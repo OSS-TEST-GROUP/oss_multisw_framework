@@ -2,11 +2,13 @@ cmake_minimum_required(VERSION 3.5)
 
 project ( "diagnostics" )
 
-## Sub Directory
-
+## Unittest
+add_subdirectory ( unittest )
 
 ## Source
-set ( MAIN_SRC main.cc )
+set ( MAIN_SRC main.cc
+               DiagnosticManager.cpp
+)
 
 ## Library
 #link_libraries ( pthread )

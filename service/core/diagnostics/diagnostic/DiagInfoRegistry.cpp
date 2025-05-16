@@ -1,0 +1,78 @@
+#include "DiagInfoRegistry.hpp"
+
+namespace diagnostic_manager {
+
+DiagInfoRegistry::DiagInfoRegistry() {}
+DiagInfoRegistry::~DiagInfoRegistry() {}
+
+void DiagInfoRegistry::UpdateDiagInfo(std::shared_ptr<DiagInfo> diag_info) {
+    std::lock_guard<std::mutex> lock_guard(diag_info_mutex_);
+
+    if (diag_info == nullptr) {
+        return;
+    }
+    diag_info_list_[diag_info->GetDiagCode()] = diag_info;
+}
+
+void DiagInfoRegistry::RemoveDiagInfo(int32_t code) {
+    std::lock_guard<std::mutex> lock_guard(diag_info_mutex_);
+    
+    if (diag_info_list_.count(code) == 0) {
+        return;
+    }
+    diag_info_list_.erase(code);
+}
+
+void DiagInfoRegistry::ClearDiagInfoList() {
+    std::lock_guard<std::mutex> lock_guard(diag_info_mutex_);
+
+    diag_info_list_.clear();
+}
+
+std::shared_ptr<DiagInfo> DiagInfoRegistry::GetDiagInfo(int32_t code) {
+    std::lock_guard<std::mutex> lock_guard(diag_info_mutex_);
+
+    auto iter = diag_info_list_.find(code);
+    if (iter == diag_info_list_.end()) {
+        return nullptr;
+    }
+    return iter->second;
+}
+std::shared_ptr<DiagInfo> DiagInfoRegistry::GetDiagInfoByName(std::string name) {
+    std::lock_guard<std::mutex> lock_guard(diag_info_mutex_);
+
+    for (auto& iter : diag_info_list_) {
+        if (iter.second->GetDiagName() == name) {
+            return iter.second;
+        }
+    }
+    return nullptr;
+}
+std::vector<std::shared_ptr<DiagInfo>> DiagInfoRegistry::GetAllDiagInfo() {
+    std::vector<std::shared_ptr<DiagInfo>> diag_list;
+
+    for (auto& iter : diag_info_list_) {
+        diag_list.push_back(iter.second);
+    }
+    return diag_list;
+}
+
+std::vector<int32_t> DiagInfoRegistry::GetDiagInfoCodeList() {
+    std::vector<int32_t> code_list;
+
+    for (auto& iter : diag_info_list_) {
+        code_list.push_back(iter.first);
+    }
+    return code_list;
+}
+std::vector<std::string> DiagInfoRegistry::GetDiagInfoNameList() {
+    std::vector<std::string> name_list;
+    
+    for (auto& iter : diag_info_list_) {
+        name_list.push_back(iter.second->GetDiagName());
+    }
+
+    return name_list;
+}
+
+} // namespace diagnostic_manager
