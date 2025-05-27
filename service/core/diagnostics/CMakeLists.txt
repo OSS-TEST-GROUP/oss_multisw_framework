@@ -3,15 +3,40 @@ cmake_minimum_required(VERSION 3.5)
 project ( "diagnostics" )
 
 ## Unittest
-add_subdirectory ( unittest )
+if (BUILD_UNITTEST)
+    add_subdirectory ( unittest )
+endif()
 
 ## Source
+set ( DIAGNOSTIC_SRC
+    diagnostic/DiagInfo.cpp
+    diagnostic/DiagInfoRegistry.cpp
+    diagnostic/VariantData.cpp
+)
+set ( EXECUTOR_SRC
+    executor/RequestBase.cpp
+    executor/ServiceExecutor.cpp
+    executor/ServiceTask.cpp
+)
+set ( TRANSMITTER_SRC
+    transmitter/Message.cpp
+    transmitter/ReceivedMessage.cpp
+    transmitter/MessageTransmitter.cpp
+    transmitter/MessageProtocol.cpp
+    transmitter/dds/DDSProtocol.cpp
+    transmitter/dds/DDSDynamicIDLParser.cpp
+)
+
 set ( MAIN_SRC main.cc
                DiagnosticManager.cpp
+               ${DIAGNOSTIC_SRC}
+               ${EXECUTOR_SRC}
+               ${TRANSMITTER_SRC}
 )
 
 ## Library
-#link_libraries ( pthread )
+include_directories ( . )
+link_libraries ( pthread fastcdr fastdds )
 #link_directories ( ${CMAKE_INSTALL_PREFIX} )
 
 ## Target binary

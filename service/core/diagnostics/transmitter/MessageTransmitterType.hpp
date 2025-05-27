@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <memory>
+#include <functional>
 
 #include "Message.hpp"
 #include "ReceivedMessage.hpp"

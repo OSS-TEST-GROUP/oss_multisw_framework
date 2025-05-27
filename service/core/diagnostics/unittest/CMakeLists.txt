@@ -8,15 +8,6 @@ add_compile_options(
     -ftest-coverage
 )
 
-## gtest
-include(FetchContent)
-FetchContent_Declare(
-    googletest
-    URL https://github.com/google/googletest/archive/refs/tags/v1.17.0.zip
-)
-#set(INSTALL_GTEST OFF)
-FetchContent_MakeAvailable(googletest)
-
 # IDL generation
 set(GENERATED_DIR "${CMAKE_INSTALL_PREFIX}/generated")
 file(MAKE_DIRECTORY ${GENERATED_DIR})
@@ -46,7 +37,6 @@ include_directories (
 link_libraries ( gtest gmock fastcdr fastdds )
 
 ## Target binary
-add_executable ( DiagnosticManagerTest DiagnosticManagerTest.cpp )
 add_executable ( DiagInfoRegistryTest DiagInfoRegistryTest.cpp )
 add_executable ( DiagInfoTest DiagInfoTest.cpp )
 add_executable ( ServiceExecutorTest ServiceExecutorTest.cpp )
@@ -59,8 +49,7 @@ add_executable ( DDSProtocolTest DDSProtocolTest.cpp )
 add_executable ( DDSDynamicIDLParserTest DDSDynamicIDLParserTest.cpp )
 
 ## Install
-install ( TARGETS DiagnosticManagerTest
-                  DiagInfoRegistryTest
+install ( TARGETS DiagInfoRegistryTest
                   DiagInfoTest
                   ServiceExecutorTest
                   ServiceTaskTest

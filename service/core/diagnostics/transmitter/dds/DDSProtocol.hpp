@@ -18,6 +18,7 @@ using namespace eprosima::fastdds::dds;
 namespace diagnostic_manager {
 
 class TopicInformation {
+  public:
     TopicInformation() : topic(nullptr), reader(nullptr) {}
 
     std::string topic_name;

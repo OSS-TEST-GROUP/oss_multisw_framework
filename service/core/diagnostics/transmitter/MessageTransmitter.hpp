@@ -4,6 +4,7 @@
 #include <iostream>
 #include <memory>
 #include <unordered_map>
+#include <set>
 #include <list>
 
 #include "executor/ServiceExecutor.hpp"
@@ -17,6 +18,7 @@
 namespace diagnostic_manager {
 
 class SubscriberInfo {
+  public:
     SubscriberInfo();
     SubscriberInfo(uint64_t id, const std::string& name, ReceiveMessageCreator creator, TaskID task_id);
 
@@ -60,7 +62,7 @@ class MessageTransmitter {
 
     std::unordered_map<MessageProtocolType, std::shared_ptr<MessageProtocol>> protocols_;
 
-    std::atomic<int64_t> next_subscriber_id_;
+    std::atomic<int64_t> next_subscriber_id_{0};
     std::unordered_map<int64_t, SubscriberInfo> subscriber_list_;
     std::mutex subscriber_handling_mutex_;
 

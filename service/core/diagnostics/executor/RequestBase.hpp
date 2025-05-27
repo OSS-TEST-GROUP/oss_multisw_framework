@@ -2,6 +2,8 @@
 #define DIAGNOSTICS_EXECUTOR_REQUEST_BASE_HPP_
 
 #include <iostream>
+#include <atomic>
+#include <chrono>
 
 namespace diagnostic_manager {
 

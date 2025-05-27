@@ -3,6 +3,8 @@
 
 #include <iostream>
 #include <unordered_map>
+#include <vector>
+#include <memory>
 #include <mutex>
 
 #include "DiagInfo.hpp"

@@ -2,6 +2,9 @@
 #define DIAGNOSTICS_TRASMITTER_MESSAGE_HPP_
 
 #include <iostream>
+#include <memory>
+#include <chrono>
+
 #include "MessageProtocolType.hpp"
 #include "diagnostic/VariantData.hpp"
 

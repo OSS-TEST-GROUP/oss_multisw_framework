@@ -1,5 +1,7 @@
 #include "ServiceExecutor.hpp"
 
+#include <optional>
+
 namespace diagnostic_manager {
 
 bool ComparatorIntervalQueue::operator()(const std::shared_ptr<ServiceTask> l, std::shared_ptr<ServiceTask> r) const {

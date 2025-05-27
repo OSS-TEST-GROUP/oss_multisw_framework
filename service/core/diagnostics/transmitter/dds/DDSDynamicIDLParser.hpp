@@ -13,6 +13,7 @@ using namespace eprosima::fastdds::dds;
 namespace diagnostic_manager {
 
 class DynamicIDLTypeSupport {
+  public:
     DynamicType::_ref_type dyn_type;
     std::shared_ptr<TypeSupport> type_support;
 };

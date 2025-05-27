@@ -3,6 +3,8 @@
 
 #include <iostream>
 #include <chrono>
+#include <memory>
+#include <functional>
 
 #include "RequestBase.hpp"
 

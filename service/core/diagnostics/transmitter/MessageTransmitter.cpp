@@ -9,7 +9,7 @@ SubscriberInfo::SubscriberInfo(uint64_t id, const std::string& name, ReceiveMess
     SubscriberInfo();
 }
 
-MessageTransmitter::MessageTransmitter(std::shared_ptr<ServiceExecutor> service_executor) : service_executor_(service_executor), next_subscriber_id_(1) {}
+MessageTransmitter::MessageTransmitter(std::shared_ptr<ServiceExecutor> service_executor) : service_executor_(service_executor) {}
 MessageTransmitter::~MessageTransmitter() {}
 
 bool MessageTransmitter::Initialize() {
