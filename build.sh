@@ -30,6 +30,8 @@ export CMAKE_TEMP_DIR=".build"
 export BUILD_MODE="Debug"
 export CPU_CORES=`nproc`
 
+export BUILD_UNITTEST="FALSE"
+
 do_error_check()
 {
 	if [ "${?}" != "0" ]; then
@@ -45,6 +47,9 @@ do_parse_option()
     case ${arg} in
       --release)
         BUILD_MODE="Release"
+        ;;
+      --build-unittest)
+        BUILD_UNITTEST="TRUE"
         ;;
       *)
         echo "Unknown option. ${arg}"
@@ -79,7 +84,7 @@ do_build()
   # Build with cmake
   pushd "${CMAKE_TEMP_DIR}" 1>/dev/null
 
-  cmake ../
+  cmake ../ -DBUILD_UNITTEST=${BUILD_UNITTEST}
   do_error_check
 
   make -j${CPU_CORES}
