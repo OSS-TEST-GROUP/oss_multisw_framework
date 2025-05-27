@@ -6,7 +6,9 @@
 #include <unordered_map>
 #include <queue>
 #include <thread>
+#include <memory>
 #include <typeindex>
+#include <condition_variable>
 
 #include "ServiceTask.hpp"
 #include "RequestBase.hpp"

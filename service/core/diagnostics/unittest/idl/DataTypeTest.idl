@@ -1,0 +1,39 @@
+struct SubStructure
+{
+    long id;
+    string name;
+};
+
+struct DataTypeTest
+{
+    char v_char8;
+    wchar v_char16;
+    octet v_uint8;
+    short v_int16;
+    unsigned short v_uint16;
+    long v_int32;
+    unsigned long v_uint32;
+    long long v_int64;
+    unsigned long long v_uint64;
+    float v_float;
+    double v_double;
+    boolean v_bool;
+    string v_string;
+
+    SubStructure v_structure;
+
+    sequence<char> seq_char8;
+    sequence<wchar> seq_char16;
+    sequence<octet> seq_uint8;
+    sequence<short> seq_int16;
+    sequence<unsigned short> seq_uint16;
+    sequence<long> seq_int32;
+    sequence<unsigned long> seq_uint32;
+    sequence<long long> seq_int64;
+    sequence<unsigned long long> seq_uint64;
+    sequence<float> seq_float;
+    sequence<double> seq_double;
+    sequence<boolean> seq_bool;
+    sequence<string> seq_string;
+    sequence<SubStructure> seq_structure;
+};

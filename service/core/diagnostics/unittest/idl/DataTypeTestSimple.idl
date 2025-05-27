@@ -1,0 +1,5 @@
+struct DataTypeTestSimple
+{
+    long id;
+    string name;
+};
