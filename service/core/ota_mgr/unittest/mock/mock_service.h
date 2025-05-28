@@ -2,7 +2,7 @@
 #define MOCK_SERVICE_H_
 
 #include <gmock/gmock.h>
-#include "otam_main.h" // Includes the Service base class definition
+#include "otam_main/otam_main.h" // Includes the Service base class definition
 
 // Mock for the generic Service interface.
 class MockService : public Service {

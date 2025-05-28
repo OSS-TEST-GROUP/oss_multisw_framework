@@ -1,7 +1,8 @@
-#include "otam_main.h"
-
 #include <iostream>
 #include <stdexcept> // For std::runtime_error
+
+#include "otam_main.h"
+#include "otam_client_service/otam_client_service.h"
 
 // Dummy implementations of other services for compilation.
 // These will be replaced by actual implementations when those units are developed.
@@ -10,13 +11,6 @@ class OtamServerService : public Service {
   void Initialize() override { std::cout << "OtamServerService Initialized." << std::endl; }
   void Start() override { std::cout << "OtamServerService Started." << std::endl; }
   void Stop() override { std::cout << "OtamServerService Stopped." << std::endl; }
-};
-
-class OtamClientService : public Service {
- public:
-  void Initialize() override { std::cout << "OtamClientService Initialized." << std::endl; }
-  void Start() override { std::cout << "OtamClientService Started." << std::endl; }
-  void Stop() override { std::cout << "OtamClientService Stopped." << std::endl; }
 };
 
 class OtamVehicleService : public Service {

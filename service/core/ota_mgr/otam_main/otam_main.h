@@ -5,15 +5,7 @@
 #include <vector>
 #include <string>
 
-// A dummy base class for demonstration. In a real scenario, other services
-// would inherit from a common interface (e.g., IOtamService).
-class Service {
-  public:
-   virtual ~Service() = default;
-   virtual void Initialize() = 0;
-   virtual void Start() = 0;
-   virtual void Stop() = 0;
- };
+#include "otam_common/service.h"
 
 class OtamMain {
  public:

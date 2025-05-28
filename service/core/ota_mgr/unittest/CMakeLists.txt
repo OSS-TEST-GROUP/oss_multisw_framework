@@ -2,61 +2,54 @@
 
 # Do not call project() here, it's defined in the top-level CMakeLists.txt
 
-# --- Optional: Configure GTest/GMock via FetchContent ---
-# This approach fetches and builds GTest/GMock as part of your project,
-# which can simplify setup and ensure consistent versions across environments.
-# If you prefer to find system-installed GTest/GMock, remove this block
-# and ensure 'find_package(GTest REQUIRED)' is used in test/CMakeLists.txt.
-include(FetchContent)
-
-FetchContent_Declare(
-    googletest
-    GIT_REPOSITORY https://github.com/google/googletest.git
-    GIT_TAG        v1.17.0 # Or a newer stable release
-)
-
-# FetchContent_MakeAvailable will automatically add gtest and gmock targets
-# (e.g., GTest::gtest, GMock::gmock) which can then be linked.
-FetchContent_MakeAvailable(googletest)
-# --- End of Optional GTest/GMock FetchContent block ---
-
 # Add source files for mocks
 set(OTAM_MOCK_SRCS
     mock/mock_service.cc
 )
 
-# Add header files for mocks
-set(OTAM_MOCK_HDRS
-    mock/mock_service.h
-)
-
 # Create a static library for the mocks
-add_library(OtamMocks STATIC ${OTAM_MOCK_SRCS} ${OTAM_MOCK_HDRS})
+add_library(OtamMocks STATIC ${OTAM_MOCK_SRCS})
 target_include_directories(OtamMocks PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/../otam_main
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
 )
 
 target_include_directories(OtamMocks PRIVATE
     ${googletest_SOURCE_DIR}/googlemock/include
+    ${googletest_SOURCE_DIR}/googletest/include
 )
 
+message(STATUS "googletest_SOURCE_DIR = ${googletest_SOURCE_DIR}")
+
 # Add the test executable.
-add_executable(otam_main_tests test_otam_main.cc)
+add_executable(otam_main_tests 
+    test_otam_main.cc
+    test_otam_client_service.cc
+)
 
 # Link the test executable to GTest, GMock, OtamMain library, and our mocks.
 target_link_libraries(otam_main_tests PRIVATE
+    OtamMocks
+    OtamMain
+    OtamDdsImpl
+    OtamClientService
     gtest
     gmock
-    OtamMain
-    OtamMocks
+    fastcdr
+    fastdds
 )
 
 # Specify include directories for OtamMain header and mock headers.
 target_include_directories(otam_main_tests PRIVATE
-    ${CMAKE_SOURCE_DIR}/otam_main
     ${CMAKE_CURRENT_SOURCE_DIR}/mock
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
 )
 
-# Add the tests to CTest.
-include(GoogleTest)
-gtest_discover_tests(otam_main_tests)
+install ( TARGETS otam_main_tests
+    RUNTIME DESTINATION bin/unittest/ota_mgr/test
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib
+    )
+
+# # Add the tests to CTest.
+# include(GoogleTest)
+# gtest_discover_tests(otam_main_tests)
