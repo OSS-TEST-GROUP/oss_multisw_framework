@@ -1,0 +1,14 @@
+#include "DiagnosticCommon.idl"
+
+/* TopicName - mmf/diagnosticmgr/DiagnosticStatusRequest */
+struct DiagnosticInfoRequest {
+    string diag_name;
+};
+
+/* TopicName - mmf/diagnosticmgr/DiagnosticStatusResponse */
+struct DiagnosticInfoResponse {
+    long diag_code;
+    string diag_name;
+    DiagnosticStatusType status;
+    string message;
+};

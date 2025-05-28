@@ -1,0 +1,9 @@
+enum DiagnosticStatusType
+{
+    UNKNOWN,
+    PASS,
+    FAIL
+};
+
+struct DummyType {
+};

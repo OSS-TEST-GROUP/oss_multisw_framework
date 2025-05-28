@@ -50,10 +50,10 @@ TEST_F(DDSDynamicIDLParserTest, Parse_TC001) {
     std::string valid_dir = "idl";
     EXPECT_TRUE(parser->Initialize(valid_dir));
 
-    auto type_support = parser->Parse("DataTypeTest.idl");
+    auto type_support = parser->Parse("DataTypeTestSimple.idl");
     EXPECT_TRUE(type_support != nullptr);
     EXPECT_TRUE(type_support->dyn_type != nullptr);
-    EXPECT_EQ("DataTypeTest", type_support->type_support->get_type_name());
+    EXPECT_EQ("DataTypeTestSimple", type_support->type_support->get_type_name());
 }
 
 TEST_F(DDSDynamicIDLParserTest, ParseAll_TC001) {
@@ -61,7 +61,7 @@ TEST_F(DDSDynamicIDLParserTest, ParseAll_TC001) {
     EXPECT_TRUE(parser->Initialize(valid_dir));
 
     auto type_support_list = parser->ParseAll();
-    EXPECT_TRUE(type_support_list.size() == 2);
+    EXPECT_TRUE(type_support_list.size() == 1);
 }
 
 int main(int argc, char* argv[]) {

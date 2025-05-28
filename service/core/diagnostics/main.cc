@@ -1,4 +1,5 @@
 #include <iostream>
+#include <thread>
 
 #include "DiagnosticManager.hpp"
 
@@ -14,6 +15,10 @@ int main(int argc, char* argv[]) {
 
 	if (!manager.Start()) {
 		std::cerr << "Failed to start the DiagnosticManager." << std::endl;
+	}
+
+	while (true) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(50));
 	}
 
 	return 0;

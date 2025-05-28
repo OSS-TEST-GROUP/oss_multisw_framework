@@ -52,4 +52,5 @@ endif()
 
 
 ## Source Directory
+add_subdirectory ( idl )
 add_subdirectory ( service )

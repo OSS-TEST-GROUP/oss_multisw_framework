@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <unordered_map>
+#include <mutex>
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp>
 #include <fastdds/dds/domain/DomainParticipant.hpp>
 #include <fastdds/dds/domain/DomainParticipantListener.hpp>
@@ -80,6 +81,7 @@ class DDSProtocol : public MessageProtocol, DomainParticipantListener {
     std::unordered_map<std::string, std::shared_ptr<TopicInformation>> discovered_topic_;
 
     std::set<std::string> subscribed_topic_;
+    std::mutex subsription_handling_mutex_;
 
     std::unique_ptr<DDSDynamicIDLParser> dds_dynamic_idl_parser_;
     std::unordered_map<std::string, std::shared_ptr<DynamicIDLTypeSupport>> parsed_dynamic_type_supports_;

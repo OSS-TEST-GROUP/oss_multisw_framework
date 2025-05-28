@@ -9,7 +9,7 @@ add_compile_options(
 )
 
 # IDL generation
-set(GENERATED_DIR "${CMAKE_INSTALL_PREFIX}/generated")
+set(GENERATED_DIR "${CMAKE_INSTALL_PREFIX}/generated/idl")
 file(MAKE_DIRECTORY ${GENERATED_DIR})
 
 set(TEST_IDL "${CMAKE_CURRENT_SOURCE_DIR}/idl/DataTypeTest.idl")

@@ -1,0 +1,9 @@
+#include "DiagnosticCommon.idl"
+
+/* TopicName - mmf/diagnosticmgr/DiagnosticNotification */
+struct DiagnosticNotification {
+    long diag_code;
+    string diag_name;
+    DiagnosticStatusType status;
+    string message;
+};

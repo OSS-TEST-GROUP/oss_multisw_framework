@@ -54,6 +54,8 @@ bool DDSProtocol::PublishMessage(std::shared_ptr<Message> message) {
 }
 
 bool DDSProtocol::SubscribeMessage(const std::string& name) {
+    std::lock_guard<std::mutex> lock(subsription_handling_mutex_);
+
     subscribed_topic_.insert(name);
 
     if (discovered_topic_.count(name) > 0) {
@@ -69,6 +71,8 @@ bool DDSProtocol::SubscribeMessage(const std::string& name) {
 }
 
 bool DDSProtocol::UnsubscribeMessage(const std::string& name) {
+    std::lock_guard<std::mutex> lock(subsription_handling_mutex_);
+
     if (subscribed_topic_.count(name) == 0) {
         return false;
     }
@@ -215,7 +219,7 @@ bool DDSProtocol::DeserializeMessage(DynamicData::_ref_type dds_data, std::share
 
         MemberDescriptor::_ref_type member_desc = {traits<MemberDescriptor>::make_shared()};
         if (member->get_descriptor(member_desc) != RETCODE_OK) {
-            std::cout << "Failed to get member descriptor." << std::endl;
+            std::cerr << "Failed to get member descriptor." << std::endl;
             continue;
         }
 
@@ -306,7 +310,7 @@ bool DDSProtocol::DeserializeMessage(DynamicData::_ref_type dds_data, std::share
                 auto seq_type = type_desc->element_type()->get_kind();
 
                 if (!read_values_from_dynamic_data(dds_data, member, seq_type, variant_data)) {
-                    std::cout << "Not supported sequence type." << std::endl;
+                    std::cerr << "Not supported sequence type." << std::endl;
                 }
                 break;
             }
@@ -344,14 +348,16 @@ void DDSProtocol::load_dds_dynamic_idl(const std::string& path) {
 void DDSProtocol::on_data_available(DataReader* reader) {
     std::shared_ptr<TopicInformation> topic_info;
 
-    auto topic_info_iter = discovered_topic_.find(reader->get_topicdescription()->get_name());
-    if (topic_info_iter == discovered_topic_.end()) {
-        return;
-    } else {
-        topic_info = topic_info_iter->second;
-    }
+    {
+        std::lock_guard<std::mutex> lock(subsription_handling_mutex_);
 
-    std::cout << "Received a message. topic=" << topic_info->topic_name << std::endl;
+        auto topic_info_iter = discovered_topic_.find(reader->get_topicdescription()->get_name());
+        if (topic_info_iter == discovered_topic_.end()) {
+            return;
+        } else {
+            topic_info = topic_info_iter->second;
+        }
+    }
 
     DynamicData::_ref_type new_data = DynamicDataFactory::get_instance()->create_data(topic_info->remote_type);
     SampleInfo info;
@@ -382,11 +388,11 @@ void DDSProtocol::on_data_available(DataReader* reader) {
 void DDSProtocol::on_subscription_matched(DataReader* reader, const SubscriptionMatchedStatus& info) {
     if (info.current_count_change == 1)
     {
-        std::cout << "Subscriber matched." << std::endl;
+        // std::cout << "Subscriber matched." << std::endl;
     }
     else if (info.current_count_change == -1)
     {
-        std::cout << "Subscriber unmatched." << std::endl;
+        // std::cout << "Subscriber unmatched." << std::endl;
     }
     else
     {
@@ -398,12 +404,11 @@ void DDSProtocol::on_data_writer_discovery(DomainParticipant* participant,
                                            eprosima::fastdds::rtps::WriterDiscoveryStatus reason,
                                            const eprosima::fastdds::dds::PublicationBuiltinTopicData& info,
                                            bool& should_be_ignored) {
+    std::lock_guard<std::mutex> lock(subsription_handling_mutex_);
 
     if (discovered_topic_.count(info.topic_name.to_string()) > 0) {
         return;
     }
-
-    std::cout << "Discovered new writer. " << info.guid << " participant=" << info.participant_guid << std::endl;
 
     // Notify run thread that type has been discovered
     std::shared_ptr<TopicInformation> topic_info = std::make_shared<TopicInformation>();

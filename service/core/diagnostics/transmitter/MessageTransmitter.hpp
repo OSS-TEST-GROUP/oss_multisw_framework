@@ -62,7 +62,7 @@ class MessageTransmitter {
 
     std::unordered_map<MessageProtocolType, std::shared_ptr<MessageProtocol>> protocols_;
 
-    std::atomic<int64_t> next_subscriber_id_{0};
+    std::atomic<int64_t> next_subscriber_id_{1};
     std::unordered_map<int64_t, SubscriberInfo> subscriber_list_;
     std::mutex subscriber_handling_mutex_;
 
