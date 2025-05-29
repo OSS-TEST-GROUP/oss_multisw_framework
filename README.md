@@ -1,23 +1,31 @@
 # oss_multisw_framework
 
 
-
-## Getting started
-
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
-
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
+## Fetch the repository
 
 ```
-cd existing_repo
-git remote add origin https://lotte-autops.com/oss_group1/oss_multisw_framework.git
-git branch -M main
-git push -uf origin main
+git clone ssh://lotte-autops.com/oss_group1/oss_multisw_framework.git
+```
+
+## Setup the build environment
+
+Build the docker image for the development environment.
+```
+docker build -t oss-mw-dev-test:0.1 -f docker/build_environment/Dockerfile .
+```
+
+Run the docker with the built image.
+```
+docker run -it --gpus all -v /${HOME}/workspace:/root/workspace -v /run/user/1000:/run/user/1000 -v /tmp/.X11-unix:/tmp/.X11-unix -v ${HOME}/.ssh:/root/.ssh -e DISPLAY=unix:1 oss-mw-dev-test:0.1 bash
+```
+
+## How to build the OSS MW Framework
+
+```
+source docker/build_environment/setup_environment.sh
+.build.sh
+or
+.build.sh --build-unittest
 ```
 
 ## Integrate with your tools
