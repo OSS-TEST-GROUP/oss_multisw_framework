@@ -28,6 +28,29 @@ or
 .build.sh --build-unittest
 ```
 
+## How to use dds idl files
+
+You can add your idl files into the path below.
+```
+oss_multisw_framework/idl/dds
+```
+
+The dds generated source files will be generated at 'oss_multisw_framework/output/[debug/release]/generated/idl'.
+You can refer it through CMakeLists.txt like the below.
+```
+link_libraries ( fastcdr fastdds )  // 라이브러리 추가
+set(GENERATED_DIR "${CMAKE_INSTALL_PREFIX}/generated/idl")
+set(GENERATED_DDS_FILES ${GENERATED_DIR}/DataTypeTestPubSubTypes.cxx
+                        ${GENERATED_DIR}/DataTypeTestTypeObjectSupport.cxx
+                        ${GENERATED_DIR}/DataTypeTestSimplePubSubTypes.cxx
+```
+
+## About the unittest
+You can use gtest on each services by including the line below on your unittest's CMakeLists.txt
+```
+link_libraries ( gtest gmock )
+```
+
 ## Integrate with your tools
 
 - [ ] [Set up project integrations](https://lotte-autops.com/oss_group1/oss_multisw_framework/-/settings/integrations)
