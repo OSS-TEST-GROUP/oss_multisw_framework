@@ -1,0 +1,29 @@
+diagnosic_policies:
+  - code : 10
+    name : lifecycle
+    rules :
+      - status : "FATAL"
+        message : "At least one service is not alive."
+        condition :
+          - "LifecycleDiagReport.service_list[].service_state not in [1,2]"
+      - status : "WARNING"
+        message : "AD SW is not initizlied yet."
+        condition :
+          - "LifecycleDiagReport.initialized = false"
+          - "LifecycleDiagReport.isConnected = false"
+    active : true
+  - code : 12
+    name : adsw_manager
+    rules :
+      - status : "FATAL"
+        message : "AD SW Manager can't connect to Lifecycle Manager."
+        condition :
+          - "ADSWManagerDiagReport.isConnected = false"
+    active : true
+refer_messages:
+  - name : LifecycleDiagReport
+    message : mmf/lifecyclemgr/LifecycleDiagReport
+    protocol : dds
+  - name : ADSWManagerDiagReport
+    message : mmf/lifecyclemgr/ADSWManagerDiagReport
+    protocol : dds
