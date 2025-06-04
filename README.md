@@ -4,7 +4,7 @@
 ## Fetch the repository
 
 ```
-git clone ssh://lotte-autops.com/oss_group1/oss_multisw_framework.git
+git clone git@lotte-autops.com:oss_group1/oss_multisw_framework.git
 ```
 
 ## Setup the build environment
