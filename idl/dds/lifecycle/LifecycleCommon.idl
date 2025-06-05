@@ -1,0 +1,32 @@
+enum ServiceType
+{
+    NORMAL,
+    ONESHOT
+};
+
+struct RecoveryPolicy {
+    DEFAULT,
+    ALWAYS,
+    ON_FAILURE,
+    ON_SUCCESS,
+    ON_NOT_RESPONDING,
+    MANUAL
+};                 
+
+enum ReturnCode {
+    SUCCESS,
+    FAILED
+};
+
+enum ServiceMode {
+    NORMAL,
+    OTA_MODE
+};
+
+enum ServiceState {
+    NOT_RUNNING,
+    INITIALIZING,
+    RUNNING,
+    RNNING_NO_REPONSE,
+    TERMINATING
+};

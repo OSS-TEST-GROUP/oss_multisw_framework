@@ -6,4 +6,5 @@ enum DiagnosticStatusType
 };
 
 struct DummyType {
-};
+};                 
+
