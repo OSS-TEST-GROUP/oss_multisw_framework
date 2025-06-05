@@ -12,10 +12,8 @@ git clone git@lotte-autops.com:oss_group1/oss_multisw_framework.git
 Build the docker image for the development environment.
 ```
 docker build -t oss-mw-dev-test:0.1 -f docker/build_environment/Dockerfile .
-```
 
-For arm64 archtecture.
-```
+# For arm64 archtecture.
 docker run --privileged --rm tonistiigi/binfmt --install arm64
 docker buildx build --platform linux/arm64 -t oss-mw-dev-test:0.1 -f docker/build_environment/Dockerfile .
 ```
