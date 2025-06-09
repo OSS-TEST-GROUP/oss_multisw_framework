@@ -62,6 +62,18 @@ class VariantData {
         return std::get<T>(members_[name]);
     }
 
+    VariantData* GetChild(const std::string& key);
+    bool GetInt64(const std::string& key, int64_t& out);
+    bool GetUInt64(const std::string& key, uint64_t& out);
+    bool GetDouble(const std::string& key, double& out);
+    bool GetString(const std::string& key, std::string& out);
+
+    VariantData* GetChildFromList(const std::string& key, uint64_t idx);
+    bool GetInt64FromList(const std::string& key, uint64_t idx, int64_t& out);
+    bool GetUInt64FromList(const std::string& key, uint64_t idx, uint64_t& out);
+    bool GetDoubleFromList(const std::string& key, uint64_t idx, double& out);
+    bool GetStringFromList(const std::string& key, uint64_t idx, std::string& out);
+
     std::type_index GetValueType(const std::string& name);
 
     bool HasKey(const std::string& name);

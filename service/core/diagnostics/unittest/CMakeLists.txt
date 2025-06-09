@@ -51,6 +51,7 @@ add_executable ( ReferenceMessageTest ReferenceMessageTest.cpp )
 add_executable ( DiagPolicyRuleTest DiagPolicyRuleTest.cpp )
 add_executable ( DiagPolicyTest DiagPolicyTest.cpp )
 add_executable ( PolicyManagerTest PolicyManagerTest.cpp )
+add_executable ( DataManagerTest DataManagerTest.cpp )
 
 ## Install
 install ( TARGETS DiagInfoRegistryTest
@@ -67,6 +68,7 @@ install ( TARGETS DiagInfoRegistryTest
                   DiagPolicyRuleTest
                   DiagPolicyTest
                   PolicyManagerTest
+                  DataManagerTest
     RUNTIME DESTINATION bin/unittest/diagnostics
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib

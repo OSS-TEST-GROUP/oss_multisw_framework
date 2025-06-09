@@ -25,4 +25,4 @@ private:
 
 } // namespace diagnostic_manager
 
-#endif // DIAGNOSTICS_DIAG_POLICY_HPP_
+#endif // DIAGNOSTICS_DIAGNOSTIC_ANALYZER_DIAG_POLICY_HPP_
