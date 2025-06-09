@@ -1,0 +1,168 @@
+#include "DataManager.hpp"
+
+#include <vector>
+#include <stdexcept>
+#include <cctype>
+#include <type_traits>
+
+namespace diagnostic_manager {
+
+bool DataManager::UpdateData(std::shared_ptr<VariantData> variant_data) {
+    std::string name = variant_data->GetName();
+    if (name.empty()) {
+        return false;
+    }
+
+    std::lock_guard<std::mutex> lock(data_handling_lock_);
+    data_list_[name] = variant_data;
+    return true;
+}
+
+std::shared_ptr<VariantData> DataManager::GetData(const std::string& name) {
+    auto it = data_list_.find(name);
+    if (it == data_list_.end()) {
+        return nullptr;
+    }
+    return it->second;
+}
+
+
+template<typename T>
+bool DataManager::FetchValue(const std::string& path, T& out) {
+    // Ensure T is one of the supported types.
+    static_assert(std::is_same_v<T, int64_t> || std::is_same_v<T, uint64_t> ||
+                  std::is_same_v<T, double> || std::is_same_v<T, std::string>,
+                  "FetchValue supports only int64_t, uint64_t, double, or std::string.");
+
+    if (path.empty()) {
+        return false;
+    }
+
+    // Split the input path into tokens separated by '.'.
+    std::vector<std::string> tokens = GetPathTokens(path);
+
+    std::lock_guard<std::mutex> lock(data_handling_lock_);
+
+    std::shared_ptr<VariantData> root = GetData(tokens[0]);
+    VariantData* current = root.get();
+
+    for (size_t i = 1; i < tokens.size(); ++i) {
+        const std::string& token = tokens[i];
+        if (token.empty()) {
+            std::cerr << "FetchValue: Invalid empty token in path" << std::endl;
+            return false;
+        }
+
+        // Parse the current token for a key (name part) and optional indices.
+        std::string key_name;
+        std::vector<size_t> indices;
+        if (!GetIndiciesInfo(token, key_name, indices)) {
+            std::cerr << "FetchValue: Faile to get indices." << std::endl;
+        }
+
+        if (i < tokens.size() - 1) {
+        // At the middle of tokens. Exploring in a tree of the VariantData.
+            VariantData* next = nullptr;
+            if (indices.empty()) {
+                next = current->GetChild(key_name);
+            } else {
+                next = current->GetChildFromList(key_name, indices[0]);
+            }
+
+            if (!next) {
+                return false;
+            }
+            current = next;
+
+        } else {
+        // At the end of tokens. Getting a final value.
+            if (indices.empty()) {
+                if constexpr(std::is_same_v<T, int64_t>) {
+                    return current->GetInt64(key_name, out);
+                } else if constexpr (std::is_same_v<T, uint64_t>) {
+                    return current->GetUInt64(key_name, out);
+                } else if constexpr(std::is_same_v<T, double>) {
+                    return current->GetDouble(key_name, out);
+                } else if constexpr(std::is_same_v<T, std::string>) {
+                    return current->GetString(key_name, out);
+                } else {
+                    std::cerr << "No Output. not supported type." << std::endl;
+                }
+            } else {
+                if constexpr(std::is_same_v<T, int64_t>) {
+                    return current->GetInt64FromList(key_name, indices[0], out);
+                } else if constexpr (std::is_same_v<T, uint64_t>) {
+                    return current->GetUInt64FromList(key_name, indices[0], out);
+                } else if constexpr(std::is_same_v<T, double>) {
+                    return current->GetDoubleFromList(key_name, indices[0], out);
+                } else if constexpr(std::is_same_v<T, std::string>) {
+                    return current->GetStringFromList(key_name, indices[0], out);
+                } else {
+                    std::cerr << "No Output. not supported type." << std::endl;
+                }
+            }
+        }
+    }
+
+    return false;
+}
+
+std::vector<std::string> DataManager::GetPathTokens(const std::string& path) {
+    std::vector<std::string> tokens;
+    size_t start = 0;
+    while (start < path.size()) {
+        size_t dotPos = path.find('.', start);
+        if (dotPos == std::string::npos) {
+            tokens.push_back(path.substr(start));
+            break;
+        } else {
+            tokens.push_back(path.substr(start, dotPos - start));
+            start = dotPos + 1;
+        }
+    }
+    return tokens;
+}
+
+bool DataManager::GetIndiciesInfo(const std::string& token, std::string& key, std::vector<size_t>& indices) {
+    uint64_t i = 0;
+
+    if (std::isalpha(static_cast<unsigned char>(token[0])) || token[0] == '_') {
+        while (i < token.size() && token[i] != '[') {
+            if (token[i] == ']') {
+                std::cerr << "GetIndiciesInfo: ']' without matching '[' in path. token=" << token << std::endl;
+                return false;
+            }
+            key = token.substr(0, i+1);
+            ++i;
+        }
+    }
+
+    while (i < token.size()) {
+        if (token[i] == '[') {
+            ++i;
+            if (i >= token.size() || !std::isdigit(static_cast<unsigned char>(token[i]))) {
+                std::cerr << "FetchValue: Invalid index in path token = " << token << std::endl;
+                return false;
+            }
+            size_t index = 0;
+            while (i < token.size() && std::isdigit(static_cast<unsigned char>(token[i]))) {
+                index = index * 10 + (token[i] - '0');
+                ++i;
+            }
+            if (i >= token.size() || token[i] != ']') {
+                std::cerr << "FetchValue: Missing ']' in path token = " << token << std::endl;
+                return false;
+            }
+            indices.push_back(index);
+            ++i; // move past ']'
+        } else {
+            // Unexpected character in token (should only be '[' or ']' at this point).
+            std::cerr << "FetchValue: Unexpected character '" << std::string(1, token[i]) << "' in path token = " << token << std::endl;
+            return false;
+        }
+    }
+
+    return true;
+}
+
+} // namespace diagnostic_manager

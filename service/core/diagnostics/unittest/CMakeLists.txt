@@ -34,7 +34,7 @@ include_directories (
 )
 
 ## Library
-link_libraries ( gtest gmock fastcdr fastdds )
+link_libraries ( gtest gmock fastcdr fastdds yaml-cpp )
 
 ## Target binary
 add_executable ( DiagInfoRegistryTest DiagInfoRegistryTest.cpp )
@@ -47,6 +47,11 @@ add_executable ( MessageTransmitterTest MessageTransmitterTest.cpp )
 add_executable ( MessageTest MessageTest.cpp )
 add_executable ( DDSProtocolTest DDSProtocolTest.cpp )
 add_executable ( DDSDynamicIDLParserTest DDSDynamicIDLParserTest.cpp )
+add_executable ( ReferenceMessageTest ReferenceMessageTest.cpp )
+add_executable ( DiagPolicyRuleTest DiagPolicyRuleTest.cpp )
+add_executable ( DiagPolicyTest DiagPolicyTest.cpp )
+add_executable ( PolicyManagerTest PolicyManagerTest.cpp )
+add_executable ( DataManagerTest DataManagerTest.cpp )
 
 ## Install
 install ( TARGETS DiagInfoRegistryTest
@@ -59,6 +64,11 @@ install ( TARGETS DiagInfoRegistryTest
                   MessageTest
                   DDSProtocolTest
                   DDSDynamicIDLParserTest
+                  ReferenceMessageTest
+                  DiagPolicyRuleTest
+                  DiagPolicyTest
+                  PolicyManagerTest
+                  DataManagerTest
     RUNTIME DESTINATION bin/unittest/diagnostics
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
@@ -86,4 +96,13 @@ install(
     DESTINATION
         bin/unittest/diagnostics
     FILES_MATCHING PATTERN "*Simple.idl"
+)
+
+# Test Diag config
+install(
+    DIRECTORY
+        config
+    DESTINATION
+        bin/unittest/diagnostics
+    FILES_MATCHING PATTERN "*.yaml"
 )
