@@ -1,0 +1,9 @@
+enum CommonStatusType
+{
+    UNKNOWN,
+    PASS,
+    FAIL
+};
+
+struct DummyType2 {
+};
