@@ -32,6 +32,8 @@ if(NOT fastdds_FOUND)
     find_package(fastdds 3 REQUIRED)
 endif()
 
+find_package(yaml-cpp REQUIRED)
+
 if (BUILD_UNITTEST)
     include(FetchContent)
     FetchContent_Declare(

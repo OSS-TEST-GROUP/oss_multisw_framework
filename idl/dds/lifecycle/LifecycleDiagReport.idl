@@ -5,7 +5,7 @@ struct ServiceStatus {
     ServiceType service_type;
     ServiceState service_state;
     boolean is_enabled;
-    integer recovered_count;
+    int32 recovered_count;
 };
 
 /* TopicName - mmf/lifecyclemgr/LifecycleDiagReport */

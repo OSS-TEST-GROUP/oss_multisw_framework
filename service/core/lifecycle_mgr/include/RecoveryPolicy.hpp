@@ -4,7 +4,7 @@
 namespace lifecycle_manager {
 
 enum class RecoveryPolicy {
-    DEFAULT,
+    R_DEFAULT,
     ALWAYS,
     ON_FAILURE,
     ON_SUCCESS,

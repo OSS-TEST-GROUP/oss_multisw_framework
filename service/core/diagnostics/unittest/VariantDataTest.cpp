@@ -147,6 +147,102 @@ TEST_F(VariantDataTest, GetValueType_TC001) {
     EXPECT_EQ(std::type_index(typeid(double)), ins->GetValueType("key1"));
 }
 
+TEST_F(VariantDataTest, GetChild_TC001_Valid) {
+    VariantData child;
+    child.SetName("ChildNode");
+    ins->SetValue("nested", child);
+
+    auto result = ins->GetChild("nested");
+    ASSERT_NE(result, nullptr);
+    EXPECT_EQ("ChildNode", result->GetName());
+}
+
+TEST_F(VariantDataTest, GetChild_TC002_InvalidKey) {
+    auto result = ins->GetChild("no_such_key");
+    EXPECT_EQ(result, nullptr);
+}
+
+TEST_F(VariantDataTest, GetInt64_TC001_Valid) {
+    ins->SetValue("val", -123L);
+    int64_t out;
+    EXPECT_TRUE(ins->GetInt64("val", out));
+    EXPECT_EQ(out, -123L);
+}
+
+TEST_F(VariantDataTest, GetInt64_TC002_InvalidType) {
+    ins->SetValue("val", std::string("oops"));
+    int64_t out;
+    EXPECT_FALSE(ins->GetInt64("val", out));
+}
+
+TEST_F(VariantDataTest, GetUInt64_TC001_Valid) {
+    ins->SetValue("val", 123UL);
+    uint64_t out;
+    EXPECT_TRUE(ins->GetUInt64("val", out));
+    EXPECT_EQ(out, 123UL);
+}
+
+TEST_F(VariantDataTest, GetDouble_TC001_FromInt) {
+    ins->SetValue("val", 42);
+    double out;
+    EXPECT_TRUE(ins->GetDouble("val", out));
+    EXPECT_DOUBLE_EQ(out, 42.0);
+}
+
+TEST_F(VariantDataTest, GetString_TC001) {
+    ins->SetValue("val", std::string("hello"));
+    std::string out;
+    EXPECT_TRUE(ins->GetString("val", out));
+    EXPECT_EQ(out, "hello");
+}
+
+TEST_F(VariantDataTest, GetChildFromList_TC001_Valid) {
+    VariantData child;
+    child.SetName("Child1");
+    std::vector<VariantData> children = { child };
+    ins->SetValue("listKey", children);
+
+    VariantData* result = ins->GetChildFromList("listKey", 0);
+    ASSERT_NE(result, nullptr);
+    EXPECT_EQ("Child1", result->GetName());
+}
+
+TEST_F(VariantDataTest, GetInt64FromList_TC001_Valid) {
+    std::vector<int64_t> values = { -456LL };
+    ins->SetValue("listKey", values);
+
+    int64_t out;
+    EXPECT_TRUE(ins->GetInt64FromList("listKey", 0, out));
+    EXPECT_EQ(out, -456LL);
+}
+
+TEST_F(VariantDataTest, GetUInt64FromList_TC001_Valid) {
+    std::vector<uint64_t> values = { 789ULL };
+    ins->SetValue("listKey", values);
+
+    uint64_t out;
+    EXPECT_TRUE(ins->GetUInt64FromList("listKey", 0, out));
+    EXPECT_EQ(out, 789ULL);
+}
+
+TEST_F(VariantDataTest, GetDoubleFromList_TC001) {
+    std::vector<double> values = { 42.0 };
+    ins->SetValue("listKey", values);
+
+    double out;
+    EXPECT_TRUE(ins->GetDoubleFromList("listKey", 0, out));
+    EXPECT_DOUBLE_EQ(out, 42.0);
+}
+
+TEST_F(VariantDataTest, GetStringFromList_TC001_Valid) {
+    std::vector<std::string> values = { "abc" };
+    ins->SetValue("listKey", values);
+
+    std::string out;
+    EXPECT_TRUE(ins->GetStringFromList("listKey", 0, out));
+    EXPECT_EQ(out, "abc");
+}
+
 TEST_F(VariantDataTest, HasKey_TC001) {
     ins->members_["key1"] = 3.14;
 

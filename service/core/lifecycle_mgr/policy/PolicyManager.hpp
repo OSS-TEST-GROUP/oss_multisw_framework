@@ -14,6 +14,9 @@ class PolicyManager {
     PolicyManager();
     virtual ~PolicyManager();
 
+    bool Start();
+    void Stop();
+    
     std::shared_ptr<PolicyBase> GetPolicy(std::string name);
     ServiceControlAction Evaluate(std::string service);
 

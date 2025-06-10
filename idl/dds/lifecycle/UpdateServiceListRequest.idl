@@ -3,7 +3,7 @@
 struct Service {
     string name;
     ServiceType service_type;
-    RecoveryPOlicy recovery_policy;
+    RecoveryPolicy recovery_policy;
     boolean is_enabled;
 };
 

@@ -15,6 +15,9 @@ class StateMonitor {
     StateMonitor();
     virtual ~StateMonitor();
 
+    bool Start();
+    void Stop();
+    
     void UpdateServicesState(std::string udpate_msg);
 
     void SetUpdateState(std::string service);
