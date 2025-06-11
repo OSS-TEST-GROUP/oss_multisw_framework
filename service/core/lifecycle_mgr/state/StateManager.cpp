@@ -1,3 +1,5 @@
+#include <iostream>
+
 #include "StateManager.hpp"
 
 namespace lifecycle_manager {
@@ -7,6 +9,8 @@ StateManager::~StateManager() {}
 
 
 bool StateManager::Start() {
+    std::cout << __FILE__ << " :: " << __LINE__ << std::endl;
+
     return true;
 }
 void StateManager::Stop() {

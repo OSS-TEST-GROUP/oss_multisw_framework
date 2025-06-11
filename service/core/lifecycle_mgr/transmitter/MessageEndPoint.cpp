@@ -2,10 +2,9 @@
 
 namespace lifecycle_manager {
 
-MessageEndPoint::MessageEndPoint(std::string topic, std::string type, std::shared_ptr<TypeSupport> type_support) 
+MessageEndPoint::MessageEndPoint(std::string topic) 
     : topic_(topic),
-    type_name_(type),
-    type_support_(type_support){
+    type_support_(nullptr){
 }
 
 MessageEndPoint::~MessageEndPoint() {}
@@ -22,6 +21,12 @@ std::string MessageEndPoint::GetTypeName() {
 std::shared_ptr<TypeSupport> MessageEndPoint::GetTypeSupport() { 
     return type_support_; 
 }
+
+void MessageEndPoint::SetTypeSupport(std::shared_ptr<TypeSupport> typesupport){
+    type_support_ = typesupport;
+    type_name_ =  type_support_->get_type_name();
+}
+
 
 
 } // namespace lifecycle_manager

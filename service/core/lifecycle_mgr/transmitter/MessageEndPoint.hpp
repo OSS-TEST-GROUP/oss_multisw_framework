@@ -14,14 +14,15 @@ namespace lifecycle_manager {
 
 class MessageEndPoint {
   public:
-    MessageEndPoint(std::string topic, std::string type, std::shared_ptr<TypeSupport>  type_support);
+    MessageEndPoint(std::string topic);
     virtual ~MessageEndPoint();
 
     std::string GetTopic();
     std::string GetTypeName();
     std::shared_ptr<TypeSupport> GetTypeSupport();
+    void SetTypeSupport(std::shared_ptr<TypeSupport> typesupport);
 
-    virtual void OnDataAvailable() = 0;
+    virtual void OnDataAvailable(void* buffer) = 0;
     virtual void* GetTopicBuffer() = 0;
 
   protected:

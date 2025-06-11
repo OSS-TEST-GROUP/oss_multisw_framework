@@ -1,6 +1,6 @@
 
-#ifndef LIFECYCLE_MESSAGE_ENDPOINT_HPP_
-#define LIFECYCLE_MESSAGE_ENDPOINT_HPP_
+#ifndef LIFECYCLE_DIAG_REPORT_MESSAGE_ENDPOINT_HPP_
+#define LIFECYCLE_DIAG_REPORT_MESSAGE_ENDPOINT_HPP_
 
 #include <string>
 #include <set>
@@ -14,11 +14,11 @@ namespace lifecycle_manager {
 
 class LifecycleDiagReportEndPoint : public DDSMessageEndPoint {
   public:
-    LifecycleDiagReportEndPoint(std::string topic, std::string type);
+    LifecycleDiagReportEndPoint(std::string topic);
     virtual ~LifecycleDiagReportEndPoint();
 
-    void OnDataAvailable() override;
-    void* GetTopicBuffer() override;
+    virtual void  OnDataAvailable(void* buffer) override;
+    virtual void* GetTopicBuffer() override;
 
   private:
     LifecycleDiagReport data_;
@@ -27,4 +27,4 @@ class LifecycleDiagReportEndPoint : public DDSMessageEndPoint {
 
 } // namespace lifecycle_manager
 
-#endif // LIFECYCLE_MESSAGE_ENDPOINT_HPP_
+#endif // LIFECYCLE_DIAG_REPORT_MESSAGE_ENDPOINT_HPP_
