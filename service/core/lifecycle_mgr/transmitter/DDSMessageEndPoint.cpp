@@ -19,8 +19,8 @@ using namespace eprosima::fastdds::dds;
 
 namespace lifecycle_manager {
 
-DDSMessageEndPoint::DDSMessageEndPoint(std::string topic, std::string type, std::shared_ptr<TypeSupport> type_support) 
-    : MessageEndPoint(topic, type, type_support){
+DDSMessageEndPoint::DDSMessageEndPoint(std::string topic) 
+    : MessageEndPoint(topic){
 
 }
 
@@ -30,6 +30,7 @@ DDSMessageEndPoint::~DDSMessageEndPoint() {
 
 
 bool DDSMessageEndPoint::Initialize(DomainParticipant* participant, Publisher* publisher, Subscriber* subscriber){
+    std::cout << __FILE__ << " :: " << __LINE__ << std::endl;
 
     participant_ = participant;
     publisher_ = publisher;
@@ -65,6 +66,7 @@ bool DDSMessageEndPoint::Initialize(DomainParticipant* participant, Publisher* p
     {
         throw std::runtime_error("DataWriter initialization failed");
     }
+    std::cout << __FILE__ << " :: " << __LINE__ << std::endl;
 
     return true;
 }
@@ -140,7 +142,9 @@ void DDSMessageEndPoint::on_data_available(
 {
     SampleInfo info;
 
-    while ((RETCODE_OK == reader->take_next_sample(GetTopicBuffer(), &info)))
+    void* read_buffer = GetTopicBuffer();
+
+    while ((RETCODE_OK == reader->take_next_sample(read_buffer, &info)))
     {
         if ((info.instance_state == ALIVE_INSTANCE_STATE) && info.valid_data)
         {
@@ -148,7 +152,7 @@ void DDSMessageEndPoint::on_data_available(
             std::cout << "Message:  << "
                       << " RECEIVED" << std::endl;
 
-            OnDataAvailable();
+            OnDataAvailable(read_buffer);
         }
     }
 }

@@ -9,6 +9,8 @@ DDSTransmitter::~DDSTransmitter() {}
 
 
 bool DDSTransmitter::Initialize(){
+    std::cout << __FILE__ << " :: " << __LINE__ << std::endl;
+
    // Create the participant
     DomainParticipantQos pqos = PARTICIPANT_QOS_DEFAULT;
     pqos.name("Shape_pub_participant");
@@ -40,6 +42,7 @@ bool DDSTransmitter::Initialize(){
         std::cout << "Subscriber initialization failed." << std::endl;
         return false;
     }
+    std::cout << __FILE__ << " :: " << __LINE__ << std::endl;
 
     return true;    
 }
@@ -58,7 +61,14 @@ void DDSTransmitter::Finalize(){
 }
 
 
-bool DDSTransmitter::AddMessageEndpoint(std::shared_ptr<DDSMessageEndPoint>){
+bool DDSTransmitter::AddMessageEndpoint(std::shared_ptr<DDSMessageEndPoint> endpoint){
+
+    if (endpoint){
+    std::cout << __FILE__ << " :: " << __LINE__ << std::endl;
+
+        endpoints_[endpoint->GetTopic()] = endpoint;
+    }
+    std::cout << __FILE__ << " :: " << __LINE__ << std::endl;
 
     return false;
 
@@ -66,9 +76,31 @@ bool DDSTransmitter::AddMessageEndpoint(std::shared_ptr<DDSMessageEndPoint>){
 
 std::shared_ptr<DDSMessageEndPoint> DDSTransmitter::GetMessageEndPoint(std::string topic){
 
+    auto search = endpoints_.find(topic);
+
+    if (search != endpoints_.end()){
+        std::cout << "Found " << search->first  << '\n';
+        return search->second;
+    } else{ 
+        std::cout << "Not found\n";
+    }
     return nullptr;
+    
 }
 
+
+DomainParticipant* DDSTransmitter::GetDomain(){
+    return participant_;
+}
+
+Publisher* DDSTransmitter::GetPublisher(){
+    return publisher_;
+}
+
+
+Subscriber* DDSTransmitter::GetSubscriber(){
+    return subscriber_;
+}
 
 
 } // namespace lifecycle_manager

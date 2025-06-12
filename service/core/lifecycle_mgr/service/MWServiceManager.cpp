@@ -1,3 +1,5 @@
+#include <iostream>
+
 #include "MWServiceManager.hpp"
 
 namespace lifecycle_manager {
@@ -7,10 +9,16 @@ MWServiceManager::~MWServiceManager() {}
 
 
 bool MWServiceManager::Initialize(){
+    std::cout << __FILE__ << " :: " << __LINE__ << std::endl;
 
+    return false;
 }
 
 bool MWServiceManager::Start(){
+
+    std::cout << __FILE__ << " :: " << __LINE__ << std::endl;
+
+    return true;
 
 }
 

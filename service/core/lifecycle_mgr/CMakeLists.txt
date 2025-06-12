@@ -9,7 +9,10 @@ project ( "lifecycle_mgr" )
 
 ## Source
 set ( ENDPOINT_SRC
-#    endpoint/LifecycleDiagReportEndPoint.cpp
+    endpoint/LifecycleDiagReportEndPoint.cpp
+    endpoint/SetServiceModeEndPoint.cpp
+    endpoint/UpdateServiceListEndPoint.cpp
+    endpoint/EndPointFactory.cpp
 )
 
 

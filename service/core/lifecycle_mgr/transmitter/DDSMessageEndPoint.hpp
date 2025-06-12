@@ -27,7 +27,7 @@ namespace lifecycle_manager {
 
 class DDSMessageEndPoint : public MessageEndPoint, public DataWriterListener , public DataReaderListener{
   public:
-    DDSMessageEndPoint(std::string topic, std::string type, std::shared_ptr<TypeSupport> type_support);
+    DDSMessageEndPoint(std::string topic);
     virtual ~DDSMessageEndPoint();
 
     bool Initialize(DomainParticipant* participant, Publisher* publisher, Subscriber* subscriber);

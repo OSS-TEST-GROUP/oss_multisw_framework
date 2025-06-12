@@ -23,8 +23,12 @@ class DDSTransmitter {
     bool Initialize();
     void Finalize();
 
-    bool AddMessageEndpoint(std::shared_ptr<DDSMessageEndPoint>);
+    bool AddMessageEndpoint(std::shared_ptr<DDSMessageEndPoint> endpoint);
     std::shared_ptr<DDSMessageEndPoint> GetMessageEndPoint(std::string topic);
+
+    DomainParticipant* GetDomain();
+    Publisher* GetPublisher();
+    Subscriber* GetSubscriber();
 
   private:
     DomainParticipant* participant_;
