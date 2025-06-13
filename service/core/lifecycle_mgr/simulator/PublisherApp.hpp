@@ -28,13 +28,14 @@
 
 #include "Application.hpp"
 #include "CLIParser.hpp"
+
 #include "lifecycle/LifecycleDiagReport.hpp"
 #include "lifecycle/SetServiceModeRequest.hpp"
 #include "lifecycle/UpdateServiceListRequest.hpp"
-
-#include "lifecycle/LifecycleDiagReportPubSubTypes.hpp"
-#include "lifecycle/SetServiceModeRequestPubSubTypes.hpp"
-#include "lifecycle/UpdateServiceListRequestPubSubTypes.hpp"
+#include "lifecycle/GetServiceStateRequest.hpp"
+#include "lifecycle/NotifyServiceState.hpp"
+#include "lifecycle/StartServiceRequest.hpp"
+#include "lifecycle/StopServiceRequest.hpp"
 
 using namespace eprosima::fastdds::dds;
 
@@ -43,6 +44,18 @@ namespace fastdds {
 namespace examples {
 namespace hello_world {
 
+class TopicWriter {
+public :
+        TopicWriter(const std::string& topic, const CLIParser::MessageType& mtype);
+        ~TopicWriter();
+
+private:
+    CLIParser::MessageType mtype_;
+    Topic* topic_;
+    DataWriter* reader_;
+    std::shared_ptr<TypeSupport> type_;
+};
+
 class PublisherApp : public Application, public DataWriterListener
 {
 public:
@@ -50,7 +63,7 @@ public:
     PublisherApp(
             const CLIParser::publisher_config& config,
             const std::string& topic_name,
-            const CLIParser::MessageKind& message_kind);
+            const CLIParser::MessageType& message_kind);
 
     ~PublisherApp();
 
@@ -74,10 +87,19 @@ private:
     bool publish();
 
     LifecycleDiagReport diag_report_;
-    SetServiceModeRequest set_service_mode_;
-    UpdateServiceListRequest update_service_list_;
+    SetServiceModeRequest set_service_req_;
+    SetServiceModeResponse set_service_resp_;
+    UpdateServiceListRequest update_service_req_;
+    UpdateServiceListResponse update_service_resp_;
+    GetServiceStateRequest get_svc_state_req_;
+    GetServiceStateResponse get_svc_state_resp_;
+    NotifyServiceState notify_svc_state;
+    StartServiceRequest start_svc_req_;
+    StartServiceResponse start_svc_resp_;
+    StopServiceRequest stop_svc_req_;
+    StopServiceResponse stop_svc_resp_;
 
-    CLIParser::MessageKind message_kind_;
+    CLIParser::MessageType message_kind_;
 
     DomainParticipant* participant_;
 
@@ -104,10 +126,6 @@ private:
     std::atomic<bool> stop_;
 
     const uint32_t period_ms_ = 100; // in ms
-
-    std::shared_ptr<LifecycleDiagReportPubSubType> diag_report_type_;
-    std::shared_ptr<SetServiceModeRequestPubSubType> set_service_mode_type_;
-    std::shared_ptr<UpdateServiceListRequestPubSubType> update_service_list_type_;
 
 };
 

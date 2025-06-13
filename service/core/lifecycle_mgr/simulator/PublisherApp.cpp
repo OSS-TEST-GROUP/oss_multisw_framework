@@ -18,6 +18,7 @@
  */
 
 #include "PublisherApp.hpp"
+#include "MessageHandle.hpp"
 
 #include <condition_variable>
 #include <stdexcept>
@@ -27,6 +28,14 @@
 #include <fastdds/dds/publisher/Publisher.hpp>
 #include <fastdds/dds/publisher/qos/DataWriterQos.hpp>
 #include <fastdds/dds/publisher/qos/PublisherQos.hpp>
+
+#include "lifecycle/LifecycleDiagReportPubSubTypes.hpp"
+#include "lifecycle/SetServiceModeRequestPubSubTypes.hpp"
+#include "lifecycle/UpdateServiceListRequestPubSubTypes.hpp"
+#include "lifecycle/GetServiceStateRequestPubSubTypes.hpp"
+#include "lifecycle/NotifyServiceStatePubSubTypes.hpp"
+#include "lifecycle/StartServiceRequestPubSubTypes.hpp"
+#include "lifecycle/StopServiceRequestPubSubTypes.hpp"
 
 using namespace eprosima::fastdds::dds;
 
@@ -38,7 +47,7 @@ namespace hello_world {
 PublisherApp::PublisherApp(
         const CLIParser::publisher_config& config,
         const std::string& topic_name,
-        const CLIParser::MessageKind& message_kind)
+        const CLIParser::MessageType& message_kind)
     : participant_(nullptr)
     , publisher_(nullptr)
     , topic_(nullptr)
@@ -62,19 +71,48 @@ std::cout << __FUNCTION__ << "::" << __LINE__ << std::endl;
     
     switch(message_kind_)
     {
-        case CLIParser::MessageKind::DIAG_REPORT:
+       case CLIParser::MessageType::LIFECYCLE_DIAG_REPORT:
         {
             type_ = std::make_shared<TypeSupport>(new LifecycleDiagReportPubSubType());
         }
         break;
 
-        case CLIParser::MessageKind::SET_SERVICE_MODE:
+        case CLIParser::MessageType::GET_SERVICE_STATE_REQUEST:
+        case CLIParser::MessageType::GET_SERVICE_STATE_RESPONSE:
+        {
+            type_ = std::make_shared<TypeSupport>(new GetServiceStateRequestPubSubType());
+        }
+        break;
+
+        case CLIParser::MessageType::NOTIFY_SERVICE_STATE:
+        {
+            type_ = std::make_shared<TypeSupport>(new NotifyServiceStatePubSubType());
+        }
+        break;
+
+        case CLIParser::MessageType::SET_SERVICE_MODE_REQUST:
+        case CLIParser::MessageType::SET_SERVICE_MODE_RESPONSE:
         {
             type_ = std::make_shared<TypeSupport>(new SetServiceModeRequestPubSubType());
         }
         break;
 
-        case CLIParser::MessageKind::UPDATE_SERVICE_LIST:
+        case CLIParser::MessageType::START_SERVICE_REQUEST:
+        case CLIParser::MessageType::START_SERVICE_RESPONSE:
+        {
+            type_ = std::make_shared<TypeSupport>(new StartServiceRequestPubSubType());
+        }
+        break;
+
+        case CLIParser::MessageType::STOP_SERVICE_REQUEST:
+        case CLIParser::MessageType::STOP_SERVICE_RESPONSE:
+        {
+            type_ = std::make_shared<TypeSupport>(new StopServiceRequestPubSubType());
+        }
+        break;
+
+        case CLIParser::MessageType::UPDATE_SERVICE_LIST_REQUEST:
+        case CLIParser::MessageType::UPDATE_SERVICE_LIST_RESPONSE:
         {
             type_ = std::make_shared<TypeSupport>(new UpdateServiceListRequestPubSubType());
         }
@@ -170,6 +208,7 @@ void PublisherApp::run()
                 {
                     dds::Duration_t acked_wait{1, 0};
                     acked = writer_->wait_for_acknowledgments(acked_wait);
+                    std::cout << "Message: " << static_cast<uint8_t>(message_kind_) << " wait ack" << std::endl;
                 }
                 while (acked != RETCODE_OK);
             }
@@ -198,15 +237,58 @@ bool PublisherApp::publish()
     {
         switch(message_kind_)
         {
-        case CLIParser::MessageKind::DIAG_REPORT:
+        case CLIParser::MessageType::LIFECYCLE_DIAG_REPORT:
+            MessageHandle::SetMessage(diag_report_);
             ret = (RETCODE_OK == writer_->write(&diag_report_)); break;
 
-        case CLIParser::MessageKind::SET_SERVICE_MODE:
-            ret = (RETCODE_OK == writer_->write(&set_service_mode_)); break;
+        case CLIParser::MessageType::GET_SERVICE_STATE_REQUEST:
+            MessageHandle::SetMessage(get_svc_state_req_);
+            ret = (RETCODE_OK == writer_->write(&get_svc_state_req_)); break;
 
-        case CLIParser::MessageKind::UPDATE_SERVICE_LIST:
-            ret = (RETCODE_OK == writer_->write(&update_service_list_)); break;
+        case CLIParser::MessageType::GET_SERVICE_STATE_RESPONSE:
+            MessageHandle::SetMessage(get_svc_state_resp_);
+            ret = (RETCODE_OK == writer_->write(&get_svc_state_resp_)); break;
+
+        case CLIParser::MessageType::NOTIFY_SERVICE_STATE:
+            MessageHandle::SetMessage(notify_svc_state);
+            ret = (RETCODE_OK == writer_->write(&notify_svc_state)); break;
+
+        case CLIParser::MessageType::START_SERVICE_REQUEST:
+            MessageHandle::SetMessage(start_svc_req_);
+            ret = (RETCODE_OK == writer_->write(&start_svc_req_)); break;
+
+        case CLIParser::MessageType::START_SERVICE_RESPONSE:
+            MessageHandle::SetMessage(start_svc_resp_);
+            ret = (RETCODE_OK == writer_->write(&start_svc_resp_)); break;
+
+        case CLIParser::MessageType::STOP_SERVICE_REQUEST:
+            MessageHandle::SetMessage(stop_svc_req_);
+            ret = (RETCODE_OK == writer_->write(&stop_svc_req_)); break;
+
+        case CLIParser::MessageType::STOP_SERVICE_RESPONSE:
+            MessageHandle::SetMessage(stop_svc_resp_);
+            ret = (RETCODE_OK == writer_->write(&stop_svc_resp_)); break;
+
+        case CLIParser::MessageType::SET_SERVICE_MODE_REQUST:
+            MessageHandle::SetMessage(set_service_req_);
+            ret = (RETCODE_OK == writer_->write(&set_service_req_)); break;
+
+        case CLIParser::MessageType::SET_SERVICE_MODE_RESPONSE:
+            MessageHandle::SetMessage(set_service_resp_);
+            ret = (RETCODE_OK == writer_->write(&set_service_resp_)); break;
+
+        case CLIParser::MessageType::UPDATE_SERVICE_LIST_REQUEST:
+            MessageHandle::SetMessage(update_service_req_);
+            ret = (RETCODE_OK == writer_->write(&update_service_req_)); break;
+            
+        case CLIParser::MessageType::UPDATE_SERVICE_LIST_RESPONSE:
+            MessageHandle::SetMessage(update_service_resp_);
+            ret = (RETCODE_OK == writer_->write(&update_service_resp_)); break;        
+        
         }
+
+        ++index_;
+
     }
     return ret;
 }

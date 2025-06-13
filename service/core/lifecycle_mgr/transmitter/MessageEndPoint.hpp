@@ -25,12 +25,15 @@ class MessageEndPoint {
     virtual void OnDataAvailable(void* buffer) = 0;
     virtual void* GetTopicBuffer() = 0;
 
+    virtual void OnDataPublished(bool ret) = 0;
+
   protected:
     std::string topic_;
     std::string type_name_;
     std::shared_ptr<TypeSupport> type_support_;
 
 };
+
 
 } // namespace lifecycle_manager
 

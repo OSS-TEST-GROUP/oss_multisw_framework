@@ -25,7 +25,7 @@ enum ServiceMode {
 
 enum ServiceState {
     NOT_RUNNING,
-    INITIALIZING,``
+    INITIALIZING,
     RUNNING,
     RNNING_NO_REPONSE,
     TERMINATING
@@ -33,4 +33,3 @@ enum ServiceState {
 
 struct DummyTypeT {
 };                 
-

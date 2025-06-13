@@ -8,7 +8,6 @@
 
 #include "DDSMessageEndPoint.hpp"
 
-
 #include <fastdds/dds/domain/DomainParticipant.hpp>
 #include <fastdds/dds/publisher/DataWriterListener.hpp>
 #include <fastdds/dds/topic/TypeSupport.hpp>

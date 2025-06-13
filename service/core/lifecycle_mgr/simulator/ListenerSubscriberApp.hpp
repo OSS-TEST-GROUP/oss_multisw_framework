@@ -32,6 +32,10 @@
 #include "lifecycle/LifecycleDiagReport.hpp"
 #include "lifecycle/SetServiceModeRequest.hpp"
 #include "lifecycle/UpdateServiceListRequest.hpp"
+#include "lifecycle/GetServiceStateRequest.hpp"
+#include "lifecycle/NotifyServiceState.hpp"
+#include "lifecycle/StartServiceRequest.hpp"
+#include "lifecycle/StopServiceRequest.hpp"
 
 using namespace eprosima::fastdds::dds;
 
@@ -40,6 +44,18 @@ namespace fastdds {
 namespace examples {
 namespace hello_world {
 
+class ReaderTopic {
+public :
+        ReaderTopic(const std::string& topic, const CLIParser::MessageType& mtype);
+        ~ReaderTopic();
+
+private:
+    CLIParser::MessageType mtype_;
+    Topic* topic_;
+    DataReader* reader_;
+    std::shared_ptr<TypeSupport> type_;
+};
+
 class ListenerSubscriberApp : public Application,  public DataReaderListener
 {
 public:
@@ -47,7 +63,7 @@ public:
     ListenerSubscriberApp(
             const CLIParser::subscriber_config& config,
             const std::string& topic_name,
-            const CLIParser::MessageKind& message_kind);
+            const CLIParser::MessageType& message_kind);
 
     ~ListenerSubscriberApp();
 
@@ -72,10 +88,19 @@ private:
     bool is_stopped();
 
     LifecycleDiagReport diag_report_;
-    SetServiceModeRequest set_service_mode_;
-    UpdateServiceListRequest update_service_list_;
+    SetServiceModeRequest set_service_req_;
+    SetServiceModeResponse set_service_resp_;
+    UpdateServiceListRequest update_service_req_;
+    UpdateServiceListResponse update_service_resp_;
+    GetServiceStateRequest get_svc_state_req_;
+    GetServiceStateResponse get_svc_state_resp_;
+    NotifyServiceState notify_svc_state;
+    StartServiceRequest start_svc_req_;
+    StartServiceResponse start_svc_resp_;
+    StopServiceRequest stop_svc_req_;
+    StopServiceResponse stop_svc_resp_;
 
-    CLIParser::MessageKind message_kind_;
+    CLIParser::MessageType message_kind_;
 
     DomainParticipant* participant_;
 

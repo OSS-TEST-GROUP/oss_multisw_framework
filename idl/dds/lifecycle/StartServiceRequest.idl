@@ -1,0 +1,12 @@
+#include "LifecycleCommon.idl"
+
+/* TopicName - mmf/lifecyclemgr/StartServiceRequest */
+struct StartServiceRequest {
+    sequence<string> service_list;
+    boolean is_group;
+};
+
+/* TopicName - mmf/lifecyclemgr/StartServiceResponse */
+struct StartServiceResponse {
+    ReturnCode ret_code;
+};
