@@ -9,7 +9,7 @@
 
 namespace diagnostic_manager {
 
-class ReceivedMessage : public RequestBase {
+class IncomingMessageBase : public RequestBase {
   public:
     void SetMessage(std::shared_ptr<Message> msg);
     std::shared_ptr<Message> GetMessage();

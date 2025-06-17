@@ -2,7 +2,7 @@
 
 #include "transmitter/MessageTransmitter.cpp"
 #include "transmitter/MessageProtocol.cpp"
-#include "transmitter/ReceivedMessage.cpp"
+#include "transmitter/request_msg/IncomingMessageBase.cpp"
 #include "transmitter/Message.cpp"
 #include "diagnostic/VariantData.cpp"
 
@@ -70,8 +70,8 @@ TEST_F(MessageTransmitterTest, Initialize_and_Finalize_TC001) {
 TEST_F(MessageTransmitterTest, AddSubscriber_TC001) {
     auto receive_func = [](std::shared_ptr<RequestBase> request) {
     };
-    auto message_creator = []() -> std::shared_ptr<ReceivedMessage> {
-        return std::make_shared<ReceivedMessage>();
+    auto message_creator = []() -> std::shared_ptr<IncomingMessageBase> {
+        return std::make_shared<IncomingMessageBase>();
     };
 
     EXPECT_EQ(0, ins->subscriber_list_.size());
@@ -87,8 +87,8 @@ TEST_F(MessageTransmitterTest, AddSubscriber_TC001) {
 }
 
 TEST_F(MessageTransmitterTest, RemoveSubscriber_TC001) {
-    auto message_creator = []() -> std::shared_ptr<ReceivedMessage> {
-        return std::make_shared<ReceivedMessage>();
+    auto message_creator = []() -> std::shared_ptr<IncomingMessageBase> {
+        return std::make_shared<IncomingMessageBase>();
     };
     ins->subscriber_list_[1] = std::move(SubscriberInfo(1, "Hello", message_creator, 1234));
 
@@ -123,8 +123,8 @@ TEST_F(MessageTransmitterTest, SubscribeMessage_TC001) {
 
     auto receive_func = [](std::shared_ptr<RequestBase> request) {
     };
-    auto message_creator = []() -> std::shared_ptr<ReceivedMessage> {
-        return std::make_shared<ReceivedMessage>();
+    auto message_creator = []() -> std::shared_ptr<IncomingMessageBase> {
+        return std::make_shared<IncomingMessageBase>();
     };
 
     EXPECT_EQ(0, ins->subscriber_list_.size());
@@ -153,8 +153,8 @@ TEST_F(MessageTransmitterTest, SubscribeMessage_TC002_FailedSubscribe) {
 
     auto receive_func = [](std::shared_ptr<RequestBase> request) {
     };
-    auto message_creator = []() -> std::shared_ptr<ReceivedMessage> {
-        return std::make_shared<ReceivedMessage>();
+    auto message_creator = []() -> std::shared_ptr<IncomingMessageBase> {
+        return std::make_shared<IncomingMessageBase>();
     };
 
     EXPECT_EQ(0, ins->subscriber_list_.size());
@@ -183,8 +183,8 @@ TEST_F(MessageTransmitterTest, UnsubscribeMessage_TC001) {
 
     auto receive_func = [](std::shared_ptr<RequestBase> request) {
     };
-    auto message_creator = []() -> std::shared_ptr<ReceivedMessage> {
-        return std::make_shared<ReceivedMessage>();
+    auto message_creator = []() -> std::shared_ptr<IncomingMessageBase> {
+        return std::make_shared<IncomingMessageBase>();
     };
 
     EXPECT_EQ(0, ins->subscriber_list_.size());
@@ -245,8 +245,8 @@ TEST_F(MessageTransmitterTest, ForwardDeliveredMessage_TC001) {
 
     auto receive_func = [](std::shared_ptr<RequestBase> request) {
     };
-    auto message_creator = []() -> std::shared_ptr<ReceivedMessage> {
-        return std::make_shared<ReceivedMessage>();
+    auto message_creator = []() -> std::shared_ptr<IncomingMessageBase> {
+        return std::make_shared<IncomingMessageBase>();
     };
 
     EXPECT_EQ(0, ins->subscriber_list_.size());
@@ -346,8 +346,8 @@ TEST_F(MessageTransmitterTest, MultiThreadTest_TC001) {
     auto test_thread_func = [&](int32_t idx) {
         auto receive_func = [](std::shared_ptr<RequestBase> request) {
         };
-        auto message_creator = []() -> std::shared_ptr<ReceivedMessage> {
-            return std::make_shared<ReceivedMessage>();
+        auto message_creator = []() -> std::shared_ptr<IncomingMessageBase> {
+            return std::make_shared<IncomingMessageBase>();
         };
         std::string subscriber_name = "HappySubscriber"; subscriber_name += idx;
         std::string subscription_name = "HelloTopic"; subscription_name += idx;

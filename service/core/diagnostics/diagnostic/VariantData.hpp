@@ -10,6 +10,7 @@
 namespace diagnostic_manager {
 
 class VariantData;
+class VariantValue;
 
 using VariantType = std::variant<
     char,
@@ -62,16 +63,21 @@ class VariantData {
         return std::get<T>(members_[name]);
     }
 
+    VariantValue GetValueAsVariant(const std::string& name);
+    VariantValue GetValueAsVariantFromList(const std::string& name, uint64_t index);
+
     VariantData* GetChild(const std::string& key);
     bool GetInt64(const std::string& key, int64_t& out);
     bool GetUInt64(const std::string& key, uint64_t& out);
     bool GetDouble(const std::string& key, double& out);
+    bool GetBoolean(const std::string& key, bool& out);
     bool GetString(const std::string& key, std::string& out);
 
     VariantData* GetChildFromList(const std::string& key, uint64_t idx);
     bool GetInt64FromList(const std::string& key, uint64_t idx, int64_t& out);
     bool GetUInt64FromList(const std::string& key, uint64_t idx, uint64_t& out);
     bool GetDoubleFromList(const std::string& key, uint64_t idx, double& out);
+    bool GetBooleanFromList(const std::string& key, uint64_t idx, bool& out);
     bool GetStringFromList(const std::string& key, uint64_t idx, std::string& out);
 
     std::type_index GetValueType(const std::string& name);
@@ -84,6 +90,15 @@ class VariantData {
   private:
     std::string name_;
     std::map<std::string, VariantType> members_;
+};
+
+class VariantValue {
+  public:
+    VariantValue();
+    virtual ~VariantValue();
+
+    std::type_index type;
+    VariantType value;
 };
 
 } // namespace diagnostic_manager

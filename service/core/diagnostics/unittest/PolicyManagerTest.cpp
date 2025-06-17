@@ -38,7 +38,7 @@ TEST_F(PolicyManagerTest, Initialize_TC001) {
 
 TEST_F(PolicyManagerTest, LoadAllPolicies_TC001) {
     ASSERT_TRUE(ins->LoadAllPolicy(config_path));
-    EXPECT_EQ(ins->GetPolicyNum(), 2);
+    EXPECT_EQ(ins->GetPolicyNum(), 3);
     EXPECT_EQ(ins->GetReferenceMessageNum(), 2);
 
     // Validate policies that read from test config.
@@ -54,12 +54,14 @@ TEST_F(PolicyManagerTest, LoadAllPolicies_TC001) {
     EXPECT_EQ(lifecycle_rules[0].message, "At least one service is not alive.");
     EXPECT_EQ(lifecycle_rules[0].conditions.size(), 1);
     EXPECT_EQ(lifecycle_rules[0].conditions[0], "LifecycleDiagReport.service_list[].service_state not in [1,2]");
+    EXPECT_EQ(lifecycle_rules[0].condition_operator, ConditionOperator::AND);
 
     EXPECT_EQ(lifecycle_rules[1].status, DiagInfoStatus::WARNING);
     EXPECT_EQ(lifecycle_rules[1].message, "AD SW is not initizlied yet.");
     EXPECT_EQ(lifecycle_rules[1].conditions.size(), 2);
     EXPECT_EQ(lifecycle_rules[1].conditions[0], "LifecycleDiagReport.initialized = false");
     EXPECT_EQ(lifecycle_rules[1].conditions[1], "LifecycleDiagReport.isConnected = false");
+    EXPECT_EQ(lifecycle_rules[1].condition_operator, ConditionOperator::AND);
 
     // Validate DiagPolicy: adsw_manager
     auto adsw = ins->GetPolicy(12);
@@ -79,12 +81,18 @@ TEST_F(PolicyManagerTest, LoadAllPolicies_TC001) {
     ASSERT_NE(ref1, nullptr);
     EXPECT_EQ(ref1->GetMessage(), "mmf/lifecyclemgr/LifecycleDiagReport");
     EXPECT_EQ(ref1->GetProtocol(), MessageProtocolType::DDS);
+    EXPECT_TRUE(ref1->CheckDiagCode(10));
+    EXPECT_TRUE(ref1->CheckDiagCode(11));
+    EXPECT_FALSE(ref1->CheckDiagCode(12));
 
     // Validate ReferenceMessage: ADSWManagerDiagReport
     auto ref2 = ins->GetReferenceMessage("ADSWManagerDiagReport");
     ASSERT_NE(ref2, nullptr);
     EXPECT_EQ(ref2->GetMessage(), "mmf/lifecyclemgr/ADSWManagerDiagReport");
     EXPECT_EQ(ref2->GetProtocol(), MessageProtocolType::DDS);
+    EXPECT_FALSE(ref2->CheckDiagCode(10));
+    EXPECT_FALSE(ref2->CheckDiagCode(11));
+    EXPECT_TRUE(ref2->CheckDiagCode(12));
 }
 
 TEST_F(PolicyManagerTest, GetPolicy_TC001) {

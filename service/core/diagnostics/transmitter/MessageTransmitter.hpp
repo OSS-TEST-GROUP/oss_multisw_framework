@@ -13,7 +13,7 @@
 #include "MessageProtocolType.hpp"
 #include "MessageProtocol.hpp"
 #include "MessageTransmitterType.hpp"
-#include "ReceivedMessage.hpp"
+#include "request_msg/IncomingMessageBase.hpp"
 
 namespace diagnostic_manager {
 

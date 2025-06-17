@@ -40,6 +40,8 @@ bool PolicyManager::LoadPolicy(const std::string& path) {
         return false;
     }
 
+    std::vector<std::shared_ptr<DiagPolicy>> diag_polices_temp;
+
     // Parse diagnostic policies
     if (root["diagnosic_policies"] && root["diagnosic_policies"].IsSequence()) {
         YAML::Node policiesNode = root["diagnosic_policies"];
@@ -68,6 +70,7 @@ bool PolicyManager::LoadPolicy(const std::string& path) {
                     }
                     std::string statusStr = ruleNode["status"].as<std::string>();
                     std::string messageStr = ruleNode["message"].as<std::string>();
+                    std::string conditionOperatorStr = ruleNode["condition_operator"].as<std::string>();
 
                     // Convert status string to DiagInfoStatus enum
                     DiagInfoStatus status = DiagInfoStatus::UNKNOWN;
@@ -91,8 +94,16 @@ bool PolicyManager::LoadPolicy(const std::string& path) {
                             conditions.push_back(condNode.as<std::string>());
                         }
                     }
+
+                    ConditionOperator condition_operator = ConditionOperator::AND;
+                    if (conditionOperatorStr == "AND") {
+                        condition_operator = ConditionOperator::AND;
+                    } else if (conditionOperatorStr == "OR") {
+                        condition_operator = ConditionOperator::OR;
+                    }
+
                     // Create a new DiagPolicyRule object and add it to the policy
-                    rules.emplace_back(status, messageStr, conditions);
+                    rules.emplace_back(status, messageStr, conditions, condition_operator);
                     // Assuming DiagPolicy has a method to add a rule (or accessible vector)
                 }
             }
@@ -102,6 +113,7 @@ bool PolicyManager::LoadPolicy(const std::string& path) {
 
             // Add the completed policy to the list (only if active or regardless? likely include all)
             policies_.push_back(policyObj);
+            diag_polices_temp.push_back(policyObj);
         }
     }
 
@@ -133,6 +145,14 @@ bool PolicyManager::LoadPolicy(const std::string& path) {
 
             // Create a ReferenceMessage object and add to the list
             std::shared_ptr<ReferenceMessage> refMsgObj = std::make_shared<ReferenceMessage>(refName, messageType, protoType);
+
+            // Insert diag code to be referred
+            for (auto& diag_policy : diag_polices_temp) {
+                if (HasConditionUsingReferenceMessage(diag_policy, refName)) {
+                    refMsgObj->SetDiagCode(diag_policy->GetDiagCode());
+                }
+            }
+
             reference_msgs_.push_back(refMsgObj);
         }
     }
@@ -174,6 +194,15 @@ std::shared_ptr<ReferenceMessage> PolicyManager::GetReferenceMessage(const std::
     return nullptr;
 }
 
+std::shared_ptr<ReferenceMessage> PolicyManager::GetReferenceMessageByMessageName(const std::string& name) {
+    for (const auto& refMsg : reference_msgs_) {
+        if (refMsg->GetMessage() == name) {
+            return refMsg;
+        }
+    }
+    return nullptr;
+}
+
 std::vector<std::shared_ptr<ReferenceMessage>> PolicyManager::GetAllReferenceMessage() {
     return reference_msgs_;
 }
@@ -184,6 +213,17 @@ uint64_t PolicyManager::GetPolicyNum() {
 
 uint64_t PolicyManager::GetReferenceMessageNum() {
     return static_cast<uint64_t>(reference_msgs_.size());
+}
+
+bool PolicyManager::HasConditionUsingReferenceMessage(std::shared_ptr<DiagPolicy> policy, const std::string& message) {
+    for (auto& diag_rule : policy->GetRules()) {
+        for (auto& condition : diag_rule.conditions) {
+            if (condition.find(message) != std::string::npos) {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 } // namespace diagnostic_manager

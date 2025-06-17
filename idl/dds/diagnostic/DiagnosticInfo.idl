@@ -1,5 +1,4 @@
 #include "DiagnosticCommon.idl"
-#include "common/Common.idl"
 
 /* TopicName - mmf/diagnosticmgr/DiagnosticStatusRequest */
 struct DiagnosticInfoRequest {

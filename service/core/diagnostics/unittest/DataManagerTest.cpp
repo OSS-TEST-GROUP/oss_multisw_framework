@@ -76,6 +76,42 @@ TEST_F(DataManagerTest, FetchPrimitiveArrayElement_TC003) {
     EXPECT_FLOAT_EQ(temperatures[2], 80.1f);
 }
 
+TEST_F(DataManagerTest, FetchAsVariantValuePrimitive_TC001) {
+    VariantValue rpm, temp;
+    EXPECT_TRUE(manager.FetchValueAsVariant("Engine.status.rpm", rpm));
+    EXPECT_TRUE(manager.FetchValueAsVariant("Engine.status.temp", temp));
+
+    EXPECT_EQ(rpm.type, std::type_index(typeid(int)));
+    EXPECT_EQ(std::get<int>(rpm.value), 3000);
+
+    EXPECT_EQ(temp.type, std::type_index(typeid(double)));
+    EXPECT_DOUBLE_EQ(std::get<double>(temp.value), 85.5);
+}
+
+TEST_F(DataManagerTest, FetchAsVariantValueNestedArrayElement_TC002) {
+    VariantValue rpm1, code2;
+    EXPECT_TRUE(manager.FetchValueAsVariant("Engine.status.reports[0].rpm", rpm1));
+    EXPECT_TRUE(manager.FetchValueAsVariant("Engine.status.reports[1].code", code2));
+
+    EXPECT_EQ(rpm1.type, std::type_index(typeid(int)));
+    EXPECT_EQ(std::get<int>(rpm1.value), 2500);
+
+    EXPECT_EQ(code2.type, std::type_index(typeid(std::string)));
+    EXPECT_EQ(std::get<std::string>(code2.value), "WARN");
+}
+
+TEST_F(DataManagerTest, FetchAsVariantValuePrimitiveArrayElement_TC003) {
+    VariantValue temp1, temp2;
+    EXPECT_TRUE(manager.FetchValueAsVariant("Engine.temperatures[0]", temp1));
+    EXPECT_TRUE(manager.FetchValueAsVariant("Engine.temperatures[2]", temp2));
+
+    EXPECT_EQ(temp1.type, std::type_index(typeid(float)));
+    EXPECT_FLOAT_EQ(std::get<float>(temp1.value), 60.0f);
+
+    EXPECT_EQ(temp2.type, std::type_index(typeid(float)));
+    EXPECT_FLOAT_EQ(std::get<float>(temp2.value), 80.1f);
+}
+
 TEST_F(DataManagerTest, InvalidKey_TC001) {
     int64_t test;
     EXPECT_FALSE(manager.FetchValue("Engine.invalidKey", test));

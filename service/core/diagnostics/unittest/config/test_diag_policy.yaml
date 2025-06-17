@@ -4,10 +4,27 @@ diagnosic_policies:
     rules :
       - status : "FATAL"
         message : "At least one service is not alive."
+        condition_operator : "AND"
         condition :
           - "LifecycleDiagReport.service_list[].service_state not in [1,2]"
       - status : "WARNING"
         message : "AD SW is not initizlied yet."
+        condition_operator : "AND"
+        condition :
+          - "LifecycleDiagReport.initialized = false"
+          - "LifecycleDiagReport.isConnected = false"
+    active : true
+  - code : 11
+    name : lifecycle2
+    rules :
+      - status : "FATAL"
+        message : "At least one service is not alive."
+        condition_operator : "AND"
+        condition :
+          - "LifecycleDiagReport.service_list[].service_state not in [1,2]"
+      - status : "WARNING"
+        message : "AD SW is not initizlied yet."
+        condition_operator : "OR"
         condition :
           - "LifecycleDiagReport.initialized = false"
           - "LifecycleDiagReport.isConnected = false"
@@ -17,6 +34,7 @@ diagnosic_policies:
     rules :
       - status : "FATAL"
         message : "AD SW Manager can't connect to Lifecycle Manager."
+        condition_operator : "OR"
         condition :
           - "ADSWManagerDiagReport.isConnected = false"
     active : true

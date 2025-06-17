@@ -5,6 +5,5 @@ enum DiagnosticStatusType
     FAIL
 };
 
-struct DummyType {
-};                 
-
+struct DiagnosticCommonDummy {
+};

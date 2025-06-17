@@ -10,6 +10,8 @@
 #include <fastdds/dds/xtypes/dynamic_types/DynamicDataFactory.hpp>
 #include <fastdds/dds/xtypes/dynamic_types/DynamicType.hpp>
 
+#include <fastdds/dds/log/Log.hpp>
+
 #include "transmitter/MessageProtocol.hpp"
 #include "transmitter/dds/DDSDynamicIDLParser.hpp"
 #include "diagnostic/VariantData.hpp"

@@ -26,12 +26,15 @@ public:
     std::shared_ptr<DiagPolicy> GetPolicyByName(const std::string& name);
 
     std::shared_ptr<ReferenceMessage> GetReferenceMessage(const std::string& name);
+    std::shared_ptr<ReferenceMessage> GetReferenceMessageByMessageName(const std::string& name);
     std::vector<std::shared_ptr<ReferenceMessage>> GetAllReferenceMessage();
 
     uint64_t GetPolicyNum();
     uint64_t GetReferenceMessageNum();
 
 private:
+    bool HasConditionUsingReferenceMessage(std::shared_ptr<DiagPolicy> policy, const std::string& message);
+
     // List of diagnostic policies
     std::vector<std::shared_ptr<DiagPolicy>> policies_;
 
