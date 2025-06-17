@@ -8,6 +8,10 @@ namespace diagnostic_manager {
 
 DDSProtocol::DDSProtocol() : participant_(nullptr), subscriber_(nullptr) {
     dds_dynamic_idl_parser_ = std::make_unique<DDSDynamicIDLParser>();
+
+    // Enable all logging categories
+    eprosima::fastdds::dds::Log::SetVerbosity(eprosima::fastdds::dds::Log::Info);
+    eprosima::fastdds::dds::Log::SetCategoryFilter(std::regex(""));
 }
 DDSProtocol::~DDSProtocol() {}
 
@@ -20,7 +24,6 @@ bool DDSProtocol::Initialize() {
     participant_ = factory->create_participant_with_default_profile(this, participant_mask);
 
     load_dds_dynamic_idl("idl");
-    std::cout << "Parsed " << parsed_dynamic_type_supports_.size() << " idl files dynamically." << std::endl;
 
     // Create the subscriber
     SubscriberQos sub_qos = SUBSCRIBER_QOS_DEFAULT;
@@ -336,12 +339,16 @@ bool DDSProtocol::DeserializeMessage(DynamicData::_ref_type dds_data, std::share
 }
 
 void DDSProtocol::load_dds_dynamic_idl(const std::string& path) {
-    dds_dynamic_idl_parser_->Initialize("idl");
+    if (!dds_dynamic_idl_parser_->Initialize("idl")) {
+        return;
+    }
     auto type_support_list = dds_dynamic_idl_parser_->ParseAll();
 
     for (auto& iter : type_support_list) {
         parsed_dynamic_type_supports_[iter->type_support->get_type_name()] = iter;
     }
+
+    std::cout << "Parsed " << parsed_dynamic_type_supports_.size() << " idl files dynamically." << std::endl;
 }
 
 // FastDDS override method

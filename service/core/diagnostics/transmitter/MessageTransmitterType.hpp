@@ -6,11 +6,11 @@
 #include <functional>
 
 #include "Message.hpp"
-#include "ReceivedMessage.hpp"
+#include "request_msg/IncomingMessageBase.hpp"
 
 namespace diagnostic_manager {
 
-using ReceiveMessageCreator = std::function<std::shared_ptr<ReceivedMessage>()>;
+using ReceiveMessageCreator = std::function<std::shared_ptr<IncomingMessageBase>()>;
 using ForwardFunctionType = std::function<void(std::shared_ptr<Message>)>;
 
 } // namespace diagnostic_manager

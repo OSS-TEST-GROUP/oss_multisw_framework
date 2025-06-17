@@ -9,8 +9,8 @@ class DiagPolicyTest : public ::testing::Test {
 protected:
     void SetUp() override {
         rules = {
-            MakeDummyRule(DiagInfoStatus::PASS, "All good", {"cond1"}),
-            MakeDummyRule(DiagInfoStatus::WARNING, "Voltage high", {"cond2", "cond3"})
+            MakeDummyRule(DiagInfoStatus::PASS, "All good", {"cond1"}, ConditionOperator::AND),
+            MakeDummyRule(DiagInfoStatus::WARNING, "Voltage high", {"cond2", "cond3"}, ConditionOperator::AND)
         };
 
         policy = new DiagPolicy(42, "VoltagePolicy", true, rules);
@@ -20,8 +20,8 @@ protected:
         delete policy;
     }
 
-    DiagPolicyRule MakeDummyRule(DiagInfoStatus status, const std::string& msg, const std::vector<std::string>& conditions) {
-        return DiagPolicyRule(status, msg, conditions);
+    DiagPolicyRule MakeDummyRule(DiagInfoStatus status, const std::string& msg, const std::vector<std::string>& conditions, ConditionOperator condition_operator) {
+        return DiagPolicyRule(status, msg, conditions, condition_operator);
     }
 
     DiagPolicy* policy;

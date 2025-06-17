@@ -20,23 +20,35 @@ set ( EXECUTOR_SRC
 )
 set ( TRANSMITTER_SRC
     transmitter/Message.cpp
-    transmitter/ReceivedMessage.cpp
+    transmitter/request_msg/IncomingMessageBase.cpp
     transmitter/MessageTransmitter.cpp
     transmitter/MessageProtocol.cpp
     transmitter/dds/DDSProtocol.cpp
     transmitter/dds/DDSDynamicIDLParser.cpp
 )
 
+set ( DIAGNOSTIC_ANALYZER_SRC
+    diagnostic_analyzer/DataManager.cpp
+    diagnostic_analyzer/DiagPolicyRule.cpp
+    diagnostic_analyzer/PolicyManager.cpp
+    diagnostic_analyzer/DiagPolicy.cpp
+    diagnostic_analyzer/DiagnosticAnalyzer.cpp
+    diagnostic_analyzer/ConditionEvaluator.cpp
+    diagnostic_analyzer/ReferenceMessage.cpp
+)
+
+
 set ( MAIN_SRC main.cc
                DiagnosticManager.cpp
                ${DIAGNOSTIC_SRC}
                ${EXECUTOR_SRC}
                ${TRANSMITTER_SRC}
+               ${DIAGNOSTIC_ANALYZER_SRC}
 )
 
 ## Library
 include_directories ( . )
-link_libraries ( pthread fastcdr fastdds )
+link_libraries ( pthread fastcdr fastdds yaml-cpp )
 #link_directories ( ${CMAKE_INSTALL_PREFIX} )
 
 ## Target binary

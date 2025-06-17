@@ -33,8 +33,8 @@ void MessageTransmitter::Finalize() {
 }
 
 int64_t MessageTransmitter::AddSubscriber(const std::string& name, ExecutorFunctionType func, ReceiveMessageCreator creator) {
-    std::shared_ptr<ReceivedMessage> received_messaged = creator();
-    TaskID task_id = service_executor_->AddTask(name, std::move(func), *received_messaged);
+    std::shared_ptr<IncomingMessageBase> incoming_msg_base = creator();
+    TaskID task_id = service_executor_->AddTask(name, std::move(func), *incoming_msg_base);
     if (task_id < 0) {
         std::cerr << "Failed to create the executor task. name=" << name << std::endl;
         return -1;

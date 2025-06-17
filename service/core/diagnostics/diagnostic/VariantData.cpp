@@ -10,6 +10,75 @@ std::string VariantData::GetName() {
     return name_;
 }
 
+VariantValue VariantData::GetValueAsVariant(const std::string& name) {
+    VariantValue value;
+    value.type = GetValueType(name);
+    value.value = members_[name];
+    return value;
+}
+
+
+VariantValue VariantData::GetValueAsVariantFromList(const std::string& name, uint64_t index) {
+    VariantValue value;
+
+    if (!HasKey(name)) return value;
+    auto& v_list = members_[name];
+    std::visit([&](auto&& val_list) -> void {
+        using T = std::decay_t<decltype(val_list)>;
+        if constexpr (std::is_same_v<T, std::vector<char>>) {
+            value.type = std::type_index(typeid(char));
+            if (index < val_list.size()) { value.value = val_list[index]; }
+        } else if constexpr (std::is_same_v<T, std::vector<wchar_t>>) {
+            value.type = std::type_index(typeid(wchar_t));
+            if (index < val_list.size()) { value.value = val_list[index]; }
+        } else if constexpr (std::is_same_v<T, std::vector<int8_t>>) {
+            value.type = std::type_index(typeid(int8_t));
+            if (index < val_list.size()) { value.value = val_list[index]; }
+        } else if constexpr (std::is_same_v<T, std::vector<int16_t>>) {
+            value.type = std::type_index(typeid(int16_t));
+            if (index < val_list.size()) { value.value = val_list[index]; }
+        } else if constexpr (std::is_same_v<T, std::vector<int32_t>>) {
+            value.type = std::type_index(typeid(int32_t));
+            if (index < val_list.size()) { value.value = val_list[index]; }
+        } else if constexpr (std::is_same_v<T, std::vector<int64_t>>) {
+            value.type = std::type_index(typeid(int64_t));
+            if (index < val_list.size()) { value.value = val_list[index]; }
+        } else if constexpr (std::is_same_v<T, std::vector<uint8_t>>) {
+            value.type = std::type_index(typeid(uint8_t));
+            if (index < val_list.size()) { value.value = val_list[index]; }
+        } else if constexpr (std::is_same_v<T, std::vector<uint16_t>>) {
+            value.type = std::type_index(typeid(uint16_t));
+            if (index < val_list.size()) { value.value = val_list[index]; }
+        } else if constexpr (std::is_same_v<T, std::vector<uint32_t>>) {
+            value.type = std::type_index(typeid(uint32_t));
+            if (index < val_list.size()) { value.value = val_list[index]; }
+        } else if constexpr (std::is_same_v<T, std::vector<uint64_t>>) {
+            value.type = std::type_index(typeid(uint64_t));
+            if (index < val_list.size()) { value.value = val_list[index]; }
+        } else if constexpr (std::is_same_v<T, std::vector<float>>) {
+            value.type = std::type_index(typeid(float));
+            if (index < val_list.size()) { value.value = val_list[index]; }
+        } else if constexpr (std::is_same_v<T, std::vector<double>>) {
+            value.type = std::type_index(typeid(double));
+            if (index < val_list.size()) { value.value = val_list[index]; }
+        } else if constexpr (std::is_same_v<T, std::vector<bool>>) {
+            value.type = std::type_index(typeid(bool));
+            if (index < val_list.size()) { value.value = val_list[index]; }
+        } else if constexpr (std::is_same_v<T, std::vector<std::string>>) {
+            value.type = std::type_index(typeid(std::string));
+            if (index < val_list.size()) { value.value = val_list[index]; }
+        } else if constexpr (std::is_same_v<T, std::vector<std::wstring>>) {
+            value.type = std::type_index(typeid(std::wstring));
+            if (index < val_list.size()) { value.value = val_list[index]; }
+        } else {
+            std::cerr << "It's not an vector." << std::endl;
+        }
+    }, v_list);
+
+    return value;
+}
+
+
 VariantData* VariantData::GetChild(const std::string& key) {
     if (!HasKey(key)) return nullptr;
 
@@ -55,6 +124,19 @@ bool VariantData::GetDouble(const std::string& key, double& out) {
         using T = std::decay_t<decltype(val)>;
         if constexpr (std::is_arithmetic_v<T>) {
             out = static_cast<double>(val);
+            return true;
+        }
+        return false;
+    }, v);
+}
+
+bool VariantData::GetBoolean(const std::string& key, bool& out) {
+    if (!HasKey(key)) return false;
+    auto& v = members_[key];
+    return std::visit([&](auto&& val) -> bool {
+        using T = std::decay_t<decltype(val)>;
+        if constexpr (std::is_same_v<T, bool>) {
+            out = static_cast<bool>(val);
             return true;
         }
         return false;
@@ -146,6 +228,21 @@ bool VariantData::GetDoubleFromList(const std::string& key, uint64_t idx, double
     }, v_list);
 }
 
+bool VariantData::GetBooleanFromList(const std::string& key, uint64_t idx, bool& out) {
+    if (!HasKey(key)) return false;
+    auto& v_list = members_[key];
+    return std::visit([&](auto&& val_list) -> bool {
+        using T = std::decay_t<decltype(val_list)>;
+        if constexpr (std::is_same_v<T, std::vector<bool>>) {
+            if (idx < val_list.size()) {
+                out = static_cast<bool>(val_list[idx]);
+                return true;
+            }
+        }
+        return false;
+    }, v_list);
+}
+
 bool VariantData::GetStringFromList(const std::string& key, uint64_t idx, std::string& out) {
     if (!HasKey(key)) return false;
     auto& v_list = members_[key];
@@ -187,5 +284,8 @@ std::vector<std::string> VariantData::GetKeyList() {
 uint64_t VariantData::GetValueNum() {
     return members_.size();
 }
+
+VariantValue::VariantValue() : type(typeid(void)) {}
+VariantValue::~VariantValue() {}
 
 } // namespace diagnostic_manager

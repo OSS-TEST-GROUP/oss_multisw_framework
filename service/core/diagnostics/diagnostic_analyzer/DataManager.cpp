@@ -15,6 +15,7 @@ bool DataManager::UpdateData(std::shared_ptr<VariantData> variant_data) {
 
     std::lock_guard<std::mutex> lock(data_handling_lock_);
     data_list_[name] = variant_data;
+    updated_data_list_.insert(variant_data);
     return true;
 }
 
@@ -26,11 +27,20 @@ std::shared_ptr<VariantData> DataManager::GetData(const std::string& name) {
     return it->second;
 }
 
+std::set<std::shared_ptr<VariantData>> DataManager::GetAllUpdatedData() {
+    std::set<std::shared_ptr<VariantData>> result;
+    {
+        std::lock_guard<std::mutex> lock(data_handling_lock_);
+        result.insert(updated_data_list_.begin(), updated_data_list_.end());
+        updated_data_list_.clear();
+    }
+    return result;
+}
 
 template<typename T>
 bool DataManager::FetchValue(const std::string& path, T& out) {
     // Ensure T is one of the supported types.
-    static_assert(std::is_same_v<T, int64_t> || std::is_same_v<T, uint64_t> ||
+    static_assert(std::is_same_v<T, int64_t> || std::is_same_v<T, uint64_t> || std::is_same_v<T, bool> ||
                   std::is_same_v<T, double> || std::is_same_v<T, std::string>,
                   "FetchValue supports only int64_t, uint64_t, double, or std::string.");
 
@@ -44,67 +54,82 @@ bool DataManager::FetchValue(const std::string& path, T& out) {
     std::lock_guard<std::mutex> lock(data_handling_lock_);
 
     std::shared_ptr<VariantData> root = GetData(tokens[0]);
-    VariantData* current = root.get();
+    VariantData* current = FindChildByExploring(root, tokens);
+    if (!current) {
+        return false;
+    }
 
-    for (size_t i = 1; i < tokens.size(); ++i) {
-        const std::string& token = tokens[i];
-        if (token.empty()) {
-            std::cerr << "FetchValue: Invalid empty token in path" << std::endl;
-            return false;
-        }
+    // Parse the current token for a key (name part) and optional indices.
+    std::string key_name;
+    std::vector<size_t> indices;
+    if (!GetIndiciesInfo(tokens.back(), key_name, indices)) {
+        std::cerr << "FetchValue: Faile to get indices." << std::endl;
+        return false;
+    }
 
-        // Parse the current token for a key (name part) and optional indices.
-        std::string key_name;
-        std::vector<size_t> indices;
-        if (!GetIndiciesInfo(token, key_name, indices)) {
-            std::cerr << "FetchValue: Faile to get indices." << std::endl;
-        }
-
-        if (i < tokens.size() - 1) {
-        // At the middle of tokens. Exploring in a tree of the VariantData.
-            VariantData* next = nullptr;
-            if (indices.empty()) {
-                next = current->GetChild(key_name);
-            } else {
-                next = current->GetChildFromList(key_name, indices[0]);
-            }
-
-            if (!next) {
-                return false;
-            }
-            current = next;
-
+    if (indices.empty()) {
+        if constexpr(std::is_same_v<T, int64_t>) {
+            return current->GetInt64(key_name, out);
+        } else if constexpr (std::is_same_v<T, uint64_t>) {
+            return current->GetUInt64(key_name, out);
+        } else if constexpr(std::is_same_v<T, double>) {
+            return current->GetDouble(key_name, out);
+        } else if constexpr(std::is_same_v<T, bool>) {
+            return current->GetBoolean(key_name, out);
+        } else if constexpr(std::is_same_v<T, std::string>) {
+            return current->GetString(key_name, out);
         } else {
-        // At the end of tokens. Getting a final value.
-            if (indices.empty()) {
-                if constexpr(std::is_same_v<T, int64_t>) {
-                    return current->GetInt64(key_name, out);
-                } else if constexpr (std::is_same_v<T, uint64_t>) {
-                    return current->GetUInt64(key_name, out);
-                } else if constexpr(std::is_same_v<T, double>) {
-                    return current->GetDouble(key_name, out);
-                } else if constexpr(std::is_same_v<T, std::string>) {
-                    return current->GetString(key_name, out);
-                } else {
-                    std::cerr << "No Output. not supported type." << std::endl;
-                }
-            } else {
-                if constexpr(std::is_same_v<T, int64_t>) {
-                    return current->GetInt64FromList(key_name, indices[0], out);
-                } else if constexpr (std::is_same_v<T, uint64_t>) {
-                    return current->GetUInt64FromList(key_name, indices[0], out);
-                } else if constexpr(std::is_same_v<T, double>) {
-                    return current->GetDoubleFromList(key_name, indices[0], out);
-                } else if constexpr(std::is_same_v<T, std::string>) {
-                    return current->GetStringFromList(key_name, indices[0], out);
-                } else {
-                    std::cerr << "No Output. not supported type." << std::endl;
-                }
-            }
+            std::cerr << "No Output. not supported type." << std::endl;
+        }
+    } else {
+        if constexpr(std::is_same_v<T, int64_t>) {
+            return current->GetInt64FromList(key_name, indices[0], out);
+        } else if constexpr (std::is_same_v<T, uint64_t>) {
+            return current->GetUInt64FromList(key_name, indices[0], out);
+        } else if constexpr(std::is_same_v<T, double>) {
+            return current->GetDoubleFromList(key_name, indices[0], out);
+        } else if constexpr(std::is_same_v<T, bool>) {
+            return current->GetBooleanFromList(key_name, indices[0], out);
+        } else if constexpr(std::is_same_v<T, std::string>) {
+            return current->GetStringFromList(key_name, indices[0], out);
+        } else {
+            std::cerr << "No Output. not supported type." << std::endl;
         }
     }
 
     return false;
+}
+
+bool DataManager::FetchValueAsVariant(const std::string& path, VariantValue& value) {
+    if (path.empty()) {
+        return false;
+    }
+
+    // Split the input path into tokens separated by '.'
+    std::vector<std::string> tokens = GetPathTokens(path);
+
+    std::lock_guard<std::mutex> lock(data_handling_lock_);
+
+    std::shared_ptr<VariantData> root = GetData(tokens[0]);
+    VariantData* current = FindChildByExploring(root, tokens);
+    if (!current) {
+        return false;
+    }
+
+    // Parse the current token for a key (name part) and optional indices.
+    std::string key_name;
+    std::vector<size_t> indices;
+    if (!GetIndiciesInfo(tokens.back(), key_name, indices)) {
+        std::cerr << "FetchValue: Faile to get indices." << std::endl;
+        return false;
+    }
+
+    if (indices.empty()) {
+        value = current->GetValueAsVariant(key_name);
+    } else {
+        value = current->GetValueAsVariantFromList(key_name, indices[0]);
+    }
+    return value.type != std::type_index(typeid(void));
 }
 
 std::vector<std::string> DataManager::GetPathTokens(const std::string& path) {
@@ -164,5 +189,46 @@ bool DataManager::GetIndiciesInfo(const std::string& token, std::string& key, st
 
     return true;
 }
+
+VariantData* DataManager::FindChildByExploring(std::shared_ptr<VariantData> root, std::vector<std::string> tokens) {
+    VariantData* current = root.get();
+    for (size_t i = 1; i < tokens.size() - 1; ++i) {
+        const std::string& token = tokens[i];
+        if (token.empty()) {
+            std::cerr << "FetchValue: Invalid empty token in path" << std::endl;
+            return nullptr;
+        }
+
+        // Parse the current token for a key (name part) and optional indices.
+        std::string key_name;
+        std::vector<size_t> indices;
+        if (!GetIndiciesInfo(token, key_name, indices)) {
+            std::cerr << "FetchValue: Faile to get indices." << std::endl;
+        }
+
+        if (i < tokens.size() - 1) {
+        // At the middle of tokens. Exploring in a tree of the VariantData.
+            VariantData* next = nullptr;
+            if (indices.empty()) {
+                next = current->GetChild(key_name);
+            } else {
+                next = current->GetChildFromList(key_name, indices[0]);
+            }
+
+            if (!next) {
+                return nullptr;
+            }
+            current = next;
+        }
+    }
+
+    return current;
+}
+
+template bool DataManager::FetchValue<int64_t>(const std::string&, int64_t&);
+template bool DataManager::FetchValue<uint64_t>(const std::string&, uint64_t&);
+template bool DataManager::FetchValue<double>(const std::string&, double&);
+template bool DataManager::FetchValue<bool>(const std::string&, bool&);
+template bool DataManager::FetchValue<std::string>(const std::string&, std::string&);
 
 } // namespace diagnostic_manager

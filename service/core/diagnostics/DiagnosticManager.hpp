@@ -4,6 +4,7 @@
 #include "executor/ServiceExecutor.hpp"
 #include "transmitter/MessageTransmitter.hpp"
 #include "diagnostic/DiagInfoRegistry.hpp"
+#include "diagnostic_analyzer/DiagnosticAnalyzer.hpp"
 
 namespace diagnostic_manager {
 
@@ -21,6 +22,7 @@ class DiagnosticManager {
     std::shared_ptr<ServiceExecutor> service_executor_;
     std::shared_ptr<MessageTransmitter> message_transmitter_;
     std::shared_ptr<DiagInfoRegistry> diag_info_registry_;
+    std::shared_ptr<DiagnosticAnalyzer> diagnostic_analyzer_;
 };
 
 } // namespace diagnostic_manager

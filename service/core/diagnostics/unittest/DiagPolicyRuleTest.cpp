@@ -8,7 +8,7 @@ class DiagPolicyRuleTest : public ::testing::Test {
 protected:
     void SetUp() override {
         conditions = {"cond_1", "cond_2"};
-        rule = new DiagPolicyRule(DiagInfoStatus::WARNING, "Voltage too high", conditions);
+        rule = new DiagPolicyRule(DiagInfoStatus::WARNING, "Voltage too high", conditions, ConditionOperator::AND);
     }
 
     void TearDown() override {
@@ -25,6 +25,7 @@ TEST_F(DiagPolicyRuleTest, ConstructorInitializesFields_TC001) {
     ASSERT_EQ(rule->conditions.size(), 2);
     EXPECT_EQ(rule->conditions[0], "cond_1");
     EXPECT_EQ(rule->conditions[1], "cond_2");
+    EXPECT_EQ(rule->condition_operator, ConditionOperator::AND);
 }
 
 int main(int argc, char* argv[]) {
