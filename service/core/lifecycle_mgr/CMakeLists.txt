@@ -8,10 +8,20 @@ project ( "lifecycle_mgr" )
 #endif()
 
 ## Source
+set ( MANAGER_SRC
+    manager/LifecycleManager.cpp
+    manager/ManagerBase.cpp
+    manager/LifecycleFactory.cpp
+)
+
 set ( ENDPOINT_SRC
     endpoint/LifecycleDiagReportEndPoint.cpp
     endpoint/SetServiceModeEndPoint.cpp
     endpoint/UpdateServiceListEndPoint.cpp
+    endpoint/GetServiceStateEndPoint.cpp
+    endpoint/NotifyServiceStateEndPoint.cpp
+    endpoint/StartServiceEndPoint.cpp
+    endpoint/StopServiceEndPoint.cpp
     endpoint/EndPointFactory.cpp
 )
 
@@ -48,9 +58,17 @@ set(GENERATED_DDS_FILES ${GENERATED_DIR}/lifecycle/LifecycleCommonPubSubTypes.cx
                         ${GENERATED_DIR}/lifecycle/SetServiceModeRequestTypeObjectSupport.cxx
                         ${GENERATED_DIR}/lifecycle/UpdateServiceListRequestPubSubTypes.cxx
                         ${GENERATED_DIR}/lifecycle/UpdateServiceListRequestTypeObjectSupport.cxx
+                        ${GENERATED_DIR}/lifecycle/StartServiceRequestPubSubTypes.cxx
+                        ${GENERATED_DIR}/lifecycle/StartServiceRequestTypeObjectSupport.cxx
+                        ${GENERATED_DIR}/lifecycle/StopServiceRequestPubSubTypes.cxx
+                        ${GENERATED_DIR}/lifecycle/StopServiceRequestTypeObjectSupport.cxx
+                        ${GENERATED_DIR}/lifecycle/GetServiceStateRequestPubSubTypes.cxx
+                        ${GENERATED_DIR}/lifecycle/GetServiceStateRequestTypeObjectSupport.cxx
+                        ${GENERATED_DIR}/lifecycle/NotifyServiceStatePubSubTypes.cxx
+                        ${GENERATED_DIR}/lifecycle/NotifyServiceStateTypeObjectSupport.cxx
 )
 set ( MAIN_SRC main.cc
-               LifecycleManager.cpp
+               ${MANAGER_SRC}
                ${ENDPOINT_SRC}
                ${POLICY_SRC}
                ${SERIVCE_SRC}

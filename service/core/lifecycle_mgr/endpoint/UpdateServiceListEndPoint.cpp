@@ -36,7 +36,7 @@ void UpdateServiceListEndPoint::OnDataAvailable(void* buffer){
                         << ", " << static_cast<int32_t>(svc->recovery_policy()) 
                         << ", " << static_cast<bool>(svc->is_enabled()) << std::endl;
 
-            //GetServieManager()->UpdateService();
+            //GetServieManager()->UpdateService(svc->name(), svc->service_type(), );
         }
     }
 
@@ -45,6 +45,14 @@ void UpdateServiceListEndPoint::OnDataAvailable(void* buffer){
 void* UpdateServiceListEndPoint::GetTopicBuffer(){
     return &data_;
 }
+
+
+void UpdateServiceListEndPoint::OnDataPublished(bool ret){
+
+    std::cout << "Message Published " << GetTopic() << ", " << ret << std::endl;
+
+}
+
 
 
 } // namespace lifecycle_manager

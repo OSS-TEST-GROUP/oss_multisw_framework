@@ -20,7 +20,10 @@ using namespace eprosima::fastdds::dds;
 namespace lifecycle_manager {
 
 DDSMessageEndPoint::DDSMessageEndPoint(std::string topic) 
-    : MessageEndPoint(topic){
+    : participant_(nullptr),
+    publisher_(nullptr),
+    subscriber_(nullptr), 
+    MessageEndPoint(topic){
 
 }
 
@@ -30,12 +33,11 @@ DDSMessageEndPoint::~DDSMessageEndPoint() {
 
 
 bool DDSMessageEndPoint::Initialize(DomainParticipant* participant, Publisher* publisher, Subscriber* subscriber){
-    std::cout << __FILE__ << " :: " << __LINE__ << std::endl;
 
     participant_ = participant;
     publisher_ = publisher;
     subscriber_ = subscriber;
-    
+        
     // Register the Type
     GetTypeSupport()->register_type(participant_);
 
@@ -47,25 +49,33 @@ bool DDSMessageEndPoint::Initialize(DomainParticipant* participant, Publisher* p
         return false;
     }
 
-    // Create the reader
-    DataReaderQos reader_qos = DATAREADER_QOS_DEFAULT;
-    subscriber_->get_default_datareader_qos(reader_qos);
-    reader_ = subscriber_->create_datareader(dds_topic_, reader_qos, this, StatusMask::all());
-    if (reader_ == nullptr)
+    if (publisher_ != nullptr)
     {
-        throw std::runtime_error("DataReader initialization failed");
+            // Create the data writer
+        DataWriterQos writer_qos = DATAWRITER_QOS_DEFAULT;
+        writer_qos.history().depth = 5;
+        publisher_->get_default_datawriter_qos(writer_qos);
+        writer_ = publisher_->create_datawriter(dds_topic_, writer_qos, this, StatusMask::all());
+        if (writer_ == nullptr)
+        {
+            throw std::runtime_error("DataWriter initialization failed");
+        }
+
     }
 
-
-    // Create the data writer
-    DataWriterQos writer_qos = DATAWRITER_QOS_DEFAULT;
-    writer_qos.history().depth = 5;
-    publisher_->get_default_datawriter_qos(writer_qos);
-    writer_ = publisher_->create_datawriter(dds_topic_, writer_qos, this, StatusMask::all());
-    if (writer_ == nullptr)
+    if (subscriber_ != nullptr)
     {
-        throw std::runtime_error("DataWriter initialization failed");
+        // Create the reader
+        DataReaderQos reader_qos = DATAREADER_QOS_DEFAULT;
+        subscriber_->get_default_datareader_qos(reader_qos);
+        reader_ = subscriber_->create_datareader(dds_topic_, reader_qos, this, StatusMask::all());
+        if (reader_ == nullptr)
+        {
+            throw std::runtime_error("DataReader initialization failed");
+        }
     }
+
+    
     std::cout << __FILE__ << " :: " << __LINE__ << std::endl;
 
     return true;
@@ -91,6 +101,8 @@ bool DDSMessageEndPoint::Write(const void* const data)
     if (!is_stopped())
     {
         ret = (RETCODE_OK == writer_->write(data));
+
+        OnDataPublished(ret);
     }
     return ret;
 }

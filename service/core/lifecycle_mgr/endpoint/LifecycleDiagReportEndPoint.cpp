@@ -47,4 +47,10 @@ void* LifecycleDiagReportEndPoint::GetTopicBuffer(){
 }
 
 
+void LifecycleDiagReportEndPoint::OnDataPublished(bool ret){
+
+    std::cout << "Message Published " << GetTopic() << ", " << ret << std::endl;
+
+}
+
 } // namespace lifecycle_manager

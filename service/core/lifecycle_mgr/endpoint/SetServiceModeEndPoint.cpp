@@ -37,4 +37,11 @@ void* SetServiceModeEndPoint::GetTopicBuffer(){
 }
 
 
+void SetServiceModeEndPoint::OnDataPublished(bool ret){
+
+    std::cout << "Message Published " << GetTopic() << ", " << ret << std::endl;
+
+}
+
+
 } // namespace lifecycle_manager

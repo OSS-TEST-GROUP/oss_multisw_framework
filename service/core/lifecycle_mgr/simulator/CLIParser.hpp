@@ -42,11 +42,23 @@ public:
         UNDEFINED
     };
 
-    enum class MessageKind : uint8_t
-    {
-        DIAG_REPORT =  0,
-        SET_SERVICE_MODE,
-        UPDATE_SERVICE_LIST,
+    enum class MessageType : uint8_t {
+        LIFECYCLE_DIAG_REPORT,
+        GET_SERVICE_STATE_REQUEST,
+        GET_SERVICE_STATE_RESPONSE,
+        NOTIFY_SERVICE_STATE,
+
+        SET_SERVICE_MODE_REQUST,
+        SET_SERVICE_MODE_RESPONSE,
+
+        START_SERVICE_REQUEST,
+        START_SERVICE_RESPONSE,
+
+        STOP_SERVICE_REQUEST,
+        STOP_SERVICE_RESPONSE,
+
+        UPDATE_SERVICE_LIST_REQUEST,
+        UPDATE_SERVICE_LIST_RESPONSE,
         INVALID
     };
 
@@ -67,7 +79,7 @@ public:
     struct hello_world_config
     {
         CLIParser::EntityKind entity = CLIParser::EntityKind::UNDEFINED;
-        CLIParser::MessageKind message = CLIParser::MessageKind::INVALID;
+        CLIParser::MessageType message = CLIParser::MessageType::INVALID;
         publisher_config pub_config;
         subscriber_config sub_config;
     };
@@ -249,13 +261,13 @@ public:
                 {
                     int input = std::stoi(argv[++i]);
                     if (input < std::numeric_limits<std::uint16_t>::min() ||
-                            input >= static_cast<int>(CLIParser::MessageKind::INVALID))
+                            input >= static_cast<int>(CLIParser::MessageType::INVALID))
                     {
                         throw std::out_of_range("matched argument out of range");
                     }
                     else
                     {
-                        config.message = static_cast<CLIParser::MessageKind>(input);
+                        config.message = static_cast<CLIParser::MessageType>(input);
                     }
                 }
                 catch (const std::invalid_argument& e)
@@ -326,28 +338,24 @@ public:
         }
     }
 
-    static std::string get_topic( MessageKind msg){
+    static std::string get_topic( MessageType msg){
         switch(msg){
-            case MessageKind::DIAG_REPORT : return "mmf/lifecyclemgr/LifecycleDiagReport";
-            case MessageKind::SET_SERVICE_MODE : return "mmf/lifecyclemgr/SetServiceModeRequest";
-            case MessageKind::UPDATE_SERVICE_LIST : return "mmf/lifecyclemgr/UpdateServiceListRequest";
+            case MessageType::LIFECYCLE_DIAG_REPORT : return "mmf/lifecyclemgr/LifecycleDiagReport";
+            case MessageType::SET_SERVICE_MODE_REQUST : return "mmf/lifecyclemgr/SetServiceModeRequest";
+            case MessageType::SET_SERVICE_MODE_RESPONSE : return "mmf/lifecyclemgr/SetServiceModeResponse";
+            case MessageType::GET_SERVICE_STATE_REQUEST : return "mmf/lifecyclemgr/GetServiceStateRequest";
+            case MessageType::GET_SERVICE_STATE_RESPONSE : return "mmf/lifecyclemgr/GetServiceStateResponse";
+            case MessageType::NOTIFY_SERVICE_STATE : return "mmf/lifecyclemgr/NotifyServiceState";
+
+            case MessageType::START_SERVICE_REQUEST : return "mmf/lifecyclemgr/StartServiceRequest";
+            case MessageType::START_SERVICE_RESPONSE : return "mmf/lifecyclemgr/StartServiceResponse";
+            case MessageType::STOP_SERVICE_REQUEST : return "mmf/lifecyclemgr/StopServiceRequest";
+            case MessageType::STOP_SERVICE_RESPONSE : return "mmf/lifecyclemgr/StopServiceResponse";
+            case MessageType::UPDATE_SERVICE_LIST_REQUEST : return "mmf/lifecyclemgr/UpdateServiceListRequest";
+            case MessageType::UPDATE_SERVICE_LIST_RESPONSE : return "mmf/lifecyclemgr/UpdateServiceListResponse";
         }
         return "hello_world_topic";
     }
-
-    static MessageKind get_msg_type( std::string topic){
-
-        if (topic == get_topic(MessageKind::DIAG_REPORT) ){
-            return MessageKind::DIAG_REPORT;
-        }else if (topic == get_topic(MessageKind::DIAG_REPORT)) {
-            return MessageKind::SET_SERVICE_MODE;
-        }else if (topic == get_topic(MessageKind::DIAG_REPORT)){
-            return MessageKind::UPDATE_SERVICE_LIST;
-        }
-
-        return MessageKind::INVALID;
-    }
-
 
 };
 

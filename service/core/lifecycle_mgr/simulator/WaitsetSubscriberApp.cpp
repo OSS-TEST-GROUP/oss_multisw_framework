@@ -38,6 +38,10 @@
 #include "lifecycle/LifecycleDiagReportPubSubTypes.hpp"
 #include "lifecycle/SetServiceModeRequestPubSubTypes.hpp"
 #include "lifecycle/UpdateServiceListRequestPubSubTypes.hpp"
+#include "lifecycle/GetServiceStateRequestPubSubTypes.hpp"
+#include "lifecycle/NotifyServiceStatePubSubTypes.hpp"
+#include "lifecycle/StartServiceRequestPubSubTypes.hpp"
+#include "lifecycle/StopServiceRequestPubSubTypes.hpp"
 
 using namespace eprosima::fastdds::dds;
 
@@ -49,7 +53,7 @@ namespace hello_world {
 WaitsetSubscriberApp::WaitsetSubscriberApp(
         const CLIParser::subscriber_config& config,
         const std::string& topic_name,
-        const CLIParser::MessageKind& message_kind)
+        const CLIParser::MessageType& message_kind)
     : participant_(nullptr)
     , subscriber_(nullptr)
     , topic_(nullptr)
@@ -70,19 +74,48 @@ WaitsetSubscriberApp::WaitsetSubscriberApp(
 
     switch(message_kind_)
     {
-        case CLIParser::MessageKind::DIAG_REPORT:
+       case CLIParser::MessageType::LIFECYCLE_DIAG_REPORT:
         {
             type_ = std::make_shared<TypeSupport>(new LifecycleDiagReportPubSubType());
         }
         break;
 
-        case CLIParser::MessageKind::SET_SERVICE_MODE:
+        case CLIParser::MessageType::GET_SERVICE_STATE_REQUEST:
+        case CLIParser::MessageType::GET_SERVICE_STATE_RESPONSE:
+        {
+            type_ = std::make_shared<TypeSupport>(new GetServiceStateRequestPubSubType());
+        }
+        break;
+
+        case CLIParser::MessageType::NOTIFY_SERVICE_STATE:
+        {
+            type_ = std::make_shared<TypeSupport>(new NotifyServiceStatePubSubType());
+        }
+        break;
+
+        case CLIParser::MessageType::SET_SERVICE_MODE_REQUST:
+        case CLIParser::MessageType::SET_SERVICE_MODE_RESPONSE:
         {
             type_ = std::make_shared<TypeSupport>(new SetServiceModeRequestPubSubType());
         }
         break;
 
-        case CLIParser::MessageKind::UPDATE_SERVICE_LIST:
+        case CLIParser::MessageType::START_SERVICE_REQUEST:
+        case CLIParser::MessageType::START_SERVICE_RESPONSE:
+        {
+            type_ = std::make_shared<TypeSupport>(new StartServiceRequestPubSubType());
+        }
+        break;
+
+        case CLIParser::MessageType::STOP_SERVICE_REQUEST:
+        case CLIParser::MessageType::STOP_SERVICE_RESPONSE:
+        {
+            type_ = std::make_shared<TypeSupport>(new StopServiceRequestPubSubType());
+        }
+        break;
+
+        case CLIParser::MessageType::UPDATE_SERVICE_LIST_REQUEST:
+        case CLIParser::MessageType::UPDATE_SERVICE_LIST_RESPONSE:
         {
             type_ = std::make_shared<TypeSupport>(new UpdateServiceListRequestPubSubType());
         }
@@ -180,14 +213,35 @@ void WaitsetSubscriberApp::run()
                     {
                         switch(message_kind_)
                         {
-                            case CLIParser::MessageKind::DIAG_REPORT:
+                            case CLIParser::MessageType::LIFECYCLE_DIAG_REPORT:
                                 ret_code = reader_->take_next_sample(&diag_report_, &info); break;
 
-                            case CLIParser::MessageKind::SET_SERVICE_MODE:
-                                ret_code = reader_->take_next_sample(&diag_report_, &info); break;
+                            case CLIParser::MessageType::START_SERVICE_REQUEST:
+                                ret_code = reader_->take_next_sample(&start_svc_req_, &info); break;
+                            case CLIParser::MessageType::START_SERVICE_RESPONSE:
+                                ret_code = reader_->take_next_sample(&start_svc_resp_, &info); break;
 
-                            case CLIParser::MessageKind::UPDATE_SERVICE_LIST:
-                                ret_code = reader_->take_next_sample(&diag_report_, &info); break;
+                            case CLIParser::MessageType::STOP_SERVICE_REQUEST:
+                                ret_code = reader_->take_next_sample(&stop_svc_req_, &info); break;
+                            case CLIParser::MessageType::STOP_SERVICE_RESPONSE:
+                                ret_code = reader_->take_next_sample(&stop_svc_resp_, &info); break;
+
+                            case CLIParser::MessageType::GET_SERVICE_STATE_REQUEST:
+                                ret_code = reader_->take_next_sample(&get_svc_state_req_, &info); break;
+                            case CLIParser::MessageType::GET_SERVICE_STATE_RESPONSE:
+                                ret_code = reader_->take_next_sample(&get_svc_state_resp_, &info); break;
+                            case CLIParser::MessageType::NOTIFY_SERVICE_STATE:
+                                ret_code = reader_->take_next_sample(&notify_svc_state, &info); break;
+
+                            case CLIParser::MessageType::SET_SERVICE_MODE_REQUST:
+                                ret_code = reader_->take_next_sample(&set_service_req_, &info); break;
+                            case CLIParser::MessageType::SET_SERVICE_MODE_RESPONSE:
+                                ret_code = reader_->take_next_sample(&set_service_resp_, &info); break;
+
+                            case CLIParser::MessageType::UPDATE_SERVICE_LIST_REQUEST:
+                                ret_code = reader_->take_next_sample(&update_service_req_, &info); break;
+                            case CLIParser::MessageType::UPDATE_SERVICE_LIST_RESPONSE:
+                                ret_code = reader_->take_next_sample(&update_service_resp_, &info); break;
                         }
 
                         if (RETCODE_OK != ret_code){

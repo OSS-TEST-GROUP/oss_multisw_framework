@@ -1,0 +1,8 @@
+#include "LifecycleCommon.idl"
+
+/* TopicName - mmf/lifecyclemgr/NotifyServiceState */
+struct NotifyServiceState {
+    sequence<string> service_list;
+    sequence<ServiceState> service_state_list;
+};
+

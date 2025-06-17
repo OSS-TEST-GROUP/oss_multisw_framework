@@ -5,6 +5,7 @@
 #include <map>
 #include <memory>
 #include <vector>
+#include <mutex>
 
 #include "Service.hpp"
 
@@ -21,22 +22,35 @@ class ServiceRegistry {
     void RemoveGroup(std::string name);
     bool IsGroup(std::string name);
 
-    bool AddService(std::string service, std::string group);
+    bool AddService(std::shared_ptr<Service> service, std::string group);
     void RemoveService(std::string name);
 
     std::shared_ptr<Service> GetService(std::string name);
     std::vector<std::shared_ptr<Service>> GetServicesByGroup(std::string group);
-    std::string GetGroupNameByService(std::string service);
+    std::string GetGroupNameByService(std::shared_ptr<Service> service);
 
     uint64_t GetServiceNum();
     uint64_t GetServiceNumInGroup(std::string group);
     uint64_t GetGroupNum();
 
+  private:
+    bool hasGroup(std::string name);
+    std::shared_ptr<std::vector<std::string>> getGroup(std::string name);
+
+    bool vectorAdd(std::vector<std::string> vec, std::string item);
+    bool vectorRemove(std::vector<std::string> vec, std::string item);
+    bool vectorHas(std::vector<std::string> vec, std::string item);
+
+    bool hasService(std::string name);
+    std::shared_ptr<Service> getService(std::string name);
 
   private:
     std::map<std::string, std::shared_ptr<Service>> services_;
+    std::map<std::string, std::shared_ptr<std::vector<std::string>>> groups_;
+    std::mutex lock_mutex_;    
 };
 
 } // namespace lifecycle_manager
 
 #endif // LIFECYCLE_SERVICE_REGISTRY_HPP_
+

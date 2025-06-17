@@ -57,6 +57,14 @@ set(GENERATED_DDS_FILES ${GENERATED_DIR}/lifecycle/LifecycleCommonPubSubTypes.cx
                         ${GENERATED_DIR}/lifecycle/SetServiceModeRequestTypeObjectSupport.cxx
                         ${GENERATED_DIR}/lifecycle/UpdateServiceListRequestPubSubTypes.cxx
                         ${GENERATED_DIR}/lifecycle/UpdateServiceListRequestTypeObjectSupport.cxx
+                        ${GENERATED_DIR}/lifecycle/StartServiceRequestPubSubTypes.cxx
+                        ${GENERATED_DIR}/lifecycle/StartServiceRequestTypeObjectSupport.cxx
+                        ${GENERATED_DIR}/lifecycle/StopServiceRequestPubSubTypes.cxx
+                        ${GENERATED_DIR}/lifecycle/StopServiceRequestTypeObjectSupport.cxx
+                        ${GENERATED_DIR}/lifecycle/GetServiceStateRequestPubSubTypes.cxx
+                        ${GENERATED_DIR}/lifecycle/GetServiceStateRequestTypeObjectSupport.cxx
+                        ${GENERATED_DIR}/lifecycle/NotifyServiceStatePubSubTypes.cxx
+                        ${GENERATED_DIR}/lifecycle/NotifyServiceStateTypeObjectSupport.cxx
 )
 include_directories ( ${GENERATED_DIR} )
 

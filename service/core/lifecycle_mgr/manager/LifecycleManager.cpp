@@ -1,5 +1,14 @@
 #include "LifecycleManager.hpp"
 
+#include "service/ServiceRegistry.hpp"
+#include "state/StateManager.hpp"
+#include "state/StateMonitor.hpp"
+
+#include "service/MWServiceManager.hpp"
+#include "transmitter/DDSTransmitter.hpp"
+#include "policy/PolicyManager.hpp"
+#include "endpoint/EndPointFactory.hpp"
+
 namespace lifecycle_manager {
 
 LifecycleManager::LifecycleManager() {}
@@ -8,28 +17,21 @@ LifecycleManager::~LifecycleManager() {}
 bool LifecycleManager::Initialize() {
 
     service_registry_ = std::make_shared<ServiceRegistry>();
-    state_manager_ = std::make_shared<StateManager>();
-
-    std::cout << __FILE__ << " :: " << __LINE__ << std::endl;
+    state_manager_ = std::make_shared<StateManager>(*this);
 
     state_monitor_ = std::make_shared<StateMonitor>();
-     std::cout << __FILE__ << " :: " << __LINE__ << std::endl;
 
     policy_manager_ = std::make_shared<PolicyManager>();
-    std::cout << __FILE__ << " :: " << __LINE__ << std::endl;
 
     mw_service_manager_ = std::make_shared<MWServiceManager>();
     mw_service_manager_->Initialize();
-    std::cout << __FILE__ << " :: " << __LINE__ << std::endl;
 
     msg_transmitter_ = std::make_shared<DDSTransmitter>();
     msg_transmitter_->Initialize();
 
-    std::cout << __FILE__ << " :: " << __LINE__ << std::endl;
-
     endpoint_factory_ = new EndPointFactory();
+    endpoint_factory_->Initialize();
     endpoint_factory_->CreateEndPoints(msg_transmitter_);
-    std::cout << __FILE__ << " :: " << __LINE__ << std::endl;
 
     return true;
 }
