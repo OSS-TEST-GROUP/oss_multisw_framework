@@ -65,3 +65,12 @@ install ( TARGETS ${PROJECT_NAME}
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
     )
+
+# Diag config
+install(
+    DIRECTORY
+        config
+    DESTINATION
+        bin
+    FILES_MATCHING PATTERN "*.yaml"
+)

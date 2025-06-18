@@ -8,6 +8,7 @@
 #include <mutex>
 
 #include "DataManager.hpp"
+#include "PolicyManager.hpp"
 
 namespace diagnostic_manager {
 
@@ -41,7 +42,7 @@ class ConditionExpression {
 
 class ConditionEvaluator {
   public:
-    ConditionEvaluator(std::shared_ptr<DataManager> data_manager);
+    ConditionEvaluator(std::shared_ptr<DataManager> data_manager, std::shared_ptr<PolicyManager> policy_manager);
     virtual ~ConditionEvaluator();
 
     bool EvaluateCondition(const std::string& condition);
@@ -67,6 +68,8 @@ class ConditionEvaluator {
     template<typename T>
     bool EvaluateOperandByOperatorWithList(T lh, const std::string& rh, ConditionOperatorType op);
 
+    std::string ResolveMessageName(const std::string& name);
+
     template<typename T>
     bool FetchOrParseValue(const std::string& operand, T& out);
 
@@ -74,6 +77,7 @@ class ConditionEvaluator {
     std::set<T> ParseArrayValue(const std::string& operand);
 
     std::shared_ptr<DataManager> data_manager_;
+    std::shared_ptr<PolicyManager> policy_manager_;
     std::unordered_map<std::string, ConditionExpression> condition_cache_;
 };
 

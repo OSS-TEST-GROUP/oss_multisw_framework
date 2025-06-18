@@ -9,14 +9,14 @@
 #include "PolicyManager.hpp"
 #include "DataManager.hpp"
 #include "ConditionEvaluator.hpp"
-#include "request_msg/DiagMessage.hpp"
 #include "transmitter/MessageTransmitter.hpp"
+#include "executor/ServiceExecutor.hpp"
 
 namespace diagnostic_manager {
 
 class DiagnosticAnalyzer {
 public:
-    DiagnosticAnalyzer(std::shared_ptr<MessageTransmitter> msg_transmitter);
+    DiagnosticAnalyzer(std::shared_ptr<ServiceExecutor> service_executor, std::shared_ptr<MessageTransmitter> msg_transmitter);
     virtual ~DiagnosticAnalyzer();
 
     bool Initialize();
@@ -37,12 +37,15 @@ private:
 
     bool initialized_{false};
 
+    std::shared_ptr<ServiceExecutor> service_executor_;
     std::shared_ptr<PolicyManager> policy_manager_;
     std::shared_ptr<DataManager> data_manager_;
     std::shared_ptr<ConditionEvaluator> condition_evaluator_;
 
     std::shared_ptr<MessageTransmitter> msg_transmitter_;
     int64_t subscriber_id_{-1};
+
+    std::chrono::steady_clock::time_point last_analyzed_;
 };
 
 }  // namespace diagnostic_manager

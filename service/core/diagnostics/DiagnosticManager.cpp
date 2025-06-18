@@ -21,7 +21,7 @@ bool DiagnosticManager::Initialize() {
 
     diag_info_registry_ = std::make_shared<DiagInfoRegistry>();
 
-    diagnostic_analyzer_ = std::make_shared<DiagnosticAnalyzer>(message_transmitter_);
+    diagnostic_analyzer_ = std::make_shared<DiagnosticAnalyzer>(service_executor_, message_transmitter_);
     diagnostic_analyzer_->Initialize();
 
     return true;

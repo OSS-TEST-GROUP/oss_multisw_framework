@@ -9,7 +9,7 @@ namespace diagnostic_manager {
 enum class DiagInfoStatus {
     UNKNOWN,
     PASS,
-    FAIL,
+    FATAL,
     WARNING,
 };
 

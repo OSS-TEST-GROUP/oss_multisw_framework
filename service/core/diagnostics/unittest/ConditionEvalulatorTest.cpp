@@ -2,6 +2,10 @@
 
 #include "diagnostic_analyzer/ConditionEvaluator.cpp"
 #include "diagnostic_analyzer/DataManager.cpp"
+#include "diagnostic_analyzer/PolicyManager.cpp"
+#include "diagnostic_analyzer/ReferenceMessage.cpp"
+#include "diagnostic_analyzer/DiagPolicy.cpp"
+#include "diagnostic_analyzer/DiagPolicyRule.cpp"
 #include "diagnostic/VariantData.cpp"
 
 using namespace diagnostic_manager;
@@ -10,12 +14,14 @@ class ConditionEvaluatorTest : public ::testing::Test {
 protected:
     virtual void SetUp() override {
         data_manager = std::make_shared<DataManager>();
-        ins = new ConditionEvaluator(data_manager);
+        policy_manager = std::make_shared<PolicyManager>();
+        ins = new ConditionEvaluator(data_manager, policy_manager);
     }
 
     virtual void TearDown(){
         delete ins;
         data_manager.reset();
+        policy_manager.reset();
     }
 
     template<typename ValueType>
@@ -26,7 +32,13 @@ protected:
         data_manager->UpdateData(data);
     }
 
+    void AddReferenceMessage(const std::string& name, const std::string& msg, MessageProtocolType protocol) {
+        auto ref_msg = std::make_shared<ReferenceMessage>(name, msg, protocol);
+        policy_manager->reference_msgs_.push_back(ref_msg);
+    }
+
     std::shared_ptr<DataManager> data_manager;
+    std::shared_ptr<PolicyManager> policy_manager;
     ConditionEvaluator* ins;
 };
 
@@ -46,19 +58,22 @@ TEST_F(ConditionEvaluatorTest, EvaluateCondition_Constant_Bool_IN) {
 }
 
 TEST_F(ConditionEvaluatorTest, EvaluateCondition_Variable_Int_IN) {
-    AddTestValue("Sensor", "value", 10);
+    AddTestValue("SensorMessage", "value", 10);
+    AddReferenceMessage("Sensor", "SensorMessage", MessageProtocolType::DDS);
     EXPECT_TRUE(ins->EvaluateCondition("Sensor.value in [8, 9, 10, 11]"));
     EXPECT_FALSE(ins->EvaluateCondition("Sensor.value in [1, 2, 3]"));
 }
 
 TEST_F(ConditionEvaluatorTest, EvaluateCondition_Variable_Bool_NOT_IN) {
-    AddTestValue("Config", "enabled", true);
+    AddTestValue("ConfigMessage", "enabled", true);
+    AddReferenceMessage("Config", "ConfigMessage", MessageProtocolType::DDS);
     EXPECT_FALSE(ins->EvaluateCondition("Config.enabled not in [true]"));
     EXPECT_TRUE(ins->EvaluateCondition("Config.enabled not in [false]"));
 }
 
 TEST_F(ConditionEvaluatorTest, EvaluateCondition_Variable_String_IN) {
-    AddTestValue("Meta", "type", std::string("sensor"));
+    AddTestValue("MetaMessage", "type", std::string("sensor"));
+    AddReferenceMessage("Meta", "MetaMessage", MessageProtocolType::DDS);
     EXPECT_TRUE(ins->EvaluateCondition("Meta.type in [\"sensor\", \"actuator\"]"));
     EXPECT_FALSE(ins->EvaluateCondition("Meta.type in [\"camera\"]"));
 }

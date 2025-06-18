@@ -379,7 +379,7 @@ void DDSProtocol::on_data_available(DataReader* reader) {
             // InstanceHandle_t publication_handle = info.publication_handle;
             // std::cout << "- Received a message. " << reader->get_topicdescription()->get_name() << " publication_handle=" << publication_handle << std::endl;
 
-            variant_data->SetName(topic_info->topic_type);
+            variant_data->SetName(topic_info->topic_name);
             if (DeserializeMessage(new_data, variant_data)) {
                 std::shared_ptr<Message> message = std::make_shared<Message>(
                     topic_info->topic_name, MessageProtocolType::DDS, topic_info->topic_type, variant_data
