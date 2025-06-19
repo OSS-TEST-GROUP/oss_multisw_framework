@@ -221,7 +221,11 @@ void ServiceExecutor::RunScheduler(const uint32_t idx) {
                 }
             }
             if (task) {
-                task->Execute(request);
+                try {
+                    task->Execute(request);
+                } catch (const std::exception& e) {
+                    std::cerr << "Exception during task execution: name=" << task->GetName() << ", " << e.what() << std::endl;
+                }
                 task.reset();
             }
             request.reset();
@@ -237,7 +241,6 @@ void ServiceExecutor::RunScheduler(const uint32_t idx) {
             if (service_task_list_.count(task->GetTaskId()) == 0) {
                 task_interval_queue_.pop();
                 task.reset();
-                std::cout << "Removed task." << std::endl;
             } else {
                 TaskTime execution_time = task->GetNextExecutionTime();
                 if (current < execution_time) {
@@ -253,7 +256,11 @@ void ServiceExecutor::RunScheduler(const uint32_t idx) {
         }
         lk_request.unlock();
         if (task) {
-            task->Execute(nullptr);
+            try {
+                task->Execute(nullptr);
+            } catch (const std::exception& e) {
+                std::cerr << "Exception during task execution: name=" << task->GetName() << ", " << e.what() << std::endl;
+            }
 
             TaskTime next_exec_time = current + task->GetInterval();
             task->SetNextExecutionTime(next_exec_time);
