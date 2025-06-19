@@ -7,13 +7,12 @@
 
 namespace lifecycle_manager {
 
-class PolicyOnNotResponding : PolicyBase {
+class PolicyOnNotResponding : public PolicyBase {
   public:
-    PolicyOnNotResponding();
+    PolicyOnNotResponding(RecoveryPolicy policy, std::string name);
     virtual ~PolicyOnNotResponding();
 
-    std::string GetName();
-    ServiceControlAction Evaluate();
+    ServiceControlAction Evaluate(std::shared_ptr<Service> service) override;
 
   private:
 };

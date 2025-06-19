@@ -1,9 +1,11 @@
 #include "LifecycleFactory.hpp"
+#include "logger/Log.hpp"
 
 namespace lifecycle_manager {
 
 LifecycleFactory::LifecycleFactory() :lifecycle_manager_(nullptr)
 {
+    LOG_INFO("Const Factory");
 }
 
 LifecycleFactory::~LifecycleFactory() {}

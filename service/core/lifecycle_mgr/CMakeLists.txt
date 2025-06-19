@@ -28,6 +28,12 @@ set ( ENDPOINT_SRC
 
 set ( POLICY_SRC
     policy/PolicyManager.cpp
+    policy/PolicyBase.cpp    
+    policy/PolicyAlways.cpp
+    policy/PolicyManual.cpp
+    policy/PolicyOnSuccess.cpp
+    policy/PolicyOnFailure.cpp
+    policy/PolicyOnNotResponding.cpp
 )
 
 set ( SERIVCE_SRC
@@ -35,6 +41,7 @@ set ( SERIVCE_SRC
     service/MWServiceManager.cpp
     service/Service.cpp
     service/ServiceRegistry.cpp
+    service/ArgumentConfig.cpp
 )
 
 set ( STATE_SRC
@@ -46,6 +53,10 @@ set ( TRANSMITTER_SRC
     transmitter/DDSMessageEndPoint.cpp
     transmitter/DDSTransmitter.cpp
     transmitter/MessageEndPoint.cpp
+)
+
+set ( MISC_SRC
+    logger/Logger.cpp
 )
 
 # IDL generation
@@ -74,12 +85,13 @@ set ( MAIN_SRC main.cc
                ${SERIVCE_SRC}
                ${STATE_SRC}
                ${TRANSMITTER_SRC}
+               ${MISC_SRC}
 )
 
 ## Library
 include_directories ( . )
 include_directories ( ${GENERATED_DIR} )
-link_libraries ( pthread fastcdr fastdds )
+link_libraries ( pthread fastcdr fastdds yaml-cpp )
 #link_directories ( ${CMAKE_INSTALL_PREFIX} )
 
 ## Target binary

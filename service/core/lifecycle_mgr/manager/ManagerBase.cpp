@@ -13,6 +13,12 @@ ManagerBase::~ManagerBase() {}
 std::shared_ptr<DDSTransmitter> ManagerBase::GetTransmitter(){
     return lifecycle_.GetTransmitter();
 }
+std::shared_ptr<ServiceRegistry> ManagerBase::GetRegistry(){
+    return lifecycle_.GetRegistry();
+}
+std::shared_ptr<PolicyManager> ManagerBase::GetPolicy(){
+    return lifecycle_.GetPolicy();
+}
 
 const char* ManagerBase::GetTopic(MessageType mtype){
     
@@ -22,6 +28,10 @@ const char* ManagerBase::GetTopic(MessageType mtype){
         return (factory->GetTopic(mtype));
     }
     return nullptr;
+}
+
+std::shared_ptr<Service> ManagerBase::GetService(std::string name){
+    return lifecycle_.GetService(name);
 }
 
 } // namespace lifecycle_manager

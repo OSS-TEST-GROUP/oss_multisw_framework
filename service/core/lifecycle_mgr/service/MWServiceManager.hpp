@@ -20,12 +20,16 @@ class MWServiceManager {
     bool Start();
     void Stop();
 
-    void LoadMWConfig(std::string path);
+    bool LoadMWConfig(std::string path);
 
-    void StartMWService(std::string mw_service);
-    void StopMWService(std::string mw_service);
+    void StartMWService(std::shared_ptr<MWService> mw_service);
+    void StopMWService(std::shared_ptr<MWService> mw_service);
 
     void RunMWServiceManagement();
+
+  private :
+    pid_t run_process(const std::vector<std::string>& args);
+    bool kill_process(pid_t pid);
 
   private:
      std::map<std::string, std::shared_ptr<MWService>> mw_services_;

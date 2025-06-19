@@ -1,6 +1,8 @@
 #include "NotifyServiceStateEndPoint.hpp"
 
 #include "lifecycle/NotifyServiceState.hpp"
+#include "manager/LifecycleFactory.hpp"
+#include "state/StateMonitor.hpp"
 
 namespace lifecycle_manager {
 
@@ -23,6 +25,12 @@ void NotifyServiceStateEndPoint::OnDataAvailable(void* buffer){
     if (buffer != nullptr){
 
         NotifyServiceState* message = reinterpret_cast<NotifyServiceState*>(buffer);
+
+        std::shared_ptr<StateMonitor> manager = LifecycleFactory::GetInstance()->GetMonitor();
+
+        if (manager != nullptr){
+            manager->UpdateServicesState(message);            
+        }
 
         std::cout << "Message Delivery for " << GetTopic() << std::endl;
     }

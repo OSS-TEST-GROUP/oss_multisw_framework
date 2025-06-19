@@ -2,6 +2,9 @@
 
 #include "lifecycle/SetServiceModeRequest.hpp"
 
+#include "manager/LifecycleFactory.hpp"
+#include "state/StateManager.hpp"
+
 namespace lifecycle_manager {
 
 
@@ -28,6 +31,11 @@ void SetServiceModeEndPoint::OnDataAvailable(void* buffer){
 
         std::cout << "count : " << message->service_list().size() << std::endl;
 
+        std::shared_ptr<StateManager> manager = LifecycleFactory::GetInstance()->GetState();
+
+        if (manager != nullptr){
+            manager->SetServiceMode(message);            
+        }
     }
 
 }

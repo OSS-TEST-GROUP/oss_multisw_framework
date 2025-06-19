@@ -4,35 +4,30 @@
 
 #include "manager/ManagerBase.hpp"
 #include "transmitter/DDSTransmitter.hpp"
+#include "service/ServiceRegistry.hpp"
+#include "include/TypeConvert.hpp"
 
-#include "lifecycle/GetServiceStateRequest.hpp"
-#include "lifecycle/StartServiceRequest.hpp"
-#include "lifecycle/StopServiceRequest.hpp"
+#include "service/Service.hpp"
 
 namespace lifecycle_manager {
 
 StateManager::StateManager(LifecycleManager& lifecycle)
     : ManagerBase(lifecycle){
-
 }
 StateManager::~StateManager() {}
 
 
 bool StateManager::Start() {
 
-    StartThread();
-    RunThread();
-
     return true;
 }
 
 void StateManager::Stop() {
 
-    StopThread();
     
 }
 
-bool StateManager::StartService(std::string name) {
+bool StateManager::StartService(std::shared_ptr<Service> service) {
 
     std::shared_ptr<DDSTransmitter> transmitter = GetTransmitter();
 
@@ -46,15 +41,28 @@ bool StateManager::StartService(std::string name) {
             void* writeptr = endpoint->GetTopicBuffer();
             StartServiceRequest* data = reinterpret_cast<StartServiceRequest*>(writeptr);
 
-            data->service_list().push_back(name);
-            data->is_group() = true;
+            data->service_list().push_back(service->GetName());
+            data->is_group() = false;
 
+#if 0
+            std::shared_ptr<ServiceRegistry> registry = GetRegistry();
+
+            if (registry){
+                std::vector<std::string> list = registry->GetServicesNameByGroup("");
+
+                for( auto svc = list.begin(); svc != list.end(); ++svc ){
+                    data->service_list().push_back(*svc);
+                }
+                data->is_group() = false;
+            }
+#endif            
             endpoint->Write(writeptr);
         }
     }
     return true;
 }
-void StateManager::StopService(std::string name) {
+
+void StateManager::StopService(std::shared_ptr<Service> service) {
 
     std::shared_ptr<DDSTransmitter> transmitter = GetTransmitter();
 
@@ -68,91 +76,76 @@ void StateManager::StopService(std::string name) {
             void* writeptr = endpoint->GetTopicBuffer();
             StopServiceRequest* data = reinterpret_cast<StopServiceRequest*>(writeptr);
 
-            data->service_list().push_back(name);
-            data->is_group() = true;
+            data->service_list().push_back(service->GetName());
+            data->is_group() = false;
 
             endpoint->Write(writeptr);
         }
     }
 }
 
-bool StateManager::SetServiceMode(std::string service, ServiceMode mode){
-    return false;
-}
+bool StateManager::SetServiceMode(::SetServiceModeRequest* message){
 
-void StateManager::ProcessServiceHandling(std::vector<std::string> service_list){
+    std::vector<std::string> *slist = &message->service_list();
     
-}
+    ServiceMode service_mode = TypeConvert::ToServiceMode(message->service_mode());
 
+    for( auto svc = slist->begin(); svc != slist->end(); ++svc ){
+        std::shared_ptr<Service> service = GetService(*svc);
 
-void StateManager::StartThread()
-{
-    stop_thread_ = false;
-    processing_thread_ = std::thread(&StateManager::RunThread, this);
-}
-
-void StateManager::StopThread()
-{
-    stop_thread_ = true;
-    
-    if (processing_thread_.joinable())
-    {
-        processing_thread_.join();
+        if (service != nullptr){
+            service->SetServiceMode(service_mode);
+        }
     }
+    return true;
 }
 
-void StateManager::RunThread()
-{
-    while(!stop_thread_)
-	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(10000));
+void StateManager::ProcessServiceHandling(std::set<std::shared_ptr<Service>> service_list){
 
-        RequestGetState();
+    /* udpated service list passed */
 
-        std::cout << __FILE__ << " :: " << __LINE__ << std::endl;
-	}
-}
+    std::shared_ptr<PolicyManager> policy_manager = GetPolicy();
+    
+    for( auto service = service_list.begin(); service != service_list.end(); ++service ){
 
+        ServiceControlAction action = policy_manager->Evaluate(*service);
 
-void StateManager::RequestGetState(){
+        switch (action)
+        {
+        case ServiceControlAction::START:
+            /* code */
+            StartService(*service);
+            break;
 
-    std::shared_ptr<DDSTransmitter> transmitter = GetTransmitter();
+        case ServiceControlAction::STOP:
+            /* code */
+            StopService(*service);
+            break;
 
-    if (transmitter != nullptr)
-    {
-        const char* topic = GetTopic(MessageType::GET_SERVICE_STATE_REQUEST);
-        
-        std::shared_ptr<DDSMessageEndPoint> endpoint = transmitter->GetMessageEndPoint(topic);
-
-        if (endpoint != nullptr){
-            void* writeptr = endpoint->GetTopicBuffer();
-            GetServiceStateRequest* data = reinterpret_cast<GetServiceStateRequest*>(writeptr);
-
-            data->service_list().push_back("service1");
-            data->service_list().push_back("service2");
-            data->is_all_service() = true;
-
-            endpoint->Write(writeptr);
+        default:
+            break;
         }
     }
 }
 
-void StateManager::OnGetServiceResponse(void* data){
 
-    if (data){
+void StateManager::OnStart(::StartServiceResponse* message){
 
-        GetServiceStateResponse* response = reinterpret_cast<GetServiceStateResponse*>(data);
-
-        std::vector<std::string> *slist = &response->service_list();
-        std::vector<::ServiceState> *statelist = &response->service_state_list();
-
-        for( auto svc = slist->begin(); svc != slist->end(); ++svc ){
-            
-            //GetServieManager()->UpdateService();
+    if (message){
+        if( message->ret_code() != ::ReturnCode::SUCCESS){
+            // error 
         }
-        response->service_list();
     }
 
 }
+
+void StateManager::OnStop(::StopServiceResponse* message){
+    if (message){
+        if( message->ret_code() != ::ReturnCode::SUCCESS){
+            // error 
+        }
+    }
+}
+    
 
 } // namespace lifecycle_manager

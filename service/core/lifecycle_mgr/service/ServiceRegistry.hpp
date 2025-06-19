@@ -9,6 +9,8 @@
 
 #include "Service.hpp"
 
+#include "lifecycle/UpdateServiceListRequest.hpp"
+
 namespace lifecycle_manager {
 
 class ServiceRegistry {
@@ -16,7 +18,7 @@ class ServiceRegistry {
     ServiceRegistry();
     virtual ~ServiceRegistry();
 
-    bool UpdateServiceList();
+    bool UpdateServiceList(UpdateServiceListRequest* update);
 
     void AddGroup(std::string name);
     void RemoveGroup(std::string name);
@@ -27,6 +29,7 @@ class ServiceRegistry {
 
     std::shared_ptr<Service> GetService(std::string name);
     std::vector<std::shared_ptr<Service>> GetServicesByGroup(std::string group);
+    std::vector<std::string> GetServicesNameByGroup(std::string group);
     std::string GetGroupNameByService(std::shared_ptr<Service> service);
 
     uint64_t GetServiceNum();

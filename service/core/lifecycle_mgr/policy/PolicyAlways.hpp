@@ -7,13 +7,12 @@
 
 namespace lifecycle_manager {
 
-class PolicyAlways : PolicyBase {
+class PolicyAlways : public PolicyBase {
   public:
-    PolicyAlways();
+    PolicyAlways(RecoveryPolicy policy, std::string name);
     virtual ~PolicyAlways();
 
-    std::string GetName();
-    ServiceControlAction Evaluate();
+    ServiceControlAction Evaluate(std::shared_ptr<Service> service) override;
 
   private:
 };

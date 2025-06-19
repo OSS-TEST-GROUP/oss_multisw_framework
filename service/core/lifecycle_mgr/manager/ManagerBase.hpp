@@ -8,6 +8,7 @@ namespace lifecycle_manager {
 
 class LifecycleManager;
 class DDSTransmitter;
+class Service;
 
 class ManagerBase {
   public:
@@ -15,7 +16,12 @@ class ManagerBase {
     virtual ~ManagerBase();
 
     std::shared_ptr<DDSTransmitter> GetTransmitter();
+    std::shared_ptr<Service> GetService(std::string name);
+    std::shared_ptr<ServiceRegistry> GetRegistry();
+    std::shared_ptr<PolicyManager> GetPolicy();
+    
     const char* GetTopic(MessageType mtype);
+    
 
   private:
     LifecycleManager& lifecycle_;

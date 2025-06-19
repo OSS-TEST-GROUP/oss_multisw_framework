@@ -7,13 +7,12 @@
 
 namespace lifecycle_manager {
 
-class PolicyOnFailure : PolicyBase {
+class PolicyOnFailure : public PolicyBase {
   public:
-    PolicyOnFailure();
+    PolicyOnFailure(RecoveryPolicy policy, std::string name);
     virtual ~PolicyOnFailure();
 
-    std::string GetName();
-    ServiceControlAction Evaluate();
+    ServiceControlAction Evaluate(std::shared_ptr<Service> service) override;
 
   private:
 };

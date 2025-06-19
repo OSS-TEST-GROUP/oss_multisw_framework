@@ -1,6 +1,8 @@
 #include "StopServiceEndPoint.hpp"
 
 #include "lifecycle/StopServiceRequest.hpp"
+#include "manager/LifecycleFactory.hpp"
+#include "state/StateManager.hpp"
 
 namespace lifecycle_manager {
 
@@ -25,6 +27,12 @@ void StopServiceEndPoint::OnDataAvailable(void* buffer){
         StopServiceResponse* message = reinterpret_cast<StopServiceResponse*>(buffer);
 
         std::cout << "Message Delivery for " << GetTopic() << std::endl;
+
+        std::shared_ptr<StateManager> manager = LifecycleFactory::GetInstance()->GetState();
+
+        if (manager != nullptr){
+            manager->OnStop(message);            
+        }
     }
 
 }
