@@ -2,6 +2,7 @@
 
 #include "lifecycle/GetServiceStateRequest.hpp"
 #include "manager/LifecycleFactory.hpp"
+#include "state/StateMonitor.hpp"
 
 namespace lifecycle_manager {
 
@@ -23,12 +24,12 @@ void GetServiceStateEndPoint::OnDataAvailable(void* buffer){
 
     if (buffer != nullptr){
 
-        GetServiceStateResponse* message = reinterpret_cast<GetServiceStateResponse*>(buffer);
+        GetServiceStateResponse* response = reinterpret_cast<GetServiceStateResponse*>(buffer);
 
-        std::shared_ptr<StateManager> manager = LifecycleFactory::GetInstance()->GetState();
+        std::shared_ptr<StateMonitor> manager = LifecycleFactory::GetInstance()->GetMonitor();
 
         if (manager != nullptr){
-            
+            manager->UpdateServicesState(response);            
         }
 
         std::cout << "Message Delivery for " << GetTopic() << std::endl;

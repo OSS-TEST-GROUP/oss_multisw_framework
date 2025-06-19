@@ -13,6 +13,7 @@ class PolicyManager;
 class MWServiceManager;
 class DDSTransmitter;
 class EndPointFactory;
+class Service;
 
 class LifecycleManager {
   public:
@@ -50,6 +51,8 @@ class LifecycleManager {
     std::shared_ptr<ServiceRegistry> GetRegistry(){
       return service_registry_;
     }    
+
+    std::shared_ptr<Service> GetService(std::string name);
 
   private:
     std::shared_ptr<ServiceRegistry> service_registry_;

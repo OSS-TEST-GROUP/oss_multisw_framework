@@ -11,8 +11,10 @@
 namespace lifecycle_manager {
 
 class Service {
+
   public:
     Service();
+    Service(const std::string& name, const ServiceType type, const RecoveryPolicy policy, const bool enabled);
     virtual ~Service();
 
     std::string GetName();
@@ -27,11 +29,11 @@ class Service {
     void SetServiceState(ServiceState state);
     ServiceState GetLastServiceState();    
 
-
     int32_t GetRecoverdCount();
     void IncreateRecoverdCount();
     void ClearRecoverdCount();
 
+    void Print();
 
   private:
     std::string name_;

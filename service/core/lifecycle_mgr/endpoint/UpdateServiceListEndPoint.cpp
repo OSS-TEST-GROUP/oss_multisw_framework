@@ -2,6 +2,9 @@
 
 #include "lifecycle/UpdateServiceListRequest.hpp"
 
+#include "manager/LifecycleFactory.hpp"
+#include "service/ServiceRegistry.hpp"
+
 namespace lifecycle_manager {
 
 
@@ -25,21 +28,14 @@ void UpdateServiceListEndPoint::OnDataAvailable(void* buffer){
         UpdateServiceListRequest* message = reinterpret_cast<UpdateServiceListRequest*>(buffer);
 
         std::cout << "Message Delivery for " << GetTopic() << std::endl;
-
         std::cout << "count : " << message->service_list().size() << std::endl;
 
-        std::vector<::Service> *slist = &message->service_list();
+        std::shared_ptr<ServiceRegistry> manager = LifecycleFactory::GetInstance()->GetRegistry();
 
-        for( auto svc = slist->begin(); svc != slist->end(); ++svc ){
-            std::cout << "service " << svc->name() 
-                        << ", " << static_cast<int32_t>(svc->service_type()) 
-                        << ", " << static_cast<int32_t>(svc->recovery_policy()) 
-                        << ", " << static_cast<bool>(svc->is_enabled()) << std::endl;
-
-            //GetServieManager()->UpdateService(svc->name(), svc->service_type(), );
+        if (manager != nullptr){
+            manager->UpdateServiceList(message);            
         }
     }
-
 }
 
 void* UpdateServiceListEndPoint::GetTopicBuffer(){

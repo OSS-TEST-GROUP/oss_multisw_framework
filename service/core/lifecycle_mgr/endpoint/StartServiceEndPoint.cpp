@@ -1,6 +1,8 @@
 #include "StartServiceEndPoint.hpp"
 
 #include "lifecycle/StartServiceRequest.hpp"
+#include "manager/LifecycleFactory.hpp"
+#include "state/StateManager.hpp"
 
 namespace lifecycle_manager {
 
@@ -25,6 +27,13 @@ void StartServiceEndPoint::OnDataAvailable(void* buffer){
         StartServiceResponse* message = reinterpret_cast<StartServiceResponse*>(buffer);
 
         std::cout << "Message Delivery for " << GetTopic() << std::endl;
+
+        std::shared_ptr<StateManager> manager = LifecycleFactory::GetInstance()->GetState();
+
+        if (manager != nullptr){
+            manager->OnStart(message);            
+        }
+
     }
 
 }
