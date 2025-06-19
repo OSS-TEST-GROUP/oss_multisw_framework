@@ -11,7 +11,16 @@ void DiagInfoRegistry::UpdateDiagInfo(std::shared_ptr<DiagInfo> diag_info) {
     if (diag_info == nullptr) {
         return;
     }
-    diag_info_list_[diag_info->GetDiagCode()] = diag_info;
+    
+    int32_t diag_code = diag_info->GetDiagCode();
+    auto iter = diag_info_list_.find(diag_code);
+    if (iter == diag_info_list_.end()) {
+        diag_info_list_[diag_code] = diag_info;
+    } else {
+        if (*(iter->second) != *diag_info) {
+            diag_info_list_[diag_code] = diag_info;
+        }
+    }
 }
 
 void DiagInfoRegistry::RemoveDiagInfo(int32_t code) {

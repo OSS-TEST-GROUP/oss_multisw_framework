@@ -1,0 +1,15 @@
+module data_type_test {
+
+struct DataTypeTestComplex1
+{
+    long id;
+    string name;
+};
+
+struct DataTypeTestComplex2
+{
+    long id;
+    string name;
+};
+
+};

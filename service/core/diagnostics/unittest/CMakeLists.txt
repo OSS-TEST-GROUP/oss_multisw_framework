@@ -10,36 +10,30 @@ add_compile_options(
 
 
 # IDL generation
-# Set path to fastrtpsgen or use RTI generator
-set(FASTDDSGEN "fastddsgen")  # Adjust this path
-set(IDL_FILE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/idl)
-
-# Output directory for generated files
 set(GENERATED_DIR "${CMAKE_INSTALL_PREFIX}/generated/idl")
-set(BUILD_CHECK_FILE ${GENERATED_DIR}/.build_idl_diag_unittest)
+file(MAKE_DIRECTORY ${GENERATED_DIR})
 
-if (NOT EXISTS ${GENERATED_DIR})
-    file(MAKE_DIRECTORY ${GENERATED_DIR})
-endif()
-if (NOT EXISTS ${BUILD_CHECK_FILE})
-    execute_process(
-        COMMAND touch ${BUILD_CHECK_FILE}
-    )
-
-    # Function to generate sources from IDL files
-    function(generate_dds_from_idl IDL_DIR IDL_FILE)
-        execute_process(
-            COMMAND ${FASTDDSGEN} -I ${IDL_DIR} -replace -d ${GENERATED_DIR} ${IDL_DIR}/${IDL_FILE}
-        )
-    endfunction()
-
-    # Find all .idl files in service directories
-    file(GLOB_RECURSE IDL_FILES RELATIVE ${IDL_FILE_DIR} "*.idl")
-
-    foreach(IDL_FILE ${IDL_FILES})
-        generate_dds_from_idl(${IDL_FILE_DIR} ${IDL_FILE})
-    endforeach()
-endif()
+set(TEST_IDL "${CMAKE_CURRENT_SOURCE_DIR}/idl/DataTypeTest.idl")
+add_custom_command(
+    OUTPUT ${GENERATED_DIR}/DataTypeTestPubSubTypes.cxx ${GENERATED_DIR}/DataTypeTestTypeObjectSupport.cxx
+    COMMAND fastddsgen -d ${GENERATED_DIR} ${TEST_IDL}
+    DEPENDS ${TEST_IDL}
+    COMMENT "Generating Fast DDS code from ${TEST_IDL}"
+)
+set(TEST_IDL2 "${CMAKE_CURRENT_SOURCE_DIR}/idl/DataTypeTestSimple.idl")
+add_custom_command(
+    OUTPUT ${GENERATED_DIR}/DataTypeTestSimplePubSubTypes.cxx
+    COMMAND fastddsgen -no-typeobjectsupport -d ${GENERATED_DIR} ${TEST_IDL2}
+    DEPENDS ${TEST_IDL2}
+    COMMENT "Generating Fast DDS code from ${TEST_IDL2}"
+)
+set(TEST_IDL_LIFECYCLE_DIAG_REPORT "${CMAKE_CURRENT_SOURCE_DIR}/idl/LifecycleDiagReport.idl")
+add_custom_command(
+    OUTPUT ${GENERATED_DIR}/LifecycleDiagReportPubSubTypes.cxx ${GENERATED_DIR}/LifecycleDiagReportTypeObjectSupport.cxx
+    COMMAND fastddsgen -d ${GENERATED_DIR} ${TEST_IDL_LIFECYCLE_DIAG_REPORT}
+    DEPENDS ${TEST_IDL_LIFECYCLE_DIAG_REPORT}
+    COMMENT "Generating Fast DDS code from ${TEST_IDL_LIFECYCLE_DIAG_REPORT}"
+)
 
 
 ## Source
@@ -95,21 +89,27 @@ install ( TARGETS DiagInfoRegistryTest
 
 # Sample app for TEST
 set(GENERATED_DDS_FILES ${GENERATED_DIR}/DataTypeTestPubSubTypes.cxx
-                        ${GENERATED_DIR}/DataTypeTestSimpleTypeObjectSupport.cxx
-                        ${GENERATED_DIR}/LifecycleDiagReportPubSubTypes.cxx
                         ${GENERATED_DIR}/DataTypeTestSimplePubSubTypes.cxx
                         ${GENERATED_DIR}/DataTypeTestTypeObjectSupport.cxx
+                        ${GENERATED_DIR}/LifecycleDiagReportPubSubTypes.cxx
                         ${GENERATED_DIR}/LifecycleDiagReportTypeObjectSupport.cxx
+                        ${GENERATED_DIR}/diagnostic/DiagnosticCommonPubSubTypes.cxx
+                        ${GENERATED_DIR}/diagnostic/DiagnosticCommonTypeObjectSupport.cxx
+                        ${GENERATED_DIR}/diagnostic/DiagnosticNotificationPubSubTypes.cxx
+                        ${GENERATED_DIR}/diagnostic/DiagnosticNotificationTypeObjectSupport.cxx
 )
 
 add_executable ( HelloWorldPublisher test/HelloWorldPublisher.cpp ${GENERATED_DDS_FILES} )
 target_include_directories ( HelloWorldPublisher PUBLIC ${GENERATED_DIR} )
 add_executable ( HelloWorldPublisherNoDynamic test/HelloWorldPublisherNoDynamic.cpp ${GENERATED_DDS_FILES} )
 target_include_directories ( HelloWorldPublisherNoDynamic PUBLIC ${GENERATED_DIR} )
+
 add_executable ( LifecycleDiagReportPublisher test/LifecycleDiagReportPublisher.cpp ${GENERATED_DDS_FILES} )
 target_include_directories ( LifecycleDiagReportPublisher PUBLIC ${GENERATED_DIR} )
+add_executable ( DiagnosticNotificationReceiver test/DiagnosticNotificationReceiver.cpp ${GENERATED_DDS_FILES} )
+target_include_directories ( DiagnosticNotificationReceiver PUBLIC ${GENERATED_DIR} )
 
-install ( TARGETS HelloWorldPublisher HelloWorldPublisherNoDynamic LifecycleDiagReportPublisher
+install ( TARGETS HelloWorldPublisher HelloWorldPublisherNoDynamic LifecycleDiagReportPublisher DiagnosticNotificationReceiver
     RUNTIME DESTINATION bin/unittest/diagnostics/test
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
@@ -121,7 +121,9 @@ install(
         idl
     DESTINATION
         bin/unittest/diagnostics
-    FILES_MATCHING PATTERN "*Simple.idl"
+    FILES_MATCHING
+        PATTERN "*Simple.idl"
+        PATTERN "*Complex.idl"
 )
 
 # Test Diag config

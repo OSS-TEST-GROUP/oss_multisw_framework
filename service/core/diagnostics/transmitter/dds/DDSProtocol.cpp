@@ -3,6 +3,8 @@
 #include <fastdds/dds/xtypes/dynamic_types/DynamicTypeBuilderFactory.hpp>
 #include <fastdds/dds/subscriber/Subscriber.hpp>
 #include <fastdds/dds/subscriber/DataReader.hpp>
+#include <fastdds/dds/publisher/Publisher.hpp>
+#include <fastdds/dds/publisher/DataWriter.hpp>
 
 namespace diagnostic_manager {
 
@@ -25,12 +27,19 @@ bool DDSProtocol::Initialize() {
 
     load_dds_dynamic_idl("idl");
 
-    // Create the subscriber
+    // Create the subscriber and the publisher
     SubscriberQos sub_qos = SUBSCRIBER_QOS_DEFAULT;
     participant_->get_default_subscriber_qos(sub_qos);
     subscriber_ = participant_->create_subscriber(sub_qos);
-    if (nullptr == subscriber_)
+    if (subscriber_ == nullptr)
     {
+        return false;
+    }
+
+    PublisherQos pub_qos = PUBLISHER_QOS_DEFAULT;
+    participant_->get_default_publisher_qos(pub_qos);
+    publisher_ = participant_->create_publisher(pub_qos);
+    if (publisher_ == nullptr) {
         return false;
     }
 
@@ -53,11 +62,53 @@ MessageProtocolType DDSProtocol::GetProtocolType() {
 }
 
 bool DDSProtocol::PublishMessage(std::shared_ptr<Message> message) {
+    std::shared_ptr<TopicInformation> topic_info;
+    {
+        std::lock_guard<std::mutex> lock(topic_handling_mutex_);
+
+        auto iter = discovered_topic_.find(message->GetName());
+        if (iter == discovered_topic_.end()) {
+            topic_info = create_topic_information_from_dynamic_idl(message->GetName(), message->GetTypeName());
+            if (topic_info) {
+                discovered_topic_[message->GetName()] = topic_info;
+            }
+        } else {
+            topic_info = iter->second;
+        }
+    }
+
+    if (topic_info == nullptr) {
+        std::cerr << "Failed to publish the message. No topic_information. name=" << message->GetName();
+        return false;
+    }
+
+    if (topic_info->writer == nullptr) {
+         if (!create_datawriter(topic_info)) {
+            std::cerr << "Failed to create a datawriter." << message->GetName() << std::endl;
+            return false;
+         }
+    }
+
+    if (topic_info->remote_type == nullptr) {
+        std::cerr << "Failed to create dyanmic data type." << std::endl;
+        return false;
+    }
+    DynamicData::_ref_type dds_data = DynamicDataFactory::get_instance()->create_data(topic_info->remote_type);
+    if (!SerializeMessage(dds_data, message->GetData())) {
+        std::cerr << "Failed to serialize the message. name=" << message->GetName() << std::endl;
+        return false;
+    }
+
+    if (topic_info->writer->write(&dds_data) != RETCODE_OK) {
+        std::cerr << "Failed to write the message. name=" << message->GetName() << std::endl;
+        return false;
+    }
+
     return true;
 }
 
 bool DDSProtocol::SubscribeMessage(const std::string& name) {
-    std::lock_guard<std::mutex> lock(subsription_handling_mutex_);
+    std::lock_guard<std::mutex> lock(topic_handling_mutex_);
 
     subscribed_topic_.insert(name);
 
@@ -74,7 +125,7 @@ bool DDSProtocol::SubscribeMessage(const std::string& name) {
 }
 
 bool DDSProtocol::UnsubscribeMessage(const std::string& name) {
-    std::lock_guard<std::mutex> lock(subsription_handling_mutex_);
+    std::lock_guard<std::mutex> lock(topic_handling_mutex_);
 
     if (subscribed_topic_.count(name) == 0) {
         return false;
@@ -104,111 +155,44 @@ bool DDSProtocol::SerializeMessage(DynamicData::_ref_type dds_data, std::shared_
         type_list.push_back(variant_data->GetValueType(iter));
     }
 
-    DynamicTypeBuilder::_ref_type struct_builder {DynamicTypeBuilderFactory::get_instance()->create_type(type_descriptor)};
-
-    MemberDescriptor::_ref_type member_descriptor;
     for (uint64_t idx = 0; idx < member_list.size(); idx++) {
-        member_descriptor = traits<MemberDescriptor>::make_shared();
-        member_descriptor->name(member_list[idx]);
-
         auto& type = type_list[idx];
-        if (type == std::type_index(typeid(char))) { member_descriptor->type(DynamicTypeBuilderFactory::get_instance()->get_primitive_type(TK_CHAR8)); }
-        else if (type == std::type_index(typeid(wchar_t))) { member_descriptor->type(DynamicTypeBuilderFactory::get_instance()->get_primitive_type(TK_CHAR16)); }
-        else if (type == std::type_index(typeid(int8_t))) { member_descriptor->type(DynamicTypeBuilderFactory::get_instance()->get_primitive_type(TK_INT8)); }
-        else if (type == std::type_index(typeid(int16_t))) { member_descriptor->type(DynamicTypeBuilderFactory::get_instance()->get_primitive_type(TK_INT16)); }
-        else if (type == std::type_index(typeid(int32_t))) { member_descriptor->type(DynamicTypeBuilderFactory::get_instance()->get_primitive_type(TK_INT32)); }
-        else if (type == std::type_index(typeid(int64_t))) { member_descriptor->type(DynamicTypeBuilderFactory::get_instance()->get_primitive_type(TK_INT64)); }
-        else if (type == std::type_index(typeid(uint8_t))) { member_descriptor->type(DynamicTypeBuilderFactory::get_instance()->get_primitive_type(TK_UINT8)); }
-        else if (type == std::type_index(typeid(uint16_t))) { member_descriptor->type(DynamicTypeBuilderFactory::get_instance()->get_primitive_type(TK_UINT16)); }
-        else if (type == std::type_index(typeid(uint32_t))) { member_descriptor->type(DynamicTypeBuilderFactory::get_instance()->get_primitive_type(TK_UINT32)); }
-        else if (type == std::type_index(typeid(uint64_t))) { member_descriptor->type(DynamicTypeBuilderFactory::get_instance()->get_primitive_type(TK_UINT64)); }
-        else if (type == std::type_index(typeid(float))) { member_descriptor->type(DynamicTypeBuilderFactory::get_instance()->get_primitive_type(TK_FLOAT32)); }
-        else if (type == std::type_index(typeid(double))) { member_descriptor->type(DynamicTypeBuilderFactory::get_instance()->get_primitive_type(TK_FLOAT64)); }
-        else if (type == std::type_index(typeid(std::string))) { member_descriptor->type(DynamicTypeBuilderFactory::get_instance()->
-                                                                    create_string_type(static_cast<uint32_t>(LENGTH_UNLIMITED))->build()); }
-        else if (type == std::type_index(typeid(std::wstring))) { member_descriptor->type(DynamicTypeBuilderFactory::get_instance()->
-                                                                    create_wstring_type(static_cast<uint32_t>(LENGTH_UNLIMITED))->build()); }
-        // else if (type == std::type_index(typeid(VariantData))) {}
-        else if (type == std::type_index(typeid(std::vector<char>))) { member_descriptor->type(DynamicTypeBuilderFactory::get_instance()->create_sequence_type(
-                DynamicTypeBuilderFactory::get_instance()->get_primitive_type(TK_CHAR8), variant_data->GetValue<std::vector<char>>(member_list[idx]).size())->build()); }
-        else if (type == std::type_index(typeid(std::vector<wchar_t>))) { member_descriptor->type(DynamicTypeBuilderFactory::get_instance()->create_sequence_type(
-                DynamicTypeBuilderFactory::get_instance()->get_primitive_type(TK_CHAR16), variant_data->GetValue<std::vector<wchar_t>>(member_list[idx]).size())->build()); }
-        else if (type == std::type_index(typeid(std::vector<int8_t>))) { member_descriptor->type(DynamicTypeBuilderFactory::get_instance()->create_sequence_type(
-                DynamicTypeBuilderFactory::get_instance()->get_primitive_type(TK_INT8), variant_data->GetValue<std::vector<int8_t>>(member_list[idx]).size())->build()); }
-        else if (type == std::type_index(typeid(std::vector<int16_t>))) { member_descriptor->type(DynamicTypeBuilderFactory::get_instance()->create_sequence_type(
-                DynamicTypeBuilderFactory::get_instance()->get_primitive_type(TK_INT16), variant_data->GetValue<std::vector<int16_t>>(member_list[idx]).size())->build()); }
-        else if (type == std::type_index(typeid(std::vector<int32_t>))) { member_descriptor->type(DynamicTypeBuilderFactory::get_instance()->create_sequence_type(
-                DynamicTypeBuilderFactory::get_instance()->get_primitive_type(TK_INT32), variant_data->GetValue<std::vector<int32_t>>(member_list[idx]).size())->build()); }
-        else if (type == std::type_index(typeid(std::vector<int64_t>))) { member_descriptor->type(DynamicTypeBuilderFactory::get_instance()->create_sequence_type(
-                DynamicTypeBuilderFactory::get_instance()->get_primitive_type(TK_INT64), variant_data->GetValue<std::vector<int64_t>>(member_list[idx]).size())->build()); }
-        else if (type == std::type_index(typeid(std::vector<uint8_t>))) { member_descriptor->type(DynamicTypeBuilderFactory::get_instance()->create_sequence_type(
-                DynamicTypeBuilderFactory::get_instance()->get_primitive_type(TK_UINT8), variant_data->GetValue<std::vector<uint8_t>>(member_list[idx]).size())->build()); }
-        else if (type == std::type_index(typeid(std::vector<uint16_t>))) { member_descriptor->type(DynamicTypeBuilderFactory::get_instance()->create_sequence_type(
-                DynamicTypeBuilderFactory::get_instance()->get_primitive_type(TK_UINT16), variant_data->GetValue<std::vector<uint16_t>>(member_list[idx]).size())->build()); }
-        else if (type == std::type_index(typeid(std::vector<uint32_t>))) { member_descriptor->type(DynamicTypeBuilderFactory::get_instance()->create_sequence_type(
-                DynamicTypeBuilderFactory::get_instance()->get_primitive_type(TK_UINT32), variant_data->GetValue<std::vector<uint32_t>>(member_list[idx]).size())->build()); }
-        else if (type == std::type_index(typeid(std::vector<uint64_t>))) { member_descriptor->type(DynamicTypeBuilderFactory::get_instance()->create_sequence_type(
-                DynamicTypeBuilderFactory::get_instance()->get_primitive_type(TK_UINT64), variant_data->GetValue<std::vector<uint64_t>>(member_list[idx]).size())->build()); }
-        else if (type == std::type_index(typeid(std::vector<float>))) { member_descriptor->type(DynamicTypeBuilderFactory::get_instance()->create_sequence_type(
-                DynamicTypeBuilderFactory::get_instance()->get_primitive_type(TK_FLOAT32), variant_data->GetValue<std::vector<float>>(member_list[idx]).size())->build()); }
-        else if (type == std::type_index(typeid(std::vector<double>))) { member_descriptor->type(DynamicTypeBuilderFactory::get_instance()->create_sequence_type(
-                DynamicTypeBuilderFactory::get_instance()->get_primitive_type(TK_FLOAT64), variant_data->GetValue<std::vector<double>>(member_list[idx]).size())->build()); }
-        else if (type == std::type_index(typeid(std::vector<bool>))) { member_descriptor->type(DynamicTypeBuilderFactory::get_instance()->create_sequence_type(
-                DynamicTypeBuilderFactory::get_instance()->get_primitive_type(TK_BOOLEAN), variant_data->GetValue<std::vector<bool>>(member_list[idx]).size())->build()); }
-
-        else if (type == std::type_index(typeid(std::vector<std::string>))) { member_descriptor->type(DynamicTypeBuilderFactory::get_instance()->create_sequence_type(
-                DynamicTypeBuilderFactory::get_instance()->create_string_type(static_cast<uint32_t>(LENGTH_UNLIMITED))->build(), variant_data->GetValue<std::vector<std::string>>(member_list[idx]).size())->build()); }
-        else if (type == std::type_index(typeid(std::vector<std::wstring>))) { member_descriptor->type(DynamicTypeBuilderFactory::get_instance()->create_sequence_type(
-                DynamicTypeBuilderFactory::get_instance()->create_wstring_type(static_cast<uint32_t>(LENGTH_UNLIMITED))->build(), variant_data->GetValue<std::vector<std::wstring>>(member_list[idx]).size())->build()); }
-        // else if (type == std::type_index(typeid(std::vector<VariantData>))) { member_descriptor->member_descriptor->type(DynamicTypeBuilderFactory::get_instance()->get_primitive_type()); }
-        else {
-            std::cerr << "Not supported type. name=" << member_list[idx] << std::endl;
-        }
-        struct_builder->add_member(member_descriptor);
-    }
-
-    DynamicType::_ref_type struct_type {struct_builder->build()};
-    DynamicData::_ref_type data {DynamicDataFactory::get_instance()->create_data(struct_type)};
-
-    for (uint64_t idx = 0; idx < member_list.size(); idx++) {
-                auto& type = type_list[idx];
         std::string& member_name = member_list[idx];
-        if (type == std::type_index(typeid(char))) { data->set_char8_value(data->get_member_id_by_name(member_name), variant_data->GetValue<char>(member_name)); }
-        else if (type == std::type_index(typeid(wchar_t))) { data->set_char16_value(data->get_member_id_by_name(member_name), variant_data->GetValue<wchar_t>(member_name)); }
-        else if (type == std::type_index(typeid(int8_t))) { data->set_int8_value(data->get_member_id_by_name(member_name), variant_data->GetValue<int8_t>(member_name)); }
-        else if (type == std::type_index(typeid(int16_t))) { data->set_int16_value(data->get_member_id_by_name(member_name), variant_data->GetValue<int16_t>(member_name)); }
-        else if (type == std::type_index(typeid(int32_t))) { data->set_int32_value(data->get_member_id_by_name(member_name), variant_data->GetValue<int32_t>(member_name)); }
-        else if (type == std::type_index(typeid(int64_t))) { data->set_int64_value(data->get_member_id_by_name(member_name), variant_data->GetValue<int64_t>(member_name)); }
-        else if (type == std::type_index(typeid(uint8_t))) { data->set_uint8_value(data->get_member_id_by_name(member_name), variant_data->GetValue<uint8_t>(member_name)); }
-        else if (type == std::type_index(typeid(uint16_t))) { data->set_uint16_value(data->get_member_id_by_name(member_name), variant_data->GetValue<uint16_t>(member_name)); }
-        else if (type == std::type_index(typeid(uint32_t))) { data->set_uint32_value(data->get_member_id_by_name(member_name), variant_data->GetValue<uint32_t>(member_name)); }
-        else if (type == std::type_index(typeid(uint64_t))) { data->set_uint64_value(data->get_member_id_by_name(member_name), variant_data->GetValue<uint64_t>(member_name)); }
-        else if (type == std::type_index(typeid(float))) { data->set_float32_value(data->get_member_id_by_name(member_name), variant_data->GetValue<float>(member_name)); }
-        else if (type == std::type_index(typeid(double))) { data->set_float64_value(data->get_member_id_by_name(member_name), variant_data->GetValue<double>(member_name)); }
-        else if (type == std::type_index(typeid(std::string))) { data->set_string_value(data->get_member_id_by_name(member_name), variant_data->GetValue<std::string>(member_name)); }
-        else if (type == std::type_index(typeid(std::wstring))) { data->set_wstring_value(data->get_member_id_by_name(member_name), variant_data->GetValue<std::wstring>(member_name)); }
+        if (type == std::type_index(typeid(char))) { dds_data->set_char8_value(dds_data->get_member_id_by_name(member_name), variant_data->GetValue<char>(member_name)); }
+        else if (type == std::type_index(typeid(wchar_t))) { dds_data->set_char16_value(dds_data->get_member_id_by_name(member_name), variant_data->GetValue<wchar_t>(member_name)); }
+        else if (type == std::type_index(typeid(int8_t))) { dds_data->set_int8_value(dds_data->get_member_id_by_name(member_name), variant_data->GetValue<int8_t>(member_name)); }
+        else if (type == std::type_index(typeid(int16_t))) { dds_data->set_int16_value(dds_data->get_member_id_by_name(member_name), variant_data->GetValue<int16_t>(member_name)); }
+        else if (type == std::type_index(typeid(int32_t))) { dds_data->set_int32_value(dds_data->get_member_id_by_name(member_name), variant_data->GetValue<int32_t>(member_name)); }
+        else if (type == std::type_index(typeid(int64_t))) { dds_data->set_int64_value(dds_data->get_member_id_by_name(member_name), variant_data->GetValue<int64_t>(member_name)); }
+        else if (type == std::type_index(typeid(uint8_t))) { dds_data->set_uint8_value(dds_data->get_member_id_by_name(member_name), variant_data->GetValue<uint8_t>(member_name)); }
+        else if (type == std::type_index(typeid(uint16_t))) { dds_data->set_uint16_value(dds_data->get_member_id_by_name(member_name), variant_data->GetValue<uint16_t>(member_name)); }
+        else if (type == std::type_index(typeid(uint32_t))) { dds_data->set_uint32_value(dds_data->get_member_id_by_name(member_name), variant_data->GetValue<uint32_t>(member_name)); }
+        else if (type == std::type_index(typeid(uint64_t))) { dds_data->set_uint64_value(dds_data->get_member_id_by_name(member_name), variant_data->GetValue<uint64_t>(member_name)); }
+        else if (type == std::type_index(typeid(float))) { dds_data->set_float32_value(dds_data->get_member_id_by_name(member_name), variant_data->GetValue<float>(member_name)); }
+        else if (type == std::type_index(typeid(double))) { dds_data->set_float64_value(dds_data->get_member_id_by_name(member_name), variant_data->GetValue<double>(member_name)); }
+        else if (type == std::type_index(typeid(std::string))) { dds_data->set_string_value(dds_data->get_member_id_by_name(member_name), variant_data->GetValue<std::string>(member_name)); }
+        else if (type == std::type_index(typeid(std::wstring))) { dds_data->set_wstring_value(dds_data->get_member_id_by_name(member_name), variant_data->GetValue<std::wstring>(member_name)); }
         // else if (type == std::type_index(typeid(VariantData))) {}
-        else if (type == std::type_index(typeid(std::vector<char>))) { data->set_char8_values(data->get_member_id_by_name(member_name), variant_data->GetValue<std::vector<char>>(member_name)); }
-        else if (type == std::type_index(typeid(std::vector<wchar_t>))) { data->set_char16_values(data->get_member_id_by_name(member_name), variant_data->GetValue<std::vector<wchar_t>>(member_name)); }
-        else if (type == std::type_index(typeid(std::vector<int8_t>))) { data->set_int8_values(data->get_member_id_by_name(member_name), variant_data->GetValue<std::vector<int8_t>>(member_name)); }
-        else if (type == std::type_index(typeid(std::vector<int16_t>))) { data->set_int16_values(data->get_member_id_by_name(member_name), variant_data->GetValue<std::vector<int16_t>>(member_name)); }
-        else if (type == std::type_index(typeid(std::vector<int32_t>))) { data->set_int32_values(data->get_member_id_by_name(member_name), variant_data->GetValue<std::vector<int32_t>>(member_name)); }
-        else if (type == std::type_index(typeid(std::vector<int64_t>))) { data->set_int64_values(data->get_member_id_by_name(member_name), variant_data->GetValue<std::vector<int64_t>>(member_name)); }
-        else if (type == std::type_index(typeid(std::vector<uint8_t>))) { data->set_uint8_values(data->get_member_id_by_name(member_name), variant_data->GetValue<std::vector<uint8_t>>(member_name)); }
-        else if (type == std::type_index(typeid(std::vector<uint16_t>))) { data->set_uint16_values(data->get_member_id_by_name(member_name), variant_data->GetValue<std::vector<uint16_t>>(member_name)); }
-        else if (type == std::type_index(typeid(std::vector<uint32_t>))) { data->set_uint32_values(data->get_member_id_by_name(member_name), variant_data->GetValue<std::vector<uint32_t>>(member_name)); }
-        else if (type == std::type_index(typeid(std::vector<uint64_t>))) { data->set_uint64_values(data->get_member_id_by_name(member_name), variant_data->GetValue<std::vector<uint64_t>>(member_name)); }
-        else if (type == std::type_index(typeid(std::vector<float>))) { data->set_float32_values(data->get_member_id_by_name(member_name), variant_data->GetValue<std::vector<float>>(member_name)); }
-        else if (type == std::type_index(typeid(std::vector<double>))) { data->set_float64_values(data->get_member_id_by_name(member_name), variant_data->GetValue<std::vector<double>>(member_name)); }
-        else if (type == std::type_index(typeid(std::vector<bool>))) { data->set_boolean_values(data->get_member_id_by_name(member_name), variant_data->GetValue<std::vector<bool>>(member_name)); }
-        else if (type == std::type_index(typeid(std::vector<std::string>))) { data->set_string_values(data->get_member_id_by_name(member_name), variant_data->GetValue<std::vector<std::string>>(member_name)); }
-        else if (type == std::type_index(typeid(std::vector<std::wstring>))) { data->set_wstring_values(data->get_member_id_by_name(member_name), variant_data->GetValue<std::vector<std::wstring>>(member_name)); }
+        else if (type == std::type_index(typeid(std::vector<char>))) { dds_data->set_char8_values(dds_data->get_member_id_by_name(member_name), variant_data->GetValue<std::vector<char>>(member_name)); }
+        else if (type == std::type_index(typeid(std::vector<wchar_t>))) { dds_data->set_char16_values(dds_data->get_member_id_by_name(member_name), variant_data->GetValue<std::vector<wchar_t>>(member_name)); }
+        else if (type == std::type_index(typeid(std::vector<int8_t>))) { dds_data->set_int8_values(dds_data->get_member_id_by_name(member_name), variant_data->GetValue<std::vector<int8_t>>(member_name)); }
+        else if (type == std::type_index(typeid(std::vector<int16_t>))) { dds_data->set_int16_values(dds_data->get_member_id_by_name(member_name), variant_data->GetValue<std::vector<int16_t>>(member_name)); }
+        else if (type == std::type_index(typeid(std::vector<int32_t>))) { dds_data->set_int32_values(dds_data->get_member_id_by_name(member_name), variant_data->GetValue<std::vector<int32_t>>(member_name)); }
+        else if (type == std::type_index(typeid(std::vector<int64_t>))) { dds_data->set_int64_values(dds_data->get_member_id_by_name(member_name), variant_data->GetValue<std::vector<int64_t>>(member_name)); }
+        else if (type == std::type_index(typeid(std::vector<uint8_t>))) { dds_data->set_uint8_values(dds_data->get_member_id_by_name(member_name), variant_data->GetValue<std::vector<uint8_t>>(member_name)); }
+        else if (type == std::type_index(typeid(std::vector<uint16_t>))) { dds_data->set_uint16_values(dds_data->get_member_id_by_name(member_name), variant_data->GetValue<std::vector<uint16_t>>(member_name)); }
+        else if (type == std::type_index(typeid(std::vector<uint32_t>))) { dds_data->set_uint32_values(dds_data->get_member_id_by_name(member_name), variant_data->GetValue<std::vector<uint32_t>>(member_name)); }
+        else if (type == std::type_index(typeid(std::vector<uint64_t>))) { dds_data->set_uint64_values(dds_data->get_member_id_by_name(member_name), variant_data->GetValue<std::vector<uint64_t>>(member_name)); }
+        else if (type == std::type_index(typeid(std::vector<float>))) { dds_data->set_float32_values(dds_data->get_member_id_by_name(member_name), variant_data->GetValue<std::vector<float>>(member_name)); }
+        else if (type == std::type_index(typeid(std::vector<double>))) { dds_data->set_float64_values(dds_data->get_member_id_by_name(member_name), variant_data->GetValue<std::vector<double>>(member_name)); }
+        else if (type == std::type_index(typeid(std::vector<bool>))) { dds_data->set_boolean_values(dds_data->get_member_id_by_name(member_name), variant_data->GetValue<std::vector<bool>>(member_name)); }
+        else if (type == std::type_index(typeid(std::vector<std::string>))) { dds_data->set_string_values(dds_data->get_member_id_by_name(member_name), variant_data->GetValue<std::vector<std::string>>(member_name)); }
+        else if (type == std::type_index(typeid(std::vector<std::wstring>))) { dds_data->set_wstring_values(dds_data->get_member_id_by_name(member_name), variant_data->GetValue<std::vector<std::wstring>>(member_name)); }
         else {
             std::cerr << "Not supported type. name=" << member_list[idx] << std::endl;
         }
     }
 
-    dds_data = data;
     return true;
 }
 
@@ -347,8 +331,8 @@ void DDSProtocol::load_dds_dynamic_idl(const std::string& path) {
     for (auto& iter : type_support_list) {
         parsed_dynamic_type_supports_[iter->type_support->get_type_name()] = iter;
     }
-
-    std::cout << "Parsed " << parsed_dynamic_type_supports_.size() << " idl files dynamically." << std::endl;
+    
+    std::cout << "loaded " << type_support_list.size() << " dynamic types." << std::endl;
 }
 
 // FastDDS override method
@@ -356,7 +340,7 @@ void DDSProtocol::on_data_available(DataReader* reader) {
     std::shared_ptr<TopicInformation> topic_info;
 
     {
-        std::lock_guard<std::mutex> lock(subsription_handling_mutex_);
+        std::lock_guard<std::mutex> lock(topic_handling_mutex_);
 
         auto topic_info_iter = discovered_topic_.find(reader->get_topicdescription()->get_name());
         if (topic_info_iter == discovered_topic_.end()) {
@@ -411,33 +395,40 @@ void DDSProtocol::on_data_writer_discovery(DomainParticipant* participant,
                                            eprosima::fastdds::rtps::WriterDiscoveryStatus reason,
                                            const eprosima::fastdds::dds::PublicationBuiltinTopicData& info,
                                            bool& should_be_ignored) {
-    std::lock_guard<std::mutex> lock(subsription_handling_mutex_);
+    std::shared_ptr<TopicInformation> topic_info;
+    bool need_to_subscribe = false;
+    {
+        std::lock_guard<std::mutex> lock(topic_handling_mutex_);
 
-    if (discovered_topic_.count(info.topic_name.to_string()) > 0) {
-        return;
+        if (discovered_topic_.count(info.topic_name.to_string()) > 0) {
+            return;
+        }
+
+        // Notify run thread that type has been discovered
+        topic_info = std::make_shared<TopicInformation>();
+        topic_info->topic_name = info.topic_name.to_string();
+        topic_info->topic_type = info.type_name.to_string();
+
+        // Get remote type information and use it to retrieve the type object
+        topic_info->remote_type_information = info.type_information.type_information;
+
+        discovered_topic_[topic_info->topic_name] = topic_info;
+
+        // If it's already subscribed topic
+        if (subscribed_topic_.count(topic_info->topic_name) > 0) {
+            need_to_subscribe = true;
+        }
     }
 
-    // Notify run thread that type has been discovered
-    std::shared_ptr<TopicInformation> topic_info = std::make_shared<TopicInformation>();
-    topic_info->topic_name = info.topic_name.to_string();
-    topic_info->topic_type = info.type_name.to_string();
-
-    // Get remote type information and use it to retrieve the type object
-    topic_info->remote_type_information = info.type_information.type_information;
-
-    discovered_topic_[topic_info->topic_name] = topic_info;
-
-    // If it's already subscribed topic
-    if (subscribed_topic_.count(topic_info->topic_name) > 0) {
+    if (need_to_subscribe) {
         if (!register_type_object(topic_info)) {
             std::cerr << "Failed to register a type object. topic=" << topic_info->topic_name << std::endl;
             return;
         }
         if (!create_datareader(topic_info)) {
-            std::cerr << "Failed to register a datareader. topic=" << topic_info->topic_name << std::endl;
+            std::cerr << "Failed to create a datareader. topic=" << topic_info->topic_name << std::endl;
         }
     }
-
 }
 
 bool DDSProtocol::register_type_object(std::shared_ptr<TopicInformation> topic_information) {
@@ -496,23 +487,31 @@ bool DDSProtocol::register_type_object_from_dynamic_idl(std::shared_ptr<TopicInf
     topic_information->remote_type = iter->second->dyn_type;
     topic_information->type_support = iter->second->type_support;
 
-    topic_information->type_support->register_type(participant_, topic_information->topic_type);
+    if (topic_information->type_support->register_type(participant_) != RETCODE_OK) {
+        std::cerr << "Type registration failed for " << topic_information->topic_type << std::endl;
+        return false;
+    }
     return true;
 }
 
 bool DDSProtocol::create_datareader(std::shared_ptr<TopicInformation> topic_information) {
     // Create the topic
-    TopicQos topic_qos = TOPIC_QOS_DEFAULT;
-    participant_->get_default_topic_qos(topic_qos);
-    topic_information->topic = participant_->create_topic(topic_information->topic_name, topic_information->topic_type, topic_qos);
-    if (topic_information->topic == nullptr)
-    {
-        return false;
+    if (topic_information->topic == nullptr) {
+        TopicQos topic_qos = TOPIC_QOS_DEFAULT;
+        participant_->get_default_topic_qos(topic_qos);
+        topic_information->topic = participant_->create_topic(topic_information->topic_name, topic_information->topic_type, topic_qos);
+        if (topic_information->topic == nullptr)
+        {
+            return false;
+        }
     }
 
     DataReaderQos reader_qos = DATAREADER_QOS_DEFAULT;
     subscriber_->get_default_datareader_qos(reader_qos);
     topic_information->reader = subscriber_->create_datareader(topic_information->topic, reader_qos);
+    if (topic_information->reader == nullptr) {
+        return false;
+    }
 
     return true;
 }
@@ -523,11 +522,72 @@ bool DDSProtocol::delete_datareader(std::shared_ptr<TopicInformation> topic_info
     }
     topic_information->reader = nullptr;
 
-    if (participant_->delete_topic(topic_information->topic) != RETCODE_OK) {
+    if (topic_information->reader == nullptr) {
+        if (participant_->delete_topic(topic_information->topic) != RETCODE_OK) {
+            return false;
+        }
+        topic_information->topic = nullptr;
+    }
+    return true;
+}
+
+bool DDSProtocol::create_datawriter(std::shared_ptr<TopicInformation> topic_information) {
+    if (topic_information->topic == nullptr) {
+        TopicQos topic_qos = TOPIC_QOS_DEFAULT;
+        participant_->get_default_topic_qos(topic_qos);
+        topic_information->topic = participant_->create_topic(
+            topic_information->topic_name,
+            topic_information->topic_type,
+            topic_qos
+        );
+        if (topic_information->topic == nullptr) {
+            return false;
+        }
+    }
+
+    DataWriterQos writer_qos = DATAWRITER_QOS_DEFAULT;
+    publisher_->get_default_datawriter_qos(writer_qos);
+    topic_information->writer = publisher_->create_datawriter(
+        topic_information->topic,
+        writer_qos
+    );
+
+    if (topic_information->writer == nullptr) {
         return false;
     }
-    topic_information->topic = nullptr;
+
     return true;
+}
+
+bool DDSProtocol::delete_datawriter(std::shared_ptr<TopicInformation> topic_information) {
+    // Delete the DataWriter
+    if (publisher_->delete_datawriter(topic_information->writer) != RETCODE_OK) {
+        std::cerr << "Failed to delete datawriter for topic: " << topic_information->topic_name << std::endl;
+        return false;
+    }
+    topic_information->writer = nullptr;
+
+    // Delete the Topic (only if it's not in use by other entities)
+    if (topic_information->reader == nullptr) {
+        if (participant_->delete_topic(topic_information->topic) != RETCODE_OK) {
+            std::cerr << "Failed to delete topic for datawriter: " << topic_information->topic_name << std::endl;
+            return false;
+        }
+        topic_information->topic = nullptr;
+    }
+    return true;
+}
+
+std::shared_ptr<TopicInformation> DDSProtocol::create_topic_information_from_dynamic_idl(const std::string& name, const std::string& type) {
+    std::shared_ptr<TopicInformation> topic_information = std::make_shared<TopicInformation>();
+    topic_information->topic_name = name;
+    topic_information->topic_type = type;
+
+    if (!register_type_object_from_dynamic_idl(topic_information)) {
+        std::cerr << "Failed to create topic_information from dynamic idl. type=" << type << std::endl;
+        return nullptr;
+    }
+    return topic_information;
 }
 
 bool DDSProtocol::read_values_from_dynamic_data(DynamicData::_ref_type dds_data, DynamicTypeMember::_ref_type member, TypeKind elem_type,

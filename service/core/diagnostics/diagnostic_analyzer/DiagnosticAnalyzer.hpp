@@ -9,6 +9,7 @@
 #include "PolicyManager.hpp"
 #include "DataManager.hpp"
 #include "ConditionEvaluator.hpp"
+#include "diagnostic/DiagInfoRegistry.hpp"
 #include "transmitter/MessageTransmitter.hpp"
 #include "executor/ServiceExecutor.hpp"
 
@@ -16,7 +17,8 @@ namespace diagnostic_manager {
 
 class DiagnosticAnalyzer {
 public:
-    DiagnosticAnalyzer(std::shared_ptr<ServiceExecutor> service_executor, std::shared_ptr<MessageTransmitter> msg_transmitter);
+    DiagnosticAnalyzer(std::shared_ptr<ServiceExecutor> service_executor, std::shared_ptr<MessageTransmitter> msg_transmitter,
+            std::shared_ptr<DiagInfoRegistry> diag_info_registry);
     virtual ~DiagnosticAnalyzer();
 
     bool Initialize();
@@ -45,7 +47,7 @@ private:
     std::shared_ptr<MessageTransmitter> msg_transmitter_;
     int64_t subscriber_id_{-1};
 
-    std::chrono::steady_clock::time_point last_analyzed_;
+    std::shared_ptr<DiagInfoRegistry> diag_info_registry_;
 };
 
 }  // namespace diagnostic_manager

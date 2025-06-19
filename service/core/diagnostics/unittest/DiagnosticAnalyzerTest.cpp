@@ -7,6 +7,7 @@
 #include "diagnostic_analyzer/DiagPolicyRule.cpp"
 #include "diagnostic_analyzer/ReferenceMessage.cpp"
 #include "diagnostic_analyzer/DataManager.cpp"
+#include "diagnostic/DiagInfoRegistry.cpp"
 #include "diagnostic/DiagInfo.cpp"
 #include "diagnostic/VariantData.cpp"
 #include "transmitter/request_msg/IncomingMessageBase.cpp"
@@ -41,13 +42,15 @@ protected:
         service_executor_mock_ = std::make_shared<ServiceExecutorMock>();
         Mock_ServiceExecutorMock = service_executor_mock_.get();
         Mock_MessageTransmitterMock = new MessageTransmitterMock;
+        diag_info_registry = std::make_shared<DiagInfoRegistry>();
         message_transmitter = std::make_shared<MessageTransmitter>(service_executor_mock_);
-        ins = new DiagnosticAnalyzer(service_executor_mock_, message_transmitter);
+        ins = new DiagnosticAnalyzer(service_executor_mock_, message_transmitter, diag_info_registry);
     }
     virtual void TearDown(){
         service_executor_mock_.reset();
         Mock_ServiceExecutorMock = nullptr;
         message_transmitter.reset();
+        diag_info_registry.reset();
         delete Mock_MessageTransmitterMock;
         delete ins;
     }
@@ -70,6 +73,7 @@ protected:
 
     DiagnosticAnalyzer* ins;
 
+    std::shared_ptr<DiagInfoRegistry> diag_info_registry;
     std::shared_ptr<MessageTransmitter> message_transmitter;
     std::shared_ptr<ServiceExecutorMock> service_executor_mock_;
 };

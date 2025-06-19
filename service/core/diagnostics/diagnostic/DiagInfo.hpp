@@ -25,6 +25,8 @@ class DiagInfo {
     std::string GetMessage();
     std::chrono::steady_clock::time_point GetUpdateTime();
 
+    bool operator==(const DiagInfo& other) const;
+
   private:
     int32_t diag_code_;
     std::string diag_name_;

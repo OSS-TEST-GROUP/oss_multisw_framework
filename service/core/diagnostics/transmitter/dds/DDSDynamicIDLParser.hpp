@@ -23,9 +23,11 @@ class DDSDynamicIDLParser {
     bool Initialize(const std::string& idl_directory);
 
     std::vector<std::shared_ptr<DynamicIDLTypeSupport>> ParseAll();
-    std::shared_ptr<DynamicIDLTypeSupport> Parse(const std::string& idl_name);
+    std::vector<std::shared_ptr<DynamicIDLTypeSupport>> Parse(const std::string& idl_name);
 
   private:
+    std::vector<std::string> ExtractStructNamesFromIDL(const std::string& idl_name);
+
     std::string idl_directory_;
 };
 

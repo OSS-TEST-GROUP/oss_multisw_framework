@@ -14,8 +14,9 @@ namespace diagnostic_manager {
 
 const std::string DIAG_CONFIG_PATH = "config";
 
-DiagnosticAnalyzer::DiagnosticAnalyzer(std::shared_ptr<ServiceExecutor> service_executor, std::shared_ptr<MessageTransmitter> msg_transmitter)
-        : service_executor_(service_executor), msg_transmitter_(msg_transmitter) {}
+DiagnosticAnalyzer::DiagnosticAnalyzer(std::shared_ptr<ServiceExecutor> service_executor, std::shared_ptr<MessageTransmitter> msg_transmitter,
+    std::shared_ptr<DiagInfoRegistry> diag_info_registry)
+        : service_executor_(service_executor), msg_transmitter_(msg_transmitter), diag_info_registry_(diag_info_registry) {}
 
 DiagnosticAnalyzer::~DiagnosticAnalyzer() {}
 
@@ -76,14 +77,6 @@ std::vector<std::shared_ptr<DiagInfo>> DiagnosticAnalyzer::AnalyzeAll() {
         result.insert(result.end(), analysis_results.begin(), analysis_results.end());
     }
 
-    std::cout << "--- Analyze Result ---" << std::endl;
-    for (auto iter : result) {
-        std::cout << "DiagInfo[" << iter->GetDiagCode() << "] " << iter->GetDiagName() << " status=" << (uint32_t)iter->GetStatus() << " message=" << iter->GetMessage() << std::endl;
-    }
-    if (result.size() == 0) {
-        std::cout << "No analyzation info." << std::endl;
-    }
-
     return result;
 }
 
@@ -115,7 +108,10 @@ void DiagnosticAnalyzer::HandleReceiveDiagMessage(std::shared_ptr<RequestBase> r
 void DiagnosticAnalyzer::HandleAnalyzeRequest(std::shared_ptr<RequestBase> req_msg) {
     // TODO - To be improved not to analyze too frequently.
 
-    AnalyzeAll();
+    auto diag_info_list = AnalyzeAll();
+    for (auto iter : diag_info_list) {
+        diag_info_registry_->UpdateDiagInfo(iter);
+    }
 }
 
 bool DiagnosticAnalyzer::EvaluatePolicyRuleConditions(const std::vector<std::string>& conditions, ConditionOperator condition_operator) {

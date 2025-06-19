@@ -41,6 +41,10 @@ std::chrono::steady_clock::time_point DiagInfo::GetUpdateTime() {
     return Mock_DiagInfo->GetUpdateTime();
 }
 
+bool DiagInfo::operator==(const DiagInfo& other) const {
+    return false;
+}
+
 } // namespace diagnostic_manager
 
 #endif 

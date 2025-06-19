@@ -12,6 +12,7 @@ set ( DIAGNOSTIC_SRC
     diagnostic/DiagInfo.cpp
     diagnostic/DiagInfoRegistry.cpp
     diagnostic/VariantData.cpp
+    diagnostic/DiagnosticPublisher.cpp
 )
 set ( EXECUTOR_SRC
     executor/RequestBase.cpp
@@ -73,4 +74,12 @@ install(
     DESTINATION
         bin
     FILES_MATCHING PATTERN "*.yaml"
+)
+
+# Diag idl
+install(FILES
+    ${CMAKE_SOURCE_DIR}/idl/dds/diagnostic/DiagnosticCommon.idl
+    ${CMAKE_SOURCE_DIR}/idl/dds/diagnostic/DiagnosticInfo.idl
+    ${CMAKE_SOURCE_DIR}/idl/dds/diagnostic/DiagnosticNotification.idl
+    DESTINATION bin/idl
 )
