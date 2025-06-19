@@ -39,6 +39,7 @@ add_custom_command(
 ## Source
 include_directories (
     ..
+    ${GENERATED_DIR}
 )
 
 ## Library
@@ -93,10 +94,14 @@ set(GENERATED_DDS_FILES ${GENERATED_DIR}/DataTypeTestPubSubTypes.cxx
                         ${GENERATED_DIR}/DataTypeTestTypeObjectSupport.cxx
                         ${GENERATED_DIR}/LifecycleDiagReportPubSubTypes.cxx
                         ${GENERATED_DIR}/LifecycleDiagReportTypeObjectSupport.cxx
+                        ${GENERATED_DIR}/common/CommonPubSubTypes.cxx
+                        ${GENERATED_DIR}/common/CommonTypeObjectSupport.cxx
                         ${GENERATED_DIR}/diagnostic/DiagnosticCommonPubSubTypes.cxx
                         ${GENERATED_DIR}/diagnostic/DiagnosticCommonTypeObjectSupport.cxx
                         ${GENERATED_DIR}/diagnostic/DiagnosticNotificationPubSubTypes.cxx
                         ${GENERATED_DIR}/diagnostic/DiagnosticNotificationTypeObjectSupport.cxx
+                        ${GENERATED_DIR}/diagnostic/DiagnosticInfoPubSubTypes.cxx
+                        ${GENERATED_DIR}/diagnostic/DiagnosticInfoTypeObjectSupport.cxx
 )
 
 add_executable ( HelloWorldPublisher test/HelloWorldPublisher.cpp ${GENERATED_DDS_FILES} )
@@ -108,8 +113,10 @@ add_executable ( LifecycleDiagReportPublisher test/LifecycleDiagReportPublisher.
 target_include_directories ( LifecycleDiagReportPublisher PUBLIC ${GENERATED_DIR} )
 add_executable ( DiagnosticNotificationReceiver test/DiagnosticNotificationReceiver.cpp ${GENERATED_DDS_FILES} )
 target_include_directories ( DiagnosticNotificationReceiver PUBLIC ${GENERATED_DIR} )
+add_executable ( DiagnosticInfoTestClient test/DiagnosticInfoTestClient.cpp ${GENERATED_DDS_FILES} )
+target_include_directories ( DiagnosticNotificationReceiver PUBLIC ${GENERATED_DIR} )
 
-install ( TARGETS HelloWorldPublisher HelloWorldPublisherNoDynamic LifecycleDiagReportPublisher DiagnosticNotificationReceiver
+install ( TARGETS HelloWorldPublisher HelloWorldPublisherNoDynamic LifecycleDiagReportPublisher DiagnosticNotificationReceiver DiagnosticInfoTestClient
     RUNTIME DESTINATION bin/unittest/diagnostics/test
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib

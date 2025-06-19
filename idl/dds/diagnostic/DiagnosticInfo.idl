@@ -1,16 +1,32 @@
+#include "common/Common.idl"
 #include "DiagnosticCommon.idl"
 
 module diagnosticmgr {
-    /* TopicName - mmf/diagnosticmgr/DiagnosticStatusRequest */
+    /* TopicName - mmf/diagnosticmgr/DiagnosticInfoRequest */
     struct DiagnosticInfoRequest {
+        long diag_code;
         string diag_name;
     };
 
-    /* TopicName - mmf/diagnosticmgr/DiagnosticStatusResponse */
+    /* TopicName - mmf/diagnosticmgr/DiagnosticInfoResponse */
     struct DiagnosticInfoResponse {
+        CommonStatusType ret_code;
+
         long diag_code;
         string diag_name;
         DiagnosticStatusType status;
         string message;
+    };
+
+    /* TopicName - mmf/diagnosticmgr/DiagnosticInfoListRequest */
+    struct DiagnosticInfoListRequest {
+    };
+
+    /* TopicName - mmf/diagnosticmgr/DiagnosticInfoListResponse */
+    struct DiagnosticInfoListResponse {
+        CommonStatusType ret_code;
+
+        sequence<long> diag_codes;
+        sequence<string> diag_names;
     };
 };

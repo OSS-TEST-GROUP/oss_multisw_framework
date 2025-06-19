@@ -21,7 +21,10 @@ class DiagnosticPublisher {
     void PublishUpdatedInfo();
 
   private:
-    void HandleGetDiagInfoRequest(std::shared_ptr<RequestBase> request_msg);
+    void HandleDiagInfoMessage(std::shared_ptr<RequestBase> request_msg);
+    void HandleRequestGetDiagInfo(std::shared_ptr<VariantData> data);
+    void HandleRequestGetDiagInfoList(std::shared_ptr<VariantData> data);
+
     void HandlePublicationProcess(std::shared_ptr<RequestBase> request_msg);
 
     std::shared_ptr<Message> CreateDiagInfoToNotificationMessage(std::shared_ptr<DiagInfo> diag_info);

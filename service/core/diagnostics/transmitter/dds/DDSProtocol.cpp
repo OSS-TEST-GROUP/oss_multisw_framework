@@ -103,6 +103,7 @@ bool DDSProtocol::PublishMessage(std::shared_ptr<Message> message) {
         std::cerr << "Failed to write the message. name=" << message->GetName() << std::endl;
         return false;
     }
+    std::cout << "write success. " << message->GetName() << std::endl;
 
     return true;
 }

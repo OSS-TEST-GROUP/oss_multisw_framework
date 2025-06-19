@@ -77,9 +77,8 @@ install(
 )
 
 # Diag idl
-install(FILES
-    ${CMAKE_SOURCE_DIR}/idl/dds/diagnostic/DiagnosticCommon.idl
-    ${CMAKE_SOURCE_DIR}/idl/dds/diagnostic/DiagnosticInfo.idl
-    ${CMAKE_SOURCE_DIR}/idl/dds/diagnostic/DiagnosticNotification.idl
+install(DIRECTORY
+    ${CMAKE_SOURCE_DIR}/idl/dds/common
+    ${CMAKE_SOURCE_DIR}/idl/dds/diagnostic
     DESTINATION bin/idl
 )

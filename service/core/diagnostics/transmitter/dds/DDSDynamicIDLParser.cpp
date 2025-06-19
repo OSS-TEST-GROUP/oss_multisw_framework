@@ -32,11 +32,14 @@ std::vector<std::shared_ptr<DynamicIDLTypeSupport>> DDSDynamicIDLParser::ParseAl
         return types;
     }
 
-    for (const auto& entry : fs::directory_iterator(idl_directory_))
+    for (const auto& entry : fs::recursive_directory_iterator(idl_directory_))
     {
-        if (entry.path().extension() == ".idl")
+        if (entry.is_regular_file() && entry.path().extension() == ".idl")
         {
-            auto ret = Parse(entry.path().filename().string());
+            // auto ret = Parse(entry.path().filename().string());
+            // types.insert(types.end(), ret.begin(), ret.end());
+            std::filesystem::path relative_path = std::filesystem::relative(entry.path(), idl_directory_);
+            auto ret = Parse(relative_path.string());
             types.insert(types.end(), ret.begin(), ret.end());
         }
     }
