@@ -1,0 +1,28 @@
+diagnosic_policies:
+  - code : 10
+    name : lifecyclemanager
+    rules :
+      - status : "FATAL"
+        message : "All services are not alive."
+        condition_operator : "AND"
+        condition :
+          - "LifecycleDiagReport.is_started = true"
+          - "LifecycleDiagReport.total_services_num > 0"
+          - "LifecycleDiagReport.running_service_num = 0"
+      - status : "WARNING"
+        message : "At least one service is not alive."
+        condition_operator : "AND"
+        condition :
+          - "LifecycleDiagReport.is_started = true"
+          - "LifecycleDiagReport.running_service_num < LifecycleDiagReport.total_services_num"
+      - status : "PASS"
+        message : "All services are running."
+        condition_operator : "AND"
+        condition :
+          - "LifecycleDiagReport.is_started = true"
+          - "LifecycleDiagReport.running_service_num = LifecycleDiagReport.total_services_num"
+    active : true
+refer_messages:
+  - name : LifecycleDiagReport
+    message : mmf/lifecyclemgr/LifecycleDiagReport
+    protocol : dds

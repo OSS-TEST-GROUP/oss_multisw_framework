@@ -31,7 +31,7 @@ class ServiceExecutor {
 
     void SetExecutorNum(uint32_t num);
 
-    TaskID AddTask(const std::string& name, ExecutorFunctionType function, RequestBase& request);
+    TaskID AddTask(const std::string& name, ExecutorFunctionType function, const RequestBase& request);
     TaskID AddTaskInterval(const std::string& name, ExecutorFunctionType function, TaskInterval interval);
     TaskID AddTaskOnce(const std::string& name, ExecutorFunctionType function, TaskDelay delay);
 

@@ -30,4 +30,11 @@ std::chrono::steady_clock::time_point DiagInfo::GetUpdateTime() {
     return update_time_;
 }
 
+bool DiagInfo::operator==(const DiagInfo& other) const {
+    return diag_code_ == other.diag_code_ &&
+            diag_name_ == other.diag_name_ &&
+            status_ == other.status_ &&
+            message_ == other.message_;
+}
+
 } // namespace diagnostic_manager

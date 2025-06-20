@@ -27,6 +27,7 @@ bool PolicyManager::LoadAllPolicy(const std::string& path) {
         return false;
     }
 
+    std::cout << "A total of " << policies_.size() << " policies were loaded." << std::endl;
     return true;
 }
 
@@ -76,13 +77,10 @@ bool PolicyManager::LoadPolicy(const std::string& path) {
                     DiagInfoStatus status = DiagInfoStatus::UNKNOWN;
                     if (statusStr == "PASS") {
                         status = DiagInfoStatus::PASS;
-                    } else if (statusStr == "FAIL") {
-                        status = DiagInfoStatus::FAIL;
+                    } else if (statusStr == "FATAL") {
+                        status = DiagInfoStatus::FATAL;
                     } else if (statusStr == "WARNING") {
                         status = DiagInfoStatus::WARNING;
-                    } else if (statusStr == "FATAL") {
-                        // Map "FATAL" to FAIL (or treat as FAIL if no distinct enum)
-                        status = DiagInfoStatus::FAIL;
                     } else {
                         status = DiagInfoStatus::UNKNOWN;
                     }

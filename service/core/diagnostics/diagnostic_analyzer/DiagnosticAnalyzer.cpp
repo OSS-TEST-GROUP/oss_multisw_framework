@@ -5,6 +5,8 @@
 #include <regex>
 
 #include "DiagnosticAnalyzer.hpp"
+#include "request_msg/AnalyzeRequestMessage.hpp"
+#include "request_msg/DiagMessage.hpp"
 
 using namespace std::placeholders;
 
@@ -12,8 +14,9 @@ namespace diagnostic_manager {
 
 const std::string DIAG_CONFIG_PATH = "config";
 
-DiagnosticAnalyzer::DiagnosticAnalyzer(std::shared_ptr<MessageTransmitter> msg_transmitter)
-        : msg_transmitter_(msg_transmitter) {}
+DiagnosticAnalyzer::DiagnosticAnalyzer(std::shared_ptr<ServiceExecutor> service_executor, std::shared_ptr<MessageTransmitter> msg_transmitter,
+    std::shared_ptr<DiagInfoRegistry> diag_info_registry)
+        : service_executor_(service_executor), msg_transmitter_(msg_transmitter), diag_info_registry_(diag_info_registry) {}
 
 DiagnosticAnalyzer::~DiagnosticAnalyzer() {}
 
@@ -23,7 +26,6 @@ bool DiagnosticAnalyzer::Initialize() {
     }
 
     data_manager_ = std::make_shared<DataManager>();
-    condition_evaluator_ = std::make_shared<ConditionEvaluator>(data_manager_);
 
     policy_manager_ = std::make_shared<PolicyManager>();
     if (!policy_manager_->Initialize()) {
@@ -35,6 +37,8 @@ bool DiagnosticAnalyzer::Initialize() {
         return false;
     }
 
+    condition_evaluator_ = std::make_shared<ConditionEvaluator>(data_manager_, policy_manager_);
+
     subscriber_id_ = msg_transmitter_->AddSubscriber("DiagnosticAnalyzer", std::bind(&DiagnosticAnalyzer::HandleReceiveDiagMessage, this, _1), []() {
         return std::make_shared<DiagMessage>();
     });
@@ -42,6 +46,8 @@ bool DiagnosticAnalyzer::Initialize() {
         std::cerr << "Failed to register to the MessageTransmitter." << std::endl;
         return false;
     }
+
+    service_executor_->AddTask("DiagnosticAnalyzerRequest", std::bind(&DiagnosticAnalyzer::HandleAnalyzeRequest, this, _1), AnalyzeRequestMessage());
 
     SubscribeReferenceMessages();
 
@@ -64,6 +70,9 @@ std::vector<std::shared_ptr<DiagInfo>> DiagnosticAnalyzer::AnalyzeAll() {
     auto police_list = GetDiagPoliciesToAnalyze();
 
     for (const auto& policy : police_list) {
+        if (!policy->IsActive()) {
+            continue;
+        }
         auto analysis_results = Analyze(policy);
         result.insert(result.end(), analysis_results.begin(), analysis_results.end());
     }
@@ -77,18 +86,33 @@ std::vector<std::shared_ptr<DiagInfo>> DiagnosticAnalyzer::Analyze(std::shared_p
     for (auto& policy_rule : diag_policy->GetRules()) {
         bool evaluation_result = EvaluatePolicyRuleConditions(policy_rule.conditions, policy_rule.condition_operator);
         if (evaluation_result) {
-            // Updating Diag Info here with policy_rule.status
+            diag_info.push_back(std::make_shared<DiagInfo>(diag_policy->GetDiagCode(), diag_policy->GetDiagName(), policy_rule.status, policy_rule.message));
+            break;
         }
     }
-
-    //CalculatePolicyRuleCondition
 
     return diag_info;
 }
 
-void DiagnosticAnalyzer::HandleReceiveDiagMessage(std::shared_ptr<RequestBase> req_msg) {}
+void DiagnosticAnalyzer::HandleReceiveDiagMessage(std::shared_ptr<RequestBase> req_msg) {
+    auto diag_msg = std::dynamic_pointer_cast<DiagMessage>(req_msg);
+    if (!diag_msg) return;
+    auto diag_data = diag_msg->GetMessage()->GetData();
+    if (!diag_data) return;
 
-void DiagnosticAnalyzer::HandleAnalyzeRequest(std::shared_ptr<RequestBase> req_msg) {}
+    data_manager_->UpdateData(diag_data);
+
+    service_executor_->RequestTask(std::make_shared<AnalyzeRequestMessage>());
+}
+
+void DiagnosticAnalyzer::HandleAnalyzeRequest(std::shared_ptr<RequestBase> req_msg) {
+    // TODO - To be improved not to analyze too frequently.
+
+    auto diag_info_list = AnalyzeAll();
+    for (auto iter : diag_info_list) {
+        diag_info_registry_->UpdateDiagInfo(iter);
+    }
+}
 
 bool DiagnosticAnalyzer::EvaluatePolicyRuleConditions(const std::vector<std::string>& conditions, ConditionOperator condition_operator) {
     bool or_success = false;
@@ -127,11 +151,9 @@ std::vector<std::shared_ptr<DiagPolicy>> DiagnosticAnalyzer::GetDiagPoliciesToAn
         if (!ref_msg) {
             continue;
         }
-
         auto ref_msg_diag_codes = ref_msg->GetAllDiagCode();
         diag_codes.insert(ref_msg_diag_codes.begin(), ref_msg_diag_codes.end());
     }
-
 
     for (auto diag_code : diag_codes) {
         policies.push_back(policy_manager_->GetPolicy(diag_code));

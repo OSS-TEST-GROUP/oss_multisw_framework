@@ -12,6 +12,7 @@ set ( DIAGNOSTIC_SRC
     diagnostic/DiagInfo.cpp
     diagnostic/DiagInfoRegistry.cpp
     diagnostic/VariantData.cpp
+    diagnostic/DiagnosticPublisher.cpp
 )
 set ( EXECUTOR_SRC
     executor/RequestBase.cpp
@@ -65,3 +66,19 @@ install ( TARGETS ${PROJECT_NAME}
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
     )
+
+# Diag config
+install(
+    DIRECTORY
+        config
+    DESTINATION
+        bin
+    FILES_MATCHING PATTERN "*.yaml"
+)
+
+# Diag idl
+install(DIRECTORY
+    ${CMAKE_SOURCE_DIR}/idl/dds/common
+    ${CMAKE_SOURCE_DIR}/idl/dds/diagnostic
+    DESTINATION bin/idl
+)

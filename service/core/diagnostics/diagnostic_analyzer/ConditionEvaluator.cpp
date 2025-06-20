@@ -5,7 +5,8 @@
 
 namespace diagnostic_manager {
 
-ConditionEvaluator::ConditionEvaluator(std::shared_ptr<DataManager> data_manager) : data_manager_(data_manager) {}
+ConditionEvaluator::ConditionEvaluator(std::shared_ptr<DataManager> data_manager, std::shared_ptr<PolicyManager> policy_manager) :
+    data_manager_(data_manager), policy_manager_(policy_manager) {}
 
 ConditionEvaluator::~ConditionEvaluator() {}
 
@@ -127,7 +128,7 @@ ConditionOperandType ConditionEvaluator::EvaluateOperandType(ConditionExpression
 
     if (!IsConstantValue(cond_expression.lh)) {
         VariantValue value;
-        data_manager_->FetchValueAsVariant(cond_expression.lh, value);
+        data_manager_->FetchValueAsVariant(ResolveMessageName(cond_expression.lh), value);
         operand_types.insert(ConvertTypeIndexToOperandType(value.type));
     } else {
         operand_types.insert(EvaluateOperandTypeFromConstantValue(cond_expression.lh));
@@ -135,7 +136,7 @@ ConditionOperandType ConditionEvaluator::EvaluateOperandType(ConditionExpression
 
     if (!IsConstantValue(cond_expression.rh)) {
         VariantValue value;
-        data_manager_->FetchValueAsVariant(cond_expression.rh, value);
+        data_manager_->FetchValueAsVariant(ResolveMessageName(cond_expression.rh), value);
         operand_types.insert(ConvertTypeIndexToOperandType(value.type));
     } else {
         operand_types.insert(EvaluateOperandTypeFromConstantValue(cond_expression.rh));
@@ -379,6 +380,20 @@ bool ConditionEvaluator::EvaluateOperandByOperatorWithList(T lh, const std::stri
     return false;
 }
 
+std::string ConditionEvaluator::ResolveMessageName(const std::string& name) {
+    size_t msg_name_pos = name.find('.');
+    if (msg_name_pos == std::string::npos) {
+        return name;
+    }
+
+    auto ref_message = policy_manager_->GetReferenceMessage(name.substr(0, msg_name_pos));
+    if (!ref_message) {
+        return name;
+    }
+
+    return ref_message->GetMessage() + name.substr(msg_name_pos);
+}
+
 template<typename T>
 bool ConditionEvaluator::FetchOrParseValue(const std::string& operand, T& out) {
     std::string trimmed = operand;
@@ -422,7 +437,7 @@ bool ConditionEvaluator::FetchOrParseValue(const std::string& operand, T& out) {
             return true;
         }
     } else {
-        return data_manager_->FetchValue(trimmed, out);
+        return data_manager_->FetchValue(ResolveMessageName(trimmed), out);
     }
 }
 

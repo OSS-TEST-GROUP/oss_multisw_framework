@@ -5,6 +5,9 @@
 #include <fastdds/dds/xtypes/dynamic_types/DynamicPubSubType.hpp>
 
 #include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <regex>
 
 namespace diagnostic_manager {
 
@@ -29,40 +32,68 @@ std::vector<std::shared_ptr<DynamicIDLTypeSupport>> DDSDynamicIDLParser::ParseAl
         return types;
     }
 
-    for (const auto& entry : fs::directory_iterator(idl_directory_))
+    for (const auto& entry : fs::recursive_directory_iterator(idl_directory_))
     {
-        if (entry.path().extension() == ".idl")
+        if (entry.is_regular_file() && entry.path().extension() == ".idl")
         {
-            auto type = Parse(entry.path().filename().string());
-            if (type)
-            {
-                types.push_back(type);
-            }
+            // auto ret = Parse(entry.path().filename().string());
+            // types.insert(types.end(), ret.begin(), ret.end());
+            std::filesystem::path relative_path = std::filesystem::relative(entry.path(), idl_directory_);
+            auto ret = Parse(relative_path.string());
+            types.insert(types.end(), ret.begin(), ret.end());
         }
     }
 
     return types;
 }
 
-std::shared_ptr<DynamicIDLTypeSupport> DDSDynamicIDLParser::Parse(const std::string& idl_name)
+std::vector<std::shared_ptr<DynamicIDLTypeSupport>> DDSDynamicIDLParser::Parse(const std::string& idl_name)
 {
+    std::vector<std::shared_ptr<DynamicIDLTypeSupport>> types;
     std::string idl_path = (fs::path(idl_directory_) / idl_name).string();
 
-    // For simplicity, we assume the IDL contains only one top-level type
-    // and its name matches the file name (without extension)
-    std::string type_name = idl_name.substr(0, idl_name.find_last_of('.'));
+    auto type_list = ExtractStructNamesFromIDL(idl_name);
 
-    auto builder = DynamicTypeBuilderFactory::get_instance()->create_type_w_uri(idl_path, type_name, {idl_directory_});
-    if (!builder)
-    {
-        std::cerr << "Failed to parse IDL: " << idl_path << std::endl;
-        return nullptr;
+    for (auto& iter : type_list) {
+        auto builder = DynamicTypeBuilderFactory::get_instance()->create_type_w_uri(idl_path, iter, {idl_directory_});
+        if (!builder)
+        {
+            std::cerr << "Failed to parse IDL: " << idl_path << std::endl;
+            continue;
+        }
+
+        auto dynamic_idl_type = std::make_shared<DynamicIDLTypeSupport>();
+        dynamic_idl_type->dyn_type = builder->build();
+        dynamic_idl_type->type_support = std::make_shared<TypeSupport>(new DynamicPubSubType(dynamic_idl_type->dyn_type));
+        types.push_back(dynamic_idl_type);
     }
 
-    auto dynamic_idl_type = std::make_shared<DynamicIDLTypeSupport>();
-    dynamic_idl_type->dyn_type = builder->build();
-    dynamic_idl_type->type_support = std::make_shared<TypeSupport>(new DynamicPubSubType(dynamic_idl_type->dyn_type));
-    return dynamic_idl_type;
+    return types;
+}
+
+std::vector<std::string> DDSDynamicIDLParser::ExtractStructNamesFromIDL(const std::string& idl_name) {
+    std::string idl_path = (fs::path(idl_directory_) / idl_name).string();
+    std::ifstream file(idl_path);
+    if (!file.is_open()) {
+        std::cerr << "Failed to open IDL file: " << idl_path << std::endl;
+        return {};
+    }
+
+    std::vector<std::string> results;
+    std::regex struct_decl(R"(\s*struct\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*(\{)?)");
+
+    std::string line;
+    while (std::getline(file, line)) {
+        std::smatch match;
+    
+        // Struct declaration
+        if (std::regex_search(line, match, struct_decl)) {
+            results.push_back(match[1]);
+            continue;
+        }
+    }
+
+    return results;
 }
 
 } // namespace diagnostic_manager

@@ -336,7 +336,7 @@ TEST_F(MessageTransmitterTest, MultiThreadTest_TC001) {
     
     std::atomic<uint64_t> next_task_id(1U);
     EXPECT_CALL(*Mock_ServiceExecutorMock, AddTask(_, _, _)).WillRepeatedly(
-        Invoke([&](const std::string& name, ExecutorFunctionType type, RequestBase& req){
+        Invoke([&](const std::string& name, ExecutorFunctionType type, const RequestBase& req){
             return next_task_id.fetch_add(1);
         }));
     EXPECT_CALL(*Mock_DDSProtocol, SubscribeMessage(_)).WillRepeatedly(Return(true));

@@ -50,7 +50,7 @@ TEST_F(PolicyManagerTest, LoadAllPolicies_TC001) {
     auto lifecycle_rules = lifecycle->GetRules();
     ASSERT_EQ(lifecycle_rules.size(), 2);
 
-    EXPECT_EQ(lifecycle_rules[0].status, DiagInfoStatus::FAIL);  // "FATAL" maps to FAIL
+    EXPECT_EQ(lifecycle_rules[0].status, DiagInfoStatus::FATAL);  // "FATAL" maps to FATAL
     EXPECT_EQ(lifecycle_rules[0].message, "At least one service is not alive.");
     EXPECT_EQ(lifecycle_rules[0].conditions.size(), 1);
     EXPECT_EQ(lifecycle_rules[0].conditions[0], "LifecycleDiagReport.service_list[].service_state not in [1,2]");
@@ -71,7 +71,7 @@ TEST_F(PolicyManagerTest, LoadAllPolicies_TC001) {
 
     auto adsw_rules = adsw->GetRules();
     ASSERT_EQ(adsw_rules.size(), 1);
-    EXPECT_EQ(adsw_rules[0].status, DiagInfoStatus::FAIL);
+    EXPECT_EQ(adsw_rules[0].status, DiagInfoStatus::FATAL);
     EXPECT_EQ(adsw_rules[0].message, "AD SW Manager can't connect to Lifecycle Manager.");
     ASSERT_EQ(adsw_rules[0].conditions.size(), 1);
     EXPECT_EQ(adsw_rules[0].conditions[0], "ADSWManagerDiagReport.isConnected = false");

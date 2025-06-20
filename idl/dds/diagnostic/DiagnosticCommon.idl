@@ -1,9 +1,14 @@
-enum DiagnosticStatusType
-{
-    UNKNOWN,
-    PASS,
-    FAIL
-};
+module diagnosticmgr {
 
-struct DiagnosticCommonDummy {
+    enum DiagnosticStatusType
+    {
+        UNKNOWN,
+        PASS,
+        FATAL,
+        WARNING
+    };
+
+    struct DiagnosticCommonDummy {
+    };
+
 };

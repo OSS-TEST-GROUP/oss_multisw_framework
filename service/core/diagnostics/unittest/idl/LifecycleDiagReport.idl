@@ -1,0 +1,7 @@
+module lifecyclemgr {
+    struct LifecycleDiagReport {
+        boolean             is_started;
+        unsigned long       running_service_num;
+        unsigned long       total_services_num;
+    };
+};

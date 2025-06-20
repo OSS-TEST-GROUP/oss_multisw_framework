@@ -22,7 +22,7 @@ namespace diagnostic_manager {
 
 class TopicInformation {
   public:
-    TopicInformation() : topic(nullptr), reader(nullptr) {}
+    TopicInformation() : topic(nullptr), reader(nullptr), writer(nullptr) {}
 
     std::string topic_name;
     std::string topic_type;
@@ -35,6 +35,7 @@ class TopicInformation {
 
     Topic* topic;
     DataReader* reader;
+    DataWriter* writer;
 
     std::shared_ptr<TypeSupport> type_support;
 };
@@ -73,17 +74,22 @@ class DDSProtocol : public MessageProtocol, DomainParticipantListener {
     bool register_type_object_from_dynamic_idl(std::shared_ptr<TopicInformation> topic_information);
     bool create_datareader(std::shared_ptr<TopicInformation> topic_information);
     bool delete_datareader(std::shared_ptr<TopicInformation> topic_information);
+    bool create_datawriter(std::shared_ptr<TopicInformation> topic_information);
+    bool delete_datawriter(std::shared_ptr<TopicInformation> topic_information);
+
+    std::shared_ptr<TopicInformation> create_topic_information_from_dynamic_idl(const std::string& name, const std::string& type);
 
     bool read_values_from_dynamic_data(DynamicData::_ref_type dds_data, DynamicTypeMember::_ref_type member, TypeKind elem_type,
                                        std::shared_ptr<VariantData> variant_data);
 
     DomainParticipant* participant_;
     Subscriber* subscriber_;
+    Publisher* publisher_;
 
+    std::mutex topic_handling_mutex_;
     std::unordered_map<std::string, std::shared_ptr<TopicInformation>> discovered_topic_;
 
     std::set<std::string> subscribed_topic_;
-    std::mutex subsription_handling_mutex_;
 
     std::unique_ptr<DDSDynamicIDLParser> dds_dynamic_idl_parser_;
     std::unordered_map<std::string, std::shared_ptr<DynamicIDLTypeSupport>> parsed_dynamic_type_supports_;

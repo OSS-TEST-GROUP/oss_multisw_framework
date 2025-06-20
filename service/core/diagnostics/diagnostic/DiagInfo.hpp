@@ -9,7 +9,7 @@ namespace diagnostic_manager {
 enum class DiagInfoStatus {
     UNKNOWN,
     PASS,
-    FAIL,
+    FATAL,
     WARNING,
 };
 
@@ -24,6 +24,8 @@ class DiagInfo {
     DiagInfoStatus GetStatus();
     std::string GetMessage();
     std::chrono::steady_clock::time_point GetUpdateTime();
+
+    bool operator==(const DiagInfo& other) const;
 
   private:
     int32_t diag_code_;

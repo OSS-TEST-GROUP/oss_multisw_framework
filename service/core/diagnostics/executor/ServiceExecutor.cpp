@@ -51,7 +51,7 @@ void ServiceExecutor::SetExecutorNum(uint32_t num) {
     executor_num_ = num;
 }
 
-TaskID ServiceExecutor::AddTask(const std::string& name, ExecutorFunctionType function, RequestBase& request) {
+TaskID ServiceExecutor::AddTask(const std::string& name, ExecutorFunctionType function, const RequestBase& request) {
     TaskID task_id = next_task_id_.fetch_add(1);
     std::type_index req_type(typeid(request));
 

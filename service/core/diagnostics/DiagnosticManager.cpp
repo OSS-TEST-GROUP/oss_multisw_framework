@@ -7,7 +7,6 @@ DiagnosticManager::~DiagnosticManager() {}
 
 bool DiagnosticManager::Initialize() {
     service_executor_ = std::make_shared<ServiceExecutor>();
-    service_executor_->SetExecutorNum(3);
     if (!service_executor_->Initialize()) {
         std::cerr << "Failed to initialize the ServiceExecutor." << std::endl;
         return false;
@@ -21,8 +20,15 @@ bool DiagnosticManager::Initialize() {
 
     diag_info_registry_ = std::make_shared<DiagInfoRegistry>();
 
-    diagnostic_analyzer_ = std::make_shared<DiagnosticAnalyzer>(message_transmitter_);
-    diagnostic_analyzer_->Initialize();
+    diagnostic_analyzer_ = std::make_shared<DiagnosticAnalyzer>(service_executor_, message_transmitter_, diag_info_registry_);
+    if (!diagnostic_analyzer_->Initialize()) {
+        std::cerr << "Failed to initialize the DiagnosticAnalyzer." << std::endl;
+    }
+
+    diagnostic_publisher_ = std::make_shared<DiagnosticPublisher>(service_executor_, message_transmitter_, diag_info_registry_);
+    if (!diagnostic_publisher_->Initialize()) {
+        std::cerr << "Failed to initialize the DiagnosticPublisher." << std::endl;
+    }
 
     return true;
 }

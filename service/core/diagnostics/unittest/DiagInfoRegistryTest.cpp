@@ -41,7 +41,7 @@ TEST_F(DiagInfoRegistryTest, UpdateDiagInfo_TC001) {
     std::shared_ptr diag_info = std::make_shared<DiagInfo>();
     EXPECT_EQ(0, ins->diag_info_list_.size());
 
-    EXPECT_CALL(*Mock_DiagInfo, GetDiagCode()).WillOnce(Return(123));
+    EXPECT_CALL(*Mock_DiagInfo, GetDiagCode()).WillRepeatedly(Return(123));
 
     ins->UpdateDiagInfo(diag_info);
     EXPECT_EQ(1, ins->diag_info_list_.size());
