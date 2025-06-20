@@ -15,6 +15,7 @@
 #include <filesystem>
 
 #include "MWServiceManager.hpp"
+#include "logger/Log.hpp"
 
 namespace fs = std::filesystem;
 
@@ -25,14 +26,17 @@ MWServiceManager::~MWServiceManager() {}
 
 
 bool MWServiceManager::Initialize(){
-    std::cout << __FILE__ << " :: " << __LINE__ << std::endl;
+    LOG_DEBUG("MWServiceManager::Initialize");
+
+    LoadMWConfig("/root/workspace/config_middleware.yaml");
 
     return false;
 }
 
 bool MWServiceManager::Start(){
+    LOG_DEBUG("MWServiceManager::Start");
 
-    std::cout << __FILE__ << " :: " << __LINE__ << std::endl;
+    RunMWServiceManagement();
 
     return true;
 
@@ -43,12 +47,16 @@ void MWServiceManager::Stop(){
 }
 
 bool MWServiceManager::LoadMWConfig(std::string path){
+
+    LOG_DEBUG("LoadConfig path " << path);
+
     YAML::Node root;
     try {
         // Load the YAML configuration file
         root = YAML::LoadFile(path);
     } catch (const YAML::Exception& e) {
         // Failed to open or parse the YAML file
+        LOG_ERROR("LoadConfig path " << path << ", error = " << e.msg);
         return false;
     }
 
@@ -59,6 +67,7 @@ bool MWServiceManager::LoadMWConfig(std::string path){
             // Required fields: code, name, rules, active
             if (!serviceNode["exepath"] || !serviceNode["name"]) {
                 // Skip if essential fields are missing
+                LOG_DEBUG("LoadConfig  missing exepath or name ");
                 continue;
             }
             int code = serviceNode["code"].as<int>();
@@ -68,7 +77,8 @@ bool MWServiceManager::LoadMWConfig(std::string path){
             if (serviceNode["active"]) {
                 active = serviceNode["active"].as<bool>();
             }
-            
+           LOG_DEBUG("LoadConfig " << name << "::" << exepath);
+
             std::vector<ArgumentConfig> arguments;
 
             // Parse args if present
@@ -76,14 +86,15 @@ bool MWServiceManager::LoadMWConfig(std::string path){
                 YAML::Node argsNode = serviceNode["args"];
                 for (const auto& argNode : argsNode) {
                     // Each rule should have status and message (condition is optional list)
-                    if (!argsNode["arg_name"] || !argsNode["arg_default"]) {
+                    if (!argNode["arg_name"] || !argNode["arg_default"]) {
+                        LOG_DEBUG("LoadConfig  missing arg_name or arg_default ");
                         continue; // skip rules missing essential fields
                     }
 
-                    std::string nameStr = argsNode["arg_name"].as<std::string>();
-                    std::string descStr = argsNode["description"].as<std::string>();
-                    std::string typeStr = argsNode["arg_type"].as<std::string>();
-                    std::string defStr = argsNode["arg_default"].as<std::string>();
+                    std::string nameStr = argNode["arg_name"].as<std::string>();
+                    std::string descStr = argNode["description"].as<std::string>();
+                    std::string typeStr = argNode["arg_type"].as<std::string>();
+                    std::string defStr = argNode["arg_default"].as<std::string>();
 
                     // Create a new DiagPolicyRule object and add it to the policy
                     arguments.emplace_back(nameStr, descStr, typeStr, defStr);
@@ -96,6 +107,8 @@ bool MWServiceManager::LoadMWConfig(std::string path){
 
             // Add the completed policy to the list (only if active or regardless? likely include all)
             mw_services_[name] = serivceObj;
+
+            LOG_DEBUG("LoadConfig " << name << "::" << mw_services_.size());
         }
     }
 
@@ -105,10 +118,10 @@ bool MWServiceManager::LoadMWConfig(std::string path){
 void MWServiceManager::StartMWService(std::shared_ptr<MWService> mw_service){
 
     std::vector<std::string> args = mw_service->GetArgs();
-    pid_t child_pid = run_process(args);
+    pid_t child_pid = run_process(mw_service->GetName(), mw_service->GetPath(), args);
 
     if (child_pid > 0) {
-        std::cout << "Spawned child process PID: " << child_pid << std::endl;
+        LOG_INFO("Spawned child process PID :: " << child_pid);
         mw_service->SetPID(child_pid);
     }
 }
@@ -120,7 +133,7 @@ void MWServiceManager::StopMWService(std::shared_ptr<MWService> mw_service){
     if (child_pid > 0){
         // Kill the child process if needed
         if (kill_process(child_pid)) {
-            std::cout << "Killed child process PID: " << child_pid << std::endl;
+            LOG_INFO("Killed child process PID "" " << child_pid);
         }
 
         // Optionally wait for child to avoid zombie
@@ -134,9 +147,16 @@ void MWServiceManager::StopMWService(std::shared_ptr<MWService> mw_service){
 
 void MWServiceManager::RunMWServiceManagement(){
 
+    for (auto& mws : mw_services_){
+        LOG_INFO("Run MWService :: " << mws.first);
+
+        StartMWService(mws.second);
+    }
+
 }
 
-pid_t MWServiceManager::run_process(const std::vector<std::string>& args) {
+pid_t MWServiceManager::run_process(const std::string exename, const std::string exepath, 
+                        const std::vector<std::string>& args) {
 
     pid_t pid = fork();
     if (pid < 0) {
@@ -146,6 +166,7 @@ pid_t MWServiceManager::run_process(const std::vector<std::string>& args) {
     if (pid == 0) {
         // In child process
         std::vector<char*> c_args;
+        c_args.push_back(const_cast<char*>(exepath.c_str()));
         for (const auto& arg : args)
             c_args.push_back(const_cast<char*>(arg.c_str()));
         c_args.push_back(nullptr); // execvp expects nullptr terminated array

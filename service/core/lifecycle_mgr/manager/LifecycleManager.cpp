@@ -8,6 +8,7 @@
 #include "transmitter/DDSTransmitter.hpp"
 #include "policy/PolicyManager.hpp"
 #include "endpoint/EndPointFactory.hpp"
+#include "logger/Log.hpp"
 
 namespace lifecycle_manager {
 
@@ -15,6 +16,7 @@ LifecycleManager::LifecycleManager() {}
 LifecycleManager::~LifecycleManager() {}
 
 bool LifecycleManager::Initialize() {
+    LOG_DEBUG("LifecycleManager::Initialize" );
 
     service_registry_ = std::make_shared<ServiceRegistry>();
     state_manager_ = std::make_shared<StateManager>(*this);
@@ -37,32 +39,26 @@ bool LifecycleManager::Initialize() {
 }
 
 bool LifecycleManager::Start() {
-
-    std::cout << __FILE__ << " :: " << __LINE__ << std::endl;
+    LOG_DEBUG("LifecycleManager::Start" );
 
     if (!state_manager_->Start()){
-        std::cerr << "Failed to initialize the StateManager." << std::endl;
+        LOG_ERROR("Failed to Start " );
         return false;
     }
 
-    if (!state_monitor_->Start()){
-        std::cerr << "Failed to initialize the StateMonitor." << std::endl;
-        return false;
-    }   
-
     if (!policy_manager_->Start()){
-        std::cerr << "Failed to initialize the PolicyManager." << std::endl;
+        LOG_ERROR("Failed to Start " );
         return false;
     }   
-
-    std::cout << __FILE__ << " :: " << __LINE__ << std::endl;
-
     if (!mw_service_manager_->Start()){
-        std::cerr << "Failed to initialize the MWServiceManager." << std::endl;
+        LOG_ERROR("Failed to Start " );
         return false;
     }       
 
-    std::cout << __FILE__ << " :: " << __LINE__ << std::endl;
+    if (!state_monitor_->Start()){
+        LOG_ERROR("Failed to Start " );
+        return false;
+    }   
 
     return true;
 

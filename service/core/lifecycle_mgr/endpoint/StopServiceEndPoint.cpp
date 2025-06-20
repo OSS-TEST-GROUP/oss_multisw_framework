@@ -3,6 +3,7 @@
 #include "lifecycle/StopServiceRequest.hpp"
 #include "manager/LifecycleFactory.hpp"
 #include "state/StateManager.hpp"
+#include "logger/Log.hpp"
 
 namespace lifecycle_manager {
 
@@ -21,12 +22,11 @@ StopServiceEndPoint::~StopServiceEndPoint() {
 
 
 void StopServiceEndPoint::OnDataAvailable(void* buffer){
+    LOG_DEBUG("Message Delivery for " << GetTopic() );
 
     if (buffer != nullptr){
 
         StopServiceResponse* message = reinterpret_cast<StopServiceResponse*>(buffer);
-
-        std::cout << "Message Delivery for " << GetTopic() << std::endl;
 
         std::shared_ptr<StateManager> manager = LifecycleFactory::GetInstance()->GetState();
 
@@ -44,8 +44,7 @@ void* StopServiceEndPoint::GetTopicBuffer(){
 
 void StopServiceEndPoint::OnDataPublished(bool ret){
 
-    std::cout << "Message Published " << GetTopic() << ", " << ret << std::endl;
-
+    LOG_DEBUG("Message Published for " << GetTopic() << ", " << (ret == true) ? "Success" : "Fail");
 }
 
 } // namespace lifecycle_manager

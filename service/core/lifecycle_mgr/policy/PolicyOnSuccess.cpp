@@ -11,18 +11,36 @@ ServiceControlAction PolicyOnSuccess::Evaluate(std::shared_ptr<Service> service)
     ServiceState state = service->GetServiceState();
     ServiceControlAction action = ServiceControlAction::NONE;
 
-    switch(state){
-        case ServiceState::NOT_RUNNING :
-        case ServiceState::INITIALIZING :
-        case ServiceState::RUNNING :
-        case ServiceState::RUNNING_NO_RESPONSE :
-        case ServiceState::TERMINATING :
-            action = ServiceControlAction::NONE;
+    /* if service not responding sate .. then restart ?? */
+
+    if (service->GetServiceMode() != ServiceMode::NORMAL){
+        return action;
     }
 
-    return action;
+    switch(state){
+        case ServiceState::NOT_RUNNING :{
+            action  = ServiceControlAction::START;
+        }break;
 
+        case ServiceState::INITIALIZING :{
+            action = ServiceControlAction::NONE; 
+            // wait initialize finish
+        }break;
+
+        case ServiceState::RUNNING :{
+            // do nothing
+            action = ServiceControlAction::NONE; 
+        }break;
+
+        case ServiceState::RUNNING_NO_RESPONSE :{
+            // stop app and try run after terminated
+            action = ServiceControlAction::STOP; 
+        }break;
+
+        case ServiceState::TERMINATING :{
+            action  = ServiceControlAction::START;
+        }break;
+    }
 }
-
 
 } // namespace lifecycle_manager

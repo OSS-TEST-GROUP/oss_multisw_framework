@@ -4,6 +4,7 @@
 
 #include "manager/LifecycleFactory.hpp"
 #include "service/ServiceRegistry.hpp"
+#include "logger/Log.hpp"
 
 namespace lifecycle_manager {
 
@@ -20,15 +21,12 @@ UpdateServiceListEndPoint::~UpdateServiceListEndPoint() {
 }
 
 
-
 void UpdateServiceListEndPoint::OnDataAvailable(void* buffer){
+    LOG_DEBUG("Message Delivery for " << GetTopic() );
 
     if (buffer != nullptr){
 
         UpdateServiceListRequest* message = reinterpret_cast<UpdateServiceListRequest*>(buffer);
-
-        std::cout << "Message Delivery for " << GetTopic() << std::endl;
-        std::cout << "count : " << message->service_list().size() << std::endl;
 
         std::shared_ptr<ServiceRegistry> manager = LifecycleFactory::GetInstance()->GetRegistry();
 
@@ -45,8 +43,7 @@ void* UpdateServiceListEndPoint::GetTopicBuffer(){
 
 void UpdateServiceListEndPoint::OnDataPublished(bool ret){
 
-    std::cout << "Message Published " << GetTopic() << ", " << ret << std::endl;
-
+    LOG_DEBUG("Message Published for " << GetTopic() << ", " << (ret == true) ? "Success" : "Fail");
 }
 
 

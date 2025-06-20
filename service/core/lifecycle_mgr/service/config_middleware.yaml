@@ -1,7 +1,7 @@
 config_middleware:
   - code : 10
     name : lifecycle_mgr
-    exepath : "/home/workspace/mw/bin/lifecycle_mgr"
+    exepath : "/root/workspace/mw/bin/lifecycle_mgr"
     args :
       - arg_name : "arg1"
         description : ""
@@ -13,8 +13,8 @@ config_middleware:
         arg_default : "3"
     active : false
   - code : 11
-    name : diagnstics
-    exepath : "/home/workspace/mw/bin/diagnstics"
+    name : diagnostics
+    exepath : "/root/workspace/mw/bin/diagnostics"
     args :
       - arg_name : "arg1"
         description : ""
@@ -27,7 +27,7 @@ config_middleware:
     active : true
   - code : 12
     name : ota_mgr
-    exepath : "/home/workspace/mw/bin/ota_mgr"
+    exepath : "/root/workspace/mw/bin/ota_mgr"
     args :
       - arg_name : "arg1"
         description : ""
@@ -36,7 +36,7 @@ config_middleware:
     active : true
   - code : 12
     name : security_mgr
-    exepath : "/home/workspace/mw/bin/security_mgr"
+    exepath : "/root/workspace/mw/bin/security_mgr"
     args :
       - arg_name : "arg1"
         description : ""
@@ -45,7 +45,7 @@ config_middleware:
     active : true    
   - code : 12
     name : vehicle_info_mgr
-    exepath : "/home/workspace/mw/bin/vehicle_info_mgr"
+    exepath : "/root/workspace/mw/bin/vehicle_info_mgr"
     args :
       - arg_name : "arg1"
         description : ""

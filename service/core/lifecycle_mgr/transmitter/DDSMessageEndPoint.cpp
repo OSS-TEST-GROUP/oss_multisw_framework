@@ -3,6 +3,7 @@
 #include <stdexcept>
 
 #include "DDSMessageEndPoint.hpp"
+#include "logger/Log.hpp"
 
 #include <fastdds/dds/publisher/qos/DataWriterQos.hpp>
 #include <fastdds/dds/publisher/qos/PublisherQos.hpp>
@@ -75,9 +76,6 @@ bool DDSMessageEndPoint::Initialize(DomainParticipant* participant, Publisher* p
         }
     }
 
-    
-    std::cout << __FILE__ << " :: " << __LINE__ << std::endl;
-
     return true;
 }
 
@@ -114,18 +112,17 @@ void DDSMessageEndPoint::on_publication_matched(
     if (info.current_count_change == 1)
     {
         matched_ = static_cast<int16_t>(info.current_count);
-        std::cout << "Publisher matched." << std::endl;
+        LOG_DEBUG("Publisher matched.");
         cv_.notify_one();
     }
     else if (info.current_count_change == -1)
     {
         matched_ = static_cast<int16_t>(info.current_count);
-        std::cout << "Publisher unmatched." << std::endl;
+        LOG_DEBUG("Publisher unmatched.");
     }
     else
     {
-        std::cout << info.current_count_change
-                  << " is not a valid value for PublicationMatchedStatus current count change" << std::endl;
+        LOG_DEBUG(info.current_count_change << " is not a valid value for PublicationMatchedStatus current count change");
     }
 }
 
@@ -136,16 +133,15 @@ void DDSMessageEndPoint::on_subscription_matched(
 {
     if (info.current_count_change == 1)
     {
-        std::cout << "Subscriber matched." << std::endl;
+        LOG_DEBUG("Subscriber matched.");
     }
     else if (info.current_count_change == -1)
     {
-        std::cout << "Subscriber unmatched." << std::endl;
+        LOG_DEBUG("Subscriber unmatched.");
     }
     else
     {
-        std::cout << info.current_count_change
-                  << " is not a valid value for SubscriptionMatchedStatus current count change" << std::endl;
+        LOG_DEBUG(info.current_count_change << " is not a valid value for SubscriptionMatchedStatus current count change");
     }
 }
 
@@ -160,10 +156,6 @@ void DDSMessageEndPoint::on_data_available(
     {
         if ((info.instance_state == ALIVE_INSTANCE_STATE) && info.valid_data)
         {
-            // Print Hello world message data
-            std::cout << "Message:  << "
-                      << " RECEIVED" << std::endl;
-
             OnDataAvailable(read_buffer);
         }
     }

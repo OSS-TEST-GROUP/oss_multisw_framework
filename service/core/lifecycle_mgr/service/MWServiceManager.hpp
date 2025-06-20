@@ -28,7 +28,7 @@ class MWServiceManager {
     void RunMWServiceManagement();
 
   private :
-    pid_t run_process(const std::vector<std::string>& args);
+    pid_t run_process(const std::string exename, const std::string exepath, const std::vector<std::string>& args);
     bool kill_process(pid_t pid);
 
   private:

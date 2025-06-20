@@ -8,6 +8,7 @@
 #include "StopServiceEndPoint.hpp"
 #include "GetServiceStateEndPoint.hpp"
 #include "NotifyServiceStateEndPoint.hpp"
+#include "logger/Log.hpp"
 
 namespace lifecycle_manager {
 
@@ -73,10 +74,7 @@ int32_t EndPointFactory::CreateEndPoints(std::shared_ptr<DDSTransmitter> transmi
 
     for (auto const& [key, val] : topic_lists_)
     {
-        std::cout << static_cast<int32_t>(key)        // string (key)
-                << ':'  
-                << val        // string's value
-                << std::endl;
+        LOG_DEBUG(__FUNCTION__ << "::" << static_cast<int32_t>(key) << "," << val);
 
         std::shared_ptr<DDSMessageEndPoint> msg_endpoint = nullptr;
         PubSubTYpe pubsub = PubSubTYpe::PUBSUB_NONE;

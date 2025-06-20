@@ -3,6 +3,7 @@
 #include "lifecycle/NotifyServiceState.hpp"
 #include "manager/LifecycleFactory.hpp"
 #include "state/StateMonitor.hpp"
+#include "logger/Log.hpp"
 
 namespace lifecycle_manager {
 
@@ -21,6 +22,7 @@ NotifyServiceStateEndPoint::~NotifyServiceStateEndPoint() {
 
 
 void NotifyServiceStateEndPoint::OnDataAvailable(void* buffer){
+    LOG_DEBUG("Message Delivery for " << GetTopic() );
 
     if (buffer != nullptr){
 
@@ -31,8 +33,6 @@ void NotifyServiceStateEndPoint::OnDataAvailable(void* buffer){
         if (manager != nullptr){
             manager->UpdateServicesState(message);            
         }
-
-        std::cout << "Message Delivery for " << GetTopic() << std::endl;
     }
 
 }
@@ -44,8 +44,7 @@ void* NotifyServiceStateEndPoint::GetTopicBuffer(){
 
 void NotifyServiceStateEndPoint::OnDataPublished(bool ret){
 
-    std::cout << "Message Published " << GetTopic() << ", " << ret << std::endl;
-
+    LOG_DEBUG("Message Published for " << GetTopic() << ", " << (ret == true) ? "Success" : "Fail");
 }
 
 } // namespace lifecycle_manager
