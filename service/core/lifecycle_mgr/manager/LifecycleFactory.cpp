@@ -5,7 +5,7 @@ namespace lifecycle_manager {
 
 LifecycleFactory::LifecycleFactory() :lifecycle_manager_(nullptr)
 {
-    LOG_INFO("Const Factory");
+    LOG_INFO("Create LifecycleFactory");
 }
 
 LifecycleFactory::~LifecycleFactory() {}

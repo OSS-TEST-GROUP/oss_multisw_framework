@@ -10,14 +10,11 @@ ServiceControlAction PolicyManual::Evaluate(std::shared_ptr<Service> service){
     ServiceState state = service->GetServiceState();
     ServiceControlAction action = ServiceControlAction::NONE;
 
-    switch(state){
-        case ServiceState::NOT_RUNNING :
-        case ServiceState::INITIALIZING :
-        case ServiceState::RUNNING :
-        case ServiceState::RUNNING_NO_RESPONSE :
-        case ServiceState::TERMINATING :
-            action = ServiceControlAction::NONE;
+    if (service->GetServiceMode() != ServiceMode::NORMAL){
+        return action;
     }
+
+    /* manual policy run via operator command or ?? */
 
     return action;
 }

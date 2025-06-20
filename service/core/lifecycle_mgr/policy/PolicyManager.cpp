@@ -6,6 +6,7 @@
 #include "PolicyOnFailure.hpp"
 #include "PolicyOnNotResponding.hpp"
 #include "PolicyOnSuccess.hpp"
+#include "logger/Log.hpp"
 
 namespace lifecycle_manager {
 
@@ -15,7 +16,7 @@ PolicyManager::PolicyManager() {}
 PolicyManager::~PolicyManager() {}
 
 bool PolicyManager::Start() {
-    std::cout << __FILE__ << " :: " << __LINE__ << std::endl;
+    LOG_DEBUG("PolicyManager::Start " );
 
     policies_[RecoveryPolicy::ALWAYS] = std::make_shared<PolicyAlways>(RecoveryPolicy::ALWAYS, "Policy-Always");
     policies_[RecoveryPolicy::ON_FAILURE] = std::make_shared<PolicyOnFailure>(RecoveryPolicy::ON_FAILURE, "Policy-OnFailure");

@@ -1,9 +1,9 @@
 #include "LifecycleDiagReportEndPoint.hpp"
 
 #include "lifecycle/LifecycleDiagReport.hpp"
+#include "logger/Log.hpp"
 
 namespace lifecycle_manager {
-
 
 LifecycleDiagReportEndPoint::LifecycleDiagReportEndPoint(std::string topic) 
     : DDSMessageEndPoint(topic){
@@ -19,24 +19,19 @@ LifecycleDiagReportEndPoint::~LifecycleDiagReportEndPoint() {
 
 
 void LifecycleDiagReportEndPoint::OnDataAvailable(void* buffer){
+    LOG_DEBUG("Message Delivery for " << GetTopic() );
 
     if (buffer != nullptr){
 
         LifecycleDiagReport* message = reinterpret_cast<LifecycleDiagReport*>(buffer);
 
-        std::cout << "Message Delivery for " << GetTopic() << std::endl;
-
-        std::cout << "count : " << message->service_list().size() << std::endl;
-       
         std::vector<::ServiceStatus> *slist = &message->service_list();
 
         for( auto svc = slist->begin(); svc != slist->end(); ++svc ){
-            std::cout << "service " << svc->name() 
+            LOG_VERBOSE("service " << svc->name() 
                         << ", " << static_cast<int32_t>(svc->service_type()) 
                         << ", " << static_cast<int32_t>(svc->service_state()) 
-                        << ", " << static_cast<bool>(svc->is_enabled()) << std::endl;
-
-            //GetServieManager()->UpdateService();
+                        << ", " << static_cast<bool>(svc->is_enabled()));
         }
     }
 
@@ -49,8 +44,7 @@ void* LifecycleDiagReportEndPoint::GetTopicBuffer(){
 
 void LifecycleDiagReportEndPoint::OnDataPublished(bool ret){
 
-    std::cout << "Message Published " << GetTopic() << ", " << ret << std::endl;
-
+    LOG_DEBUG("Message Published for " << GetTopic() << ", " << (ret == true) ? "Success" : "Fail");
 }
 
 } // namespace lifecycle_manager

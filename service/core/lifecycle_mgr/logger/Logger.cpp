@@ -25,7 +25,7 @@ std::shared_ptr<Logger> Logger::getInstance()
 {
     // Note we need a custom deleter, since the destructor is protected.
     static std::shared_ptr<Logger> instance(
-        new Logger(LogLevel::INFO, ""),
+        new Logger(LogLevel::DEBUG, ""),
         [](Logger* p)
         {
             delete p;
@@ -35,30 +35,33 @@ std::shared_ptr<Logger> Logger::getInstance()
 
 void Logger::setLogLevel(LogLevel level) { logLevel = level; }
 
-void Logger::critical(const std::string& msg) { 
-    log(LogLevel::CRITICAL, "CRITICAL", msg); 
+void Logger::critical(const std::string msg) { 
+    log(LogLevel::CRITICAL, "[CRITICAL]", msg); 
+}
+void Logger::error(const std::string msg) { 
+    log(LogLevel::ERROR, "[ERROR]", msg); 
+}
+void Logger::info(const std::string msg)    
+{ 
+    log(LogLevel::INFO,    "[INFO]",    msg); 
+}
+void Logger::debug(const std::string msg)   
+{ 
+    log(LogLevel::DEBUG,   "[DEBUG]",   msg); 
+}
+void Logger::verbose(const std::string msg) 
+{ 
+    log(LogLevel::VERBOSE, "[VERBOSE]", msg); 
 }
 
-void Logger::info(const std::string& msg)    
-{ 
-    log(LogLevel::INFO,    "INFO",    msg); 
-}
-void Logger::debug(const std::string& msg)   
-{ 
-    log(LogLevel::DEBUG,   "DEBUG",   msg); 
-}
-void Logger::verbose(const std::string& msg) 
-{ 
-    log(LogLevel::VERBOSE, "VERBOSE", msg); 
-}
 
-
-void Logger::log(LogLevel level, const std::string& levelStr, const std::string& msg) {
+void Logger::log(LogLevel level, const std::string& levelStr, const std::string msg) {
     if (level > logLevel) return;
     
     std::lock_guard<std::mutex> guard(logMutex);
 
     std::ostringstream oss;
+
     oss << "[" << timestamp() << "] [" << levelStr << "] " << msg << std::endl;
 
     if (useFile) {

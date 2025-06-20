@@ -2,6 +2,8 @@
 
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp>
 
+#include "logger/Log.hpp"
+
 namespace lifecycle_manager {
 
 DDSTransmitter::DDSTransmitter() {}
@@ -9,7 +11,7 @@ DDSTransmitter::~DDSTransmitter() {}
 
 
 bool DDSTransmitter::Initialize(){
-    std::cout << __FILE__ << " :: " << __LINE__ << std::endl;
+    LOG_DEBUG("DDSTransmitter::Initialize");
 
    // Create the participant
     DomainParticipantQos pqos = PARTICIPANT_QOS_DEFAULT;
@@ -42,7 +44,6 @@ bool DDSTransmitter::Initialize(){
         std::cout << "Subscriber initialization failed." << std::endl;
         return false;
     }
-    std::cout << __FILE__ << " :: " << __LINE__ << std::endl;
 
     return true;    
 }
@@ -64,11 +65,9 @@ void DDSTransmitter::Finalize(){
 bool DDSTransmitter::AddMessageEndpoint(std::shared_ptr<DDSMessageEndPoint> endpoint){
 
     if (endpoint){
-    std::cout << __FILE__ << " :: " << __LINE__ << std::endl;
 
         endpoints_[endpoint->GetTopic()] = endpoint;
     }
-    std::cout << __FILE__ << " :: " << __LINE__ << std::endl;
 
     return false;
 
@@ -79,7 +78,7 @@ std::shared_ptr<DDSMessageEndPoint> DDSTransmitter::GetMessageEndPoint(std::stri
     auto search = endpoints_.find(topic);
 
     if (search != endpoints_.end()){
-        std::cout << "Found " << search->first  << '\n';
+        LOG_DEBUG("GetEndpoint for " << topic << ", found " << search->first);
         return search->second;
     } else{ 
         std::cout << "Not found\n";

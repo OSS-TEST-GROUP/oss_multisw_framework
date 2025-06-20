@@ -4,6 +4,7 @@
 
 #include "manager/LifecycleFactory.hpp"
 #include "state/StateManager.hpp"
+#include "logger/Log.hpp"
 
 namespace lifecycle_manager {
 
@@ -22,14 +23,11 @@ SetServiceModeEndPoint::~SetServiceModeEndPoint() {
 
 
 void SetServiceModeEndPoint::OnDataAvailable(void* buffer){
+    LOG_DEBUG("Message Delivery for " << GetTopic() );
 
     if (buffer != nullptr){
 
         SetServiceModeRequest* message = reinterpret_cast<SetServiceModeRequest*>(buffer);
-
-        std::cout << "Message Delivery for " << GetTopic() << std::endl;
-
-        std::cout << "count : " << message->service_list().size() << std::endl;
 
         std::shared_ptr<StateManager> manager = LifecycleFactory::GetInstance()->GetState();
 
@@ -47,8 +45,7 @@ void* SetServiceModeEndPoint::GetTopicBuffer(){
 
 void SetServiceModeEndPoint::OnDataPublished(bool ret){
 
-    std::cout << "Message Published " << GetTopic() << ", " << ret << std::endl;
-
+    LOG_DEBUG("Message Published for " << GetTopic() << ", " << (ret == true) ? "Success" : "Fail");
 }
 
 
