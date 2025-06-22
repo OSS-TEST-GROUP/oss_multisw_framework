@@ -31,6 +31,28 @@ export BUILD_MODE="Debug"
 export CPU_CORES=`nproc`
 
 export BUILD_UNITTEST="FALSE"
+export EXTENSION_PLATFORM="ros2"
+
+show_help() {
+  cat << EOF
+Usage: build.sh [OPTIONS]
+
+Available options:
+  --release                    Set the build mode to Release
+  --build-unittest             Enable building unit tests
+  --set-extension-platform={PLATFORM}
+                               Set the target platform for extension
+                               Supported platform:
+                                 - AAutoSAR
+                                 - AGL
+                                 - ROS2
+  --help                       Show this help message
+
+Examples:
+  ./build.sh --release
+  ./build.sh --build-unittest --set-extension-platform=linux
+EOF
+}
 
 do_error_check()
 {
@@ -45,14 +67,22 @@ do_parse_option()
   for arg in $*
   do
     case ${arg} in
+      --help)
+        show_help
+        exit 0
+        ;;
       --release)
         BUILD_MODE="Release"
         ;;
       --build-unittest)
         BUILD_UNITTEST="TRUE"
         ;;
+      --set-extension-platform=*)
+        EXTENSION_PLATFORM="${arg#*=}"
+        ;;
       *)
         echo "Unknown option. ${arg}"
+        echo "Use --help to see available options."
         kill -SIGINT $$
         ;;
     esac
@@ -84,7 +114,7 @@ do_build()
   # Build with cmake
   pushd "${CMAKE_TEMP_DIR}" 1>/dev/null
 
-  cmake ../ -DBUILD_UNITTEST=${BUILD_UNITTEST}
+  cmake ../ -DBUILD_UNITTEST=${BUILD_UNITTEST} -DEXTENSION_PLATFORM=${EXTENSION_PLATFORM}
   do_error_check
 
   make -j${CPU_CORES}
