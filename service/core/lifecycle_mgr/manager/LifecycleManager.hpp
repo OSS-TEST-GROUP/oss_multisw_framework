@@ -54,14 +54,14 @@ class LifecycleManager {
 
     std::shared_ptr<Service> GetService(std::string name);
 
-  private:
+    // Unit test support: allow test subclasses to access dependency injection
+  protected:
     std::shared_ptr<ServiceRegistry> service_registry_;
     std::shared_ptr<StateManager> state_manager_;
     std::shared_ptr<StateMonitor> state_monitor_;
     std::shared_ptr<PolicyManager> policy_manager_;
     std::shared_ptr<MWServiceManager> mw_service_manager_;
     std::shared_ptr<DDSTransmitter> msg_transmitter_;
-    
     EndPointFactory* endpoint_factory_;
 };
 
