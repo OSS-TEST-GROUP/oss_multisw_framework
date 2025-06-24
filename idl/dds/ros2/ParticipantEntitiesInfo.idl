@@ -1,0 +1,17 @@
+#ifndef ROS2_PARTICIPANT_ENTITIES_INFO_IDL
+#define ROS2_PARTICIPANT_ENTITIES_INFO_IDL
+
+#include "ros2/Gid.idl"
+#include "ros2/NodeEntitiesInfo.idl"
+
+module rmw_dds_common {
+  module msg {
+    struct ParticipantEntitiesInfo {
+      rmw_dds_common::msg::Gid participant_gid;
+
+      sequence<rmw_dds_common::msg::NodeEntitiesInfo> node_entities_info_seq;
+    };
+  };
+};
+
+#endif

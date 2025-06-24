@@ -1,0 +1,20 @@
+#ifndef ROS2_NODE_ENTITIES_INFO_IDL
+#define ROS2_NODE_ENTITIES_INFO_IDL
+
+#include "ros2/Gid.idl"
+
+module rmw_dds_common {
+  module msg {
+    struct NodeEntitiesInfo {
+      string<256> node_namespace;
+
+      string<256> node_name;
+
+      sequence<rmw_dds_common::msg::Gid> reader_gid_seq;
+
+      sequence<rmw_dds_common::msg::Gid> writer_gid_seq;
+    };
+  };
+};
+
+#endif

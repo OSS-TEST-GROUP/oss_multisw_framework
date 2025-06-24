@@ -1,0 +1,13 @@
+#ifndef ROS2_GID_IDL
+#define ROS2_GID_IDL
+
+module rmw_dds_common {
+  module msg {
+    typedef uint8 uint8__24[24];
+    struct Gid {
+      uint8__24 data;
+    };
+  };
+};
+
+#endif
