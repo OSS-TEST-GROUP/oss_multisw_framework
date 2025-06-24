@@ -72,7 +72,7 @@ install ( TARGETS LifecycleManagerTest
     ARCHIVE DESTINATION lib
     )
 
-
+    
 # Test IDL
 install(
     DIRECTORY

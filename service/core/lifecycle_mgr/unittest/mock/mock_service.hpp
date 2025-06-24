@@ -1,11 +1,18 @@
-// Google Mock for Service
-#pragma once
+#ifndef MOCK_LIFECYCLE_SERVICE_HPP_
+#define MOCK_LIFECYCLE_SERVICE_HPP_
+
 #include <gmock/gmock.h>
 #include "service/Service.hpp"
 
 namespace lifecycle_manager {
 class MockService : public Service {
 public:
+
+    MockService() : Service() {}
+    MockService(const std::string& name, const ServiceType type, const RecoveryPolicy policy, const bool enabled)
+        : Service(name, type, policy, enabled) {}       
+    virtual ~MockService() {}
+
     MOCK_METHOD(std::string, GetName, (), ());
     MOCK_METHOD(ServiceType, GetServiceType, (), ());
     MOCK_METHOD(RecoveryPolicy, GetRecoveryPolicy, (), ());
@@ -15,8 +22,8 @@ public:
     MOCK_METHOD(ServiceState, GetServiceState, (), ());
     MOCK_METHOD(void, SetServiceState, (ServiceState), ());
     MOCK_METHOD(ServiceState, GetLastServiceState, (), ());
-    MOCK_METHOD(int32_t, GetRecoverdCount, (), ());
-    MOCK_METHOD(void, IncreateRecoverdCount, (), ());
+    MOCK_METHOD(int32_t, GetRecoveredCount, (), ());
+    MOCK_METHOD(void, IncreaseRecoveredCount, (), ());
     MOCK_METHOD(void, ClearRecoverdCount, (), ());
     MOCK_METHOD(void, Print, (), ());
 };
@@ -64,16 +71,16 @@ ServiceState Service::GetLastServiceState() {
     return Mock_Service->GetLastServiceState();
 }
 
-int32_t Service::GetRecoverdCount() {
-    return Mock_Service->GetRecoverdCount();
+int32_t Service::GetRecoveredCount() {
+    return Mock_Service->GetRecoveredCount();
 }
 
-void Service::IncreateRecoverdCount() {
-    Mock_Service->IncreateRecoverdCount();
+void Service::IncreaseRecoveredCount() {
+    Mock_Service->IncreaseRecoveredCount();
 }
 
-void Service::ClearRecoverdCount() {
-    Mock_Service->ClearRecoverdCount();
+void Service::ClearRecoveredCount() {
+    Mock_Service->ClearRecoveredCount();
 }
 
 void Service::Print() {
@@ -81,3 +88,5 @@ void Service::Print() {
 }
 
 } // namespace lifecycle_manager
+
+#endif // MOCK_LIFECYCLE_SERVICE_HPP_

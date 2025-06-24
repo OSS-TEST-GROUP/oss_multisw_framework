@@ -65,7 +65,7 @@ TEST_F(ServiceTest, ParameterizedConstructor) {
     EXPECT_EQ(s.GetServiceMode(), ServiceMode::NORMAL);
     EXPECT_EQ(s.GetServiceState(), ServiceState::NOT_RUNNING);
     EXPECT_EQ(s.GetLastServiceState(), ServiceState::NOT_RUNNING);
-    EXPECT_EQ(s.GetRecoverdCount(), 0);
+    EXPECT_EQ(s.GetRecoveredCount(), 0);
 }
 
 TEST_F(ServiceTest, ServiceStateTransition) {
@@ -80,13 +80,13 @@ TEST_F(ServiceTest, ServiceStateTransition) {
 
 TEST_F(ServiceTest, RecoverdCountOperations) {
     Service s;
-    EXPECT_EQ(s.GetRecoverdCount(), 0);
-    s.IncreateRecoverdCount();
-    EXPECT_EQ(s.GetRecoverdCount(), 1);
-    s.IncreateRecoverdCount();
-    EXPECT_EQ(s.GetRecoverdCount(), 2);
-    s.ClearRecoverdCount();
-    EXPECT_EQ(s.GetRecoverdCount(), 0);
+    EXPECT_EQ(s.GetRecoveredCount(), 0);
+    s.IncreaseRecoveredCount();
+    EXPECT_EQ(s.GetRecoveredCount(), 1);
+    s.IncreaseRecoveredCount();
+    EXPECT_EQ(s.GetRecoveredCount(), 2);
+    s.ClearRecoveredCount();
+    EXPECT_EQ(s.GetRecoveredCount(), 0);
 }
 
 TEST_F(ServiceTest, PrintDoesNotThrow) {

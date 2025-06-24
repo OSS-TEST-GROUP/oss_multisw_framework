@@ -8,10 +8,12 @@
 #include <string>
 #include <vector>
 
-#include "service/MWServiceManager.hpp"
-#include "unittest/mock/mock_mw_service_manager.hpp"
+#include "mock/mock_mw_service_manager.hpp"
+#include "mock/mock_mwservice.hpp"
+#include "mock/mock_argumentconfig.hpp"
 
 using namespace lifecycle_manager;
+
 using ::testing::Return;
 using ::testing::_;
 using ::testing::A;

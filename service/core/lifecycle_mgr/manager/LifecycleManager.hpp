@@ -26,31 +26,16 @@ class LifecycleManager {
     void Stop();
 
 
-    std::shared_ptr<DDSTransmitter> GetTransmitter(){
-      return msg_transmitter_;
-    }
+    std::shared_ptr<DDSTransmitter> GetTransmitter();
 
-    EndPointFactory* GetEndpointFactory(){
-      return endpoint_factory_;
-    }
+    EndPointFactory* GetEndpointFactory();
 
-    std::shared_ptr<StateManager> GetState(){
-      return state_manager_;
-    }
+    std::shared_ptr<StateManager> GetState();
 
-    std::shared_ptr<StateMonitor> GetMonitor(){
-      return state_monitor_;
-    }
-    std::shared_ptr<PolicyManager> GetPolicy(){
-      return policy_manager_;
-    }
-    std::shared_ptr<MWServiceManager> GetMWService(){
-      return mw_service_manager_;
-    }    
-    
-    std::shared_ptr<ServiceRegistry> GetRegistry(){
-      return service_registry_;
-    }    
+    std::shared_ptr<StateMonitor> GetMonitor();
+    std::shared_ptr<PolicyManager> GetPolicy();
+    std::shared_ptr<MWServiceManager> GetMWService();
+    std::shared_ptr<ServiceRegistry> GetRegistry();
 
     std::shared_ptr<Service> GetService(std::string name);
 

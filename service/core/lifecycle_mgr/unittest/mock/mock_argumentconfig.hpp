@@ -1,4 +1,5 @@
-#pragma once
+#ifndef MOCK_LIFECYCLE_ARGUMENT_CONFIG_HPP_
+#define MOCK_LIFECYCLE_ARGUMENT_CONFIG_HPP_
 
 #include <gmock/gmock.h>
 #include "service/ArgumentConfig.hpp"
@@ -14,11 +15,9 @@ public:
     MOCK_METHOD(std::string, GetName, (), ());
     MOCK_METHOD(std::string, GetDescription, (), ());
     MOCK_METHOD(std::string, GetType, (), ());
-    MOCK_METHOD(std::string, GetDefault, (), ());
+    MOCK_METHOD(std::string, GetArgument, (), ());
 
 };
-
- 
 
 MockArgumentConfig* Mock_ArgumentConfig;
 
@@ -38,8 +37,11 @@ std::string ArgumentConfig::GetType() {
     return Mock_ArgumentConfig->GetType();
 }
 
-std::string ArgumentConfig::GetDefault() const {
-    return Mock_ArgumentConfig->GetDefault();
+std::string ArgumentConfig::GetArgument() {
+    return Mock_ArgumentConfig->GetArgument();
 }
 
 } // namespace lifecycle_manager
+
+
+#endif // MOCK_LIFECYCLE_ARGUMENT_CONFIG_HPP_

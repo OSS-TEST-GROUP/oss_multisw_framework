@@ -1,9 +1,11 @@
 // Unit tests for EndPointFactory class using Google Test and Google Mock
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "endpoint/EndPointFactory.hpp"
-#include "unittest/mock/mock_endpoint_factory.hpp"
-#include "unittest/mock/mock_dds_transmitter.hpp"
+
+#include "mock/mock_endpoint_factory.hpp"
+#include "mock/mock_dds_message_endpoint.hpp"
+#include "mock/mock_dds_transmitter.hpp"
+#include "mock/mock_message_endpoint.hpp"
 
 using ::testing::Return;
 using ::testing::_;
@@ -35,7 +37,7 @@ protected:
 
 TEST_F(EndPointFactoryTest, CreateEndPointsCalled) {
     MockEndPointFactory factory;
-    auto dds = std::make_shared<MockDDSTransmitter>();
+    auto dds = std::make_shared<DDSTransmitter>();
     EXPECT_CALL(factory, CreateEndPoints(dds)).Times(1);
     factory.CreateEndPoints(dds);
 }

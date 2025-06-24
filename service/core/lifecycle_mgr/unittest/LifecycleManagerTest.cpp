@@ -2,19 +2,15 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
-#include "manager/LifecycleManager.hpp"
-#include "state/StateManager.hpp"
-#include "policy/PolicyManager.hpp"
-#include "service/MWServiceManager.hpp"
-#include "state/StateMonitor.hpp"
-#include "service/ServiceRegistry.hpp"
-#include "service/Service.hpp"
-
 #include "unittest/mock/mock_state_manager.hpp"
 #include "unittest/mock/mock_policy_manager.hpp"
 #include "unittest/mock/mock_mw_service_manager.hpp"
 #include "unittest/mock/mock_state_monitor.hpp"
 #include "unittest/mock/mock_service_registry.hpp"
+#include "unittest/mock/mock_lifecycle_manager.hpp"
+#include "unittest/mock/mock_manager_base.hpp"
+#include "unittest/mock/mock_service.hpp"
+
 
 using namespace lifecycle_manager;
 using ::testing::Return;

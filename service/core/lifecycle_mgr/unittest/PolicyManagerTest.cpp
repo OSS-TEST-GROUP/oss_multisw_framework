@@ -1,10 +1,11 @@
 // Unit tests for PolicyManager class using Google Test and Google Mock
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "policy/PolicyManager.hpp"
+
 #include "unittest/mock/mock_policy_manager.hpp"
 #include "unittest/mock/mock_service.hpp"
 #include "unittest/mock/mock_policy_always.hpp"
+#include "unittest/mock/mock_policy_base.hpp"
 
 using namespace lifecycle_manager;
 

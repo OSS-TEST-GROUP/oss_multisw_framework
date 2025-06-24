@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+
 #include "service/ArgumentConfig.hpp"
 #include "mock/mock_argumentconfig.hpp"
 

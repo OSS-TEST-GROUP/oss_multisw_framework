@@ -1,5 +1,7 @@
-// Google Mock for MWServiceManager
-#pragma once
+
+#ifndef MOCK_LIFECYCLE_MW_SERVICE_MANAGER_HPP_
+#define MOCK_LIFECYCLE_MW_SERVICE_MANAGER_HPP_
+
 #include <gmock/gmock.h>
 #include "service/MWServiceManager.hpp"
 #include "service/MWService.hpp"
@@ -43,8 +45,8 @@ bool MWServiceManager::LoadMWConfig(std::string path) {
 }
 
 
-bool MWServiceManager::StartMWService(std::shared_ptr<MWService> mw_service) {
-    return Mock_MWServiceManager->StartMWService(mw_service);
+void MWServiceManager::StartMWService(std::shared_ptr<MWService> mw_service) {
+    Mock_MWServiceManager->StartMWService(mw_service);
 }
 
 void MWServiceManager::StopMWService(std::shared_ptr<MWService> mw_service) {
@@ -56,3 +58,5 @@ void MWServiceManager::RunMWServiceManagement() {
 }
 
 } // namespace lifecycle_manager
+
+#endif // MOCK_LIFECYCLE_MW_SERVICE_MANAGER_HPP_

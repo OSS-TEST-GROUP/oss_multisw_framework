@@ -1,5 +1,6 @@
-// Google Mock for LifecycleManager
-#pragma once
+#ifndef MOCK_LIFECYCLE_LIFECYCLE_MANAGER_HPP_
+#define MOCK_LIFECYCLE_LIFECYCLE_MANAGER_HPP_
+
 #include <gmock/gmock.h>
 #include "manager/LifecycleManager.hpp"
 
@@ -17,13 +18,14 @@ public:
     MOCK_METHOD(std::shared_ptr<PolicyManager>, GetPolicy, (), ());
     MOCK_METHOD(std::shared_ptr<MWServiceManager>, GetMWService, (), ());
     MOCK_METHOD(std::shared_ptr<ServiceRegistry>, GetRegistry, (), ());
-    MOCK_METHOD(std::shared_ptr<Service>, GetService, (std::string name),());
+    MOCK_METHOD(std::shared_ptr<Service>, GetService, (std::string name), ());
 };
 
 MockLifecycleManager* Mock_LifecycleManager;
 
 LifecycleManager::LifecycleManager() {}
 LifecycleManager::~LifecycleManager() {}
+
 
 bool LifecycleManager::Initialize() {
     return Mock_LifecycleManager->Initialize();
@@ -69,4 +71,7 @@ std::shared_ptr<Service> LifecycleManager::GetService(std::string name) {
     return Mock_LifecycleManager->GetService(name);
 }
 
+
 } // namespace lifecycle_manager
+
+#endif // MOCK_LIFECYCLE_LIFECYCLE_MANAGER_HPP_

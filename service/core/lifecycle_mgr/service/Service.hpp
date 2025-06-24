@@ -29,9 +29,9 @@ class Service {
     void SetServiceState(ServiceState state);
     ServiceState GetLastServiceState();    
 
-    int32_t GetRecoverdCount();
-    void IncreateRecoverdCount();
-    void ClearRecoverdCount();
+    int32_t GetRecoveredCount();
+    void IncreaseRecoveredCount();
+    void ClearRecoveredCount();
 
     void Print();
 

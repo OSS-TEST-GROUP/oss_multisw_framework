@@ -1,7 +1,8 @@
 #include <gtest/gtest.h>
 #include <string>
 #include <vector>
-#include "service/MWService.hpp"
+
+#include "mock/mock_mwservice.hpp"
 #include "mock/mock_argumentconfig.hpp" // Assuming this is where MockArgumentConfig is defined
 #include "unittest/mock/mock_mw_service_manager.hpp" // Assuming this is where MockMWServiceManager is defined
 
@@ -35,7 +36,8 @@ protected:
 
 
 TEST_F(MWServiceTest, ConstructorAndGetters) {
-    std::vector<ArgumentConfig> args = { ArgumentConfig("arg1"), ArgumentConfig("arg2") };
+    std::vector<ArgumentConfig> args = { ArgumentConfig("arg1", "first arg", "string", "default1"), 
+                                        ArgumentConfig("arg2", "second arg", "int", "42") };
     MWService service(42, "TestService", "/usr/bin/test", true, args);
 
     EXPECT_EQ(service.GetName(), "TestService");

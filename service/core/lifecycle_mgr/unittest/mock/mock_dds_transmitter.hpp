@@ -1,11 +1,17 @@
 // Google Mock for DDSTransmitter
-#pragma once
+#ifndef MOCK_LIFECYCLE_DDS_TRANSMITTER_HPP_
+#define MOCK_LIFECYCLE_DDS_TRANSMITTER_HPP_
+
+
 #include <gmock/gmock.h>
 #include "transmitter/DDSTransmitter.hpp"
 
 namespace lifecycle_manager {
 class MockDDSTransmitter : public DDSTransmitter {
 public:
+    MockDDSTransmitter() : DDSTransmitter() {}
+    virtual ~MockDDSTransmitter() {}
+    
     MOCK_METHOD(bool, Initialize, (), ());
     MOCK_METHOD(void, Finalize, (), ());
     MOCK_METHOD(bool, AddMessageEndpoint, (std::shared_ptr<DDSMessageEndPoint>), ());
@@ -50,3 +56,5 @@ Subscriber* DDSTransmitter::GetSubscriber() {
 }
 
 } // namespace lifecycle_manager
+
+#endif // MOCK_LIFECYCLE_DDS_TRANSMITTER_HPP_
