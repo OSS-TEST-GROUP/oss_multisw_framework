@@ -56,15 +56,15 @@ ServiceState Service::GetLastServiceState(){
     return service_state_last_;
 }
 
-int32_t Service::GetRecoverdCount(){
+int32_t Service::GetRecoveredCount(){
     return recovered_count_;
 }
 
-void Service::IncreateRecoverdCount(){
+void Service::IncreaseRecoveredCount(){
     recovered_count_++;
 }
 
-void Service::ClearRecoverdCount(){
+void Service::ClearRecoveredCount(){
     recovered_count_ = 0;
 }
 

@@ -62,7 +62,7 @@ void StateMonitor::ClearUpdateStateFlag(std::shared_ptr<Service> service){
 }
 
 
-bool StateMonitor::GetUdpateStateFlag(std::shared_ptr<Service> service){
+bool StateMonitor::GetUpdateStateFlag(std::shared_ptr<Service> service){
     std::lock_guard<std::mutex> lock_guard(lock_mutex_);
 
     if (udpated_service_list_.find(service) != udpated_service_list_.end()) {
@@ -132,7 +132,7 @@ bool StateMonitor::getServiceState(std::shared_ptr<Service> svc, ::ServiceStatus
     entry.service_type() = TypeConvert::ToServiceType(svc->GetServiceType());
     entry.service_state() = TypeConvert::ToServiceState(svc->GetServiceState());
     entry.is_enabled() = svc->isEnabled();
-    entry.recovered_count() = svc->GetRecoverdCount();
+    entry.recovered_count() = svc->GetRecoveredCount();
 
     return false;
 }
@@ -200,7 +200,7 @@ void StateMonitor::updateServices(std::vector<std::string>* slist, std::vector<:
 
     }
 
-    for (int32_t idx; idx < slist->size(); ++idx){
+    for (size_t idx=0; idx < slist->size(); ++idx){
             
         std::string sname = slist->at(idx);
         ::ServiceState state = statelist->at(idx);

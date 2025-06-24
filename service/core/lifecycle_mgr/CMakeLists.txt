@@ -3,9 +3,9 @@ cmake_minimum_required(VERSION 3.5)
 project ( "lifecycle_mgr" )
 
 ## Unittest
-#if (BUILD_UNITTEST)
-#   add_subdirectory ( unittest )
-#endif()
+if (BUILD_UNITTEST)
+    add_subdirectory ( unittest )
+endif()
 
 ## Source
 set ( MANAGER_SRC

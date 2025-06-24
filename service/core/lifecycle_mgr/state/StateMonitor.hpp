@@ -31,7 +31,7 @@ class StateMonitor : public ManagerBase {
 
     void SetUpdateStateFlag(std::shared_ptr<Service> service);
     void ClearUpdateStateFlag(std::shared_ptr<Service> service);
-    bool GetUdpateStateFlag(std::shared_ptr<Service> service);
+    bool GetUpdateStateFlag(std::shared_ptr<Service> service);
 
     void ClearAllUpdatedFlag();
 
