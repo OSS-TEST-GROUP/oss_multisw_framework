@@ -2,11 +2,21 @@ cmake_minimum_required(VERSION 3.5)
 
 project ( "adsw_manager" )
 
-## Sub Directory
-
+## Unittest
+if (BUILD_UNITTEST)
+    add_subdirectory ( unittest )
+endif()
 
 ## Source
-set ( MAIN_SRC main.cc )
+set ( MAIN_SRC main.cc
+               ADSWManager.cpp
+               service/Service.cpp
+)
+
+include_directories (
+    .
+    ${CMAKE_SOURCE_DIR}/service
+)
 
 ## Library
 #link_libraries ( pthread )

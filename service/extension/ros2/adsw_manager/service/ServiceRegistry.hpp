@@ -1,0 +1,50 @@
+#ifndef ROS2_ADSW_MANAGER_SERIVCE_SERVICE_REGISTRY_HPP_
+#define ROS2_ADSW_MANAGER_SERIVCE_SERVICE_REGISTRY_HPP_
+
+#include <iostream>
+#include <string>
+#include <memory>
+#include <unordered_map>
+#include <set>
+
+#include "Service.hpp"
+#include "core/lifecycle_mgr/include/ServiceState.hpp"
+#include "core/lifecycle_mgr/include/ServiceType.hpp"
+#include "core/lifecycle_mgr/include/RecoveryPolicy.hpp"
+
+using namespace lifecycle_manager;
+
+namespace ros2 {
+namespace adsw_manager {
+
+class ServiceRegistry {
+  public:
+    ServiceRegistry();
+    virtual ~ServiceRegistry();
+
+    bool LoadServiceList();
+
+    void AddGroup(const std::string& name);
+    void RemoveGroup(const std::string& name);
+    bool IsGroup(const std::string& name);
+
+    bool AddService(std::shared_ptr<Service> service, const std::string& group);
+    void RemoveService(const std::string& name);
+
+    std::shared_ptr<Service> GetService(const std::string& name);
+    std::vector<std::shared_ptr<Service>> GetServicesByGroup(const std::string& group);
+    std::string GetGroupNameByService(std::shared_ptr<Service> service);
+
+    uint64_t GetServicesNum();
+    uint64_t GetServiceNumInGroup(const std::string& group);
+    uint64_t GetGroupNum();
+
+  private:
+    std::unordered_map<std::string, std::shared_ptr<Service>> services_;
+    std::unordered_map<std::string, std::set<std::shared_ptr<Service>>> group_;
+};
+
+} // namespace diagnostic_manager
+} // namespace ros2
+
+#endif
