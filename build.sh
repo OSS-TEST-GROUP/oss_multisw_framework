@@ -31,7 +31,7 @@ export BUILD_MODE="Debug"
 export CPU_CORES=`nproc`
 
 export BUILD_UNITTEST="FALSE"
-export EXTENSION_PLATFORM="ros2"
+export EXTENSION_PLATFORM="ROS2"
 
 show_help() {
   cat << EOF
@@ -50,7 +50,7 @@ Available options:
 
 Examples:
   ./build.sh --release
-  ./build.sh --build-unittest --set-extension-platform=linux
+  ./build.sh --build-unittest --set-extension-platform=ROS2
 EOF
 }
 
