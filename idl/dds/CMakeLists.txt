@@ -27,12 +27,13 @@ endfunction()
 
 # Function to generate sources from IDL files
 function(generate_dds_from_idl IDL_DIR IDL_FILE)
+    # IDL path and name
     get_filename_component(IDL_FILE_DIR ${IDL_FILE} DIRECTORY)
     get_filename_component(IDL_NAME ${IDL_FILE} NAME_WE)
     file(MAKE_DIRECTORY ${GENERATED_DIR}/${IDL_FILE_DIR})
 
+    # Check if needed to build.
     get_file_timestamp(${IDL_DIR}/${IDL_FILE} FILE_TIMESTAMP)
-
     string(REPLACE "/" "_" BUILD_CHECK_IDL_PATH ${IDL_FILE} )
     set(BUILD_CHECK ${BUILD_CHECK_PREFIX}_${BUILD_CHECK_IDL_PATH})
 
@@ -43,8 +44,14 @@ function(generate_dds_from_idl IDL_DIR IDL_FILE)
         endif()
     endif()
 
+    # DDS generation option
+    set(GEN_OPTS "")
+    if (${IDL_FILE_DIR} STREQUAL "ros2")
+        string(APPEND GEN_OPTS "-typeros2")
+    endif()
+
     execute_process(
-        COMMAND ${FASTDDSGEN} -I ${IDL_DIR} -replace -d ${GENERATED_DIR}/${IDL_FILE_DIR} ${IDL_DIR}/${IDL_FILE}
+        COMMAND ${FASTDDSGEN} -I ${IDL_DIR} ${GEN_OPTS} -replace -d ${GENERATED_DIR}/${IDL_FILE_DIR} ${IDL_DIR}/${IDL_FILE}
         RESULT_VARIABLE GEN_RESULT
     )
 
