@@ -1,7 +1,10 @@
 #include "ros2/ParticipantEntitiesInfoPubSubTypes.hpp"
 
+
 #include <chrono>
 #include <thread>
+
+#include "logger/Log.hpp"
 
 #include <fastdds/dds/domain/DomainParticipant.hpp>
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp>
@@ -50,17 +53,17 @@ private:
             if (info.current_count_change == 1)
             {
                 matched_ = info.total_count;
-                std::cout << "Publisher matched." << std::endl;
+                LOG_DEBUG("Publisher matched.");
             }
             else if (info.current_count_change == -1)
             {
                 matched_ = info.total_count;
-                std::cout << "Publisher unmatched." << std::endl;
+                LOG_DEBUG("Publisher unmatched.");
             }
             else
             {
-                std::cout << info.current_count_change
-                        << " is not a valid value for PublicationMatchedStatus current count change." << std::endl;
+                LOG_DEBUG(info.current_count_change 
+                        << " is not a valid value for PublicationMatchedStatus current count change.");
             }
         }
 

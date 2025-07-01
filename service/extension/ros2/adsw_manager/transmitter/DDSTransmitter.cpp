@@ -1,4 +1,5 @@
 #include "DDSTransmitter.hpp"
+#include "logger/Log.hpp"
 
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp>
 
@@ -9,7 +10,7 @@ DDSTransmitter::DDSTransmitter() {}
 DDSTransmitter::~DDSTransmitter() {}
 
 bool DDSTransmitter::Initialize(){
-    std::cout << __FILE__ << " :: " << __LINE__ << std::endl;
+    LOG_DEBUG("Start");
 
    // Create the participant
     DomainParticipantQos pqos = PARTICIPANT_QOS_DEFAULT;
@@ -21,7 +22,7 @@ bool DDSTransmitter::Initialize(){
          nullptr, StatusMask::none());
     if (participant_ == nullptr)
     {
-        std::cerr << "Participant initialization failed" << std::endl;
+        LOG_ERROR("Participant initialization failed");
         return false;
     }
 
@@ -31,7 +32,7 @@ bool DDSTransmitter::Initialize(){
     publisher_ = participant_->create_publisher(pub_qos, nullptr, StatusMask::none());
     if (publisher_ == nullptr)
     {
-        std::cerr << "Publisher initialization failed" << std::endl;
+        LOG_ERROR("Publisher initialization failed" );
         return false;
     }
 
@@ -41,14 +42,10 @@ bool DDSTransmitter::Initialize(){
     subscriber_ = participant_->create_subscriber(sub_qos, nullptr, StatusMask::none());
     if (subscriber_ == nullptr)
     {
-        std::cout << "Subscriber initialization failed." << std::endl;
+        LOG_ERROR("Subscriber initialization failed.");
         return false;
     }
-    std::cout << __FILE__ << " :: " << __LINE__ << std::endl;
-
-    for (auto& iter : endpoints_) {
-        iter.second->Initialize(participant_, subscriber_, publisher_);
-    }
+    LOG_DEBUG("End");
 
     return true;    
 }
@@ -73,11 +70,9 @@ void DDSTransmitter::Finalize(){
 bool DDSTransmitter::AddMessageEndpoint(std::shared_ptr<DDSMessageEndpoint> endpoint){
 
     if (endpoint){
-    std::cout << __FILE__ << " :: " << __LINE__ << std::endl;
 
         endpoints_[endpoint->GetTopic()] = endpoint;
     }
-    std::cout << __FILE__ << " :: " << __LINE__ << std::endl;
 
     return true;
 
@@ -88,7 +83,8 @@ std::shared_ptr<DDSMessageEndpoint> DDSTransmitter::GetMessageEndpoint(std::stri
     auto search = endpoints_.find(topic);
 
     if (search != endpoints_.end()){
-        std::cout << "Found " << search->first  << '\n';
+
+        LOG_DEBUG("Found " << search->first  );
         return search->second;
     } else{ 
         std::cout << "Not found\n";

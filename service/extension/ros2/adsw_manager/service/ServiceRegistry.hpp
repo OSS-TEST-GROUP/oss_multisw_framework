@@ -6,6 +6,7 @@
 #include <memory>
 #include <unordered_map>
 #include <set>
+#include <vector>
 
 #include "Service.hpp"
 #include "core/lifecycle_mgr/include/ServiceState.hpp"
@@ -44,7 +45,7 @@ class ServiceRegistry {
     std::unordered_map<std::string, std::set<std::shared_ptr<Service>>> group_;
 };
 
-} // namespace diagnostic_manager
+} // namespace adsw_manager
 } // namespace ros2
 
 #endif
