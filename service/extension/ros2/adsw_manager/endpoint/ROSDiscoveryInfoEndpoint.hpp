@@ -11,11 +11,9 @@
 namespace ros2 {
 namespace adsw_manager {
 
-using ROSDiscoveryInfoEndpointCallback = std::function<void(rmw_dds_common::msg::ParticipantEntitiesInfo&)>;
-
 class ROSDiscoveryInfoEndpoint : public DDSMessageEndpoint {
   public:
-    ROSDiscoveryInfoEndpoint(ROSDiscoveryInfoEndpointCallback cb);
+    ROSDiscoveryInfoEndpoint(std::string topic);
     virtual ~ROSDiscoveryInfoEndpoint();
 
     virtual std::string GetTopic();
@@ -25,11 +23,11 @@ class ROSDiscoveryInfoEndpoint : public DDSMessageEndpoint {
     virtual void OnDataAvailable();
   
   private:
+    std::string topic_;
     std::shared_ptr<TypeSupport> type_support_;
-    ROSDiscoveryInfoEndpointCallback cb_;
 };
 
-} // namespace diagnostic_manager
+} // namespace adsw_manager
 } // namespace ros2
 
 #endif

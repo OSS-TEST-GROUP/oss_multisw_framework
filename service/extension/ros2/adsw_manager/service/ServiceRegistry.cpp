@@ -1,4 +1,5 @@
 #include "ServiceRegistry.hpp"
+#include "logger/Log.hpp"
 
 using namespace lifecycle_manager;
 
@@ -10,6 +11,7 @@ ServiceRegistry::~ServiceRegistry() {}
 
 bool ServiceRegistry::LoadServiceList() {
     // Stub: Assume success, or extend for file/config source later
+    LOG_DEBUG("ServiceRegistry::LoadServiceList start ");
     return true;
 }
 
@@ -111,5 +113,5 @@ uint64_t ServiceRegistry::GetGroupNum() {
     return group_.size();
 }
 
-} // namespace diagnostic_manager
+} // namespace adsw_manager
 } // namespace ros2

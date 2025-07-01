@@ -35,7 +35,7 @@ class Service {
     ServiceState service_state_;
 };
 
-} // namespace diagnostic_manager
+} // namespace adsw_manager
 } // namespace ros2
 
 #endif

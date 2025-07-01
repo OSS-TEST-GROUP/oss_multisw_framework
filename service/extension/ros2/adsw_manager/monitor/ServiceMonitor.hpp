@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <string>
+#include <memory>
 
 #include "ROSServiceDiscovery.hpp"
 #include "UpdateServiceInfo.hpp"
@@ -22,11 +23,13 @@ class ServiceMonitor {
 
     void NotifyServiceState();
 
+    std::shared_ptr<ROSServiceDiscovery> GetServiceDiscovery();
+
   private:
     std::shared_ptr<ROSServiceDiscovery> ros_service_discovery_;
 };
 
-} // namespace diagnostic_manager
+} // namespace adsw_manager
 } // namespace ros2
 
 #endif

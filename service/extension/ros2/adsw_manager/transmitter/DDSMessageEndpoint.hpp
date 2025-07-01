@@ -31,7 +31,7 @@ class DDSMessageEndpoint : public DataWriterListener, public DataReaderListener 
 
     virtual void OnDataAvailable() = 0;
 
-    bool Initialize(DomainParticipant* participant, Subscriber* subscriber, Publisher* publisher);
+    bool Initialize(DomainParticipant* participant, Publisher* publisher, Subscriber* subscriber);
     void Finalize();
 
     bool Write(void* value);

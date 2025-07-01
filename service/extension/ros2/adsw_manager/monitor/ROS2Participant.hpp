@@ -11,11 +11,15 @@ namespace ros2 {
 namespace adsw_manager {
 
 class ROS2Participant {
+
   public:
+    ROS2Participant() = default;
+    ~ROS2Participant() = default;
+
     std::vector<ROS2Node> nodes;
 };
 
-} // namespace diagnostic_manager
+} // namespace adsw_manager
 } // namespace ros2
 
 #endif

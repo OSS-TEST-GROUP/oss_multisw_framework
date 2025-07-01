@@ -26,7 +26,7 @@ class UpdateServiceInfo {
     ServiceState state;
 };
 
-} // namespace diagnostic_manager
+} // namespace adsw_manager
 } // namespace ros2
 
 #endif
