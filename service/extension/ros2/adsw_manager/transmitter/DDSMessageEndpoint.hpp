@@ -77,11 +77,11 @@ class DDSMessageEndpoint : public DataWriterListener, public DataReaderListener 
     Publisher* publisher_;
     Subscriber* subscriber_;
 
-    Topic* topic_;
+    Topic* dds_topic_;
 
     DataReader* data_reader_;
     DataWriter* data_writer_;
-
+    
 };
 
 } // namespace lifecycle_manager

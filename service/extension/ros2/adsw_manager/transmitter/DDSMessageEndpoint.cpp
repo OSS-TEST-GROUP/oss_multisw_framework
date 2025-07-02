@@ -4,7 +4,7 @@
 namespace ros2 {
 namespace adsw_manager {
 
-DDSMessageEndpoint::DDSMessageEndpoint() : participant_(nullptr), publisher_(nullptr), subscriber_(nullptr), topic_(nullptr),
+DDSMessageEndpoint::DDSMessageEndpoint() : participant_(nullptr), publisher_(nullptr), subscriber_(nullptr), dds_topic_(nullptr),
         data_reader_(nullptr), data_writer_(nullptr) {}
 DDSMessageEndpoint::~DDSMessageEndpoint() {}
 
@@ -24,20 +24,20 @@ bool DDSMessageEndpoint::Initialize(DomainParticipant* participant, Publisher* p
         return false;
     }
 
-    topic_ = participant_->create_topic(topic, GetTypeName(), TOPIC_QOS_DEFAULT);
-    if (topic_ == nullptr) {
+    dds_topic_ = participant_->create_topic(topic, GetTypeName(), TOPIC_QOS_DEFAULT);
+    if (dds_topic_ == nullptr) {
         LOG_ERROR("Failed to create the topic. " << topic  );
         return false;
     }
     if (subscriber_ != nullptr) {
-        data_reader_ = subscriber_->create_datareader(topic_, DATAREADER_QOS_DEFAULT, this);
+        data_reader_ = subscriber_->create_datareader(dds_topic_, DATAREADER_QOS_DEFAULT, this);
         if (data_reader_ == nullptr) {
             LOG_ERROR("Failed to create a data reader. " << topic  );
             return false;
         }
     }
     if (publisher_ != nullptr) {
-        data_writer_ = publisher_->create_datawriter(topic_, DATAWRITER_QOS_DEFAULT, this);
+        data_writer_ = publisher_->create_datawriter(dds_topic_, DATAWRITER_QOS_DEFAULT, this);
         if (data_writer_ == nullptr) {
             LOG_ERROR("Failed to create a data writer. " << topic );
             return false;
@@ -96,6 +96,7 @@ void DDSMessageEndpoint::on_data_available(DataReader* reader)
 {
     OnDataAvailable();
 }
+
 
 } // namespace adsw_manager
 } // namespace ros2

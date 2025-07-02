@@ -165,6 +165,11 @@ public:
         return false;
     }
 
+    void setdata(int count)
+    {
+
+    }
+
 };
 
 int main(
@@ -182,6 +187,7 @@ int main(
 
     uint32_t count = 0;
     while (count < samples) {
+        setdata(4);
         mypub->publish();
         count++;
         std::this_thread::sleep_for(std::chrono::milliseconds(20));

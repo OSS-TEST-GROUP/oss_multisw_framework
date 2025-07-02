@@ -50,6 +50,35 @@ class DDSMessageEndPoint : public MessageEndPoint, public DataWriterListener , p
 
     bool Write(const void* const data);
 
+    template<typename T>
+    bool Read(T &value) {
+        SampleInfo info;
+        if (reader_->take_next_sample(&value, &info) == eprosima::fastdds::dds::RETCODE_OK)
+        {
+            if (info.valid_data) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    template<typename T>
+    bool Read(std::vector<T>& value) {
+        SampleInfo info;
+        bool ret_flag = false;
+        while (true) {
+            auto& val = value.emplace_back();
+            if (reader_->take_next_sample(&val, &info) == eprosima::fastdds::dds::RETCODE_OK)
+            {
+                if (info.valid_data) {
+                    ret_flag = true;
+                    continue;
+                }
+            } else {
+                return ret_flag;
+            }
+        }
+    }
 
     bool is_stopped() {return false;}
 

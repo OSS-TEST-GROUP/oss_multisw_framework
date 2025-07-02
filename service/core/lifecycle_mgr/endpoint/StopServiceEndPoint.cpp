@@ -21,12 +21,12 @@ StopServiceEndPoint::~StopServiceEndPoint() {
 
 
 
-void StopServiceEndPoint::OnDataAvailable(void* buffer){
+void StopServiceEndPoint::OnDataAvailable(){
     LOG_DEBUG("Message Delivery for " << GetTopic() );
 
-    if (buffer != nullptr){
+    if (Read<StopServiceResponse>(resp_) == true){
 
-        StopServiceResponse* message = reinterpret_cast<StopServiceResponse*>(buffer);
+        StopServiceResponse* message = reinterpret_cast<StopServiceResponse*>(&resp_);
 
         std::shared_ptr<StateManager> manager = LifecycleFactory::GetInstance()->GetState();
 
@@ -35,10 +35,6 @@ void StopServiceEndPoint::OnDataAvailable(void* buffer){
         }
     }
 
-}
-
-void* StopServiceEndPoint::GetTopicBuffer(){
-    return &resp_;
 }
 
 

@@ -18,12 +18,12 @@ LifecycleDiagReportEndPoint::~LifecycleDiagReportEndPoint() {
 
 
 
-void LifecycleDiagReportEndPoint::OnDataAvailable(void* buffer){
+void LifecycleDiagReportEndPoint::OnDataAvailable(){
     LOG_DEBUG("Message Delivery for " << GetTopic() );
 
-    if (buffer != nullptr){
+    if (Read<LifecycleDiagReport>(data_) == true){
 
-        LifecycleDiagReport* message = reinterpret_cast<LifecycleDiagReport*>(buffer);
+        LifecycleDiagReport* message = reinterpret_cast<LifecycleDiagReport*>(&data_);
 
         std::vector<::ServiceStatus> *slist = &message->service_list();
 
@@ -36,11 +36,6 @@ void LifecycleDiagReportEndPoint::OnDataAvailable(void* buffer){
     }
 
 }
-
-void* LifecycleDiagReportEndPoint::GetTopicBuffer(){
-    return &data_;
-}
-
 
 void LifecycleDiagReportEndPoint::OnDataPublished(bool ret){
 
