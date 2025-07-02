@@ -148,17 +148,7 @@ void DDSMessageEndPoint::on_subscription_matched(
 void DDSMessageEndPoint::on_data_available(
         DataReader* reader)
 {
-    SampleInfo info;
-
-    void* read_buffer = GetTopicBuffer();
-
-    while ((RETCODE_OK == reader->take_next_sample(read_buffer, &info)))
-    {
-        if ((info.instance_state == ALIVE_INSTANCE_STATE) && info.valid_data)
-        {
-            OnDataAvailable(read_buffer);
-        }
-    }
+    OnDataAvailable();
 }
 
 

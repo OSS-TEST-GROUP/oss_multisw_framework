@@ -4,6 +4,7 @@
 #include <iostream>
 #include <string>
 #include <map>
+#include <memory>
 
 #include "ROS2Participant.hpp"
 #include "ros2/ParticipantEntitiesInfo.hpp"
@@ -22,11 +23,10 @@ class ROSServiceDiscovery {
     void Finalize();
 
     void ParseROSDiscoveryInfo(rmw_dds_common::msg::ParticipantEntitiesInfo& info);
-    ROS2Participant* GetROSParticipant(const std::string& participant_id);
+    std::shared_ptr<ROS2Participant> GetROSParticipant(const std::string& participant_id);
 
   private:
-    std::map<std::string, ROS2Participant> ros_participants_;
-
+    std::map<std::string, std::shared_ptr<ROS2Participant>> ros_participants_;
 
 };
 

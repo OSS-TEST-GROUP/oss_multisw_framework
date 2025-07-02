@@ -93,9 +93,7 @@ void StateMonitor::NotifyLifecycleDiagnosticInfo(bool all){
         std::shared_ptr<DDSMessageEndPoint> endpoint = transmitter->GetMessageEndPoint(topic);
 
         if (endpoint != nullptr){
-            void* writeptr = endpoint->GetTopicBuffer();
-
-            LifecycleDiagReport * report = reinterpret_cast<LifecycleDiagReport*>(writeptr);
+            LifecycleDiagReport report;
 
             if (all == true){
                 std::shared_ptr<ServiceRegistry> registry = GetRegistry();
@@ -108,7 +106,7 @@ void StateMonitor::NotifyLifecycleDiagnosticInfo(bool all){
                         ::ServiceStatus service;
                         
                         getServiceState(*svc, service);
-                        report->service_list().push_back(service);
+                        report.service_list().push_back(service);
                     }
                 }
             }else{
@@ -118,10 +116,10 @@ void StateMonitor::NotifyLifecycleDiagnosticInfo(bool all){
                     ::ServiceStatus service;
                         
                     getServiceState(*svc, service);
-                    report->service_list().push_back(service);
+                    report.service_list().push_back(service);
                 }
             }
-            endpoint->Write(writeptr);
+            endpoint->Write(reinterpret_cast<void*>(&report));
         }
     }
 }
@@ -176,8 +174,7 @@ void StateMonitor::RequestGetState(){
         std::shared_ptr<DDSMessageEndPoint> endpoint = transmitter->GetMessageEndPoint(topic);
 
         if (endpoint != nullptr){
-            void* writeptr = endpoint->GetTopicBuffer();
-            GetServiceStateRequest* data = reinterpret_cast<GetServiceStateRequest*>(writeptr);
+            GetServiceStateRequest data;
 
             std::shared_ptr<ServiceRegistry> registry = GetRegistry();
 
@@ -185,11 +182,11 @@ void StateMonitor::RequestGetState(){
                 std::vector<std::string> list = registry->GetServicesNameByGroup("");
 
                 for( auto svc = list.begin(); svc != list.end(); ++svc ){
-                    data->service_list().push_back(*svc);
+                    data.service_list().push_back(*svc);
                 }
-                data->is_all_service() = false;
+                data.is_all_service() = false;
             }
-            endpoint->Write(writeptr);
+            endpoint->Write(reinterpret_cast<void*>(&data));
         }
     }
 }

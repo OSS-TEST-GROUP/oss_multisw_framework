@@ -17,8 +17,7 @@ class UpdateServiceListEndPoint : public DDSMessageEndPoint {
     UpdateServiceListEndPoint(std::string topic);
     virtual ~UpdateServiceListEndPoint();
 
-    virtual void  OnDataAvailable(void* buffer) override;
-    virtual void* GetTopicBuffer() override;
+    virtual void  OnDataAvailable() override;
     
     virtual void OnDataPublished(bool ret) override;
 

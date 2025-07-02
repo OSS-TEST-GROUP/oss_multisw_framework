@@ -22,12 +22,12 @@ SetServiceModeEndPoint::~SetServiceModeEndPoint() {
 
 
 
-void SetServiceModeEndPoint::OnDataAvailable(void* buffer){
+void SetServiceModeEndPoint::OnDataAvailable(){
     LOG_DEBUG("Message Delivery for " << GetTopic() );
 
-    if (buffer != nullptr){
+    if (Read<SetServiceModeRequest>(data_) == true){
 
-        SetServiceModeRequest* message = reinterpret_cast<SetServiceModeRequest*>(buffer);
+        SetServiceModeRequest* message = reinterpret_cast<SetServiceModeRequest*>(&data_);
 
         std::shared_ptr<StateManager> manager = LifecycleFactory::GetInstance()->GetState();
 
@@ -36,10 +36,6 @@ void SetServiceModeEndPoint::OnDataAvailable(void* buffer){
         }
     }
 
-}
-
-void* SetServiceModeEndPoint::GetTopicBuffer(){
-    return &data_;
 }
 
 

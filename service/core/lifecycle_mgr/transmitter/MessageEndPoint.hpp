@@ -22,8 +22,7 @@ class MessageEndPoint {
     std::shared_ptr<TypeSupport> GetTypeSupport();
     void SetTypeSupport(std::shared_ptr<TypeSupport> typesupport);
 
-    virtual void OnDataAvailable(void* buffer) = 0;
-    virtual void* GetTopicBuffer() = 0;
+    virtual void OnDataAvailable() = 0;
 
     virtual void OnDataPublished(bool ret) = 0;
 

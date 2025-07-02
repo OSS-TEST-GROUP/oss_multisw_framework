@@ -21,12 +21,12 @@ StartServiceEndPoint::~StartServiceEndPoint() {
 
 
 
-void StartServiceEndPoint::OnDataAvailable(void* buffer){
+void StartServiceEndPoint::OnDataAvailable(){
     LOG_DEBUG("Message Delivery for " << GetTopic() );
 
-    if (buffer != nullptr){
+    if (Read<StartServiceResponse>(resp_) == true){
 
-        StartServiceResponse* message = reinterpret_cast<StartServiceResponse*>(buffer);
+        StartServiceResponse* message = reinterpret_cast<StartServiceResponse*>(&resp_);
 
         std::shared_ptr<StateManager> manager = LifecycleFactory::GetInstance()->GetState();
 
@@ -37,11 +37,6 @@ void StartServiceEndPoint::OnDataAvailable(void* buffer){
     }
 
 }
-
-void* StartServiceEndPoint::GetTopicBuffer(){
-    return &resp_;
-}
-
 
 void StartServiceEndPoint::OnDataPublished(bool ret){
 

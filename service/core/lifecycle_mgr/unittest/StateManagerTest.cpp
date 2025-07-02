@@ -67,7 +67,6 @@ TEST_F(StateManagerTest, StartService_SendsMessage) {
     EXPECT_CALL(mgr, GetTransmitter()).WillOnce(Return(mock_transmitter));
     EXPECT_CALL(*mock_transmitter, GetMessageEndPoint(_)).WillOnce(Return(mock_endpoint));
     void* fake_buffer = malloc(sizeof(StartServiceRequest));
-    EXPECT_CALL(*mock_endpoint, GetTopicBuffer()).WillOnce(Return(fake_buffer));
     EXPECT_CALL(*mock_endpoint, Write(fake_buffer)).Times(1);
 
     EXPECT_TRUE(state_mgr.StartService(mock_service));
@@ -88,7 +87,6 @@ TEST_F(StateManagerTest, StopService_SendsMessage) {
     EXPECT_CALL(mgr, GetTransmitter()).WillOnce(Return(mock_transmitter));
     EXPECT_CALL(*mock_transmitter, GetMessageEndPoint(_)).WillOnce(Return(mock_endpoint));
     void* fake_buffer = malloc(sizeof(StopServiceRequest));
-    EXPECT_CALL(*mock_endpoint, GetTopicBuffer()).WillOnce(Return(fake_buffer));
     EXPECT_CALL(*mock_endpoint, Write(fake_buffer)).Times(1);
 
     state_mgr.StopService(mock_service);

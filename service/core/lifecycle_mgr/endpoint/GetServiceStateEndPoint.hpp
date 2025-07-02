@@ -16,8 +16,7 @@ class GetServiceStateEndPoint : public DDSMessageEndPoint {
     GetServiceStateEndPoint(std::string topic);
     virtual ~GetServiceStateEndPoint();
 
-    virtual void  OnDataAvailable(void* buffer) override;
-    virtual void* GetTopicBuffer() override;
+    virtual void  OnDataAvailable() override;
 
     virtual void OnDataPublished(bool ret) override;
 

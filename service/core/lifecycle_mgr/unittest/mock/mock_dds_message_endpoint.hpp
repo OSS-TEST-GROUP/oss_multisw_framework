@@ -23,9 +23,8 @@ public:
     MOCK_METHOD(std::string, GetTypeName, (), ());
     MOCK_METHOD(std::shared_ptr<TypeSupport>, GetTypeSupport, (), ());
     MOCK_METHOD(void, SetTypeSupport, (std::shared_ptr<TypeSupport> typesupport), ());
-    MOCK_METHOD(void*, GetTopicBuffer, (), ());
     MOCK_METHOD(void, OnDataPublished, (bool ret), ());
-    MOCK_METHOD(void, OnDataAvailable, (void* buffer), ());
+    MOCK_METHOD(void, OnDataAvailable, (), ());
 };
 
 MockDDSMessageEndPoint* Mock_DDSMessageEndPoint;
@@ -57,14 +56,11 @@ void DDSMessageEndPoint::SetTypeSupport(std::shared_ptr<TypeSupport> typesupport
 }
 
 
-void* DDSMessageEndPoint::GetTopicBuffer() {
-    return Mock_DDSMessageEndPoint->GetTopicBuffer();
-}
 void DDSMessageEndPoint::OnDataPublished(bool ret) {
     Mock_DDSMessageEndPoint->OnDataPublished(ret);      
 }
-void DDSMessageEndPoint::OnDataAvailable(void* buffer) {
-    Mock_DDSMessageEndPoint->OnDataAvailable(buffer);   
+void DDSMessageEndPoint::OnDataAvailable() {
+    Mock_DDSMessageEndPoint->OnDataAvailable();   
 }
 #endif
 
