@@ -38,11 +38,10 @@ bool StateManager::StartService(std::shared_ptr<Service> service) {
         std::shared_ptr<DDSMessageEndPoint> endpoint = transmitter->GetMessageEndPoint(topic);
 
         if (endpoint != nullptr){
-            void* writeptr = endpoint->GetTopicBuffer();
-            StartServiceRequest* data = reinterpret_cast<StartServiceRequest*>(writeptr);
+            StartServiceRequest data;
 
-            data->service_list().push_back(service->GetName());
-            data->is_group() = false;
+            data.service_list().push_back(service->GetName());
+            data.is_group() = false;
 
 #if 0
             std::shared_ptr<ServiceRegistry> registry = GetRegistry();
@@ -56,7 +55,7 @@ bool StateManager::StartService(std::shared_ptr<Service> service) {
                 data->is_group() = false;
             }
 #endif            
-            endpoint->Write(writeptr);
+            endpoint->Write(reinterpret_cast<void*>(&data));
         }
     }
     return true;
@@ -73,13 +72,13 @@ void StateManager::StopService(std::shared_ptr<Service> service) {
         std::shared_ptr<DDSMessageEndPoint> endpoint = transmitter->GetMessageEndPoint(topic);
 
         if (endpoint != nullptr){
-            void* writeptr = endpoint->GetTopicBuffer();
-            StopServiceRequest* data = reinterpret_cast<StopServiceRequest*>(writeptr);
+            
+            StopServiceRequest data;
 
-            data->service_list().push_back(service->GetName());
-            data->is_group() = false;
+            data.service_list().push_back(service->GetName());
+            data.is_group() = false;
 
-            endpoint->Write(writeptr);
+            endpoint->Write(reinterpret_cast<void*>(&data));
         }
     }
 }

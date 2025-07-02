@@ -16,8 +16,7 @@ class StartServiceEndPoint : public DDSMessageEndPoint {
     StartServiceEndPoint(std::string topic);
     virtual ~StartServiceEndPoint();
 
-    virtual void  OnDataAvailable(void* buffer) override;
-    virtual void* GetTopicBuffer() override;
+    virtual void  OnDataAvailable() override;
 
     virtual void OnDataPublished(bool ret) override;
 

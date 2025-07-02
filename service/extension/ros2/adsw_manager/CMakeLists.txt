@@ -17,6 +17,10 @@ set ( TRANSMIT_SRC
     transmitter/DDSMessageEndpoint.cpp
     endpoint/EndPointFactory.cpp
     endpoint/ROSDiscoveryInfoEndpoint.cpp
+    endpoint/GetServiceStateEndPoint.cpp
+    endpoint/NotifyServiceStateEndPoint.cpp
+    endpoint/StartServiceEndPoint.cpp
+    endpoint/StopServiceEndPoint.cpp
 )
 
 set ( SERVICE_SRC
@@ -47,6 +51,16 @@ set(GENERATED_DDS_FILES
                         ${GENERATED_DIR}/ros2/NodeEntitiesInfoTypeObjectSupport.cxx
                         ${GENERATED_DIR}/ros2/ParticipantEntitiesInfoPubSubTypes.cxx
                         ${GENERATED_DIR}/ros2/ParticipantEntitiesInfoTypeObjectSupport.cxx
+                        ${GENERATED_DIR}/lifecycle/StartServiceRequestPubSubTypes.cxx
+                        ${GENERATED_DIR}/lifecycle/StartServiceRequestTypeObjectSupport.cxx
+                        ${GENERATED_DIR}/lifecycle/StopServiceRequestPubSubTypes.cxx
+                        ${GENERATED_DIR}/lifecycle/StopServiceRequestTypeObjectSupport.cxx
+                        ${GENERATED_DIR}/lifecycle/GetServiceStateRequestPubSubTypes.cxx
+                        ${GENERATED_DIR}/lifecycle/GetServiceStateRequestTypeObjectSupport.cxx
+                        ${GENERATED_DIR}/lifecycle/NotifyServiceStatePubSubTypes.cxx
+                        ${GENERATED_DIR}/lifecycle/NotifyServiceStateTypeObjectSupport.cxx  
+                        ${GENERATED_DIR}/lifecycle/LifecycleCommonPubSubTypes.cxx
+                        ${GENERATED_DIR}/lifecycle/LifecycleCommonTypeObjectSupport.cxx                                           
 )
 
 

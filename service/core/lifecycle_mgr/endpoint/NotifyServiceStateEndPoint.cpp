@@ -21,12 +21,12 @@ NotifyServiceStateEndPoint::~NotifyServiceStateEndPoint() {
 
 
 
-void NotifyServiceStateEndPoint::OnDataAvailable(void* buffer){
+void NotifyServiceStateEndPoint::OnDataAvailable(){
     LOG_DEBUG("Message Delivery for " << GetTopic() );
 
-    if (buffer != nullptr){
+    if (Read<NotifyServiceState>(data_) == true){
 
-        NotifyServiceState* message = reinterpret_cast<NotifyServiceState*>(buffer);
+        NotifyServiceState* message = reinterpret_cast<NotifyServiceState*>(&data_);
 
         std::shared_ptr<StateMonitor> manager = LifecycleFactory::GetInstance()->GetMonitor();
 
@@ -36,11 +36,6 @@ void NotifyServiceStateEndPoint::OnDataAvailable(void* buffer){
     }
 
 }
-
-void* NotifyServiceStateEndPoint::GetTopicBuffer(){
-    return &data_;
-}
-
 
 void NotifyServiceStateEndPoint::OnDataPublished(bool ret){
 

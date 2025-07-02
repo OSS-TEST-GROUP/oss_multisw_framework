@@ -21,12 +21,12 @@ UpdateServiceListEndPoint::~UpdateServiceListEndPoint() {
 }
 
 
-void UpdateServiceListEndPoint::OnDataAvailable(void* buffer){
+void UpdateServiceListEndPoint::OnDataAvailable(){
     LOG_DEBUG("Message Delivery for " << GetTopic() );
 
-    if (buffer != nullptr){
+    if (Read<UpdateServiceListRequest>(data_) == true){
 
-        UpdateServiceListRequest* message = reinterpret_cast<UpdateServiceListRequest*>(buffer);
+        UpdateServiceListRequest* message = reinterpret_cast<UpdateServiceListRequest*>(&data_);
 
         std::shared_ptr<ServiceRegistry> manager = LifecycleFactory::GetInstance()->GetRegistry();
 
@@ -35,11 +35,6 @@ void UpdateServiceListEndPoint::OnDataAvailable(void* buffer){
         }
     }
 }
-
-void* UpdateServiceListEndPoint::GetTopicBuffer(){
-    return &data_;
-}
-
 
 void UpdateServiceListEndPoint::OnDataPublished(bool ret){
 

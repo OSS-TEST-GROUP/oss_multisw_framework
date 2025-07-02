@@ -17,8 +17,7 @@ class SetServiceModeEndPoint : public DDSMessageEndPoint {
     SetServiceModeEndPoint(std::string topic);
     virtual ~SetServiceModeEndPoint();
 
-    virtual void  OnDataAvailable(void* buffer) override;
-    virtual void* GetTopicBuffer() override;
+    virtual void  OnDataAvailable() override;
 
     virtual void OnDataPublished(bool ret) override;
 
