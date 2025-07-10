@@ -12,9 +12,9 @@ pipeline {
         APP_NAME = "oss-multimw"
         
         // Builder image
-        //BUILDER_IMAGE = "${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${APP_NAME}-builder"
+        BUILDER_IMAGE = "${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${APP_NAME}-builder"
         // Runtime image
-        //RUNTIME_IMAGE = "${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${APP_NAME}"
+        RUNTIME_IMAGE = "${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${APP_NAME}"
         
         // Tag
         IMAGE_TAG = "${BUILD_NUMBER}"
@@ -40,6 +40,46 @@ pipeline {
                 
                 script {
                     env.FULL_TAG = "${IMAGE_TAG}-${COMMIT_HASH}"
+                }
+            }
+        }
+        stage('Build Analysis Image') {
+            steps {
+                script {
+                    echo "Building static analysis/builder image..."
+                    def builderImage = docker.build(
+                        "${BUILDER_IMAGE}:${FULL_TAG}", 
+                        "--target builder --cache-from ${BUILDER_IMAGE}:latest ."
+                    )
+                    // set TAG
+                    builderImage.tag("latest")
+                }
+            }
+        }
+        stage('Static Analysis') {
+            parallel {
+                stage('Cppcheck Analysis') {
+                    steps {
+                        script {
+                            echo "Running Cppcheck..."
+                            docker.image("${BUILDER_IMAGE}:${FULL_TAG}").inside() {
+                                sh '''
+                                    mkdir -p reports
+                                    cppcheck --enable=all \
+                                        --xml --xml-version=2 \
+                                        --output-file=reports/cppcheck-result.xml \
+                                        --suppress=missingIncludeSystem \
+                                        --suppress=unmatchedSuppression \
+                                        src/ || true
+                                '''
+                            }
+                        }
+                    }
+                    post {
+                        always {
+                            publishCppcheck pattern: 'reports/cppcheck-result.xml'
+                        }
+                    }
                 }
             }
         }
