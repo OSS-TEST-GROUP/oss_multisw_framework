@@ -1,4 +1,7 @@
 pipeline {
+    agent {
+        label 'OSS-Middleware'
+    }
     environment {
         // Agent Node
         AGENT_LABEL="OSS-Middleware"
@@ -24,7 +27,6 @@ pipeline {
         // GitOps 레포지토리
         GITOPS_REPO_URL = 'git@lotte-autops.com:oss_group1/oss_multisw_framework.git'
     }
-    agent { label "${AGENT_LABEL}" } 
     
     stages {
         stage('Checkout') {
