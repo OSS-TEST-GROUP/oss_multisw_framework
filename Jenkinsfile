@@ -33,7 +33,8 @@ pipeline {
         PLATFORMS_ARM64 = 'linux/arm64'
         PLATFORMS_ALL = 'linux/amd64,linux/arm64'
 
-        // Extension Platform
+        // Project
+        BUILD_UNITTEST = 'FALSE'
         EXTENSION_PLATFORM = 'ROS2'
         
         // Credentials
@@ -81,11 +82,17 @@ pipeline {
         stage('Build Static Analysis Image') {
             steps {
                 script {
+                    env.PLATFORM_AMD64 = '${PLATFORMS_AMD64}'
+                    env.EXTENSION_PLATFORM = '${EXTENSION_PLATFORM}'
+                    env.BUILD_UNITTEST = '${BUILD_UNITTEST}'
+                    env.DOCKERFILE_PATH = '${DOCKERFILE_PATH}'
+
                     sh '''
                         echo "Building static analysis/builder image..."
                         docker buildx build \
                             --platform ${PLATFORM_AMD64} \
                             --build-arg TARGETPLATFORM=${PLATFORM_AMD64} \
+                            --build-arg BUILD_UNITTEST=${BUILD_UNITTEST} \
                             --build-arg EXTENSION_PLATFORM=${EXTENSION_PLATFORM} \
                             -f ${DOCKERFILE_PATH} \
                             --target build-stage \
