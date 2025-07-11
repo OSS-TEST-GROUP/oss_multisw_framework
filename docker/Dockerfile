@@ -34,12 +34,12 @@ LABEL platform=$TARGETPLATFORM
 ARG LIBRARIES_INSTALL_DIR=/opt
 
 RUN apt-get install -y --no-install-recommends \
-    apt update \
-    && apt install -y \
+    build-essential \
     wget \
     git \
     cmake \
     libasio-dev \
+    ccache \
     libtinyxml2-dev \
     libssl-dev \
     libp11-dev \
@@ -50,7 +50,6 @@ RUN apt-get install -y --no-install-recommends \
     openjdk-11-jre \
     libyaml-cpp-dev \
     ninja-build \
-    cache \
     curl \
     unzip \
     cppcheck \
@@ -59,7 +58,6 @@ RUN apt-get install -y --no-install-recommends \
     clang-tidy \
     clang-format \
     iwyu \
-    gcov \
     lcov \
     gcovr \
     valgrind \
@@ -74,6 +72,18 @@ RUN apt-get install -y --no-install-recommends \
     jq \
     && rm -rf /var/lib/apt/lists/* 
 
+# Install Python packages
+RUN pip3 install --no-cache-dir \
+    colcon-common-extensions \
+    vcstool \
+    # Static Analysis
+    cpplint==1.6.1 \
+    cmake-format==0.6.13 \
+    cmakelang==0.6.13 \
+    pre-commit==3.5.0 \
+    black==23.9.1 \
+    isort==5.12.0
+
 # Build and Install Fast-DDS
 RUN /bin/bash -c "mkdir -p ${LIBRARIES_INSTALL_DIR}/Fast-DDS \
     && cd ${LIBRARIES_INSTALL_DIR}/Fast-DDS \
@@ -86,20 +96,9 @@ RUN /bin/bash -c "mkdir -p ${LIBRARIES_INSTALL_DIR}/Fast-DDS \
     && git clone https://github.com/eProsima/Fast-DDS-Gen.git \
     && cd Fast-DDS-Gen \
     && chmod +x gradlew \
+	&& ls -al \
     && ./gradlew clean \
     && ./gradlew build ; ./gradlew install"
-
-# Install Python packages
-RUN pip3 install --no-cache-dir \
-    colcon-common-extensions \
-    vcstool \
-    # Static Analysis
-    cpplint==1.6.1 \
-    cmake-format==0.6.13 \
-    cmakelang==0.6.13 \
-    pre-commit==3.5.0 \
-    black==23.9.1 \
-    isort==5.12.0
 
 ARG TARGETARCH
 RUN case "${TARGETARCH}" in \
@@ -122,6 +121,7 @@ WORKDIR /workspace
 ###################################################################################
 FROM builder AS build-stage
 
+ARG BUILD_UNITTEST
 ARG EXTENSION_PLATFORM
 COPY . .
 
@@ -133,14 +133,14 @@ ENV MAKEFLAGS="-j4"
 ENV BUILD_MODE=Release
 
 RUN mkdir -p /workspace/.build
-RUN source $LIBRARIES_INSTALL_DIR/Fast-DDS/install/setup.bash && \
-    cd /workspace && \
-    cmake ../ \
-        -DBUILD_UNITTEST=TRUE \
+RUN /bin/bash -c "source $LIBRARIES_INSTALL_DIR/Fast-DDS/install/setup.bash \
+    && cd /workspace/.build \
+    && cmake ../ \
+        -DBUILD_UNITTEST=FALSE \
         -DEXTENSION_PLATFORM=${EXTENSION_PLATFORM} \
         -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
         -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
         -DCMAKE_C_COMPILER_LAUNCHER=ccache \
     && make ${MAKEFLAGS} \
     && make install \
-    cd -
+    && cd -"
