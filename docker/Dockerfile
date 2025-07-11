@@ -121,22 +121,22 @@ WORKDIR /workspace
 ###################################################################################
 FROM builder AS build-stage
 
-ARG BUILD_UNITTEST
-ARG EXTENSION_PLATFORM
+ARG BUILD_UNITTEST=FALSE
+ARG EXTENSION_PLATFORM=ROS2
 COPY . .
 
 ENV CFLAGS="-O2"
 ENV CXXFLAGS="-O2"
 ENV LDFLAGS="-O1"
 ENV CMAKE_BUILD_PARALLEL_LEVEL=4
-ENV MAKEFLAGS="-j4"
-ENV BUILD_MODE=Release
+ENV MAKEFLAGS="$(nproc)"
+ENV BUILD_MODE=${BUILD_UNITTEST}
 
 RUN mkdir -p /workspace/.build
 RUN /bin/bash -c "source $LIBRARIES_INSTALL_DIR/Fast-DDS/install/setup.bash \
     && cd /workspace/.build \
     && cmake ../ \
-        -DBUILD_UNITTEST=FALSE \
+        -DBUILD_UNITTEST=${BUILD_UNITTEST}} \
         -DEXTENSION_PLATFORM=${EXTENSION_PLATFORM} \
         -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
         -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
