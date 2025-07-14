@@ -120,13 +120,15 @@ pipeline {
                             echo "Running Cppcheck..."
                             docker.image("${BUILDER_IMAGE}:${FULL_TAG}").inside() {
                                 sh '''
+                                    find /workspace/service -name "*.cpp" -not -path "*/unittest/*" > /workspace/files_to_check.txt
                                     mkdir -p reports
                                     cppcheck --enable=all \
                                         --xml --xml-version=2 \
                                         --output-file=reports/cppcheck-result.xml \
                                         --suppress=missingIncludeSystem \
                                         --suppress=unmatchedSuppression \
-                                        /workspace/service || true
+                                        --std=c++20 \
+                                        --file-list=/workspace/files_to_check.txt || true
                                 '''
                             }
                         }
