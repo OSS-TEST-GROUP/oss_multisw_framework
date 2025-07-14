@@ -42,7 +42,7 @@ pipeline {
         //REGISTRY_CREDENTIALS = 'docker-registry-credentials'
         
         // GitOps 레포지토리
-        GITOPS_REPO_URL = 'git@lotte-autops.com:oss_group1/oss_multisw_framework.git'
+        GITOPS_REPO_URL = 'https://lotte-autops.com/oss_group1/oss_multisw_framework.git'
     }
 
    options {
@@ -126,7 +126,7 @@ pipeline {
                                         --output-file=reports/cppcheck-result.xml \
                                         --suppress=missingIncludeSystem \
                                         --suppress=unmatchedSuppression \
-                                        src/ || true
+                                        /workspace/service || true
                                 '''
                             }
                         }
