@@ -72,8 +72,18 @@ pipeline {
             steps {
                 script {
                     sh '''
+                        echo "Setting up Docker Buildx..."
+                        docker buildx rm ${BUILDX_BUILDER_NAME} || true
                         docker buildx create --name ${BUILDX_BUILDER_NAME} --driver docker-container --use || true
+
+                        echo "Check builder information..."
                         docker buildx inspect --bootstrap
+
+                        echo "Check supported platform information..."
+                        docker buildx inspect | grep Platforms
+
+                        echo "Check Qemu support"
+                        docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
                     '''
                 }
             }
