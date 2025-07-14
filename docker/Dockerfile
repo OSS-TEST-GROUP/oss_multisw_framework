@@ -129,18 +129,18 @@ ENV CFLAGS="-O2"
 ENV CXXFLAGS="-O2"
 ENV LDFLAGS="-O1"
 ENV CMAKE_BUILD_PARALLEL_LEVEL=4
-ENV MAKEFLAGS="-j $(nproc)"
+ENV MAKEFLAGS="$(nproc)"
 ENV BUILD_MODE=${BUILD_UNITTEST}
 
 RUN mkdir -p /workspace/.build
 RUN /bin/bash -c "source $LIBRARIES_INSTALL_DIR/Fast-DDS/install/setup.bash \
     && cd /workspace/.build \
     && cmake ../ \
-        -DBUILD_UNITTEST=${BUILD_UNITTEST}} \
+        -DBUILD_UNITTEST=${BUILD_UNITTEST} \
         -DEXTENSION_PLATFORM=${EXTENSION_PLATFORM} \
         -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
         -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
         -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-    && make ${MAKEFLAGS} \
+    && make -j${MAKEFLAGS} \
     && make install \
     && cd -"
