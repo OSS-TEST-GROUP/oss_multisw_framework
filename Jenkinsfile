@@ -143,10 +143,46 @@ pipeline {
                         }
                     }
                 }
+                stage('SlocCount') {
+                    steps {
+                        script {
+                            echo "Running SlocCount..."
+                            docker.image("${BUILDER_IMAGE}:${FULL_TAG}").inside() {
+                                sh '''
+                                    mkdir -p reports
+                                    mkdir -p /tmp/sloccount-clean
+
+                                    find /workspace/service/ \
+                                        -not -path "*/unittest/*" \
+                                        \\( -name "*.cpp" -o -name "*.hpp" -o -name "*.h" \\) \
+                                        -exec cp --parents {} /tmp/sloccount-clean/ \\; 2>/dev/null || true
+
+                                    cd /tmp/sloccount-clean
+                                    sloccount --duplicates --wide --details . > /workspace/reports/sloccount-detailed.xml || true
+                                    sloccount . > /workspace/reports/sloccount/sloccount-summary.txt || true
+                                    cd /workspace
+
+                                    echo "<?xml version=\\"1.0\\" encoding=\\"UTF-8\\"?>" > reports/sloccount/sloccount.xml
+                                    echo "<sloccount>" >> reports/sloccount/sloccount.xml
+                                    grep "^[a-z]" reports/sloccount/sloccount-summary.txt | while read lang lines files; do
+                                        echo "  <language name=\\"$lang\\" linecount=\\"$lines\\" filecount=\\"$files\\"/>" >> reports/sloccount/sloccount.xml
+                                    done
+                                    echo "</sloccount>" >> reports/sloccount/sloccount.xml
+                                '''
+                            }
+                        }
+                    }
+                }
+                post {
+                    always {
+                        sloccountPublish pattern: 'reports/sloccount/sloccount.xml'
+                        archiveArtifacts artifacts: 'reports/sloccount/**/*', allowEmptyArchive: true
+                    }
+                }
                 stage('CppLint') {
                     steps {
                         script {
-                            echo "Running Cppcheck..."
+                            echo "Running CppLint..."
                             docker.image("${BUILDER_IMAGE}:${FULL_TAG}").inside() {
                                 sh '''
                                     mkdir -p reports
