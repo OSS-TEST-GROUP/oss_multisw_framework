@@ -153,7 +153,7 @@ pipeline {
 
                                     find /workspace/service/ \
                                         -not -path "*/unittest/*" \
-                                        \( -name "*.cpp" -o -name "*.hpp" -o -name "*.h" \) \
+                                        \\( -name "*.cpp" -o -name "*.hpp" -o -name "*.h" \\) \
                                         > /workspace/files_to_check.txt
                                     
                                     if [ -f /workspace/files_to_check.txt ]; then
