@@ -89,7 +89,7 @@ pipeline {
             }
         }
 
-        stage('Build Static Analysis Image') {
+        stage('Build an Image for Static Analysis') {
             steps {
                 script {
                     env.PLATFORM_AMD64 = "${PLATFORMS_AMD64}"
@@ -114,14 +114,18 @@ pipeline {
         }
         stage('Static Analysis') {
             parallel {
-                stage('Cppcheck Analysis') {
+                stage('Cppcheck') {
                     steps {
                         script {
                             echo "Running Cppcheck..."
                             docker.image("${BUILDER_IMAGE}:${FULL_TAG}").inside() {
                                 sh '''
-                                    find /workspace/service -name "*.cpp" -not -path "*/unittest/*" > /workspace/files_to_check.txt
                                     mkdir -p reports
+
+                                    find /workspace/service/ \
+                                        -not -path "*/unittest/*" \
+                                        -name "*.cpp" \
+                                        > /workspace/files_to_check.txt
                                     cppcheck --enable=all \
                                         --xml --xml-version=2 \
                                         --output-file=reports/cppcheck-result.xml \
@@ -139,10 +143,37 @@ pipeline {
                         }
                     }
                 }
-                stage('Unittest') {
+                stage('CppLint') {
                     steps {
                         script {
-                            echo "Running Unittest..."
+                            echo "Running Cppcheck..."
+                            docker.image("${BUILDER_IMAGE}:${FULL_TAG}").inside() {
+                                sh '''
+                                    mkdir -p reports
+
+                                    find /workspace/service/ \
+                                        -not -path "*/unittest/*" \
+                                        \( -name "*.cpp" -o -name "*.hpp" -o -name "*.h" \) \
+                                        > /workspace/files_to_check.txt
+                                    
+                                    if [ -f /workspace/files_to_check.txt ]; then
+                                        cat /workspace/files_to_check.txt | xargs cpplint \
+                                            --filter=-whitespace/tab,-legal/copyright,-build/include_order \
+                                            --linelength=120 \
+                                            --extensions=cpp,cc,h,hpp \
+                                            --output=vs7 \
+                                            --counting=detailed \
+                                            > reports/cpplint-result.txt 2>&1 || true
+                                    else
+                                        echo "No files to check" > reports/cpplint-result.txt
+                                    fi
+                                '''
+                            }
+                        }
+                    }
+                    post {
+                        always {
+                            archiveArtifacts artifacts: 'reports/cpplint-result.txt', allowEmptyArchive: true
                         }
                     }
                 }
