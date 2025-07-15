@@ -172,13 +172,12 @@ pipeline {
                             }
                         }
                     }
-                }
-                post {
-                    always {
-                        sloccountPublish pattern: 'reports/sloccount/sloccount.xml'
-                        archiveArtifacts artifacts: 'reports/sloccount/**/*', allowEmptyArchive: true
+                    post {
+                        always {
+                            sloccountPublish pattern: 'reports/sloccount/sloccount.xml'
+                            archiveArtifacts artifacts: 'reports/sloccount/**/*', allowEmptyArchive: true
                     }
-                }
+                } 
                 stage('CppLint') {
                     steps {
                         script {
