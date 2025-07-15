@@ -40,6 +40,7 @@
 #include "lifecycle/StopServiceRequest.hpp"
 
 using namespace eprosima::fastdds::dds;
+using namespace lifecyclemgr;
 
 namespace eprosima {
 namespace fastdds {

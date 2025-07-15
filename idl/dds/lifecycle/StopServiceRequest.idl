@@ -1,12 +1,15 @@
 #include "LifecycleCommon.idl"
 
-/* TopicName - mmf/lifecyclemgr/StopServiceRequest */
-struct StopServiceRequest {
-    sequence<string> service_list;
-    boolean is_group;
-};
+module lifecyclemgr {
 
-/* TopicName - mmf/lifecyclemgr/StopServiceResponse */
-struct StopServiceResponse {
-    ReturnCode ret_code;
+    /* TopicName - mmf/lifecyclemgr/StopServiceRequest */
+    struct StopServiceRequest {
+        sequence<string> service_list;
+        boolean is_group;
+    };
+
+    /* TopicName - mmf/lifecyclemgr/StopServiceResponse */
+    struct StopServiceResponse {
+        ReturnCode ret_code;
+    };
 };

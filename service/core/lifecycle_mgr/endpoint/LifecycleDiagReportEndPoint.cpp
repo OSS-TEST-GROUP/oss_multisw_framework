@@ -5,6 +5,7 @@
 
 namespace lifecycle_manager {
 
+
 LifecycleDiagReportEndPoint::LifecycleDiagReportEndPoint(std::string topic) 
     : DDSMessageEndPoint(topic){
 
@@ -25,7 +26,7 @@ void LifecycleDiagReportEndPoint::OnDataAvailable(){
 
         LifecycleDiagReport* message = reinterpret_cast<LifecycleDiagReport*>(&data_);
 
-        std::vector<::ServiceStatus> *slist = &message->service_list();
+        std::vector<lifecyclemgr::ServiceStatus> *slist = &message->service_list();
 
         for( auto svc = slist->begin(); svc != slist->end(); ++svc ){
             LOG_VERBOSE("service " << svc->name() 

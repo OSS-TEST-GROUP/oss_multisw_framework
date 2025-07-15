@@ -1,14 +1,17 @@
 #include "LifecycleCommon.idl"
 
-struct ServiceStatus {
-    string name;
-    ServiceType service_type;
-    ServiceState service_state;
-    boolean is_enabled;
-    int32 recovered_count;
-};
+module lifecyclemgr {
 
-/* TopicName - mmf/lifecyclemgr/LifecycleDiagReport */
-struct LifecycleDiagReport {
-    sequence<ServiceStatus> service_list;
+    struct ServiceStatus {
+        string name;
+        ServiceType service_type;
+        ServiceState service_state;
+        boolean is_enabled;
+        int32 recovered_count;
+    };
+
+    /* TopicName - mmf/lifecyclemgr/LifecycleDiagReport */
+    struct LifecycleDiagReport {
+        sequence<ServiceStatus> service_list;
+    };
 };

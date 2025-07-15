@@ -11,6 +11,8 @@
 
 namespace lifecycle_manager {
 
+using namespace lifecyclemgr;
+
 class StopServiceEndPoint : public DDSMessageEndPoint {
   public:
     StopServiceEndPoint(std::string topic);

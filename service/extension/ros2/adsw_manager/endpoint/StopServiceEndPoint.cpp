@@ -1,6 +1,7 @@
 #include "StopServiceEndPoint.hpp"
 
 #include "lifecycle/StopServiceRequest.hpp"
+#include "ADSWManager.hpp"
 #include "logger/Log.hpp"
 
 namespace ros2 {
@@ -36,6 +37,16 @@ void StopServiceEndPoint::OnDataAvailable(){
 
         StopServiceRequest* message = reinterpret_cast<StopServiceRequest*>(&req_);
 
+        std::shared_ptr<ROSServiceController> manager = ADSWManager::Get()->GetServiceController();
+        if (manager != nullptr){
+            bool result = manager->ProcessServiceStopRequest(message);
+            if (!result) {
+                LOG_ERROR("Failed to process service stop request.");
+            }
+        }
+        else {
+            LOG_ERROR("Failed to retrieve service controller.");
+        }
     }
 
 }

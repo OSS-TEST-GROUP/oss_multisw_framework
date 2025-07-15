@@ -48,7 +48,7 @@ file(GLOB HELLO_WORLD_SOURCES_CXX "*.cxx")
 file(GLOB HELLO_WORLD_SOURCES_CPP "*.cpp")
 
 # IDL generation
-set(GENERATED_DIR "${PROJECT_SOURCE_DIR}/../../../../output/Debug/generated/idl")
+set(GENERATED_DIR "${PROJECT_SOURCE_DIR}/../../../../output/generated/idl/lifecycle/idl/dds")
 set(GENERATED_DDS_FILES ${GENERATED_DIR}/lifecycle/LifecycleCommonPubSubTypes.cxx
                         ${GENERATED_DIR}/lifecycle/LifecycleCommonTypeObjectSupport.cxx
                         ${GENERATED_DIR}/lifecycle/LifecycleDiagReportPubSubTypes.cxx

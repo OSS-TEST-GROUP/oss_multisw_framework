@@ -60,7 +60,7 @@ set ( MISC_SRC
 )
 
 # IDL generation
-set(GENERATED_DIR "${CMAKE_INSTALL_PREFIX}/generated/idl")
+set(GENERATED_DIR "${CMAKE_INSTALL_PREFIX}/generated/idl/lifecycle/idl/dds")
 set(GENERATED_DDS_FILES ${GENERATED_DIR}/lifecycle/LifecycleCommonPubSubTypes.cxx
                         ${GENERATED_DIR}/lifecycle/LifecycleCommonTypeObjectSupport.cxx
                         ${GENERATED_DIR}/lifecycle/LifecycleDiagReportPubSubTypes.cxx
@@ -101,6 +101,7 @@ link_libraries ( pthread fastcdr fastdds yaml-cpp )
 
 #add_executable ( ${PROJECT_NAME} ${MAIN_SRC} $<TARGET_OBJECTS:abc_obj> )
 add_executable ( ${PROJECT_NAME} ${MAIN_SRC} ${GENERATED_DDS_FILES})
+#add_executable ( ${PROJECT_NAME} ${MAIN_SRC})
 
 ## Install
 install ( TARGETS ${PROJECT_NAME}
@@ -108,3 +109,11 @@ install ( TARGETS ${PROJECT_NAME}
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
     )
+
+
+# Lifecycle idl
+install(DIRECTORY
+    ${CMAKE_SOURCE_DIR}/idl/dds/common
+    ${CMAKE_SOURCE_DIR}/idl/dds/lifecycle
+    DESTINATION bin/idl
+)

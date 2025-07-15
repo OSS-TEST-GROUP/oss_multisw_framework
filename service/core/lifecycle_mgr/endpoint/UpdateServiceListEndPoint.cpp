@@ -8,7 +8,6 @@
 
 namespace lifecycle_manager {
 
-
 UpdateServiceListEndPoint::UpdateServiceListEndPoint(std::string topic) 
     : DDSMessageEndPoint(topic){
 

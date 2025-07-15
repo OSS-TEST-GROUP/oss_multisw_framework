@@ -2,23 +2,27 @@
 #define ROS2_ADSW_MANAGER_CONTROL_SERVICE_CONTROLLER_HPP_
 
 #include <string>
+#include <memory>
+
+#include "service/Service.hpp"
 
 namespace ros2 {
 namespace adsw_manager {
 
 class ServiceController {
   public:
-    ServiceController();
-    ~ServiceController();
 
-    bool Initialize();
-    void Finalize();
+    virtual bool Initialize() = 0;
+    virtual void Finalize() = 0;
 
-    bool StartGroup();
-    bool StopGroup();
+    virtual bool StartGroup(const std::string& group) = 0;
+    virtual bool StopGroup(const std::string& group) = 0;
 
-    bool StartService(const std::string& service_name);
-    bool StopService(const std::string& service_name);
+    virtual bool StartService(const std::string& service_name) = 0;
+    virtual bool StopService(const std::string& service_name) = 0;
+
+    virtual bool StartService(std::shared_ptr<Service> service) = 0;
+    virtual bool StopService(std::shared_ptr<Service> service) = 0;
 
   private:
 };

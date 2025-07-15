@@ -26,8 +26,8 @@ class StateMonitor : public ManagerBase {
     bool Start();
     void Stop();
     
-    void UpdateServicesState(::NotifyServiceState* update);
-    void UpdateServicesState(::GetServiceStateResponse* response);
+    void UpdateServicesState(lifecyclemgr::NotifyServiceState* update);
+    void UpdateServicesState(lifecyclemgr::GetServiceStateResponse* response);
 
     void SetUpdateStateFlag(std::shared_ptr<Service> service);
     void ClearUpdateStateFlag(std::shared_ptr<Service> service);
@@ -44,8 +44,8 @@ class StateMonitor : public ManagerBase {
     void StopThread();
     void RunThread();
     void RequestGetState();
-    void updateServices(std::vector<std::string>* slist, std::vector<::ServiceState> *statelist);
-    bool getServiceState(std::shared_ptr<Service> service, ::ServiceStatus& entry);
+    void updateServices(std::vector<std::string>* slist, std::vector<lifecyclemgr::ServiceState> *statelist);
+    bool getServiceState(std::shared_ptr<Service> service, lifecyclemgr::ServiceStatus& entry);
 
   private:
     std::set<std::shared_ptr<Service>> udpated_service_list_;

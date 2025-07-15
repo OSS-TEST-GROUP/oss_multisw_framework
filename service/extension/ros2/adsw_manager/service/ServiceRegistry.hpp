@@ -12,11 +12,14 @@
 #include "core/lifecycle_mgr/include/ServiceState.hpp"
 #include "core/lifecycle_mgr/include/ServiceType.hpp"
 #include "core/lifecycle_mgr/include/RecoveryPolicy.hpp"
+#include "lifecycle/GetServiceStateRequest.hpp"
+
 
 using namespace lifecycle_manager;
 
 namespace ros2 {
 namespace adsw_manager {
+
 
 class ServiceRegistry {
   public:
@@ -39,6 +42,12 @@ class ServiceRegistry {
     uint64_t GetServicesNum();
     uint64_t GetServiceNumInGroup(const std::string& group);
     uint64_t GetGroupNum();
+
+    bool ProcessGetServiceStateRequest(lifecyclemgr::GetServiceStateRequest* message);
+
+    bool LoadServiceList(const std::string& path);
+    std::vector<std::tuple<std::string, std::string, std::string, std::string>> extractRos2LaunchCommands(const std::string& script);
+    bool ProcessUpdateServiceListRequest();
 
   private:
     std::unordered_map<std::string, std::shared_ptr<Service>> services_;

@@ -6,6 +6,7 @@
 #include "monitor/ServiceMonitor.hpp"
 #include "control/ROSServiceController.hpp"
 #include "monitor/ROSServiceDiscovery.hpp"
+#include "endpoint/EndPointFactory.hpp"
 
 namespace ros2 {
 namespace adsw_manager {
@@ -28,6 +29,8 @@ class ADSWManager {
     std::shared_ptr<ROSServiceController> GetServiceController();
     std::shared_ptr<ROSServiceDiscovery> GetServiceDiscovery();
 
+    const char* GetTopic(MessageType topic);
+
 
   private:
     static std::shared_ptr<ADSWManager> getShared();
@@ -37,6 +40,7 @@ class ADSWManager {
     std::shared_ptr<ServiceRegistry> service_registry_;
     std::shared_ptr<ServiceMonitor> service_monitor_;
     std::shared_ptr<ROSServiceController> service_controller_;
+    std::shared_ptr<EndPointFactory> endppoint_factory_;
 };
 
 } // namespace adsw_manager

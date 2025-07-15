@@ -34,6 +34,8 @@ constexpr const char* const topic_notify_svc_state = "mmf/lifecyclemgr/NotifySer
 
 constexpr const char* const topic_type = "lifecyclemgr";
 
+using namespace lifecyclemgr;
+
 EndPointFactory::EndPointFactory(){
 }
 

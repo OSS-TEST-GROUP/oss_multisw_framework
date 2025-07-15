@@ -28,21 +28,21 @@ void StateMonitor::Stop() {
     
 }
 
-void StateMonitor::UpdateServicesState(::NotifyServiceState* update){
+void StateMonitor::UpdateServicesState(lifecyclemgr::NotifyServiceState* update){
 
     if (update){
         std::vector<std::string> *slist = &update->service_list();
-        std::vector<::ServiceState> *statelist = &update->service_state_list();
+        std::vector<lifecyclemgr::ServiceState> *statelist = &update->service_state_list();
         updateServices(slist, statelist);
     }
 }
 
 
-void StateMonitor::UpdateServicesState(::GetServiceStateResponse* response){
+void StateMonitor::UpdateServicesState(lifecyclemgr::GetServiceStateResponse* response){
 
     if (response){
         std::vector<std::string> *slist = &response->service_list();
-        std::vector<::ServiceState> *statelist = &response->service_state_list();
+        std::vector<lifecyclemgr::ServiceState> *statelist = &response->service_state_list();
         updateServices(slist, statelist);
     }
 }
@@ -103,7 +103,7 @@ void StateMonitor::NotifyLifecycleDiagnosticInfo(bool all){
 
                     for( auto svc = list.begin(); svc != list.end(); ++svc ){
                         
-                        ::ServiceStatus service;
+                        lifecyclemgr::ServiceStatus service;
                         
                         getServiceState(*svc, service);
                         report.service_list().push_back(service);
@@ -113,7 +113,7 @@ void StateMonitor::NotifyLifecycleDiagnosticInfo(bool all){
                 
                 for( auto svc = udpated_service_list_.begin(); svc != udpated_service_list_.end(); ++svc ){
                         
-                    ::ServiceStatus service;
+                    lifecyclemgr::ServiceStatus service;
                         
                     getServiceState(*svc, service);
                     report.service_list().push_back(service);
@@ -124,7 +124,7 @@ void StateMonitor::NotifyLifecycleDiagnosticInfo(bool all){
     }
 }
 
-bool StateMonitor::getServiceState(std::shared_ptr<Service> svc, ::ServiceStatus& entry){
+bool StateMonitor::getServiceState(std::shared_ptr<Service> svc, lifecyclemgr::ServiceStatus& entry){
 
     entry.name() = svc->GetName();
     entry.service_type() = TypeConvert::ToServiceType(svc->GetServiceType());
@@ -191,7 +191,7 @@ void StateMonitor::RequestGetState(){
     }
 }
 
-void StateMonitor::updateServices(std::vector<std::string>* slist, std::vector<::ServiceState> *statelist){
+void StateMonitor::updateServices(std::vector<std::string>* slist, std::vector<lifecyclemgr::ServiceState> *statelist){
 
     if (slist->size() != statelist->size()){
 
@@ -200,7 +200,7 @@ void StateMonitor::updateServices(std::vector<std::string>* slist, std::vector<:
     for (size_t idx=0; idx < slist->size(); ++idx){
             
         std::string sname = slist->at(idx);
-        ::ServiceState state = statelist->at(idx);
+        lifecyclemgr::ServiceState state = statelist->at(idx);
 
         std::shared_ptr<Service> service = GetService(sname);
 

@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: autoware-single-pod
+  labels:
+    app: autoware
+spec:
+  containers:
+    - name: autoware-all
+      image: your-docker-registry/autoware:latest   # Use your Autoware build with all required components
+      command: ["/bin/bash", "-c"]
+      args:
+        [
+          "source /opt/ros/<ROS_DISTRO>/setup.bash && \
+           source /autoware/install/setup.bash && \
+           ros2 launch <YOUR_VEHICLE_SENSOR_LAUNCH_PKG> sensing.launch.xml & \
+           ros2 launch <YOUR_VEHICLE_INTERFACE_LAUNCH_PKG> vehicle_interface.launch.xml & \
+           ros2 launch autoware_launch map.launch.xml map_path:=/data/maps && \
+           wait"
+        ]
+      # Map in your map data and config as necessary
+      volumeMounts:
+        - name: map-volume
+          mountPath: /data/maps
+        - name: sensor-config
+          mountPath: /data/sensor/config
+        - name: vehicle-config
+          mountPath: /data/vehicle/config
+      env:
+        - name: ROS_DOMAIN_ID
+          value: "0"
+  volumes:
+    - name: map-volume
+      hostPath:
+        path: /host/maps       # Change to storage location of your maps on the host
+        type: Directory
+    - name: sensor-config
+      hostPath:
+        path: /host/sensor/config     # Change as needed
+        type: Directory
+    - name: vehicle-config
+      hostPath:
+        path: /host/vehicle/config    # Change as needed
+        type: Directory
+  restartPolicy: Always
+  hostNetwork: true  # recommended if accessing sensors/CAN/vehicle hardware

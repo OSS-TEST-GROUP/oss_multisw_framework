@@ -7,7 +7,6 @@
 
 namespace lifecycle_manager {
 
-
 StopServiceEndPoint::StopServiceEndPoint(std::string topic) 
     : DDSMessageEndPoint(topic){
 

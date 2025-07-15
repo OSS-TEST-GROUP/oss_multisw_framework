@@ -1,21 +1,22 @@
 #include "LifecycleCommon.idl"
 
+module lifecyclemgr {
+    /* struct ServiceState {
+        string service;
+        ServiceState service_state;
+    };
+    */
 
-/* struct ServiceState {
-    string service;
-    ServiceState service_state;
-};
-*/
 
+    /* TopicName - mmf/lifecyclemgr/GetServiceStateRequest */
+    struct GetServiceStateRequest {
+        sequence<string> service_list;
+        boolean is_all_service;
+    };
 
-/* TopicName - mmf/lifecyclemgr/GetServiceStateRequest */
-struct GetServiceStateRequest {
-    sequence<string> service_list;
-    boolean is_all_service;
-};
-
-/* TopicName - mmf/lifecyclemgr/GetServiceStateResponse */
-struct GetServiceStateResponse {
-    sequence<string> service_list;
-    sequence<ServiceState> service_state_list;
+    /* TopicName - mmf/lifecyclemgr/GetServiceStateResponse */
+    struct GetServiceStateResponse {
+        sequence<string> service_list;
+        sequence<ServiceState> service_state_list;
+    };
 };

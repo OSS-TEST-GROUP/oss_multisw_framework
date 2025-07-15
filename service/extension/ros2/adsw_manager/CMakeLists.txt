@@ -21,6 +21,7 @@ set ( TRANSMIT_SRC
     endpoint/NotifyServiceStateEndPoint.cpp
     endpoint/StartServiceEndPoint.cpp
     endpoint/StopServiceEndPoint.cpp
+    endpoint/UpdateServiceListEndPoint.cpp
 )
 
 set ( SERVICE_SRC
@@ -38,31 +39,34 @@ set ( CONTROL_SRC
     control/ContainerController.cpp
     control/ROS2NodeController.cpp
     control/ROSServiceController.cpp
-    control/ServiceController.cpp
 )
 
 # IDL generation
-set(GENERATED_DIR "${CMAKE_INSTALL_PREFIX}/generated/idl")
+set(GENERATED_ROS2_DIR "${CMAKE_INSTALL_PREFIX}/generated/idl/ros2/idl/dds")
+set(GENERATED_LIFECYCLE_DIR "${CMAKE_INSTALL_PREFIX}/generated/idl/lifecycle/idl/dds")
 
-set(GENERATED_DDS_FILES
-                        ${GENERATED_DIR}/ros2/GidPubSubTypes.cxx
-                        ${GENERATED_DIR}/ros2/GidTypeObjectSupport.cxx
-                        ${GENERATED_DIR}/ros2/NodeEntitiesInfoPubSubTypes.cxx
-                        ${GENERATED_DIR}/ros2/NodeEntitiesInfoTypeObjectSupport.cxx
-                        ${GENERATED_DIR}/ros2/ParticipantEntitiesInfoPubSubTypes.cxx
-                        ${GENERATED_DIR}/ros2/ParticipantEntitiesInfoTypeObjectSupport.cxx
-                        ${GENERATED_DIR}/lifecycle/StartServiceRequestPubSubTypes.cxx
-                        ${GENERATED_DIR}/lifecycle/StartServiceRequestTypeObjectSupport.cxx
-                        ${GENERATED_DIR}/lifecycle/StopServiceRequestPubSubTypes.cxx
-                        ${GENERATED_DIR}/lifecycle/StopServiceRequestTypeObjectSupport.cxx
-                        ${GENERATED_DIR}/lifecycle/GetServiceStateRequestPubSubTypes.cxx
-                        ${GENERATED_DIR}/lifecycle/GetServiceStateRequestTypeObjectSupport.cxx
-                        ${GENERATED_DIR}/lifecycle/NotifyServiceStatePubSubTypes.cxx
-                        ${GENERATED_DIR}/lifecycle/NotifyServiceStateTypeObjectSupport.cxx  
-                        ${GENERATED_DIR}/lifecycle/LifecycleCommonPubSubTypes.cxx
-                        ${GENERATED_DIR}/lifecycle/LifecycleCommonTypeObjectSupport.cxx                                           
+set(GENERATED_DDS_ROS2_FILES
+                        ${GENERATED_ROS2_DIR}/ros2/GidPubSubTypes.cxx
+                        ${GENERATED_ROS2_DIR}/ros2/GidTypeObjectSupport.cxx
+                        ${GENERATED_ROS2_DIR}/ros2/NodeEntitiesInfoPubSubTypes.cxx
+                        ${GENERATED_ROS2_DIR}/ros2/NodeEntitiesInfoTypeObjectSupport.cxx
+                        ${GENERATED_ROS2_DIR}/ros2/ParticipantEntitiesInfoPubSubTypes.cxx
+                        ${GENERATED_ROS2_DIR}/ros2/ParticipantEntitiesInfoTypeObjectSupport.cxx                                      
 )
-
+set(GENERATED_DDS_LIFECYCLE_FILES
+                        ${GENERATED_LIFECYCLE_DIR}/lifecycle/StartServiceRequestPubSubTypes.cxx
+                        ${GENERATED_LIFECYCLE_DIR}/lifecycle/StartServiceRequestTypeObjectSupport.cxx
+                        ${GENERATED_LIFECYCLE_DIR}/lifecycle/StopServiceRequestPubSubTypes.cxx
+                        ${GENERATED_LIFECYCLE_DIR}/lifecycle/StopServiceRequestTypeObjectSupport.cxx
+                        ${GENERATED_LIFECYCLE_DIR}/lifecycle/GetServiceStateRequestPubSubTypes.cxx
+                        ${GENERATED_LIFECYCLE_DIR}/lifecycle/GetServiceStateRequestTypeObjectSupport.cxx
+                        ${GENERATED_LIFECYCLE_DIR}/lifecycle/NotifyServiceStatePubSubTypes.cxx
+                        ${GENERATED_LIFECYCLE_DIR}/lifecycle/NotifyServiceStateTypeObjectSupport.cxx  
+                        ${GENERATED_LIFECYCLE_DIR}/lifecycle/UpdateServiceListRequestPubSubTypes.cxx
+                        ${GENERATED_LIFECYCLE_DIR}/lifecycle/UpdateServiceListRequestTypeObjectSupport.cxx
+                        ${GENERATED_LIFECYCLE_DIR}/lifecycle/LifecycleCommonPubSubTypes.cxx
+                        ${GENERATED_LIFECYCLE_DIR}/lifecycle/LifecycleCommonTypeObjectSupport.cxx                                           
+)
 
 ## Source
 set ( MAIN_SRC main.cc
@@ -74,12 +78,12 @@ include_directories (
     .
     ${CMAKE_SOURCE_DIR}/service
 )
-include_directories ( ${GENERATED_DIR} )
+include_directories ( ${GENERATED_ROS2_DIR} ${GENERATED_LIFECYCLE_DIR} )
 
 ## Library
 #link_libraries ( pthread )
 #link_directories ( ${CMAKE_INSTALL_PREFIX} )
-link_libraries ( pthread fastcdr fastdds )
+link_libraries ( pthread fastcdr fastdds yaml-cpp )
 
 ## Target binary
 #add_library ( abc_static STATIC or SHARED or OBJECT $<TARGET_OBJECTS:abcd_obj> )
@@ -87,7 +91,7 @@ link_libraries ( pthread fastcdr fastdds )
 #target_link_libraries ( abc_static ${} )
 
 #add_executable ( ${PROJECT_NAME} ${MAIN_SRC} $<TARGET_OBJECTS:abc_obj> )
-add_executable ( ${PROJECT_NAME} ${MAIN_SRC} ${GENERATED_DDS_FILES})
+add_executable ( ${PROJECT_NAME} ${MAIN_SRC} ${GENERATED_DDS_ROS2_FILES} ${GENERATED_DDS_LIFECYCLE_FILES})
 
 ## Install
 install ( TARGETS ${PROJECT_NAME}
@@ -95,3 +99,12 @@ install ( TARGETS ${PROJECT_NAME}
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
     )
+
+
+# ROS2 idl
+install(DIRECTORY
+    ${CMAKE_SOURCE_DIR}/idl/dds/common
+    ${CMAKE_SOURCE_DIR}/idl/dds/ros2
+    ${CMAKE_SOURCE_DIR}/idl/dds/lifecycle
+    DESTINATION bin/idl
+)

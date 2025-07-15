@@ -1,0 +1,54 @@
+config_middleware:
+  - code : 10
+    name : lifecycle_mgr
+    exepath : "/root/workspace/mw/bin/lifecycle_mgr"
+    args :
+      - arg_name : "arg1"
+        description : ""
+        arg_type : "int"
+        arg_default : "3"
+      - arg_name : "arg2"
+        description : ""
+        arg_type : "int"
+        arg_default : "3"
+    active : false
+  - code : 11
+    name : diagnostics
+    exepath : "/root/workspace/mw/bin/diagnostics"
+    args :
+      - arg_name : "arg1"
+        description : ""
+        arg_type : "int"
+        arg_default : "3"
+      - arg_name : "arg1"
+        description : ""
+        arg_type : "int"
+        arg_default : "3"
+    active : true
+  - code : 12
+    name : ota_mgr
+    exepath : "/root/workspace/mw/bin/ota_mgr"
+    args :
+      - arg_name : "arg1"
+        description : ""
+        arg_type : "int"
+        arg_default : "3"
+    active : true
+  - code : 12
+    name : security_mgr
+    exepath : "/root/workspace/mw/bin/security_mgr"
+    args :
+      - arg_name : "arg1"
+        description : ""
+        arg_type : "int"
+        arg_default : "3"
+    active : true    
+  - code : 12
+    name : vehicle_info_mgr
+    exepath : "/root/workspace/mw/bin/vehicle_info_mgr"
+    args :
+      - arg_name : "arg1"
+        description : ""
+        arg_type : "int"
+        arg_default : "3"
+    active : true        

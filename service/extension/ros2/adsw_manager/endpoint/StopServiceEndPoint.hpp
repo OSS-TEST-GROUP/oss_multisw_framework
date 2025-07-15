@@ -11,6 +11,8 @@
 namespace ros2 {
 namespace adsw_manager {
 
+using namespace lifecyclemgr;
+
 class StopServiceEndPoint : public DDSMessageEndpoint {
   public:
     StopServiceEndPoint(std::string topic);

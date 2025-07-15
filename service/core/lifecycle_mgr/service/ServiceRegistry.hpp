@@ -13,6 +13,8 @@
 
 namespace lifecycle_manager {
 
+using namespace lifecyclemgr;
+
 class ServiceRegistry {
   public:
     ServiceRegistry();

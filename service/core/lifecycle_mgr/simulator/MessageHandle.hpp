@@ -157,7 +157,7 @@ public:
         message.service_list().push_back("service3");
 
         message.service_state_list().push_back(::ServiceState::RUNNING);
-        message.service_state_list().push_back(::ServiceState::RNNING_NO_REPONSE);
+        message.service_state_list().push_back(::ServiceState::RUNNING_NO_RESPONSE);
         message.service_state_list().push_back(::ServiceState::RUNNING);
     }
     static void SetMessage(NotifyServiceState& message){
@@ -167,7 +167,7 @@ public:
         message.service_list().push_back("service3");
 
         message.service_state_list().push_back(::ServiceState::RUNNING);
-        message.service_state_list().push_back(::ServiceState::RNNING_NO_REPONSE);
+        message.service_state_list().push_back(::ServiceState::RUNNING_NO_RESPONSE);
         message.service_state_list().push_back(::ServiceState::RUNNING);
 
     }    
