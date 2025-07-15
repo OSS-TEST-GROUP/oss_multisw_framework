@@ -158,8 +158,8 @@ pipeline {
                                         -exec cp --parents {} /tmp/sloccount-clean/ \\; 2>/dev/null || true
 
                                     cd /tmp/sloccount-clean
-                                    sloccount --duplicates --wide --details . > /workspace/reports/sloccount/sloccount-detailed.xml || true
-                                    sloccount . > /workspace/reports/sloccount/sloccount-summary.txt || true
+                                    sloccount --duplicates --wide --details . > reports/sloccount/sloccount-detailed.xml || true
+                                    sloccount . > reports/sloccount/sloccount-summary.txt || true
                                     cd /workspace
 
                                     echo "<?xml version=\\"1.0\\" encoding=\\"UTF-8\\"?>" > reports/sloccount/sloccount.xml
@@ -176,6 +176,7 @@ pipeline {
                         always {
                             sloccountPublish pattern: 'reports/sloccount/sloccount.xml'
                             archiveArtifacts artifacts: 'reports/sloccount/**/*', allowEmptyArchive: true
+                        }
                     }
                 } 
                 stage('CppLint') {
