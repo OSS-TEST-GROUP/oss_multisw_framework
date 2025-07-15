@@ -149,7 +149,7 @@ pipeline {
                             echo "Running SlocCount..."
                             docker.image("${BUILDER_IMAGE}:${FULL_TAG}").inside() {
                                 sh '''
-                                    mkdir -p reports
+                                    mkdir -p reports/sloccount
                                     mkdir -p /tmp/sloccount-clean
 
                                     find /workspace/service/ \
