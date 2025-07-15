@@ -53,6 +53,7 @@ RUN apt-get install -y --no-install-recommends \
     curl \
     unzip \
     cppcheck \
+    sloccount \
     clang \
     clang-tools \
     clang-tidy \
@@ -77,12 +78,13 @@ RUN pip3 install --no-cache-dir \
     colcon-common-extensions \
     vcstool \
     # Static Analysis
-    cpplint==1.6.1 \
-    cmake-format==0.6.13 \
-    cmakelang==0.6.13 \
-    pre-commit==3.5.0 \
-    black==23.9.1 \
-    isort==5.12.0
+    lcov_cobertura \
+    cpplint \
+    cmake-format \
+    cmakelang \
+    pre-commit \
+    black \
+    isort
 
 # Build and Install Fast-DDS
 RUN /bin/bash -c "mkdir -p ${LIBRARIES_INSTALL_DIR}/Fast-DDS \
