@@ -158,7 +158,7 @@ pipeline {
                                         -exec cp --parents {} /tmp/sloccount-clean/ \\; 2>/dev/null || true
 
                                     cd /tmp/sloccount-clean
-                                    sloccount --duplicates --wide --details . > /workspace/reports/sloccount-detailed.xml || true
+                                    sloccount --duplicates --wide --details . > /workspace/reports/sloccount/sloccount-detailed.xml || true
                                     sloccount . > /workspace/reports/sloccount/sloccount-summary.txt || true
                                     cd /workspace
 
