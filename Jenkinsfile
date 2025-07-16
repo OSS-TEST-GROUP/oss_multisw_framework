@@ -125,22 +125,22 @@ pipeline {
                         }
                     }
                 }
-                stage('Debug Image') {
-                    steps {
-                        script {
-                            sh '''
-                                echo "Building debugging image..."
-                                docker buildx build \
-                                    --platform ${PLATFORM_ARM64} \
-                                    -f ${DOCKERFILE_PATH} \
-                                    --target debug \
-                                    --load \
-                                    -t ${DEBUG_IMAGE}:${IMAGE_TAG} \
-                                    .
-                            '''
-                        }
-                    }
-                }
+                //stage('Debug Image') {
+                //    steps {
+                //        script {
+                //            sh '''
+                //                echo "Building debugging image..."
+                //                docker buildx build \
+                //                    --platform ${PLATFORM_ARM64} \
+                //                    -f ${DOCKERFILE_PATH} \
+                //                    --target debug \
+                //                    --load \
+                //                    -t ${DEBUG_IMAGE}:${IMAGE_TAG} \
+                //                    .
+                //            '''
+                //        }
+                //    }
+                //}
                 stage('Static Analysis Image') {
                     steps {
                         script {
@@ -151,7 +151,7 @@ pipeline {
                                     -f ${DOCKERFILE_PATH} \
                                     --target static-analysis \
                                     --load \
-                                    -t ${BUILDER_IMAGE}:analysis-${PLATFORM_ARM64} \
+                                    -t ${BUILDER_IMAGE}:analysis-${BUILD_NUMBER} \
                                     .
                             '''
                         }
@@ -165,7 +165,7 @@ pipeline {
                     steps {
                         script {
                             echo "Running Cppcheck..."
-                            docker.image("${BUILDER_IMAGE}:analysis-${PLATFORM_ARM64}").inside() {
+                            docker.image("${BUILDER_IMAGE}:analysis-${BUILD_NUMBER}").inside() {
                                 sh """
                                     find /workspace/service/ \
                                         -not -path "*/unittest/*" \
@@ -196,7 +196,7 @@ pipeline {
                     steps {
                         script {
                             echo "Running SlocCount..."
-                            docker.image("${BUILDER_IMAGE}:analysis-${PLATFORM_ARM64}").inside() {
+                            docker.image("${BUILDER_IMAGE}:analysis-${BUILD_NUMBER}").inside() {
                                 sh '''
                                     mkdir -p /tmp/sloccount-clean
 
@@ -227,7 +227,7 @@ pipeline {
                     steps {
                         script {
                             echo "Running CppLint..."
-                            docker.image("${BUILDER_IMAGE}:analysis-${PLATFORM_ARM64}").inside() {
+                            docker.image("${BUILDER_IMAGE}:analysis-${BUILD_NUMBER}").inside() {
                                 sh '''
                                     find /workspace/service/ \
                                         -not -path "*/unittest/*" \

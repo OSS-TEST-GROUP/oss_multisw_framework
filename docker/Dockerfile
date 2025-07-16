@@ -168,7 +168,7 @@ RUN apt-get install -y --no-install-recommends \
     tree \
     jq
 
-ARG BUILD_UNITTEST=TRUE
+ARG BUILD_UNITTEST=FALSE
 ARG EXTENSION_PLATFORM=ROS2
 COPY . .
 
