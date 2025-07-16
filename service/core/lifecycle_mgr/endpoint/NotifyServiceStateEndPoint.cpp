@@ -7,7 +7,6 @@
 
 namespace lifecycle_manager {
 
-
 NotifyServiceStateEndPoint::NotifyServiceStateEndPoint(std::string topic) 
     : DDSMessageEndPoint(topic){
 

@@ -1,6 +1,8 @@
 #include "StartServiceEndPoint.hpp"
 
 #include "lifecycle/StartServiceRequest.hpp"
+#include "ADSWManager.hpp"
+
 #include "logger/Log.hpp"
 
 namespace ros2 {
@@ -36,10 +38,19 @@ void StartServiceEndPoint::OnDataAvailable(){
 
         StartServiceRequest* message = reinterpret_cast<StartServiceRequest*>(&req_);
 
+        std::shared_ptr<ROSServiceController> manager = ADSWManager::Get()->GetServiceController();
+        if (manager != nullptr){
+            bool result = manager->ProcessServiceStartRequest(message);
+            if (!result) {
+                LOG_ERROR("Failed to process service start request.");
+            }
+        }
+        else {
+            LOG_ERROR("Failed to retrieve service controller.");
+        }
     }
 
 }
 
-
 } // namespace adsw_manager
-} // namespace ros2
+}

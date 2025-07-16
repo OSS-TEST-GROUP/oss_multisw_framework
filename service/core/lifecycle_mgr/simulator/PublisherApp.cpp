@@ -38,6 +38,7 @@
 #include "lifecycle/StopServiceRequestPubSubTypes.hpp"
 
 using namespace eprosima::fastdds::dds;
+using namespace lifecyclemgr;
 
 namespace eprosima {
 namespace fastdds {

@@ -12,7 +12,7 @@ ServiceRegistry::~ServiceRegistry() {}
 
 bool ServiceRegistry::UpdateServiceList(UpdateServiceListRequest* update){
 
-    std::vector<::Service> *slist = &update->service_list();
+    std::vector<lifecyclemgr::Service> *slist = &update->service_list();
 
     for( auto svc = slist->begin(); svc != slist->end(); ++svc ){
         std::shared_ptr<Service> service = GetService(svc->name());

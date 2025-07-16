@@ -11,6 +11,8 @@
 
 namespace lifecycle_manager {
 
+using namespace lifecyclemgr;
+
 class NotifyServiceStateEndPoint : public DDSMessageEndPoint {
   public:
     NotifyServiceStateEndPoint(std::string topic);

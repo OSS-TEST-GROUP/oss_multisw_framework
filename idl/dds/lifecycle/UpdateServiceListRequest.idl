@@ -1,18 +1,21 @@
 #include "LifecycleCommon.idl"
 
-struct Service {
-    string name;
-    ServiceType service_type;
-    RecoveryPolicy recovery_policy;
-    boolean is_enabled;
-};
+module lifecyclemgr {
 
-/* TopicName - mmf/lifecyclemgr/UpdateServiceListRequest */
-struct UpdateServiceListRequest {
-    sequence<Service> service_list;
-};
+    struct Service {
+        string name;
+        ServiceType service_type;
+        RecoveryPolicy recovery_policy;
+        boolean is_enabled;
+    };
 
-/* TopicName - mmf/lifecyclemgr/UpdateServiceListResponse */
-struct UpdateServiceListResponse {
-    ReturnCode ret_code;
+    /* TopicName - mmf/lifecyclemgr/UpdateServiceListRequest */
+    struct UpdateServiceListRequest {
+        sequence<Service> service_list;
+    };
+
+    /* TopicName - mmf/lifecyclemgr/UpdateServiceListResponse */
+    struct UpdateServiceListResponse {
+        ReturnCode ret_code;
+    };
 };

@@ -1,14 +1,17 @@
 #include "LifecycleCommon.idl"
 
+module lifecyclemgr {
 
-/* TopicName - mmf/lifecyclemgr/SetServiceModeRequest */
-struct SetServiceModeRequest {
-    sequence<string> service_list;
-    boolean is_group;
-    ServiceMode service_mode;
-};
+    /* TopicName - mmf/lifecyclemgr/SetServiceModeRequest */
+    struct SetServiceModeRequest {
+        sequence<string> service_list;
+        boolean is_group;
+        ServiceMode service_mode;
+    };
 
-/* TopicName - mmf/lifecyclemgr/SetServiceModeResponse */
-struct SetServiceModeResponse {
-    ReturnCode ret_code;
+    /* TopicName - mmf/lifecyclemgr/SetServiceModeResponse */
+    struct SetServiceModeResponse {
+        ReturnCode ret_code;
+    };
+
 };

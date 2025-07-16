@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "transmitter/DDSTransmitter.hpp"
+#include "MessageTypes.hpp"
 
 namespace ros2 {
 namespace adsw_manager {
@@ -19,10 +20,6 @@ enum class PubSubType {
     PUBSUB_BOTH,
 };    
 
-enum class MessageType {
-    ROS2_DISCOVREY_INFO,
-};
-
 class EndPointFactory {
   public:
     EndPointFactory();
@@ -30,6 +27,8 @@ class EndPointFactory {
     
     bool Initialize();
     void Finalize();
+
+    const char* GetTopic(MessageType mtype);
     
     int32_t CreateEndPoints(std::shared_ptr<DDSTransmitter> transmitter);
 

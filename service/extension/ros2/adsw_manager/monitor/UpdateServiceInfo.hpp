@@ -4,9 +4,7 @@
 #include <iostream>
 #include <string>
 
-#include "core/lifecycle_mgr/include/ServiceState.hpp"
-
-using namespace lifecycle_manager;
+#include "service/ServiceState.hpp"
 
 namespace ros2 {
 namespace adsw_manager {

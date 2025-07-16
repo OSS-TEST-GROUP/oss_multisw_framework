@@ -12,6 +12,8 @@
 
 namespace lifecycle_manager {
 
+using namespace lifecyclemgr;
+
 class LifecycleDiagReportEndPoint : public DDSMessageEndPoint {
   public:
     LifecycleDiagReportEndPoint(std::string topic);

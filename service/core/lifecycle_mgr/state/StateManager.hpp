@@ -26,11 +26,11 @@ class StateManager : public ManagerBase {
     bool StartService(std::shared_ptr<Service> service);
     void StopService(std::shared_ptr<Service> service);
 
-    bool SetServiceMode(::SetServiceModeRequest* message);
+    bool SetServiceMode(lifecyclemgr::SetServiceModeRequest* message);
     void ProcessServiceHandling(std::set<std::shared_ptr<Service>> service_list);
 
-    void OnStart(::StartServiceResponse* message);
-    void OnStop(::StopServiceResponse* message);
+    void OnStart(lifecyclemgr::StartServiceResponse* message);
+    void OnStop(lifecyclemgr::StopServiceResponse* message);
     
   private:
 

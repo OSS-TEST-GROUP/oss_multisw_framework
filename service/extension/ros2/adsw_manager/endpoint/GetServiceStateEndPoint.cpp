@@ -1,6 +1,8 @@
 #include "GetServiceStateEndPoint.hpp"
 
 #include "lifecycle/GetServiceStateRequest.hpp"
+#include "ADSWManager.hpp"
+#include "service/TypeConvert.hpp"
 #include "logger/Log.hpp"
 
 
@@ -36,10 +38,22 @@ void GetServiceStateEndPoint::OnDataAvailable(){
 
     if (Read<GetServiceStateRequest>(req_) == true){
 
-        GetServiceStateRequest* response = reinterpret_cast<GetServiceStateRequest*>(&req_);
+        GetServiceStateRequest* message = reinterpret_cast<GetServiceStateRequest*>(&req_);
 
-     }
+        std::shared_ptr<ServiceRegistry> manager = ADSWManager::Get()->GetServiceRegistry();
 
+        if (manager != nullptr){
+            bool result = manager->ProcessGetServiceStateRequest(message);
+
+            if (!result) {
+                LOG_ERROR("Failed to process get service state request.");
+            }
+            LOG_DEBUG("Service state response sent for " << message->service_list().size() << " services.");
+        }
+        else {
+            LOG_ERROR("Failed to retrieve service state.");
+        }
+    }
 }
 
 } // namespace adsw_manager

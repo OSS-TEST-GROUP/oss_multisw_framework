@@ -7,8 +7,7 @@
 #include "logger/Log.hpp"
 
 namespace lifecycle_manager {
-
-
+    
 SetServiceModeEndPoint::SetServiceModeEndPoint(std::string topic) 
     : DDSMessageEndPoint(topic){
 

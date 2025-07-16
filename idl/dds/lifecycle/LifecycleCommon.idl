@@ -1,35 +1,37 @@
-enum ServiceType
-{
-    NORMAL,
-    ONESHOT
+module lifecyclemgr {
+    enum ServiceType
+    {
+        NORMAL,
+        ONESHOT
+    };
+
+    enum RecoveryPolicy {
+        R_DEFAULT,
+        ALWAYS,
+        ON_FAILURE,
+        ON_SUCCESS,
+        ON_NOT_RESPONDING,
+        MANUAL
+    };                 
+
+    enum ReturnCode {
+        SUCCESS,
+        FAILED
+    };
+
+    enum ServiceMode {
+        NORMAL,
+        OTA_MODE
+    };
+
+    enum ServiceState {
+        NOT_RUNNING,
+        INITIALIZING,
+        RUNNING,
+        RUNNING_NO_RESPONSE,
+        TERMINATING
+    };
+
+    struct DummyTypeT {
+    };                 
 };
-
-enum RecoveryPolicy {
-    R_DEFAULT,
-    ALWAYS,
-    ON_FAILURE,
-    ON_SUCCESS,
-    ON_NOT_RESPONDING,
-    MANUAL
-};                 
-
-enum ReturnCode {
-    SUCCESS,
-    FAILED
-};
-
-enum ServiceMode {
-    NORMAL,
-    OTA_MODE
-};
-
-enum ServiceState {
-    NOT_RUNNING,
-    INITIALIZING,
-    RUNNING,
-    RNNING_NO_REPONSE,
-    TERMINATING
-};
-
-struct DummyTypeT {
-};                 

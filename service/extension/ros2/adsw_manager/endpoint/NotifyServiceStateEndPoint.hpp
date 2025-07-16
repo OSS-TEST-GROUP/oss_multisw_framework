@@ -12,6 +12,7 @@
 namespace ros2 {
 namespace adsw_manager {
 
+using namespace lifecyclemgr;
 
 class NotifyServiceStateEndPoint : public DDSMessageEndpoint {
   public:

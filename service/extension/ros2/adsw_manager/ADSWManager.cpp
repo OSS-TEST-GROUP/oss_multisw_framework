@@ -1,5 +1,6 @@
 #include "ADSWManager.hpp"
 #include "logger/Log.hpp"
+#include "endpoint/MessageTypes.hpp"
 
 namespace ros2 {
 namespace adsw_manager {
@@ -16,6 +17,7 @@ bool ADSWManager::Initialize() {
     service_registry_ = std::make_shared<ServiceRegistry>();
     service_monitor_ = std::make_shared<ServiceMonitor>();
     service_controller_ = std::make_shared<ROSServiceController>();
+    endppoint_factory_ = std::make_shared<EndPointFactory>();
 
     if (!dds_transmitter_->Initialize()) {
         return false;
@@ -27,6 +29,9 @@ bool ADSWManager::Initialize() {
         return false;
     }
     if (!service_controller_->Initialize()) {
+        return false;
+    }
+    if (!endppoint_factory_->Initialize()){
         return false;
     }
     LOG_DEBUG("ADSWManager::Initialize End ");
@@ -75,6 +80,9 @@ std::shared_ptr<ROSServiceDiscovery> ADSWManager::GetServiceDiscovery() {
 }
 
 
+const char* ADSWManager::GetTopic(MessageType topic){
+    return endppoint_factory_->GetTopic(topic);
+}
 
 ADSWManager* ADSWManager::Get(){
    return getShared().get();

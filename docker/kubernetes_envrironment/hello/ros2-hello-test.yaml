@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ros2-hello-all
+spec:
+  containers:
+    - name: ros2-hello-app
+      image: ros2-hello:latest  # Your own hello_app image
+      imagePullPolicy: Never
+      command: ["/bin/bash", "-c"]
+      args:
+        - |
+          echo "🚀 Starting hello app components..."
+          /ros2_hello subscriber -t 2 -s 1 &  # Component 1
+          /ros2_hello publisher -t 2 -s 1 -m 1 &  # Component 2
+          /ros2_hello publisher -t 0 -s 3 -m 1 &  # Component 3
+          /ros2_hello subscriber -t 0 -s 3 &  # Component 4
+          wait  # Wait for all background processes to finish
+      env:
+        - name: ROS_DOMAIN_ID
+          value: "1"
+  restartPolicy: Never

@@ -83,7 +83,7 @@ void StateManager::StopService(std::shared_ptr<Service> service) {
     }
 }
 
-bool StateManager::SetServiceMode(::SetServiceModeRequest* message){
+bool StateManager::SetServiceMode(lifecyclemgr::SetServiceModeRequest* message){
 
     std::vector<std::string> *slist = &message->service_list();
     
@@ -128,19 +128,19 @@ void StateManager::ProcessServiceHandling(std::set<std::shared_ptr<Service>> ser
 }
 
 
-void StateManager::OnStart(::StartServiceResponse* message){
+void StateManager::OnStart(lifecyclemgr::StartServiceResponse* message){
 
     if (message){
-        if( message->ret_code() != ::ReturnCode::SUCCESS){
+        if( message->ret_code() != lifecyclemgr::ReturnCode::SUCCESS){
             // error 
         }
     }
 
 }
 
-void StateManager::OnStop(::StopServiceResponse* message){
+void StateManager::OnStop(lifecyclemgr::StopServiceResponse* message){
     if (message){
-        if( message->ret_code() != ::ReturnCode::SUCCESS){
+        if( message->ret_code() != lifecyclemgr::ReturnCode::SUCCESS){
             // error 
         }
     }
