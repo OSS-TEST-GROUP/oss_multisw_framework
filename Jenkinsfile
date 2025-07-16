@@ -30,8 +30,8 @@ pipeline {
         BUILDX_BUILDER_NAME = 'multiarch-builder'
         
         // Multi Architecture
-        PLATFORMS_AMD64 = 'linux/amd64'
-        PLATFORMS_ARM64 = 'linux/arm64'
+        PLATFORM_AMD64 = 'linux/amd64'
+        PLATFORM_ARM64 = 'linux/arm64'
         PLATFORMS_ALL = 'linux/amd64,linux/arm64'
 
         // Project
