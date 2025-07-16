@@ -5,6 +5,7 @@
 #include <thread>
 
 #include "logger/Log.hpp"
+#include "logger/Logger.cpp"
 
 #include <fastdds/dds/domain/DomainParticipant.hpp>
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp>
@@ -187,7 +188,7 @@ int main(
 
     uint32_t count = 0;
     while (count < samples) {
-        setdata(4);
+        mypub->setdata(4);
         mypub->publish();
         count++;
         std::this_thread::sleep_for(std::chrono::milliseconds(20));

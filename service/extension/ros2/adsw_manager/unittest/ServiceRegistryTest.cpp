@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include "service/ServiceRegistry.cpp"  // Include implementation directl
 #include "service/Service.cpp"
+#include "logger/Logger.cpp"
 
 using namespace ros2::adsw_manager;
 using namespace lifecycle_manager;

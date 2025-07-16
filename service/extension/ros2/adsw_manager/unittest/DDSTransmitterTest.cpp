@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include "transmitter/DDSTransmitter.cpp"  // Include implementation directl
 #include "transmitter/DDSMessageEndpoint.cpp"
+#include "logger/Logger.cpp"
 
 #include "mock/MockDDSMessageEndpoint.hpp"
 
@@ -49,7 +50,7 @@ TEST_F(DDSTransmitterTest, GetMessageEndPoint_TC001) {
     EXPECT_TRUE(ret->participant_ != nullptr);
     EXPECT_TRUE(ret->publisher_ != nullptr);
     EXPECT_TRUE(ret->subscriber_ != nullptr);
-    EXPECT_TRUE(ret->topic_ != nullptr);
+    EXPECT_TRUE(ret->dds_topic_ != nullptr);
     EXPECT_TRUE(ret->data_reader_ != nullptr);
     EXPECT_TRUE(ret->data_writer_ != nullptr);
 }
