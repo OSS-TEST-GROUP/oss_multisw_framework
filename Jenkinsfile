@@ -7,7 +7,7 @@ pipeline {
         // Agent Node
         AGENT_LABEL="OSS-Middleware"
 
-        // 이미지 관련 환경변수
+        // Docker Registry
         IMAGE_REGISTRY = "172.16.10.66"
         IMAGE_NAMESPACE = "oss"
         APP_NAME = "oss-multimw"
@@ -20,9 +20,10 @@ pipeline {
         DEBUG_IMAGE = "${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${APP_NAME}-debug"
         
         // Tag
-        IMAGE_TAG = "${BUILD_NUMBER}"
         COMMIT_HASH = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+        IMAGE_TAG = "${BUILD_NUMBER}-${COMMIT_HASH}"
         BUILD_DATE = sh(script: "date -u +'%Y-%m-%dT%H:%M:%SZ'", returnStdout: true).trim()
+        BRANCH_CLEAN = sh(script: "echo ${BRANCH_NAME} | sed 's/[^a-zA-Z0-9._-]/-/g'", returnStdout: true).trim()
 
         // Docker Buildx
         DOCKER_BUILDKIT = '1'
@@ -34,14 +35,13 @@ pipeline {
         PLATFORMS_ALL = 'linux/amd64,linux/arm64'
 
         // Project
-        BUILD_UNITTEST = 'FALSE'
+        BUILD_UNITTEST = 'TRUE'
         EXTENSION_PLATFORM = 'ROS2'
         
         // Credentials
         GITLAB_CREDENTIALS = 'brian.doh'
-        //REGISTRY_CREDENTIALS = 'docker-registry-credentials'
+        REGISTRY_CREDENTIALS = 'Harbor_Jenkins'
         
-        // GitOps 레포지토리
         GITOPS_REPO_URL = 'https://lotte-autops.com/oss_group1/oss_multisw_framework.git'
     }
 
@@ -58,12 +58,12 @@ pipeline {
                 script {
                     echo "Checking out source code..."
                 }
-                git branch: 'dev_brian-GOASP-1272',
+                git branch: 'dev_brian-GOASP-1273',
                     credentialsId: "${GITLAB_CREDENTIALS}",
                     url: "${GITOPS_REPO_URL}"
                 
                 script {
-                    env.FULL_TAG = "${IMAGE_TAG}-${COMMIT_HASH}"
+                    env.FULL_TAG = "${IMAGE_TAG}-${BRANCH_CLEAN}"
                 }
             }
         }
@@ -89,26 +89,73 @@ pipeline {
             }
         }
 
-        stage('Build an Image for Static Analysis') {
-            steps {
-                script {
-                    env.PLATFORM_AMD64 = "${PLATFORMS_AMD64}"
-                    env.EXTENSION_PLATFORM = "${EXTENSION_PLATFORM}"
-                    env.BUILD_UNITTEST = "${BUILD_UNITTEST}"
-                    env.DOCKERFILE_PATH = "${DOCKERFILE_PATH}"
-
-                    sh '''
-                        echo "Building static analysis/builder image..."
-                        docker buildx build \
-                            --platform ${PLATFORM_AMD64} \
-                            --build-arg BUILD_UNITTEST=${BUILD_UNITTEST} \
-                            --build-arg EXTENSION_PLATFORM=${EXTENSION_PLATFORM} \
-                            -f ${DOCKERFILE_PATH} \
-                            --target build-stage \
-                            --load \
-                            -t ${BUILDER_IMAGE}:${FULL_TAG} \
-                            .
-                    ''' 
+        stage('Multi-Architecture Build') {
+            parallel {
+                stage('Build Image') {
+                    steps {
+                        script {
+                            sh '''
+                                echo "Building builder image..."
+                                docker buildx build \
+                                    --platform ${env.PLATFORM_ARM64} \
+                                    --build-arg BUILD_UNITTEST=${env.BUILD_UNITTEST} \
+                                    --build-arg EXTENSION_PLATFORM=${env.EXTENSION_PLATFORM} \
+                                    -f ${env.DOCKERFILE_PATH} \
+                                    --target build-stage \
+                                    --load \
+                                    -t ${env.BUILDER_IMAGE}:${env.IMAGE_TAG} \
+                                    .
+                            '''
+                        }
+                    }
+                }
+                stage('Runtime Image') {
+                    steps {
+                        script {
+                            sh '''
+                                echo "Building runtime image..."
+                                docker buildx build \
+                                    --platform ${env.PLATFORM_ARM64} \
+                                    -f ${env.DOCKERFILE_PATH} \
+                                    --target runtime \
+                                    --load \
+                                    -t ${env.RUNTIME_IMAGE}:${env.IMAGE_TAG} \
+                                    .
+                            '''
+                        }
+                    }
+                }
+                stage('Debug Image') {
+                    steps {
+                        script {
+                            sh '''
+                                echo "Building debugging image..."
+                                docker buildx build \
+                                    --platform ${env.PLATFORM_ARM64} \
+                                    -f ${env.DOCKERFILE_PATH} \
+                                    --target debug \
+                                    --load \
+                                    -t ${env.DEBUG_IMAGE}:${env.IMAGE_TAG} \
+                                    .
+                            '''
+                        }
+                    }
+                }
+                stage('Static Analysis Image') {
+                    steps {
+                        script {
+                            sh '''
+                                echo "Building static analysis image..."
+                                docker buildx build \
+                                    --platform ${env.PLATFORM_ARM64} \
+                                    -f ${env.DOCKERFILE_PATH} \
+                                    --target static-analysis \
+                                    --load \
+                                    -t ${env.BUILDER_IMAGE}:analysis-${env.PLATFORM_ARM64} \
+                                    .
+                            '''
+                        }
+                    }
                 }
             }
         }
@@ -118,28 +165,30 @@ pipeline {
                     steps {
                         script {
                             echo "Running Cppcheck..."
-                            docker.image("${BUILDER_IMAGE}:${FULL_TAG}").inside() {
-                                sh '''
-                                    mkdir -p reports
-
+                            docker.image("${BUILDER_IMAGE}:analysis-${PLATFORM_ARM64}").inside() {
+                                sh """
                                     find /workspace/service/ \
                                         -not -path "*/unittest/*" \
                                         -name "*.cpp" \
-                                        > /workspace/files_to_check.txt
+                                        > /workspace/reports/files_to_cppcheck.txt || true
+
                                     cppcheck --enable=all \
-                                        --xml --xml-version=2 \
-                                        --output-file=reports/cppcheck-result.xml \
+                                        --xml \
+                                        --xml-version=2 \
+                                        --output-file=/workspace/reports/cppcheck-result.xml \
                                         --suppress=missingIncludeSystem \
                                         --suppress=unmatchedSuppression \
+                                        --suppress=unusedFunction \
                                         --std=c++20 \
-                                        --file-list=/workspace/files_to_check.txt || true
-                                '''
+                                        --file-list=/workspace/files_to_cppcheck.txt || true
+                                """
                             }
                         }
                     }
                     post {
                         always {
                             publishCppcheck pattern: 'reports/cppcheck-result.xml'
+                            archiveArtifacts artifacts: 'reports/cppcheck-result.xml', allowEmptyArchive: true
                         }
                     }
                 }
@@ -147,9 +196,8 @@ pipeline {
                     steps {
                         script {
                             echo "Running SlocCount..."
-                            docker.image("${BUILDER_IMAGE}:${FULL_TAG}").inside() {
+                            docker.image("${BUILDER_IMAGE}:analysis-${PLATFORM_ARM64}").inside() {
                                 sh '''
-                                    mkdir -p reports/sloccount
                                     mkdir -p /tmp/sloccount-clean
 
                                     find /workspace/service/ \
@@ -158,24 +206,20 @@ pipeline {
                                         -exec cp --parents {} /tmp/sloccount-clean/ \\; 2>/dev/null || true
 
                                     cd /tmp/sloccount-clean
-                                    sloccount --duplicates --wide --details . > /workspace/reports/sloccount/sloccount-detailed.xml || true
-                                    sloccount . > /workspace/reports/sloccount/sloccount-summary.txt || true
+                                    if [ -z $(which sloccount) ]; then
+                                        apt update && apt install sloccount -y
+                                    fi
+                                    sloccount --duplicates --wide --details . > /workspace/reports/sloccount-detailed.xml || true
+                                    sloccount . > /workspace/reports/sloccount-summary.txt || true
                                     cd /workspace
-
-                                    echo "<?xml version=\\"1.0\\" encoding=\\"UTF-8\\"?>" > reports/sloccount/sloccount.xml
-                                    echo "<sloccount>" >> reports/sloccount/sloccount.xml
-                                    grep "^[a-z]" reports/sloccount/sloccount-summary.txt | while read lang lines files; do
-                                        echo "  <language name=\\"$lang\\" linecount=\\"$lines\\" filecount=\\"$files\\"/>" >> reports/sloccount/sloccount.xml
-                                    done
-                                    echo "</sloccount>" >> reports/sloccount/sloccount.xml
                                 '''
                             }
                         }
                     }
                     post {
                         always {
-                            sloccountPublish pattern: 'reports/sloccount/sloccount.xml'
-                            archiveArtifacts artifacts: 'reports/sloccount/**/*', allowEmptyArchive: true
+                            sloccountPublish pattern: 'reports/sloccount-detailed.xml'
+                            archiveArtifacts artifacts: 'reports/sloccount-summary.txt', allowEmptyArchive: true
                         }
                     }
                 } 
@@ -183,17 +227,15 @@ pipeline {
                     steps {
                         script {
                             echo "Running CppLint..."
-                            docker.image("${BUILDER_IMAGE}:${FULL_TAG}").inside() {
+                            docker.image("${BUILDER_IMAGE}:analysis-${PLATFORM_ARM64}").inside() {
                                 sh '''
-                                    mkdir -p reports
-
                                     find /workspace/service/ \
                                         -not -path "*/unittest/*" \
                                         \\( -name "*.cpp" -o -name "*.hpp" -o -name "*.h" \\) \
-                                        > /workspace/files_to_check.txt
+                                        > /workspace/files_to_lintcheck.txt
                                     
-                                    if [ -f /workspace/files_to_check.txt ]; then
-                                        cat /workspace/files_to_check.txt | xargs cpplint \
+                                    if [ -f /workspace/files_to_lintcheck.txt ]; then
+                                        cat /workspace/files_to_lintcheck.txt | xargs cpplint \
                                             --filter=-whitespace/tab,-legal/copyright,-build/include_order \
                                             --linelength=120 \
                                             --extensions=cpp,cc,h,hpp \
