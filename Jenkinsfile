@@ -97,13 +97,13 @@ pipeline {
                             sh '''
                                 echo "Building builder image..."
                                 docker buildx build \
-                                    --platform ${env.PLATFORM_ARM64} \
-                                    --build-arg BUILD_UNITTEST=${env.BUILD_UNITTEST} \
-                                    --build-arg EXTENSION_PLATFORM=${env.EXTENSION_PLATFORM} \
-                                    -f ${env.DOCKERFILE_PATH} \
+                                    --platform ${PLATFORM_ARM64} \
+                                    --build-arg BUILD_UNITTEST=${BUILD_UNITTEST} \
+                                    --build-arg EXTENSION_PLATFORM=${EXTENSION_PLATFORM} \
+                                    -f ${DOCKERFILE_PATH} \
                                     --target build-stage \
                                     --load \
-                                    -t ${env.BUILDER_IMAGE}:${env.IMAGE_TAG} \
+                                    -t ${BUILDER_IMAGE}:${IMAGE_TAG} \
                                     .
                             '''
                         }
@@ -115,11 +115,11 @@ pipeline {
                             sh '''
                                 echo "Building runtime image..."
                                 docker buildx build \
-                                    --platform ${env.PLATFORM_ARM64} \
-                                    -f ${env.DOCKERFILE_PATH} \
+                                    --platform ${PLATFORM_ARM64} \
+                                    -f ${DOCKERFILE_PATH} \
                                     --target runtime \
                                     --load \
-                                    -t ${env.RUNTIME_IMAGE}:${env.IMAGE_TAG} \
+                                    -t ${RUNTIME_IMAGE}:${IMAGE_TAG} \
                                     .
                             '''
                         }
@@ -131,11 +131,11 @@ pipeline {
                             sh '''
                                 echo "Building debugging image..."
                                 docker buildx build \
-                                    --platform ${env.PLATFORM_ARM64} \
-                                    -f ${env.DOCKERFILE_PATH} \
+                                    --platform ${PLATFORM_ARM64} \
+                                    -f ${DOCKERFILE_PATH} \
                                     --target debug \
                                     --load \
-                                    -t ${env.DEBUG_IMAGE}:${env.IMAGE_TAG} \
+                                    -t ${DEBUG_IMAGE}:${IMAGE_TAG} \
                                     .
                             '''
                         }
@@ -147,11 +147,11 @@ pipeline {
                             sh '''
                                 echo "Building static analysis image..."
                                 docker buildx build \
-                                    --platform ${env.PLATFORM_ARM64} \
-                                    -f ${env.DOCKERFILE_PATH} \
+                                    --platform ${PLATFORM_ARM64} \
+                                    -f ${DOCKERFILE_PATH} \
                                     --target static-analysis \
                                     --load \
-                                    -t ${env.BUILDER_IMAGE}:analysis-${env.PLATFORM_ARM64} \
+                                    -t ${BUILDER_IMAGE}:analysis-${PLATFORM_ARM64} \
                                     .
                             '''
                         }
