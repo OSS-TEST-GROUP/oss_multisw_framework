@@ -58,7 +58,7 @@ pipeline {
                 script {
                     echo "Checking out source code..."
                 }
-                git branch: 'dev_brian-GOASP-1273',
+                git branch: 'dev_Brian-GOASP-1273',
                     credentialsId: "${GITLAB_CREDENTIALS}",
                     url: "${GITOPS_REPO_URL}"
                 
@@ -91,7 +91,7 @@ pipeline {
 
         stage('Multi-Architecture Build') {
             parallel {
-                stage('Build Image') {
+                stage('Builder Image') {
                     steps {
                         script {
                             sh '''
@@ -241,9 +241,9 @@ pipeline {
                                             --extensions=cpp,cc,h,hpp \
                                             --output=vs7 \
                                             --counting=detailed \
-                                            > reports/cpplint-result.txt 2>&1 || true
+                                            > /workspace/reports/cpplint-result.txt 2>&1 || true
                                     else
-                                        echo "No files to check" > reports/cpplint-result.txt
+                                        echo "No files to check" > /workspace/reports/cpplint-result.txt
                                     fi
                                 '''
                             }
