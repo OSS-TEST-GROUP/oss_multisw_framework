@@ -4,6 +4,7 @@
 #include "transmitter/DDSTransmitter.hpp"
 #include "transmitter/DDSMessageEndpoint.hpp"
 #include "logger/Log.hpp"
+#include "HelperUtils.hpp"
 
 namespace ros2 {
 namespace adsw_manager {
@@ -21,9 +22,6 @@ bool ROSServiceController::Initialize(){
     LOG_DEBUG("ROSServiceController::Initialize start ");    
     
     ros2node_controller_ = std::make_shared<ROS2NodeController>();
-    if (ros2node_controller_ != nullptr){
-        ros2node_controller_->Initialize();
-    }
 
     container_controller_ = std::make_shared<ContainerController>("deployment_file_path_example.yaml", 
         "pod_name_example", "namespace_example", "container_name_example");
@@ -39,9 +37,6 @@ void ROSServiceController::Finalize(){
     if (container_controller_ != nullptr){
         container_controller_->Finalize();
     }
-    if (ros2node_controller_ != nullptr){
-        ros2node_controller_->Finalize();
-    }
 }
 
 bool ROSServiceController::StartGroup(const std::string& group){
@@ -55,41 +50,152 @@ bool ROSServiceController::StopGroup(const std::string& group){
 
 bool ROSServiceController::StartService(const std::string& service_name){
 
+    std::shared_ptr<ServiceRegistry> registry = ADSWManager::Get()->GetServiceRegistry();
+
+    if (registry != nullptr) {
+        return StartService(registry->GetService(service_name));
+    }
+    return false;
 }
 
 bool ROSServiceController::StopService(const std::string& service_name){
 
+    std::shared_ptr<ServiceRegistry> registry = ADSWManager::Get()->GetServiceRegistry();
+
+    if (registry != nullptr) {
+        return StopService(registry->GetService(service_name));
+    }
+    return false;
 }
 
 
 bool ROSServiceController::StartService(std::shared_ptr<Service> service){
+    
+    LOG_DEBUG("ROSServiceController::StartService start " << service->GetName());
+
     if (service == nullptr) {
         LOG_ERROR("Received null service in StartService.");
         return false;
     }
 
-    LOG_DEBUG("Starting service: " << service->GetName());
+    std::string basecommand = GetContainer()->BaseRos2Command();
+    std::string command;
 
+    // Assuming launchByFile, GetLauchFile, and GetPackageName are member functions or variables.
+    // If not, you need to implement or correct them.
+    bool launchByFile = false; // Placeholder, replace with actual logic
+    if (launchByFile){
+        command = basecommand + " ros2 launch " + GetPackageName() + " " + GetLauchFile();
+    }else{
+        command = basecommand + " ros2 run " + GetPackageName();
+    }
 
-
+    int result = system(command.c_str());
+    
+    if (result == 0) {
+        LOG_DEBUG("ROSServiceController::StartService success " << service->GetName());
+        return true;
+    } else {
+        LOG_ERROR("ROSServiceController::StartService failed " << service->GetName());
+        return false;
+    }
 }
 
 bool ROSServiceController::StopService(std::shared_ptr<Service> service){
+    uint64_t pid = GetPID(service); // Get the PID of the service if needed
 
+    if (pid == 0) {
+        LOG_ERROR("Service " << service->GetName() << " is not running.");
+        return false; // Service is not running
+    }
+    // Stop Child Service --> Means to stop a specific container in the pod
+    LOG_DEBUG("ROSServiceController::StopChildService start " << pid);
+
+    // Here we can use kubectl command to stop the container
+    // For example, using system command to run kubectl
+    std::string basecommand = GetContainer()->BaseCommand();
+ 
+    std::string command = basecommand + " kill " + std::to_string(pid);
+    int result = system(command.c_str());
+    
+    if (result != 0) {
+        LOG_ERROR("ROSServiceController::StopChildService failed " << pid);
+        return false;
+    }
+    LOG_DEBUG("ROSServiceController::StopChildService success " << pid);
+    return true;    
+    
+    if (result != 0) {
+        LOG_ERROR("ROSServiceController::StopChildService failed " << pid);
+        return false;
+    }
+    LOG_DEBUG("ROSServiceController::StopChildService success " << pid);
+    return true;    
+}
+
+bool ROSServiceController::GetNodeLists(std::shared_ptr<Service> service){
+    if (service == nullptr) {
+        LOG_ERROR("Received null service in GetNodeLists.");
+        return false;
+    }
+
+    // kubectl exec -n default ros2-sample-all -- \
+    // bash -c "source /opt/ros/humble/setup.bash && source /ros2_ws/install/setup.bash &&
+    // ros2 pkg executables sample_ros2_app
+
+    // sample_ros2_app listener
+    // sample_ros2_app talker
+
+    std::string basecommand = GetContainer()->BaseRos2Command();
+
+    std::string command = basecommand + " ros2 pkg executables " + GetPackageName();
+    
+    std::string exeresult = HelperUtils::ExecCommand(command);
+
+    std::vector<std::string> lines = HelperUtils::SplitLines(exeresult);
+
+    for (auto& line : lines){
+        // service->AddNode();
+    }
+
+    return true;
 }
 
 uint64_t ROSServiceController::GetPID(std::shared_ptr<Service> service){
 
-    return 1234; // temporary PID for demonstration purposes
-    if (service == nullptr) {
+     if (service == nullptr) {
         LOG_ERROR("Received null service in GetPID.");
         return 0;
     }
 
-    // Here we can implement logic to get the PID of the service
-    // For example, if the service is a ROS2 node, we can use ros2node_controller_ to get the PID
-    // If the service is a container, we can use container_controller_ to get the PID
+    std::string basecommand = GetContainer()->BaseCommand();
+    std::string command = basecommand + " ps aux";
 
+    // Command to run inside the container
+    try {
+        std::string output = HelperUtils::ExecCommand(command);
+        std::vector<std::string> lines = HelperUtils::SplitLines(output);
+
+        if (lines.empty()) {
+            LOG_ERROR("No matching process found for: " << command);
+        } else {
+            uint64_t retpid = 0;
+            for (const auto& line : lines) {
+                try {
+                    retpid = std::stoull(line); // Convert string to uint64_t
+                } catch (...) {
+                    continue;
+                }
+            }
+            LOG_DEBUG("Matching PIDs: " << retpid);
+            return retpid;
+        }
+    } catch (const std::exception& e) {
+        LOG_ERROR("ContainerController::GetPIDs failed " << basecommand << ": " << e.what());
+        return 0;
+    }
+
+    return 0;
 }
 
 
@@ -196,6 +302,6 @@ bool ROSServiceController::ProcessServiceStopRequest(lifecyclemgr::StopServiceRe
     return true;
 }
 
-
+    
 } // namespace adsw_manager
 } // namespace ros2

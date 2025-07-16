@@ -37,8 +37,9 @@ set ( MONITOR_SRC
 
 set ( CONTROL_SRC
     control/ContainerController.cpp
-    control/ROS2NodeController.cpp
     control/ROSServiceController.cpp
+    control/ROS2NodeController.cpp
+    control/ROS2LifecycleController.cpp
 )
 
 # IDL generation

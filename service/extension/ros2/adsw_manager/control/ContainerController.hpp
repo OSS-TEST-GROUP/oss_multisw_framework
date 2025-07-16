@@ -19,10 +19,17 @@ class ContainerController {
     bool StartContainer(const std::string& container_name);
     bool StopContainer(const std::string& container_name);
 
-    bool GetPIDs(const std::string& container_name);
+    std::string GetPodName() const { return pod_name_; }
+    std::string GetNamespace() const { return namespace_; }
+    std::string GetContainerName() const { return container_name_; }
+
+
     bool GetContainerStatus(const std::string& container_name);
     bool GetContainerLogs(const std::string& container_name);
     // Add more methods as needed for container management
+
+    std::string BaseCommand();
+    std::string BaseRos2Command();
 
   private:
     std::string deployment_file_path_; // Path to the Kubernetes deployment file
