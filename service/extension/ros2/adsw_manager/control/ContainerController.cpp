@@ -73,21 +73,6 @@ bool ContainerController::StopContainer(const std::string& container_name){
 
 }
 
-bool ContainerController::GetPIDs(const std::string& container_name) {
-
-    std::string command = "kubectl exec -n " + namespace_ + " " + pod_name_ + " -- ps aux";
-
-    int result = system(command.c_str());
-
-    if (result == 0) {
-        LOG_DEBUG("ContainerController::GetPIDs success " << container_name);
-        return true;
-    } else {
-        LOG_ERROR("ContainerController::GetPIDs failed " << container_name);
-        return false;
-    }
-}
-
 bool ContainerController::GetContainerStatus(const std::string& container_name) {
 
     std::string command = "kubectl get pod " + pod_name_ + " -n " + namespace_ + " -o jsonpath='{.status.containerStatuses[?(@.name==\"" + container_name + "\")].state}'";
@@ -118,6 +103,21 @@ bool ContainerController::GetContainerLogs(const std::string& container_name) {
         return false;
     }       
 
+}
+
+std::string ContainerController::BaseCommand() {
+
+    std::string command = "kubectl exec -n " + GetNamespace() + " " + GetPodName() + " -- ";
+    LOG_DEBUG("Base command for container: " << command);
+    return command;
+}
+
+std::string ContainerController::BaseRos2Command() {
+
+    std::string command = "kubectl exec -n " + GetNamespace() + " " + GetPodName() + " -- ";
+    command += "bash -c \"source /opt/ros/humble/setup.bash && ";
+    LOG_DEBUG("Base command for container: " << command);
+    return command;
 }
 
 } // namespace adsw_manager

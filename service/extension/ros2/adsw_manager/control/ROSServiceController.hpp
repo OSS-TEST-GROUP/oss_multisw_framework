@@ -38,11 +38,19 @@ class ROSServiceController  : public ServiceController {
     bool ProcessServiceStopRequest(lifecyclemgr::StopServiceRequest* message);
 
 
+    bool GetNodeLists(std::shared_ptr<Service> service);
     uint64_t GetPID(std::shared_ptr<Service> service);
+
+    std::shared_ptr<ContainerController> GetContainer() {return container_controller_;}
+    std::string GetPackageName(){ return service_package_name_; }
+    std::string GetLauchFile() { return service_launch_file_name_; }
 
   private:
     std::shared_ptr<ROS2NodeController>  ros2node_controller_;
     std::shared_ptr<ContainerController>  container_controller_;
+
+    std::string service_package_name_;
+    std::string service_launch_file_name_;
 
 };
 

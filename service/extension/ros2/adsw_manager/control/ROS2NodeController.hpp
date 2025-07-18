@@ -8,14 +8,12 @@ namespace adsw_manager {
 
 class ROS2NodeController {
   public:
-    ROS2NodeController();
-    ~ROS2NodeController();
 
-    bool Initialize();
-    void Finalize();
-
-    bool StartROS2Node(const std::string& name_space, const std::string& name);
-    bool StopNode(const std::string& name_space, const std::string& name);
+    static bool StartNode(const std::string& basecommand, const std::string& package, const std::string& nodename);
+    static bool StopNode(const std::string& basecommand, const std::string& package, const std::string& nodename);
+    static bool GetState(const std::string& basecommand, const std::string& package, const std::string& nodename);
+    static bool SetState(const std::string& basecommand, const std::string& package, const std::string& nodename, const std::string& state);
+    static bool RestartNode(const std::string& basecommand, const std::string& package, const std::string& nodename);
 
 
   private:

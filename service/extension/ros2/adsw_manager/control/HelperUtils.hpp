@@ -12,35 +12,40 @@
 namespace ros2 {
 namespace adsw_manager {
 
-// Function to run shell command and return output
-std::string execCommand(const std::string& cmd) {
-    std::array<char, 128> buffer{};
-    std::string result;
-    FILE* pipe = popen(cmd.c_str(), "r");
+class HelperUtils{
 
-    if (!pipe)
-        throw std::runtime_error("popen() failed!");
+    public:
 
-    while (fgets(buffer.data(), buffer.size(), pipe) != nullptr) {
-        result += buffer.data();
-    }
+    // Function to run shell command and return output
+    static std::string ExecCommand(const std::string& cmd) {
+        std::array<char, 128> buffer{};
+        std::string result;
+        FILE* pipe = popen(cmd.c_str(), "r");
 
-    pclose(pipe);
-    return result;
-}
+        if (!pipe)
+            throw std::runtime_error("popen() failed!");
 
-// Split string into vector of lines
-std::vector<std::string> splitLines(const std::string& input) {
-    std::istringstream ss(input);
-    std::string line;
-    std::vector<std::string> lines;
-    while (std::getline(ss, line)) {
-        if (!line.empty()) {
-            lines.push_back(line);
+        while (fgets(buffer.data(), buffer.size(), pipe) != nullptr) {
+            result += buffer.data();
         }
+
+        pclose(pipe);
+        return result;
     }
-    return lines;
-}
+
+    // Split string into vector of lines
+    static std::vector<std::string> SplitLines(const std::string& input) {
+        std::istringstream ss(input);
+        std::string line;
+        std::vector<std::string> lines;
+        while (std::getline(ss, line)) {
+            if (!line.empty()) {
+                lines.push_back(line);
+            }
+        }
+        return lines;
+    }
+};
 
 } // namespace adsw_manager
 } // namespace ros2
