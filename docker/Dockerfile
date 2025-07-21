@@ -1,5 +1,5 @@
 # Multi Platform
-ARG BUILDPLATFORM='linux/arm64'
+ARG BUILDPLATFORM
 ARG TARGETOS
 ARG TARGETARCH
 
@@ -18,6 +18,7 @@ ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
 ENV PYTHONUNBUFFERED=1
 
+RUN rm -rf /var/lib/apt/lists/*
 RUN apt-get update && apt-get upgrade -y
 
 ###################################################################################
@@ -34,10 +35,15 @@ ARG LIBRARIES_INSTALL_DIR=/opt
 RUN apt-get install -y --no-install-recommends \
     # Base
     build-essential \
+    gdb \
     wget \
     git \
     cmake \
     ccache \
+    ninja-build \
+    curl \
+    unzip \
+    rsync \
     # Dependencies
     libasio-dev \
     libtinyxml2-dev \
@@ -48,7 +54,10 @@ RUN apt-get install -y --no-install-recommends \
     libengine-pkcs11-openssl \
     python3 \
     python3-pip \
-    openjdk-11-jre 
+    openjdk-11-jre \
+    gcc-aarch64-linux-gnu \
+    g++-aarch64-linux-gnu \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install Python packages
 RUN pip3 install --no-cache-dir \
@@ -57,13 +66,33 @@ RUN pip3 install --no-cache-dir \
     vcstool
 
 # Build and Install Fast-DDS
+RUN mkdir -p /opt
+COPY sysroot-aarch64 /opt/sysroot-aarch64
+COPY toolchain-aarch64.cmake /opt
+
 RUN /bin/bash -c "mkdir -p ${LIBRARIES_INSTALL_DIR}/Fast-DDS \
     && cd ${LIBRARIES_INSTALL_DIR}/Fast-DDS \
     && wget https://raw.githubusercontent.com/eProsima/Fast-DDS/3.2.2/fastdds.repos \
     && mkdir src \
     && vcs import src < fastdds.repos \
-    && colcon build --packages-up-to fastdds \
-    && source ${LIBRARIES_INSTALL_DIR}/Fast-DDS/install/setup.bash \
+    # AMD64
+    && colcon build \
+        --build-base build_amd64 \
+        --install-base install_amd64 \
+        --packages-up-to fastdds \
+    # ARM64
+    && colcon build --merge-install \
+        --build-base build_aarch64 \
+        --install-base install_aarch64 \
+        --cmake-force-configure \
+        --cmake-args \
+        -DCMAKE_TOOLCHAIN_FILE=/opt/toolchain-aarch64.cmake \
+        -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+    && cd - \
+"
+
+RUN /bin/bash -c "\
+    source ${LIBRARIES_INSTALL_DIR}/Fast-DDS/install_amd64/setup.bash \
     && cd ${LIBRARIES_INSTALL_DIR} \
     && git clone https://github.com/eProsima/Fast-DDS-Gen.git \
     && cd Fast-DDS-Gen \
@@ -103,19 +132,36 @@ ENV LDFLAGS="-O1"
 ENV MAKEFLAGS="$(nproc)"
 ENV BUILD_MODE=Release
 
+# AMD64
 RUN mkdir -p /workspace/.build
-RUN /bin/bash -c "source $LIBRARIES_INSTALL_DIR/Fast-DDS/install/setup.bash \
+RUN /bin/bash -c "source $LIBRARIES_INSTALL_DIR/Fast-DDS/install_amd64/setup.bash \
     && cd /workspace/.build \
-    && cmake ../ \
+    && BUILD_MODE=Debug cmake ../ \
         -DBUILD_UNITTEST=${BUILD_UNITTEST} \
         -DEXTENSION_PLATFORM=${EXTENSION_PLATFORM} \
-        -DCMAKE_BUILD_PARALLEL_LEVEL=${MAKEFLAGS} \
         -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
         -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
         -DCMAKE_C_COMPILER_LAUNCHER=ccache \
     && make -j${MAKEFLAGS} \
     && make install \
-    && cd -"
+    && cd - \
+"
+
+# ARM64
+RUN /bin/bash -c "\
+    source $LIBRARIES_INSTALL_DIR/Fast-DDS/install_aarch64/setup.bash \
+    && mkdir -p /workspace/.build_aarch64 \
+    && cd /workspace/.build_aarch64 \
+    && cmake ../ \
+        -DBUILD_UNITTEST=FALSE \
+        -DEXTENSION_PLATFORM=${EXTENSION_PLATFORM} \
+        -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+        -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+        -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+    && make -j${MAKEFLAGS} \
+    && make install \
+    && cd - \
+"
 
 ###################################################################################
 # Runtime
@@ -134,9 +180,6 @@ ENV LC_ALL=C.UTF-8
 RUN apt-get update && apt-get upgrade -y
 
 RUN apt-get install -y --no-install-recommends \
-    wget \
-    git \
-    cmake \
     libasio-dev \
     libtinyxml2-dev \
     libssl-dev \
@@ -147,26 +190,34 @@ RUN apt-get install -y --no-install-recommends \
     python3-pip \
     openjdk-11-jre \
     libyaml-cpp-dev \
-    && rm -rf /var/lib/apt/lists/* 
+    && rm -rf /var/lib/apt/lists/*
 
 RUN pip3 install --no-cache-dir \
     colcon-common-extensions
 
+RUN groupadd -r ossuser \
+    && useradd -r -g ossuser -d /oss -s /bin/bash ossuser \
+    && mkdir -p /oss \
+    && chown -R ossuser:ossuser /oss
+
+WORKDIR /oss
+
+#COPY --from=build-stage --chown=ossuser:ossuser /workspace/output/
 ###################################################################################
 # Debug
 ###################################################################################
 FROM builder AS debug
 
-RUN apt-get install -y --no-install-recommends \
+RUN apt update && apt-get install -y --no-install-recommends \
     valgrind \
-    gdb \
     gdbserver \
     netcat \
     telnet \
     vim \
     htop \
     tree \
-    jq
+    jq \
+    && rm -rf /var/lib/apt/lists/*
 
 ARG BUILD_UNITTEST=FALSE
 ARG EXTENSION_PLATFORM=ROS2
@@ -199,9 +250,6 @@ FROM build-stage AS static-analysis
 
 RUN apt-get install -y --no-install-recommends \
     # Static Analysis
-    ninja-build \
-    curl \
-    unzip \
     cppcheck \
     sloccount \
     clang \
@@ -213,7 +261,7 @@ RUN apt-get install -y --no-install-recommends \
     lcov \
     gcovr \
     perf-tools-unstable \
-    && rm -rf /var/lib/apt/lists/* 
+    && rm -rf /var/lib/apt/lists/*
 
 RUN pip3 install --no-cache-dir \
     lcov_cobertura \
