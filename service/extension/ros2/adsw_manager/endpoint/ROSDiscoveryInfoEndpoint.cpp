@@ -8,7 +8,10 @@
 namespace ros2 {
 namespace adsw_manager {
     
-ROSDiscoveryInfoEndpoint::ROSDiscoveryInfoEndpoint(std::string topic) : topic_(topic) {
+ROSDiscoveryInfoEndpoint::ROSDiscoveryInfoEndpoint(std::string topic) 
+    : DDSMessageEndpoint() {
+        
+    topic_ = topic;
     type_support_ = std::make_shared<TypeSupport>(new rmw_dds_common::msg::ParticipantEntitiesInfoPubSubType());
 }
 
@@ -30,12 +33,13 @@ void ROSDiscoveryInfoEndpoint::OnDataAvailable() {
     rmw_dds_common::msg::ParticipantEntitiesInfo info;
     
     if (Read<rmw_dds_common::msg::ParticipantEntitiesInfo>(info) == true){
-        LOG_DEBUG("Message Delivery for " << GetTopic() );
+        LOG_DEBUG("ROSDiscoveryInfoEndpoint " << GetTopic() );
 
         std::shared_ptr<ROSServiceDiscovery> manager = ADSWManager::Get()->GetServiceDiscovery();
         if (manager != nullptr){
             manager->ParseROSDiscoveryInfo(info);
         }
+        LOG_DEBUG("ROSDiscoveryInfoEndpoint processed " );
 
     }
     else {

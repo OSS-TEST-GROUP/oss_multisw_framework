@@ -44,6 +44,7 @@ bool DDSMessageEndpoint::Initialize(DomainParticipant* participant, Publisher* p
         }
     }
 
+    LOG_DEBUG("DDSMessage Intialized " << topic << ", " << GetTypeName());
     return true;
 }
 
@@ -81,9 +82,11 @@ void DDSMessageEndpoint::on_subscription_matched(DataReader* reader, const Subsc
 {
     if (info.current_count_change == 1)
     {
+        LOG_VERBOSE( "Subscriber matched. " << GetTopic() );
     }
     else if (info.current_count_change == -1)
     {
+        LOG_VERBOSE( "Subscriber unmatched. " << GetTopic() );
     }
     else
     {
@@ -94,6 +97,8 @@ void DDSMessageEndpoint::on_subscription_matched(DataReader* reader, const Subsc
 
 void DDSMessageEndpoint::on_data_available(DataReader* reader)
 {
+    LOG_VERBOSE( "on_data_available " << GetTopic() );
+    
     OnDataAvailable();
 }
 

@@ -25,12 +25,24 @@ class Service {
     ServiceState GetServiceState();
     void SetServiceState(ServiceState state);
 
+    void SetLaunchFile(const std::string& launchfile);
+    const std::string GetLaunchFile(){return launch_file_;}
+
+    const std::string GetPackage();
+    void SetRunningNodes(int32_t count);
+    int32_t GetMaxNodes();
+
   private:
     std::string name_;
     ServiceType service_type_;
     RecoveryPolicy recovery_policy_;
     bool is_enabled_;
     ServiceState service_state_;
+    std::string launch_file_;
+    std::string packag_name_;
+
+    int32_t max_nodes_;
+    int32_t current_nodes_;
 };
 
 } // namespace adsw_manager

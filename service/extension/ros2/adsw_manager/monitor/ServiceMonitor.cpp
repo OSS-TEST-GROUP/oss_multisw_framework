@@ -1,3 +1,6 @@
+#include <vector>
+#include <algorithm>
+
 #include "ServiceMonitor.hpp"
 #include "ADSWManager.hpp"
 #include "transmitter/DDSTransmitter.hpp"
@@ -16,17 +19,16 @@ ServiceMonitor::ServiceMonitor() {}
 ServiceMonitor::~ServiceMonitor() {}
 
 bool ServiceMonitor::Initialize() {
-    LOG_DEBUG("ServiceMonitor::Initialize start ");
-    ros_service_discovery_ = std::make_shared<ROSServiceDiscovery>();
+    ros_service_discovery_ = std::make_shared<ROSServiceDiscovery>(this);
 
     if (ros_service_discovery_){
         ros_service_discovery_->Initialize();
     }
-    LOG_DEBUG("ServiceMonitor::Initialize end ");
     return true;
 }
 
 void ServiceMonitor::Finalize() {
+    ros_service_node_list_.clear();
 }
 
 void ServiceMonitor::UpdateServiceState(UpdateServiceInfo info) {
@@ -48,13 +50,13 @@ void ServiceMonitor::UpdateServiceState(UpdateServiceInfo info) {
             } else if (info.service_event == ServiceEvent::STATE_UPDATED) {
                 service->SetServiceState(info.state);
             }
+
+            // Notify the service state after updating
+            NotifyServiceState();
         }
     }
 
-    // Notify the service state after updating
-    NotifyServiceState();
-    LOG_DEBUG("ServiceMonitor::NotifyServiceState end ");
-    
+    LOG_DEBUG("ServiceMonitor::NotifyServiceState end ");    
 }
 
 void ServiceMonitor::NotifyServiceState() {
@@ -88,6 +90,70 @@ void ServiceMonitor::NotifyServiceState() {
 std::shared_ptr<ROSServiceDiscovery> ServiceMonitor::GetServiceDiscovery(){
     return ros_service_discovery_;
 }
+
+int32_t ServiceMonitor::NodeStarted(std::string service, std::string node){
+
+    if (ros_service_node_list_.find(service) == ros_service_node_list_.end())
+    {
+        // The first start detected !!
+        UpdateServiceInfo serviceinfo(service, service, ServiceEvent::CREATED, ServiceState::RUNNING);
+        UpdateServiceState(serviceinfo);
+    }
+
+    ros_service_node_list_[service].push_back(node);
+    LOG_VERBOSE("ServiceMonitor::NodeStarted  " << service << "::" << node);
+    return ros_service_node_list_[service].size();
+}
+
+
+int32_t ServiceMonitor::NodeStopped(std::string service, std::string node){
+
+    std::vector<std::string> vlist = ros_service_node_list_[service];
+
+    auto it = find(vlist.begin(), vlist.end(), node);
+
+    if (it != vlist.end()){
+        ros_service_node_list_[service].erase(it);
+        LOG_VERBOSE("ServiceMonitor::NodeStopped  " << service << "::" << node);
+    }
+
+    if (ros_service_node_list_[service].size() == 0)
+    {
+        // The first start detected !!
+        UpdateServiceInfo serviceinfo(service, service, ServiceEvent::DELETED, ServiceState::NOT_RUNNING);
+        UpdateServiceState(serviceinfo);
+    }    
+    
+    return ros_service_node_list_[service].size();
+}
+
+int32_t ServiceMonitor::NodeCount(std::string service){
+    return ros_service_node_list_[service].size();
+}
+
+
+void ServiceMonitor::UpdateServiceState(){
+    LOG_DEBUG("ServiceMonitor::UpdateServiceState start ");
+    
+    std::shared_ptr<ServiceRegistry> registry = ADSWManager::Get()->GetServiceRegistry();
+
+    std::vector<std::shared_ptr<Service>> services = registry->GetServicesByGroup("");
+
+    for (auto& service : services){
+            
+        if (ros_service_node_list_.find(service->GetName()) == ros_service_node_list_.end())
+        {
+            // Not found running node list 
+            service->SetServiceState(ServiceState::NOT_RUNNING);
+            LOG_DEBUG("UpdateServiceState service " << service->GetName() << " no running node !! ");
+        }
+        else{
+            std::vector<std::string> vlist = ros_service_node_list_[service->GetName()];
+            service->SetRunningNodes(vlist.size());
+        }
+    }
+}
+
 
 } // namespace adsw_manager
 } // namespace ros2

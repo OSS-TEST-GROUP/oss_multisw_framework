@@ -40,11 +40,22 @@ void ROSServiceController::Finalize(){
 }
 
 bool ROSServiceController::StartGroup(const std::string& group){
-
+    if (!group.empty()){
+        return GetContainer()->StartContainer(group);
+        if (GetContainer()->ContainerSupported() == true){
+            return GetContainer()->StartContainer(group);
+        }
+    }
+    return false;
 }
 
 bool ROSServiceController::StopGroup(const std::string& group){
-
+    if (!group.empty()){
+        if (GetContainer()->ContainerSupported() == true){
+            return GetContainer()->StopContainer(group);
+        }
+    }
+    return false;
 }
 
 
@@ -85,9 +96,9 @@ bool ROSServiceController::StartService(std::shared_ptr<Service> service){
     // If not, you need to implement or correct them.
     bool launchByFile = false; // Placeholder, replace with actual logic
     if (launchByFile){
-        command = basecommand + " ros2 launch " + GetPackageName() + " " + GetLauchFile();
+        command = basecommand + " ros2 launch " + service->GetPackage() + " " + service->GetLaunchFile();
     }else{
-        command = basecommand + " ros2 run " + GetPackageName();
+        command = basecommand + " ros2 run " + service->GetPackage();
     }
 
     int result = system(command.c_str());
@@ -139,7 +150,7 @@ bool ROSServiceController::GetNodeLists(std::shared_ptr<Service> service){
         return false;
     }
 
-    // kubectl exec -n default ros2-sample-all -- \
+    // kubectl exec -n default ros2-sample-all -- 
     // bash -c "source /opt/ros/humble/setup.bash && source /ros2_ws/install/setup.bash &&
     // ros2 pkg executables sample_ros2_app
 
@@ -148,7 +159,7 @@ bool ROSServiceController::GetNodeLists(std::shared_ptr<Service> service){
 
     std::string basecommand = GetContainer()->BaseRos2Command();
 
-    std::string command = basecommand + " ros2 pkg executables " + GetPackageName();
+    std::string command = basecommand + " ros2 pkg executables " + service->GetPackage();
     
     std::string exeresult = HelperUtils::ExecCommand(command);
 
@@ -209,6 +220,10 @@ bool ROSServiceController::ProcessServiceStartRequest(lifecyclemgr::StartService
     std::vector<std::string> service_list = message->service_list();
     bool is_group = message->is_group();
     bool result;
+
+    if (GetContainer()->ContainerSupported() == false){
+        is_group = false;
+    }
 
     if (service_list.empty()) {
         LOG_ERROR("No services provided to start.");

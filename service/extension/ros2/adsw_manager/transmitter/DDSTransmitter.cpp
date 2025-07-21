@@ -10,7 +10,7 @@ DDSTransmitter::DDSTransmitter() {}
 DDSTransmitter::~DDSTransmitter() {}
 
 bool DDSTransmitter::Initialize(){
-    LOG_DEBUG("Start");
+    LOG_DEBUG("DDSTransmitter Start");
 
    // Create the participant
     DomainParticipantQos pqos = PARTICIPANT_QOS_DEFAULT;
@@ -45,7 +45,7 @@ bool DDSTransmitter::Initialize(){
         LOG_ERROR("Subscriber initialization failed.");
         return false;
     }
-    LOG_DEBUG("End");
+    LOG_DEBUG("DDSTransmitter End");
 
     return true;    
 }

@@ -9,8 +9,9 @@ namespace ros2 {
 namespace adsw_manager {
     
 StartServiceEndPoint::StartServiceEndPoint(std::string topic) 
-    : topic_(topic){
+    : DDSMessageEndpoint() {
         
+    topic_ = topic;
     type_support_ = std::make_shared<TypeSupport>(new StartServiceRequestPubSubType());
 
 }
@@ -24,7 +25,7 @@ std::string StartServiceEndPoint::GetTopic() {
 }
 
 std::string StartServiceEndPoint::GetTypeName() {
-    return "rmw_dds_common::msg::dds_::ParticipantEntitiesInfo_";
+    return type_support_->get_type_name();
 }
 
 std::shared_ptr<TypeSupport> StartServiceEndPoint::GetTypeSupport() {

@@ -39,7 +39,7 @@ void StopServiceEndPoint::OnDataAvailable(){
 
 void StopServiceEndPoint::OnDataPublished(bool ret){
 
-    LOG_DEBUG("Message Published for " << GetTopic() << ", " << (ret == true) ? "Success" : "Fail");
+    LOG_DEBUG("Message Published for " << GetTopic() << ", " << ((ret == true) ? "Success" : "Fail"));
 }
 
 } // namespace lifecycle_manager

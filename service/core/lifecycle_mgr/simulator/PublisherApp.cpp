@@ -146,7 +146,7 @@ std::cout << __FUNCTION__ << "::" << __LINE__ << std::endl;
     {
         throw std::runtime_error("Topic initialization failed");
     }
-std::cout << __FUNCTION__ << "::" << __LINE__ << std::endl;
+
     // Create the data writer
     DataWriterQos writer_qos = DATAWRITER_QOS_DEFAULT;
     writer_qos.history().depth = 5;
@@ -197,6 +197,7 @@ void PublisherApp::run()
 {
     while (!is_stopped() && ((samples_ == 0) || (index_ < samples_)))
     {
+std::cout << __FUNCTION__ << "::" << __LINE__ << std::endl;    
         if (publish())
         {
             std::cout << "Message: " << static_cast<uint8_t>(message_kind_) << " index: '" << index_
@@ -230,10 +231,11 @@ bool PublisherApp::publish()
     std::unique_lock<std::mutex> matched_lock(mutex_);
     cv_.wait(matched_lock, [&]()
             {
+std::cout << __FUNCTION__ << "::" << __LINE__ << ", " << matched_ << " >= " << expected_matches_ << std::endl;   
                 // at least one has been discovered
                 return ((matched_ >= expected_matches_) || is_stopped());
             });
-
+std::cout << __FUNCTION__ << "::" << __LINE__ << ", " << matched_ << " >= " << expected_matches_ << std::endl;   
     if (!is_stopped())
     {
         switch(message_kind_)

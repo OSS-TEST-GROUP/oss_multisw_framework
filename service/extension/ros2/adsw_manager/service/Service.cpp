@@ -8,7 +8,10 @@ Service::Service(const std::string& name, ServiceType service_type, RecoveryPoli
       service_type_(service_type),
       recovery_policy_(recovery_policy),
       is_enabled_(is_enable),
-      service_state_(ServiceState::NOT_RUNNING)
+      service_state_(ServiceState::NOT_RUNNING),
+      packag_name_(name),
+      max_nodes_(0),
+      current_nodes_(0)
 {
 }
 
@@ -37,6 +40,40 @@ ServiceState Service::GetServiceState() {
 void Service::SetServiceState(ServiceState state) {
     service_state_ = state;
 }
+
+void Service::SetLaunchFile(const std::string& launchfile){
+    launch_file_ = launchfile;
+}
+
+const std::string Service::GetPackage(){
+    if (!packag_name_.empty()){
+        return packag_name_;
+    }
+
+    return name_;
+}
+
+void Service::SetRunningNodes(int32_t count){
+
+    int32_t prev_nodes = current_nodes_;
+    if (max_nodes_ < count){
+        max_nodes_ = count;
+    }
+    current_nodes_ = count;
+
+    if (prev_nodes > current_nodes_){
+        // node decrease
+    }else if (prev_nodes < current_nodes_){
+        // node increasing
+    }
+
+}
+
+int32_t Service::GetMaxNodes(){
+    return max_nodes_;
+}
+
+
 
 } // namespace adsw_manager
 } // namespace ros2

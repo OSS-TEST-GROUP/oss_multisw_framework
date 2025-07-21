@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <string>
+#include <sstream>
 
 #include "Logger.hpp"
 
@@ -37,4 +38,5 @@
   Logger::Get()->verbose(outStr.str());    \
 }
 
-#endif // LIFECYCLE_LIFECYCLE_FACTORY_HPP_
+#endif // #define MIDDLEWARE_LOOGER_LOG_HPP
+

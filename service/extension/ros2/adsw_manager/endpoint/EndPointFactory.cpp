@@ -122,6 +122,7 @@ int32_t EndPointFactory::CreateEndPoints(std::shared_ptr<DDSTransmitter> transmi
                 msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndpoint>(update_service_list);
                 pubsub = PubSubType::SUBSCRIBE_ONLY;
             }
+            break;
 
             default:
                 LOG_ERROR("Unknown message type: " << static_cast<int32_t>(key));
