@@ -27,7 +27,7 @@ RUN apt-get update && apt-get upgrade -y
 FROM base-setup AS builder
 
 LABEL maintainer="Brian.doh <brian.doh@obigo.com>"
-LABEL description="C++ Static Analysis and Build environment"
+LABEL description="Setup Build environment and build/install Fast-DDS"
 LABEL version="0.0.1"
 
 ARG LIBRARIES_INSTALL_DIR=/opt
@@ -70,6 +70,8 @@ RUN mkdir -p /opt
 COPY sysroot-aarch64 /opt/sysroot-aarch64
 COPY toolchain-aarch64.cmake /opt
 
+ENV SYSROOT_DIR="/opt/sysroot-aarch64"
+
 RUN /bin/bash -c "mkdir -p ${LIBRARIES_INSTALL_DIR}/Fast-DDS \
     && cd ${LIBRARIES_INSTALL_DIR}/Fast-DDS \
     && wget https://raw.githubusercontent.com/eProsima/Fast-DDS/3.2.2/fastdds.repos \
@@ -77,17 +79,21 @@ RUN /bin/bash -c "mkdir -p ${LIBRARIES_INSTALL_DIR}/Fast-DDS \
     && vcs import src < fastdds.repos \
     # AMD64
     && colcon build \
+        --merge-install \
         --build-base build_amd64 \
         --install-base install_amd64 \
         --packages-up-to fastdds \
     # ARM64
-    && colcon build --merge-install \
+    && VERBOSE=1 colcon build \
+        --event-handlers console_direct+ \
+        --merge-install \
         --build-base build_aarch64 \
         --install-base install_aarch64 \
         --cmake-force-configure \
         --cmake-args \
         -DCMAKE_TOOLCHAIN_FILE=/opt/toolchain-aarch64.cmake \
         -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+        -DCMAKE_VERBOSE_MAKEFILE=ON \
     && cd - \
 "
 
@@ -132,10 +138,13 @@ ENV LDFLAGS="-O1"
 ENV MAKEFLAGS="$(nproc)"
 ENV BUILD_MODE=Release
 
+RUN ccache -C
+
 # AMD64
-RUN mkdir -p /workspace/.build
-RUN /bin/bash -c "source $LIBRARIES_INSTALL_DIR/Fast-DDS/install_amd64/setup.bash \
-    && cd /workspace/.build \
+RUN /bin/bash -c "\
+    source $LIBRARIES_INSTALL_DIR/Fast-DDS/install_amd64/setup.bash \
+    && mkdir -p /workspace/.build_amd64 \
+    && cd /workspace/.build_amd64 \
     && BUILD_MODE=Debug cmake ../ \
         -DBUILD_UNITTEST=${BUILD_UNITTEST} \
         -DEXTENSION_PLATFORM=${EXTENSION_PLATFORM} \
@@ -144,7 +153,7 @@ RUN /bin/bash -c "source $LIBRARIES_INSTALL_DIR/Fast-DDS/install_amd64/setup.bas
         -DCMAKE_C_COMPILER_LAUNCHER=ccache \
     && make -j${MAKEFLAGS} \
     && make install \
-    && cd - \
+    && cd /workspace \
 "
 
 # ARM64
@@ -155,12 +164,13 @@ RUN /bin/bash -c "\
     && cmake ../ \
         -DBUILD_UNITTEST=FALSE \
         -DEXTENSION_PLATFORM=${EXTENSION_PLATFORM} \
+        -DCMAKE_TOOLCHAIN_FILE=/opt/toolchain-aarch64.cmake \
         -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
         -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
         -DCMAKE_C_COMPILER_LAUNCHER=ccache \
     && make -j${MAKEFLAGS} \
     && make install \
-    && cd - \
+    && cd /workspace \
 "
 
 ###################################################################################
@@ -180,20 +190,13 @@ ENV LC_ALL=C.UTF-8
 RUN apt-get update && apt-get upgrade -y
 
 RUN apt-get install -y --no-install-recommends \
-    libasio-dev \
-    libtinyxml2-dev \
-    libssl-dev \
-    libp11-dev \
+    libtinyxml2-9 \
+    libssl3 \
+    libp11-3 \
     softhsm2 \
     libengine-pkcs11-openssl \
-    python3 \
-    python3-pip \
-    openjdk-11-jre \
-    libyaml-cpp-dev \
+    libyaml-cpp0.7 \
     && rm -rf /var/lib/apt/lists/*
-
-RUN pip3 install --no-cache-dir \
-    colcon-common-extensions
 
 RUN groupadd -r ossuser \
     && useradd -r -g ossuser -d /oss -s /bin/bash ossuser \
@@ -202,53 +205,15 @@ RUN groupadd -r ossuser \
 
 WORKDIR /oss
 
-#COPY --from=build-stage --chown=ossuser:ossuser /workspace/output/
-###################################################################################
-# Debug
-###################################################################################
-FROM builder AS debug
-
-RUN apt update && apt-get install -y --no-install-recommends \
-    valgrind \
-    gdbserver \
-    netcat \
-    telnet \
-    vim \
-    htop \
-    tree \
-    jq \
-    && rm -rf /var/lib/apt/lists/*
-
-ARG BUILD_UNITTEST=FALSE
-ARG EXTENSION_PLATFORM=ROS2
-COPY . .
-
-ENV CFLAGS="-O2"
-ENV CXXFLAGS="-O2"
-ENV LDFLAGS="-O1"
-ENV MAKEFLAGS="$(nproc)"
-ENV BUILD_MODE=Debug
-
-RUN mkdir -p /workspace/.build
-RUN /bin/bash -c "source $LIBRARIES_INSTALL_DIR/Fast-DDS/install/setup.bash \
-    && cd /workspace/.build \
-    && cmake ../ \
-        -DBUILD_UNITTEST=${BUILD_UNITTEST} \
-        -DEXTENSION_PLATFORM=${EXTENSION_PLATFORM} \
-        -DCMAKE_BUILD_PARALLEL_LEVEL=${MAKEFLAGS} \
-        -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-        -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-        -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-    && make -j${MAKEFLAGS} \
-    && make install \
-    && cd -"
+COPY --from=build-stage --chown=ossuser:ossuser /workspace/output/aarch64/Release/bin /oss
+COPY --from=build-stage /opt/Fast-DDS/install_aarch64/lib/* /oss/lib
 
 ###################################################################################
 # Static Analysis stage
 ###################################################################################
-FROM build-stage AS static-analysis
+FROM builder AS static-analysis
 
-RUN apt-get install -y --no-install-recommends \
+RUN apt update && apt-get install -y --no-install-recommends \
     # Static Analysis
     cppcheck \
     sloccount \
@@ -256,7 +221,6 @@ RUN apt-get install -y --no-install-recommends \
     clang-tools \
     clang-tidy \
     clang-format \
-    coverage \
     iwyu \
     lcov \
     gcovr \
@@ -272,7 +236,7 @@ RUN pip3 install --no-cache-dir \
     black \
     isort
 
-RUN mkdir -p /workspace/reports
+RUN mkdir -p /oss-analysis
 
 #RUN mkdir -p /workspace/reports \
 #    && find /workspace/service/ \
