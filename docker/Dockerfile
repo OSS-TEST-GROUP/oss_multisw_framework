@@ -57,13 +57,32 @@ RUN apt-get install -y --no-install-recommends \
     openjdk-11-jre \
     gcc-aarch64-linux-gnu \
     g++-aarch64-linux-gnu \
+    # Static Analysis
+    cppcheck \
+    sloccount \
+    clang \
+    clang-tools \
+    clang-tidy \
+    clang-format \
+    iwyu \
+    lcov \
+    gcovr \
+    perf-tools-unstable \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python packages
 RUN pip3 install --no-cache-dir \
     # Build Environment
     colcon-common-extensions \
-    vcstool
+    vcstool \
+    # Static Analysis
+    lcov_cobertura \
+    cpplint \
+    cmake-format \
+    cmakelang \
+    pre-commit \
+    black \
+    isort
 
 # Build and Install Fast-DDS
 RUN mkdir -p /opt
@@ -139,6 +158,7 @@ ENV MAKEFLAGS="$(nproc)"
 ENV BUILD_MODE=Release
 
 RUN ccache -C
+RUN mkdir -p /oss-analysis
 
 # AMD64
 RUN /bin/bash -c "\
@@ -212,29 +232,6 @@ COPY --from=build-stage /opt/Fast-DDS/install_aarch64/lib/* /oss/lib
 # Static Analysis stage
 ###################################################################################
 FROM builder AS static-analysis
-
-RUN apt update && apt-get install -y --no-install-recommends \
-    # Static Analysis
-    cppcheck \
-    sloccount \
-    clang \
-    clang-tools \
-    clang-tidy \
-    clang-format \
-    iwyu \
-    lcov \
-    gcovr \
-    perf-tools-unstable \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN pip3 install --no-cache-dir \
-    lcov_cobertura \
-    cpplint \
-    cmake-format \
-    cmakelang \
-    pre-commit \
-    black \
-    isort
 
 RUN mkdir -p /oss-analysis
 
