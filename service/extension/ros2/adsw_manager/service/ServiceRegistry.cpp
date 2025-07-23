@@ -21,11 +21,18 @@ namespace adsw_manager {
 ServiceRegistry::ServiceRegistry() {}
 ServiceRegistry::~ServiceRegistry() {}
 
+constexpr const char* SAVED_REGISTRY_BACKUP = "saved-service-list.yaml";
+
+
 bool ServiceRegistry::LoadServiceList() {
     // Stub: Assume success, or extend for file/config source later
     LOG_DEBUG("ServiceRegistry::LoadServiceList start ");
 
-    if (LoadServiceList("autoware-single-pod.yaml") == true){
+    if (LoadServiceSaved(SAVED_REGISTRY_BACKUP) == true){
+        return ProcessUpdateServiceListRequest();
+    }
+
+    if (LoadServiceList("ros2-sample-speclist.yaml") == true){
         LOG_DEBUG("ServiceRegistry::LoadServiceList end ");
 
         // Notify the service state after loading the service list
@@ -73,6 +80,8 @@ bool ServiceRegistry::LoadServiceList(const std::string& path) {
                             true  // Assume enabled by default
                         );
 
+                        service->SetLaunchFile(std::get<2>(cmd)); 
+
                         AddService(service, std::get<1>(cmd));
                     }
                 }
@@ -111,6 +120,27 @@ std::vector<std::tuple<std::string, std::string, std::string, std::string>> Serv
     }
     return result;
 }
+
+std::vector<std::tuple<std::string, std::string, std::string, std::string>> ServiceRegistry::extractRos2RunCommands(const std::string& script) {
+    std::vector<std::tuple<std::string, std::string, std::string, std::string>> result;
+
+    // Pattern to match: ros2 run <pkg> <exe> [args...]
+    std::regex pattern(R"(ros2\s+run\s+([^\s]+)\s+([^\s]+)([^&\n]*)?)");
+    std::smatch match;
+
+    std::string::const_iterator searchStart(script.cbegin());
+    while (std::regex_search(searchStart, script.cend(), match, pattern)) {
+        std::string full_cmd = match[0];
+        std::string pkg = match[1];
+        std::string exename = match[2];
+        std::string extra_args = match[3];
+
+        result.push_back(std::make_tuple(full_cmd, pkg, exename, extra_args));
+        searchStart = match.suffix().first;
+    }
+    return result;
+}
+
 
 void ServiceRegistry::AddGroup(const std::string& name) {
     if (group_.count(name) == 0) {
@@ -276,6 +306,104 @@ bool ServiceRegistry::ProcessUpdateServiceListRequest() {
         LOG_ERROR("Failed to get DDSMessageEndpoint for UpdateServiceListRequest");
         return false;
     }
+}
+
+bool ServiceRegistry::Save(){
+    YAML::Node config;
+
+    config["extension"] = "ROS2";
+    config["version"] = "0.1";
+
+    YAML::Node ndgroups;
+
+    for (auto& group : group_){
+        YAML::Node ndgroup;
+
+        ndgroup["group"] = group.first;
+        
+        YAML::Node ndservices;
+
+        for (auto& service : group.second){
+                // Add a sequence
+            YAML::Node ndservice;
+
+            ndservice["package"] = service->GetPackage();        
+            ndservice["name"] = service->GetName();
+            ndservice["launchfile"] = service->GetLaunchFile();
+            ndservice["type"] = static_cast<int32_t>(service->GetServiceType());
+            ndservice["recovery"] = static_cast<int32_t>(service->GetRecoveryPolicy());
+            ndservice["enabled"] = service->IsEnabled();
+            ndservice["max"] = service->GetMaxNodes();
+
+            ndservices.push_back(ndservice);
+        }
+
+        ndgroup["services"] = ndservices;
+        ndgroups.push_back(ndgroup);
+    }
+
+    config["sped"]["container"] = ndgroups;
+
+    // 파일에 쓰기
+    std::ofstream fout(SAVED_REGISTRY_BACKUP);
+    fout << config;
+    fout.close();
+    return true;
+}
+
+bool ServiceRegistry::LoadServiceSaved(const std::string& path) {
+    LOG_DEBUG("ServiceRegistry::LoadServiceList path: " << path);
+
+    try {
+
+        YAML::Node config = YAML::LoadFile(path);
+        auto containers = config["spec"]["containers"];
+        for (auto container : containers) {
+            auto groupStr = container["group"].as<std::string>();
+            auto servicesNode = container["services"];
+            std::cout << "Group name: " << groupStr << std::endl;
+
+            AddGroup(groupStr);
+            
+            if (servicesNode && servicesNode.IsSequence()) {
+                for (const auto& serviceNode : servicesNode) {
+                    // Each rule should have status and message (condition is optional list)
+                    if (!serviceNode["name"] ) {
+                        LOG_DEBUG("Load  missing service name ");
+                        continue; // skip rules missing essential fields
+                    }
+
+                    std::string pkgStr = serviceNode["package"].as<std::string>();
+                    std::string nameStr = serviceNode["name"].as<std::string>();
+                    std::string lfileStr = serviceNode["launchfile"].as<std::string>();
+                    std::string typeStr = serviceNode["type"].as<std::string>();
+                    std::string recoStr = serviceNode["recovery"].as<std::string>();
+                    std::string enableStr = serviceNode["enabled"].as<std::string>();
+                    std::string maxStr = serviceNode["max"].as<std::string>();
+
+                    std::shared_ptr<Service> service = std::make_shared<Service>(
+                            nameStr, 
+                            ServiceType::NORMAL,
+                            RecoveryPolicy::ALWAYS,
+                            true  // Assume enabled by default
+                    );
+
+                    service->SetLaunchFile(lfileStr); 
+                    AddService(service, groupStr);
+                }
+            }
+
+            // Further splitting of args (which contains your launch commands) would require string parsing:
+            // e.g., use std::regex or string split on "ros2 launch ..."
+        }        
+
+    } catch (const YAML::Exception& e) {
+        LOG_ERROR("Failed to load service list from " << path << ": " << e.what());
+        return false;
+    }
+
+    LOG_DEBUG("ServiceRegistry::LoadServiceList end ");
+    return true;
 }
 
 } // namespace adsw_manager

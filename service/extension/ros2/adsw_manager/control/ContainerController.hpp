@@ -31,7 +31,10 @@ class ContainerController {
     std::string BaseCommand();
     std::string BaseRos2Command();
 
+    bool ContainerSupported()  { return k3s_container_; }
+
   private:
+    bool k3s_container_;
     std::string deployment_file_path_; // Path to the Kubernetes deployment file
     std::string pod_name_; // Name of the pod to manage
     std::string namespace_; // Namespace in which the pod is running

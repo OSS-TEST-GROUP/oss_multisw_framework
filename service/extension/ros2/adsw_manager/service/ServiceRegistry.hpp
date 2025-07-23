@@ -47,7 +47,11 @@ class ServiceRegistry {
 
     bool LoadServiceList(const std::string& path);
     std::vector<std::tuple<std::string, std::string, std::string, std::string>> extractRos2LaunchCommands(const std::string& script);
+    std::vector<std::tuple<std::string, std::string, std::string, std::string>> extractRos2RunCommands(const std::string& script);
     bool ProcessUpdateServiceListRequest();
+
+    bool Save();
+    bool LoadServiceSaved(const std::string& path);
 
   private:
     std::unordered_map<std::string, std::shared_ptr<Service>> services_;

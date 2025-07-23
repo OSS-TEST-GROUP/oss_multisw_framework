@@ -25,8 +25,15 @@ class ServiceMonitor {
 
     std::shared_ptr<ROSServiceDiscovery> GetServiceDiscovery();
 
+    int32_t NodeStarted(std::string service, std::string node);
+    int32_t NodeStopped(std::string service, std::string node);
+    int32_t NodeCount(std::string service);
+
+    void UpdateServiceState();
+
   private:
     std::shared_ptr<ROSServiceDiscovery> ros_service_discovery_;
+    std::map<std::string, std::vector<std::string>> ros_service_node_list_;
 };
 
 } // namespace adsw_manager

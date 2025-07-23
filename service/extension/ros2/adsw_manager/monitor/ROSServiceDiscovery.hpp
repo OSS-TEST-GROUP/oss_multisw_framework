@@ -13,10 +13,12 @@
 namespace ros2 {
 namespace adsw_manager {
 
+class ServiceMonitor;
+
 
 class ROSServiceDiscovery {
   public:
-    ROSServiceDiscovery();
+    ROSServiceDiscovery(ServiceMonitor* service_monitor);
     virtual ~ROSServiceDiscovery();
 
     bool Initialize();
@@ -26,8 +28,13 @@ class ROSServiceDiscovery {
     std::shared_ptr<ROS2Participant> GetROSParticipant(const std::string& participant_id);
 
   private:
+    std::string guessService(const std::string ns);
+
+  private:
+    ServiceMonitor* service_monitor_;
     std::map<std::string, std::shared_ptr<ROS2Participant>> ros_participants_;
 
+    std::map<std::string, std::string> ros_group_participants_;
 };
 
 } // namespace adsw_manager

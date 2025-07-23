@@ -39,7 +39,9 @@ bool ADSWManager::Initialize() {
 }
 
 bool ADSWManager::Start() {
-    
+    if (endppoint_factory_ != nullptr){
+        endppoint_factory_->CreateEndPoints(dds_transmitter_);
+    }
     return true;
 }
 
@@ -74,7 +76,7 @@ std::shared_ptr<ROSServiceController> ADSWManager::GetServiceController() {
 
 std::shared_ptr<ROSServiceDiscovery> ADSWManager::GetServiceDiscovery() {
     if (service_monitor_ != nullptr){
-        service_monitor_->GetServiceDiscovery();
+        return service_monitor_->GetServiceDiscovery();
     }
     return nullptr;
 }

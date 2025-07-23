@@ -16,7 +16,20 @@ class ROS2Participant {
     ROS2Participant() = default;
     ~ROS2Participant() = default;
 
+    bool SetGuessService(std::string service){
+      if (service_name_ != service){
+        service_name_ = service;
+        return true; // changed
+      }
+      return false; // keep 
+    }
+    std::string GuessService(){ return service_name_;}
+
     std::vector<ROS2Node> nodes;
+
+  private :
+    std::string service_name_;
+
 };
 
 } // namespace adsw_manager

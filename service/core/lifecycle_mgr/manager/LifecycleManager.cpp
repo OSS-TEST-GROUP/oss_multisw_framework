@@ -68,33 +68,33 @@ void LifecycleManager::Stop() {
 
 }
 
+std::shared_ptr<DDSTransmitter> LifecycleManager::GetTransmitter(){
+    return msg_transmitter_;
+}
 
+EndPointFactory* LifecycleManager::GetEndpointFactory(){
+    return endpoint_factory_;
+}
 
-    std::shared_ptr<DDSTransmitter> LifecycleManager::GetTransmitter(){
-      return msg_transmitter_;
-    }
+std::shared_ptr<StateManager> LifecycleManager::GetState(){
+    return state_manager_;
+}
 
-    EndPointFactory* LifecycleManager::GetEndpointFactory(){
-      return endpoint_factory_;
-    }
+std::shared_ptr<StateMonitor> LifecycleManager::GetMonitor(){
+    return state_monitor_;
+}
 
-    std::shared_ptr<StateManager> LifecycleManager::GetState(){
-      return state_manager_;
-    }
+std::shared_ptr<PolicyManager> LifecycleManager::GetPolicy(){
+    return policy_manager_;
+}
 
-    std::shared_ptr<StateMonitor> LifecycleManager::GetMonitor(){
-      return state_monitor_;
-    }
-    std::shared_ptr<PolicyManager> LifecycleManager::GetPolicy(){
-      return policy_manager_;
-    }
-    std::shared_ptr<MWServiceManager> LifecycleManager::GetMWService(){
-      return mw_service_manager_;
-    }
+std::shared_ptr<MWServiceManager> LifecycleManager::GetMWService(){
+    return mw_service_manager_;
+}
 
-    std::shared_ptr<ServiceRegistry> LifecycleManager::GetRegistry(){
-      return service_registry_;
-    }    
+std::shared_ptr<ServiceRegistry> LifecycleManager::GetRegistry(){
+    return service_registry_;
+}    
 
 std::shared_ptr<Service> LifecycleManager::GetService(std::string name){
 
