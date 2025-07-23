@@ -1,5 +1,4 @@
 # Multi Platform
-ARG TARGETPLATFORM
 ARG BUILDPLATFORM
 ARG TARGETOS
 ARG TARGETARCH
@@ -11,7 +10,7 @@ FROM --platform=${BUILDPLATFORM} ubuntu:22.04 AS base-setup
 #LABEL org.opencontainers.image.authors="Brian.doh <brian.doh@obigo.com>"
 
 # Show platform information
-RUN echo "Building on $BUILDPLATFORM, targeting $TARGETPLATFORM"
+RUN echo "Building on ${BUILDPLATFORM}"
 
 # Set base environment variables
 ENV DEBIAN_FRONTEND=noninteractive
@@ -19,6 +18,7 @@ ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
 ENV PYTHONUNBUFFERED=1
 
+RUN rm -rf /var/lib/apt/lists/*
 RUN apt-get update && apt-get upgrade -y
 
 ###################################################################################
@@ -27,32 +27,39 @@ RUN apt-get update && apt-get upgrade -y
 FROM base-setup AS builder
 
 LABEL maintainer="Brian.doh <brian.doh@obigo.com>"
-LABEL description="C++ Static Analysis and Build environment"
+LABEL description="Setup Build environment and build/install Fast-DDS"
 LABEL version="0.0.1"
-LABEL platform=$TARGETPLATFORM
 
 ARG LIBRARIES_INSTALL_DIR=/opt
 
 RUN apt-get install -y --no-install-recommends \
+    # Base
     build-essential \
+    gdb \
     wget \
     git \
     cmake \
-    libasio-dev \
     ccache \
+    ninja-build \
+    curl \
+    unzip \
+    rsync \
+    # Dependencies
+    libasio-dev \
     libtinyxml2-dev \
     libssl-dev \
     libp11-dev \
+    libyaml-cpp-dev \
     softhsm2 \
     libengine-pkcs11-openssl \
     python3 \
     python3-pip \
     openjdk-11-jre \
-    libyaml-cpp-dev \
-    ninja-build \
-    curl \
-    unzip \
+    gcc-aarch64-linux-gnu \
+    g++-aarch64-linux-gnu \
+    # Static Analysis
     cppcheck \
+    sloccount \
     clang \
     clang-tools \
     clang-tidy \
@@ -60,38 +67,57 @@ RUN apt-get install -y --no-install-recommends \
     iwyu \
     lcov \
     gcovr \
-    valgrind \
     perf-tools-unstable \
-    gdb \
-    gdbserver \
-    netcat \
-    telnet \
-    vim \
-    htop \
-    tree \
-    jq \
-    && rm -rf /var/lib/apt/lists/* 
+    && rm -rf /var/lib/apt/lists/*
 
 # Install Python packages
 RUN pip3 install --no-cache-dir \
+    # Build Environment
     colcon-common-extensions \
     vcstool \
     # Static Analysis
-    cpplint==1.6.1 \
-    cmake-format==0.6.13 \
-    cmakelang==0.6.13 \
-    pre-commit==3.5.0 \
-    black==23.9.1 \
-    isort==5.12.0
+    lcov_cobertura \
+    cpplint \
+    cmake-format \
+    cmakelang \
+    pre-commit \
+    black \
+    isort
 
 # Build and Install Fast-DDS
+RUN mkdir -p /opt
+COPY sysroot-aarch64 /opt/sysroot-aarch64
+COPY toolchain-aarch64.cmake /opt
+
+ENV SYSROOT_DIR="/opt/sysroot-aarch64"
+
 RUN /bin/bash -c "mkdir -p ${LIBRARIES_INSTALL_DIR}/Fast-DDS \
     && cd ${LIBRARIES_INSTALL_DIR}/Fast-DDS \
     && wget https://raw.githubusercontent.com/eProsima/Fast-DDS/3.2.2/fastdds.repos \
     && mkdir src \
     && vcs import src < fastdds.repos \
-    && colcon build --packages-up-to fastdds \
-    && source ${LIBRARIES_INSTALL_DIR}/Fast-DDS/install/setup.bash \
+    # AMD64
+    && colcon build \
+        --merge-install \
+        --build-base build_amd64 \
+        --install-base install_amd64 \
+        --packages-up-to fastdds \
+    # ARM64
+    && VERBOSE=1 colcon build \
+        --event-handlers console_direct+ \
+        --merge-install \
+        --build-base build_aarch64 \
+        --install-base install_aarch64 \
+        --cmake-force-configure \
+        --cmake-args \
+        -DCMAKE_TOOLCHAIN_FILE=/opt/toolchain-aarch64.cmake \
+        -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+        -DCMAKE_VERBOSE_MAKEFILE=ON \
+    && cd - \
+"
+
+RUN /bin/bash -c "\
+    source ${LIBRARIES_INSTALL_DIR}/Fast-DDS/install_amd64/setup.bash \
     && cd ${LIBRARIES_INSTALL_DIR} \
     && git clone https://github.com/eProsima/Fast-DDS-Gen.git \
     && cd Fast-DDS-Gen \
@@ -121,21 +147,25 @@ WORKDIR /workspace
 ###################################################################################
 FROM builder AS build-stage
 
-ARG BUILD_UNITTEST=FALSE
+ARG BUILD_UNITTEST=TRUE
 ARG EXTENSION_PLATFORM=ROS2
 COPY . .
 
 ENV CFLAGS="-O2"
 ENV CXXFLAGS="-O2"
 ENV LDFLAGS="-O1"
-ENV CMAKE_BUILD_PARALLEL_LEVEL=4
 ENV MAKEFLAGS="$(nproc)"
-ENV BUILD_MODE=${BUILD_UNITTEST}
+ENV BUILD_MODE=Release
 
-RUN mkdir -p /workspace/.build
-RUN /bin/bash -c "source $LIBRARIES_INSTALL_DIR/Fast-DDS/install/setup.bash \
-    && cd /workspace/.build \
-    && cmake ../ \
+RUN ccache -C
+RUN mkdir -p /oss-analysis
+
+# AMD64
+RUN /bin/bash -c "\
+    source $LIBRARIES_INSTALL_DIR/Fast-DDS/install_amd64/setup.bash \
+    && mkdir -p /workspace/.build_amd64 \
+    && cd /workspace/.build_amd64 \
+    && BUILD_MODE=Debug cmake ../ \
         -DBUILD_UNITTEST=${BUILD_UNITTEST} \
         -DEXTENSION_PLATFORM=${EXTENSION_PLATFORM} \
         -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
@@ -143,4 +173,111 @@ RUN /bin/bash -c "source $LIBRARIES_INSTALL_DIR/Fast-DDS/install/setup.bash \
         -DCMAKE_C_COMPILER_LAUNCHER=ccache \
     && make -j${MAKEFLAGS} \
     && make install \
-    && cd -"
+    && cd /workspace \
+"
+
+# ARM64
+RUN /bin/bash -c "\
+    source $LIBRARIES_INSTALL_DIR/Fast-DDS/install_aarch64/setup.bash \
+    && mkdir -p /workspace/.build_aarch64 \
+    && cd /workspace/.build_aarch64 \
+    && cmake ../ \
+        -DBUILD_UNITTEST=FALSE \
+        -DEXTENSION_PLATFORM=${EXTENSION_PLATFORM} \
+        -DCMAKE_TOOLCHAIN_FILE=/opt/toolchain-aarch64.cmake \
+        -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+        -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+        -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+    && make -j${MAKEFLAGS} \
+    && make install \
+    && cd /workspace \
+"
+
+###################################################################################
+# Runtime
+###################################################################################
+FROM ubuntu:22.04 AS runtime
+
+LABEL maintainer="Brian.doh <brian.doh@obigo.com>"
+LABEL description="Runtime Environment"
+LABEL version="0.0.1"
+
+# Set base environment variables
+ENV DEBIAN_FRONTEND=noninteractive
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
+
+RUN apt-get update && apt-get upgrade -y
+
+RUN apt-get install -y --no-install-recommends \
+    libtinyxml2-9 \
+    libssl3 \
+    libp11-3 \
+    softhsm2 \
+    libengine-pkcs11-openssl \
+    libyaml-cpp0.7 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd -r ossuser \
+    && useradd -r -g ossuser -d /oss -s /bin/bash ossuser \
+    && mkdir -p /oss \
+    && chown -R ossuser:ossuser /oss
+
+WORKDIR /oss
+
+COPY --from=build-stage --chown=ossuser:ossuser /workspace/output/aarch64/Release/bin /oss
+COPY --from=build-stage /opt/Fast-DDS/install_aarch64/lib/* /oss/lib
+
+###################################################################################
+# Static Analysis stage
+###################################################################################
+FROM builder AS static-analysis
+
+#RUN mkdir -p /workspace/reports \
+#    && find /workspace/service/ \
+#        -not -path "*/unittest/*" \
+#        -name "*.cpp" \
+#        > /workspace/reports/files_to_cppcheck.txt || true
+#
+## Run CppCheck
+#RUN cppcheck --version \
+#    && cppcheck --enable=all \
+#        --xml \
+#        --xml-version=2 \
+#        --output-file=/workspace/reports/cppcheck-result.xml \
+#        --suppress=missingIncludeSystem \
+#        --suppress=unmatchedSuppression \
+#        --suppress=unusedFunction \
+#        --std=c++20 \
+#        --file-list=/workspace/files_to_cppcheck.txt || true
+
+# Run SlocCount
+#RUN mkdir -p /tmp/sloccount-clean \
+#    && find /workspace/service/ \
+#        -not -path "*/unittest/*" \
+#        \( -name "*.cpp" -o -name "*.hpp" -o -name "*.h" \) \
+#        -exec cp --parents {} /tmp/sloccount-clean/ \\; 2>/dev/null || true
+#
+#RUN cd /tmp/sloccount-clean \
+#    && sloccount --duplicates --wide --details . \
+#        > /workspace/reports/sloccount-detailed.xml || true \
+#    && sloccount . > /workspace/reports/sloccount-summary.txt || true \
+#    && cd /workspace
+
+# CppLint
+#RUN find /workspace/service/ \
+#        -not -path "*/unittest/*" \
+#        \( -name "*.cpp" -o -name "*.hpp" -o -name "*.h" \) \
+#        > /workspace/reports/files_to_lintcheck.txt || true
+#
+#RUN if [ -f /workspace/files_to_lintcheck.txt ]; then \
+#        cat /workspace/files_to_lintcheck.txt | xargs cpplint \
+#            --filter=-whitespace/tab,-legal/copyright,-build/include_order \
+#            --linelength=120 \
+#            --extensions=cpp,cc,h,hpp \
+#            --output=vs7 \
+#            --counting=detailed \
+#            > /workspace/reports/cpplint-result.txt 2>&1 || true \
+#    else \
+#        echo "No files to check" > /workspace/reports/cpplint-result.txt \
+#    fi

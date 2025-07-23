@@ -1,6 +1,15 @@
 #include <gtest/gtest.h>
 #include "endpoint/ROSDiscoveryInfoEndpoint.cpp"
 #include "transmitter/DDSMessageEndpoint.cpp"
+#include "monitor/ServiceMonitor.cpp"
+#include "monitor/ROSServiceDiscovery.cpp"
+#include "service/ServiceRegistry.cpp"
+#include "transmitter/DDSTransmitter.cpp"
+#include "control/ROSServiceController.cpp"
+#include "service/Service.cpp"
+#include "ADSWManager.cpp"
+#include "logger/Logger.cpp"
+
 
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp>
 
@@ -12,7 +21,9 @@ using namespace rmw_dds_common::msg;
 class ROSDiscoveryInfoEndpointTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        ins = std::make_unique<ROSDiscoveryInfoEndpoint>(std::bind(&ROSDiscoveryInfoEndpointTest::MessageCallback, this, std::placeholders::_1));
+		// TODO
+        //ins = std::make_unique<ROSDiscoveryInfoEndpoint>(std::bind(&ROSDiscoveryInfoEndpointTest::MessageCallback, this, std::placeholders::_1));
+        ins = std::make_unique<ROSDiscoveryInfoEndpoint>("topic");
 
         InitDDS();
     }
@@ -110,12 +121,12 @@ protected:
 };
 
 TEST_F(ROSDiscoveryInfoEndpointTest, Initialize_TC001) {
-    EXPECT_TRUE(ins->Initialize(participant_, subscriber_, publisher_));
+    EXPECT_TRUE(ins->Initialize(participant_, publisher_, subscriber_));
     ins->Finalize();
 }
 
 TEST_F(ROSDiscoveryInfoEndpointTest, ReceiveTest_TC001) {
-    EXPECT_TRUE(ins->Initialize(participant_, subscriber_, publisher_));
+    EXPECT_TRUE(ins->Initialize(participant_, publisher_, subscriber_));
 
     char* args[] = {"test/ROSDiscoveryInfoSender", 0};
     pid_t pid = startProcess(args);

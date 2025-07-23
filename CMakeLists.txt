@@ -8,7 +8,7 @@ set ( CMAKE_BUILD_TYPE "$ENV{BUILD_MODE}" )
 set ( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++20 -Wall" )
 
 set ( PROJECT_TOP_DIR "${CMAKE_CURRENT_SOURCE_DIR}" )
-set ( OUTPUT_DIR ${PROJECT_TOP_DIR}/output/${CMAKE_BUILD_TYPE} )
+set ( OUTPUT_DIR ${PROJECT_TOP_DIR}/output/${CMAKE_SYSTEM_PROCESSOR}/${CMAKE_BUILD_TYPE} )
 
 ## Build Options
 set ( EXTENSION_PLATFORM "ROS2" CACHE STRING "Target platform for extension framework" )

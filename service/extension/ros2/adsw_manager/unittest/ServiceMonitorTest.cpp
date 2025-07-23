@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 #include "monitor/ServiceMonitor.cpp"  // Include implementation directl
+#include "monitor/ROSServiceDiscovery.cpp"  // Include implementation directl
+#include "logger/Logger.cpp"
 
 using namespace ros2::adsw_manager;
 using namespace lifecycle_manager;
