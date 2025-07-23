@@ -233,8 +233,6 @@ COPY --from=build-stage /opt/Fast-DDS/install_aarch64/lib/* /oss/lib
 ###################################################################################
 FROM builder AS static-analysis
 
-RUN mkdir -p /oss-analysis
-
 #RUN mkdir -p /workspace/reports \
 #    && find /workspace/service/ \
 #        -not -path "*/unittest/*" \
