@@ -4,10 +4,10 @@
 #include <string>
 #include <set>
 #include <memory>
-\
 
 #include "transmitter/DDSMessageEndpoint.hpp"
 #include "lifecycle/NotifyServiceStatePubSubTypes.hpp"
+#include "MessageTypes.hpp"
 
 namespace ros2 {
 namespace adsw_manager {
@@ -16,7 +16,7 @@ using namespace lifecyclemgr;
 
 class NotifyServiceStateEndPoint : public DDSMessageEndpoint {
   public:
-    NotifyServiceStateEndPoint(std::string topic);
+    NotifyServiceStateEndPoint(MessageType msgtype, std::string topic);
     virtual ~NotifyServiceStateEndPoint();
 
     virtual std::string GetTopic();

@@ -15,7 +15,7 @@ using namespace lifecyclemgr;
 
 class StopServiceEndPoint : public DDSMessageEndPoint {
   public:
-    StopServiceEndPoint(std::string topic);
+    StopServiceEndPoint(MessageType msgtype, std::string topic);
     virtual ~StopServiceEndPoint();
 
     virtual void  OnDataAvailable() override;

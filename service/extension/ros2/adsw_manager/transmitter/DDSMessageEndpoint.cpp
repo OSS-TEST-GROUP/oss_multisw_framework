@@ -29,16 +29,29 @@ bool DDSMessageEndpoint::Initialize(DomainParticipant* participant, Publisher* p
         LOG_ERROR("Failed to create the topic. " << topic  );
         return false;
     }
-    if (subscriber_ != nullptr) {
-        data_reader_ = subscriber_->create_datareader(dds_topic_, DATAREADER_QOS_DEFAULT, this);
-        if (data_reader_ == nullptr) {
+
+    if (subscriber_ != nullptr)
+    {
+        // Create the reader
+        DataReaderQos reader_qos = DATAREADER_QOS_DEFAULT;
+        subscriber_->get_default_datareader_qos(reader_qos);
+        data_reader_ = subscriber_->create_datareader(dds_topic_, reader_qos, this, StatusMask::all());
+        if (data_reader_ == nullptr)
+        {
             LOG_ERROR("Failed to create a data reader. " << topic  );
             return false;
         }
     }
-    if (publisher_ != nullptr) {
-        data_writer_ = publisher_->create_datawriter(dds_topic_, DATAWRITER_QOS_DEFAULT, this);
-        if (data_writer_ == nullptr) {
+
+    if (publisher_ != nullptr)
+    {
+        // Create the data writer
+        DataWriterQos writer_qos = DATAWRITER_QOS_DEFAULT;
+        writer_qos.history().depth = 5;
+        publisher_->get_default_datawriter_qos(writer_qos);
+        data_writer_ = publisher_->create_datawriter(dds_topic_, writer_qos, this, StatusMask::all());
+        if (data_writer_ == nullptr)
+        {
             LOG_ERROR("Failed to create a data writer. " << topic );
             return false;
         }
@@ -60,9 +73,12 @@ void DDSMessageEndpoint::Finalize() {
 }
 
 bool DDSMessageEndpoint::Write(void* value) {
+    LOG_DEBUG("write message. " << GetTopic() );
+
     if (data_writer_) {
-        data_writer_->write(value);
-        return true;
+        bool ret = data_writer_->write(value);
+        LOG_DEBUG("write message. " << GetTopic() << ", return = " << ret );
+        return ret;
     }
     return false;
 }

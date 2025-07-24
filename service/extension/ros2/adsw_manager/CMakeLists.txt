@@ -15,6 +15,7 @@ set ( MISC_SRC
 set ( TRANSMIT_SRC
     transmitter/DDSTransmitter.cpp
     transmitter/DDSMessageEndpoint.cpp
+    transmitter/MessageQueue.cpp
     endpoint/EndPointFactory.cpp
     endpoint/ROSDiscoveryInfoEndpoint.cpp
     endpoint/GetServiceStateEndPoint.cpp

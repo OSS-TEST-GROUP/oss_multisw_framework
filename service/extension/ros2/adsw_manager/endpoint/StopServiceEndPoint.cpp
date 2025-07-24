@@ -7,12 +7,14 @@
 namespace ros2 {
 namespace adsw_manager {
     
-StopServiceEndPoint::StopServiceEndPoint(std::string topic) 
+StopServiceEndPoint::StopServiceEndPoint(MessageType msgtype, std::string topic) 
     : DDSMessageEndpoint() {
-        
     topic_ = topic;
-    type_support_ = std::make_shared<TypeSupport>(new StopServiceRequestPubSubType());
-
+    if (msgtype == MessageType::STOP_SERVICE_REQUEST){
+        type_support_ = std::make_shared<TypeSupport>(new StopServiceRequestPubSubType());
+    }else if (msgtype == MessageType::STOP_SERVICE_RESPONSE){
+        type_support_ = std::make_shared<TypeSupport>(new StopServiceResponsePubSubType());
+    }
 }
 
 StopServiceEndPoint::~StopServiceEndPoint() {

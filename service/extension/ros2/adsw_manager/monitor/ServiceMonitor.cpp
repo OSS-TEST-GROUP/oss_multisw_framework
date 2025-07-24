@@ -80,7 +80,6 @@ void ServiceMonitor::NotifyServiceState() {
                 ServiceState state = iter->GetServiceState();
                 notify.service_state_list().push_back(TypeConvert::ToServiceState(state));
             }
-
             endpoint->Write(reinterpret_cast<void*>(&notify));
         }
     }

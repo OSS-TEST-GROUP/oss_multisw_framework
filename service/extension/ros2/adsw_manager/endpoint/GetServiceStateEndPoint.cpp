@@ -2,17 +2,20 @@
 
 #include "lifecycle/GetServiceStateRequest.hpp"
 #include "ADSWManager.hpp"
-#include "service/TypeConvert.hpp"
 #include "logger/Log.hpp"
 
 
 namespace ros2 {
 namespace adsw_manager {
 
-GetServiceStateEndPoint::GetServiceStateEndPoint(std::string topic) 
+GetServiceStateEndPoint::GetServiceStateEndPoint(MessageType msgtype, std::string topic) 
     : DDSMessageEndpoint() {
     topic_ = topic;
-    type_support_ = std::make_shared<TypeSupport>(new GetServiceStateRequestPubSubType());
+    if (msgtype == MessageType::GET_SERVICE_STATE_REQUEST){
+        type_support_ = std::make_shared<TypeSupport>(new GetServiceStateRequestPubSubType());
+    }else if (msgtype == MessageType::GET_SERVICE_STATE_RESPONSE){
+        type_support_ = std::make_shared<TypeSupport>(new GetServiceStateResponsePubSubType());
+    }
 }
 
 GetServiceStateEndPoint::~GetServiceStateEndPoint() {

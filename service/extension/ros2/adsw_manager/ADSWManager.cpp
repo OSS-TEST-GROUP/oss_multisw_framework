@@ -19,19 +19,18 @@ bool ADSWManager::Initialize() {
     service_controller_ = std::make_shared<ROSServiceController>();
     endppoint_factory_ = std::make_shared<EndPointFactory>();
 
+    // initialize dependency : dds_transmitter --> endpoint_factory --> service_registry
     if (!dds_transmitter_->Initialize()) {
         return false;
     }
-    if (!service_registry_->LoadServiceList()) {
+    if (!endppoint_factory_->Initialize()){
         return false;
     }
+
     if (!service_monitor_->Initialize()) {
         return false;
     }
     if (!service_controller_->Initialize()) {
-        return false;
-    }
-    if (!endppoint_factory_->Initialize()){
         return false;
     }
     LOG_DEBUG("ADSWManager::Initialize End ");
@@ -41,6 +40,9 @@ bool ADSWManager::Initialize() {
 bool ADSWManager::Start() {
     if (endppoint_factory_ != nullptr){
         endppoint_factory_->CreateEndPoints(dds_transmitter_);
+    }
+    if (!service_registry_->LoadServiceList()) {
+        return false;
     }
     return true;
 }

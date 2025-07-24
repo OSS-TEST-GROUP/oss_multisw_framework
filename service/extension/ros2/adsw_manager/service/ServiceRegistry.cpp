@@ -10,6 +10,7 @@
 #include "transmitter/DDSTransmitter.hpp"
 #include "service/TypeConvert.hpp"
 #include "lifecycle/UpdateServiceListRequest.hpp"
+#include "transmitter/MessageQueue.hpp"
 
 #include "logger/Log.hpp"
 
@@ -247,13 +248,9 @@ bool ServiceRegistry::ProcessGetServiceStateRequest(lifecyclemgr::GetServiceStat
     }
 
     std::shared_ptr<DDSTransmitter> transmitter = ADSWManager::Get()->GetTransmitter();
-    lifecyclemgr::GetServiceStateResponse response;
 
     std::vector<std::string> service_list = message->service_list();
     bool is_all_service = message->is_all_service(); 
-
-    const char* topic = ADSWManager::Get()->GetTopic(MessageType::GET_SERVICE_STATE_RESPONSE);    
-    std::shared_ptr<DDSMessageEndpoint> endpoint = transmitter->GetMessageEndpoint(topic);
 
     for (const auto& service : service_list) {
     
@@ -262,19 +259,17 @@ bool ServiceRegistry::ProcessGetServiceStateRequest(lifecyclemgr::GetServiceStat
             
             ServiceState state = service_ptr->GetServiceState();
 
-            response.service_list().push_back(service);
-            response.service_state_list().push_back(TypeConvert::ToServiceState(state));
+            get_service_response_.service_list().push_back(service);
+            get_service_response_.service_state_list().push_back(TypeConvert::ToServiceState(state));
             LOG_DEBUG("Service: " << service << " State: " << static_cast<int>(state));
         } else {
             LOG_ERROR("Service not found: " << service);
         }
     }
 
-    if (endpoint != nullptr) {
-        endpoint->Write(&response);
-    }
-    LOG_DEBUG("Service state response sent for " << service_list.size() << " services.");
-    return true;
+    return transmitter->SendMessage(MessageType::GET_SERVICE_STATE_RESPONSE, 
+                                    reinterpret_cast<void*>(&get_service_response_));
+
 }
 
 bool ServiceRegistry::ProcessUpdateServiceListRequest() {
@@ -285,6 +280,7 @@ bool ServiceRegistry::ProcessUpdateServiceListRequest() {
     for (auto& service : services_){
         std::shared_ptr<Service> service_ptr = service.second;
         if (service_ptr != nullptr) {
+
             lifecyclemgr::Service service_info;
             service_info.name() = service_ptr->GetName();
             service_info.service_type() = TypeConvert::ToServiceType(service_ptr->GetServiceType());
@@ -297,7 +293,6 @@ bool ServiceRegistry::ProcessUpdateServiceListRequest() {
     std::shared_ptr<DDSTransmitter> transmitter = ADSWManager::Get()->GetTransmitter();
     const char* topic = ADSWManager::Get()->GetTopic(MessageType::UPDATE_SERVICE_LIST_REQUEST);
     std::shared_ptr<DDSMessageEndpoint> endpoint = transmitter->GetMessageEndpoint(topic);
-
     if (endpoint != nullptr) {
         endpoint->Write(&message);
         LOG_DEBUG("UpdateServiceListRequest sent with " << message.service_list().size() << " services.");
@@ -311,97 +306,120 @@ bool ServiceRegistry::ProcessUpdateServiceListRequest() {
 bool ServiceRegistry::Save(){
     YAML::Node config;
 
-    config["extension"] = "ROS2";
     config["version"] = "0.1";
 
-    YAML::Node ndgroups;
+    YAML::Node ndcontainers;  // Use plural 'containers' to match convention and your YAML
 
-    for (auto& group : group_){
-        YAML::Node ndgroup;
+    for (auto& group : group_) {
+        YAML::Node ndcontainer;
 
-        ndgroup["group"] = group.first;
-        
+        // 'group' key is not typical under each container if you use container name as key,
+        // instead store container groups as map keys, but if you want inside each container, keep it.
+        ndcontainer["group"] = group.first;
+
         YAML::Node ndservices;
 
-        for (auto& service : group.second){
-                // Add a sequence
+        for (auto& service : group.second) {
             YAML::Node ndservice;
 
-            ndservice["package"] = service->GetPackage();        
+            ndservice["package"] = service->GetPackage();
             ndservice["name"] = service->GetName();
             ndservice["launchfile"] = service->GetLaunchFile();
+
+            // Convert integers to strings if you need consistent quoting; here leave as int or convert explicitly
             ndservice["type"] = static_cast<int32_t>(service->GetServiceType());
             ndservice["recovery"] = static_cast<int32_t>(service->GetRecoveryPolicy());
+
+            // YAML supports boolean natively; if you want string "true"/"false" change accordingly
             ndservice["enabled"] = service->IsEnabled();
+
             ndservice["max"] = service->GetMaxNodes();
 
             ndservices.push_back(ndservice);
         }
 
-        ndgroup["services"] = ndservices;
-        ndgroups.push_back(ndgroup);
+        ndcontainer["services"] = ndservices;
+
+        // Push each container as an element of a sequence
+        ndcontainers.push_back(ndcontainer);
     }
 
-    config["sped"]["container"] = ndgroups;
+    // Note: your original had a typo "container" (singular).
+    // Typically the correct key would be "containers".
+    config["spec"]["containers"] = ndcontainers;
 
-    // 파일에 쓰기
+    // Write YAML to file
     std::ofstream fout(SAVED_REGISTRY_BACKUP);
+    if (!fout) {
+        std::cerr << "Error opening file for writing: " << SAVED_REGISTRY_BACKUP << std::endl;
+        return false;
+    }
     fout << config;
     fout.close();
+
     return true;
 }
 
 bool ServiceRegistry::LoadServiceSaved(const std::string& path) {
     LOG_DEBUG("ServiceRegistry::LoadServiceList path: " << path);
-
     try {
-
         YAML::Node config = YAML::LoadFile(path);
-        auto containers = config["spec"]["containers"];
-        for (auto container : containers) {
-            auto groupStr = container["group"].as<std::string>();
-            auto servicesNode = container["services"];
-            std::cout << "Group name: " << groupStr << std::endl;
 
-            AddGroup(groupStr);
-            
-            if (servicesNode && servicesNode.IsSequence()) {
-                for (const auto& serviceNode : servicesNode) {
-                    // Each rule should have status and message (condition is optional list)
-                    if (!serviceNode["name"] ) {
-                        LOG_DEBUG("Load  missing service name ");
-                        continue; // skip rules missing essential fields
-                    }
+        auto specsNode = config["specs"];
+        if (!specsNode || !specsNode.IsSequence()) {
+            LOG_ERROR("Invalid or missing 'specs' sequence in YAML");
+            return false;
+        }
 
-                    std::string pkgStr = serviceNode["package"].as<std::string>();
-                    std::string nameStr = serviceNode["name"].as<std::string>();
-                    std::string lfileStr = serviceNode["launchfile"].as<std::string>();
-                    std::string typeStr = serviceNode["type"].as<std::string>();
-                    std::string recoStr = serviceNode["recovery"].as<std::string>();
-                    std::string enableStr = serviceNode["enabled"].as<std::string>();
-                    std::string maxStr = serviceNode["max"].as<std::string>();
+        for (const auto& spec : specsNode) {
+            auto containersNode = spec["containers"];
+            if (!containersNode || !containersNode.IsMap()) {
+                LOG_ERROR("Invalid or missing 'containers' mapping in spec");
+                continue;
+            }
 
-                    std::shared_ptr<Service> service = std::make_shared<Service>(
+            // containersNode is a map: groupName -> map { services: [...] }
+            for (auto it = containersNode.begin(); it != containersNode.end(); ++it) {
+                std::string groupStr = it->first.as<std::string>();
+                auto containerData = it->second;
+                auto servicesNode = containerData["services"];
+
+                std::cout << "Group name: " << groupStr << std::endl;
+                AddGroup(groupStr);
+
+                if (servicesNode && servicesNode.IsSequence()) {
+                    for (const auto& serviceNode : servicesNode) {
+                        if (!serviceNode["name"]) {
+                            LOG_DEBUG("Load missing service name");
+                            continue;
+                        }
+
+                        std::string pkgStr = serviceNode["package"].as<std::string>("");
+                        std::string nameStr = serviceNode["name"].as<std::string>("");
+                        std::string lfileStr = serviceNode["launchfile"].as<std::string>("");
+                        std::string typeStr = serviceNode["type"].as<std::string>("");
+                        std::string recoStr = serviceNode["recovery"].as<std::string>("");
+                        std::string enableStr = serviceNode["enabled"].as<std::string>("");
+                        std::string maxStr = serviceNode["max"].as<std::string>("");
+
+                        std::shared_ptr<Service> service = std::make_shared<Service>(
                             nameStr, 
                             ServiceType::NORMAL,
                             RecoveryPolicy::ALWAYS,
-                            true  // Assume enabled by default
-                    );
+                            true  // You can parse enableStr if needed to adjust this
+                        );
 
-                    service->SetLaunchFile(lfileStr); 
-                    AddService(service, groupStr);
+                        service->SetPackage(pkgStr);
+                        service->SetLaunchFile(lfileStr); 
+                        AddService(service, groupStr);
+                    }
                 }
             }
-
-            // Further splitting of args (which contains your launch commands) would require string parsing:
-            // e.g., use std::regex or string split on "ros2 launch ..."
-        }        
-
+        }
     } catch (const YAML::Exception& e) {
         LOG_ERROR("Failed to load service list from " << path << ": " << e.what());
         return false;
     }
-
     LOG_DEBUG("ServiceRegistry::LoadServiceList end ");
     return true;
 }

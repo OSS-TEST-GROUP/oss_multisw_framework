@@ -16,7 +16,7 @@ using namespace lifecyclemgr;
 
 class SetServiceModeEndPoint : public DDSMessageEndPoint {
   public:
-    SetServiceModeEndPoint(std::string topic);
+    SetServiceModeEndPoint(MessageType msgtype, std::string topic);
     virtual ~SetServiceModeEndPoint();
 
     virtual void  OnDataAvailable() override;

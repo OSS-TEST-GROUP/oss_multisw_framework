@@ -45,6 +45,13 @@ bool DDSTransmitter::Initialize(){
         LOG_ERROR("Subscriber initialization failed.");
         return false;
     }
+
+    message_queue_ = std::make_shared<MessageQueue>();
+
+    if (message_queue_ != nullptr){
+        message_queue_->Start();
+    }
+
     LOG_DEBUG("DDSTransmitter End");
 
     return true;    
@@ -64,13 +71,16 @@ void DDSTransmitter::Finalize(){
         // Delete DomainParticipant
         DomainParticipantFactory::get_instance()->delete_participant(participant_);
     }
+   
+    if (message_queue_ != nullptr){
+        message_queue_->Stop();
+    }
 }
 
 
 bool DDSTransmitter::AddMessageEndpoint(std::shared_ptr<DDSMessageEndpoint> endpoint){
 
     if (endpoint){
-
         endpoints_[endpoint->GetTopic()] = endpoint;
     }
 
@@ -105,6 +115,20 @@ Subscriber* DDSTransmitter::GetSubscriber() {
     return subscriber_;
 }
 
+bool DDSTransmitter::SendMessage(MessageType mtype, void* ptr){
+
+    if (message_queue_ != nullptr){
+
+        MsgType message = std::make_pair(mtype, ptr);
+        message_queue_->SendMessage(message);
+
+        return true;
+    }
+
+    LOG_DEBUG("SendMessage failure !! " << static_cast<int32_t>(mtype)  );
+    return false;
+
+}
 
 } // namespace lifecycle_manager
 } // namespace ros2

@@ -6,11 +6,13 @@
 namespace ros2 {
 namespace adsw_manager {
     
-NotifyServiceStateEndPoint::NotifyServiceStateEndPoint(std::string topic) 
+NotifyServiceStateEndPoint::NotifyServiceStateEndPoint(MessageType msgtype, std::string topic) 
     : DDSMessageEndpoint() {
         
     topic_ = topic;
-    type_support_ = std::make_shared<TypeSupport>(new NotifyServiceStatePubSubType());
+    if (msgtype == MessageType::NOTIFY_SERVICE_STATE){
+        type_support_ = std::make_shared<TypeSupport>(new NotifyServiceStatePubSubType());
+    }
 }
 
 NotifyServiceStateEndPoint::~NotifyServiceStateEndPoint() {

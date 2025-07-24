@@ -56,6 +56,8 @@ class ServiceRegistry {
   private:
     std::unordered_map<std::string, std::shared_ptr<Service>> services_;
     std::unordered_map<std::string, std::set<std::shared_ptr<Service>>> group_;
+
+    lifecyclemgr::GetServiceStateResponse get_service_response_;
 };
 
 } // namespace adsw_manager

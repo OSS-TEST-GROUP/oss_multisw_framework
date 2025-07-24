@@ -7,11 +7,14 @@
 
 namespace lifecycle_manager {
 
-StopServiceEndPoint::StopServiceEndPoint(std::string topic) 
+StopServiceEndPoint::StopServiceEndPoint(MessageType msgtype, std::string topic) 
     : DDSMessageEndPoint(topic){
 
-    SetTypeSupport(std::make_shared<TypeSupport>(new StopServiceRequestPubSubType()));
-
+    if (msgtype == MessageType::STOP_SERVICE_REQUEST){
+        SetTypeSupport(std::make_shared<TypeSupport>(new StopServiceRequestPubSubType()));
+    }else if (msgtype == MessageType::STOP_SERVICE_RESPONSE){
+        SetTypeSupport(std::make_shared<TypeSupport>(new StopServiceResponsePubSubType()));
+    }
 }
 
 StopServiceEndPoint::~StopServiceEndPoint() {

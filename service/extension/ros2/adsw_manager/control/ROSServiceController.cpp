@@ -3,6 +3,7 @@
 #include "ADSWManager.hpp"
 #include "transmitter/DDSTransmitter.hpp"
 #include "transmitter/DDSMessageEndpoint.hpp"
+#include "transmitter/MessageQueue.hpp"
 #include "logger/Log.hpp"
 #include "HelperUtils.hpp"
 
@@ -94,20 +95,20 @@ bool ROSServiceController::StartService(std::shared_ptr<Service> service){
 
     // Assuming launchByFile, GetLauchFile, and GetPackageName are member functions or variables.
     // If not, you need to implement or correct them.
-    bool launchByFile = false; // Placeholder, replace with actual logic
-    if (launchByFile){
-        command = basecommand + " ros2 launch " + service->GetPackage() + " " + service->GetLaunchFile();
+    std::string launchFile = service->GetLaunchFile();
+    if (launchFile.empty()){
+        command = basecommand + " ros2 run " + service->GetPackage() + " " + service->GetPackage() + " &";
     }else{
-        command = basecommand + " ros2 run " + service->GetPackage();
+        command = basecommand + " ros2 launch " + service->GetPackage() + " " + service->GetLaunchFile() + " &";
     }
 
     int result = system(command.c_str());
     
     if (result == 0) {
-        LOG_DEBUG("ROSServiceController::StartService success " << service->GetName());
+        LOG_DEBUG("StartService success :: " << command);
         return true;
     } else {
-        LOG_ERROR("ROSServiceController::StartService failed " << service->GetName());
+        LOG_ERROR("StartService failed :: " << command);
         return false;
     }
 }
@@ -129,19 +130,13 @@ bool ROSServiceController::StopService(std::shared_ptr<Service> service){
     std::string command = basecommand + " kill " + std::to_string(pid);
     int result = system(command.c_str());
     
-    if (result != 0) {
-        LOG_ERROR("ROSServiceController::StopChildService failed " << pid);
+    if (result == 0) {
+        LOG_DEBUG("StopService success :: " << command);
+        return true;
+    } else {
+        LOG_ERROR("StopService failed :: " << command);
         return false;
     }
-    LOG_DEBUG("ROSServiceController::StopChildService success " << pid);
-    return true;    
-    
-    if (result != 0) {
-        LOG_ERROR("ROSServiceController::StopChildService failed " << pid);
-        return false;
-    }
-    LOG_DEBUG("ROSServiceController::StopChildService success " << pid);
-    return true;    
 }
 
 bool ROSServiceController::GetNodeLists(std::shared_ptr<Service> service){
@@ -166,7 +161,7 @@ bool ROSServiceController::GetNodeLists(std::shared_ptr<Service> service){
     std::vector<std::string> lines = HelperUtils::SplitLines(exeresult);
 
     for (auto& line : lines){
-        // service->AddNode();
+        LOG_DEBUG("GetNodeLists :: " << line);
     }
 
     return true;
@@ -202,7 +197,7 @@ uint64_t ROSServiceController::GetPID(std::shared_ptr<Service> service){
             return retpid;
         }
     } catch (const std::exception& e) {
-        LOG_ERROR("ContainerController::GetPIDs failed " << basecommand << ": " << e.what());
+        LOG_ERROR("ContainerController::GetPIDs failed " << command << ": " << e.what());
         return 0;
     }
 
@@ -219,7 +214,7 @@ bool ROSServiceController::ProcessServiceStartRequest(lifecyclemgr::StartService
     }
     std::vector<std::string> service_list = message->service_list();
     bool is_group = message->is_group();
-    bool result;
+    bool result = false;
 
     if (GetContainer()->ContainerSupported() == false){
         is_group = false;
@@ -231,7 +226,6 @@ bool ROSServiceController::ProcessServiceStartRequest(lifecyclemgr::StartService
     }
     else{
         LOG_DEBUG("Starting services: " << (is_group ? "Group" : "Individual") << " - " << service_list.size() << " services.");
-
         if (is_group) {
             for (const auto& service : service_list) {
                 result = StartGroup(service);
@@ -242,28 +236,20 @@ bool ROSServiceController::ProcessServiceStartRequest(lifecyclemgr::StartService
             }
         }
     }
-    lifecyclemgr::ReturnCode ret_code = lifecyclemgr::ReturnCode::SUCCESS;
+
+   /* send message via message queue.. do not use local variable --> calss variable */
     if (!result) {
-        ret_code = lifecyclemgr::ReturnCode::FAILED;
+        start_service_response_.ret_code() = lifecyclemgr::ReturnCode::FAILED;
         LOG_ERROR("Failed to start service(s).");
     } else {
-        ret_code = lifecyclemgr::ReturnCode::SUCCESS;
+        start_service_response_.ret_code() = lifecyclemgr::ReturnCode::SUCCESS;
         LOG_DEBUG("Service(s) started successfully.");
     }
 
-    lifecyclemgr::StartServiceResponse response;
-    response.ret_code() = ret_code;
-
-    const char* topic = ADSWManager::Get()->GetTopic(MessageType::START_SERVICE_RESPONSE);
     std::shared_ptr<DDSTransmitter> transmitter = ADSWManager::Get()->GetTransmitter();
-    std::shared_ptr<DDSMessageEndpoint> endpoint = transmitter->GetMessageEndpoint(topic);
 
-    // Write the response back to the DDS topic
-    if (endpoint != nullptr) {
-        endpoint->Write(reinterpret_cast<void*>(&response));
-    }
-    return true;
-
+    return transmitter->SendMessage(MessageType::START_SERVICE_RESPONSE, 
+                                    reinterpret_cast<void*>(&start_service_response_));
 }
 
 bool ROSServiceController::ProcessServiceStopRequest(lifecyclemgr::StopServiceRequest* message){
@@ -275,7 +261,7 @@ bool ROSServiceController::ProcessServiceStopRequest(lifecyclemgr::StopServiceRe
     }
     std::vector<std::string> service_list = message->service_list();
     bool is_group = message->is_group();
-    bool result;
+    bool result = false;
 
     if (service_list.empty()) {
         LOG_ERROR("No services provided to stop.");
@@ -294,27 +280,20 @@ bool ROSServiceController::ProcessServiceStopRequest(lifecyclemgr::StopServiceRe
             }
         }
     }
-    lifecyclemgr::ReturnCode ret_code = lifecyclemgr::ReturnCode::SUCCESS;
+
+    /* send message via message queue.. do not use local variable --> calss variable */
     if (!result) {
-        ret_code = lifecyclemgr::ReturnCode::FAILED;
-        LOG_ERROR("Failed to start service(s).");
+        stop_service_response_.ret_code() = lifecyclemgr::ReturnCode::FAILED;
+        LOG_ERROR("Failed to stop service(s).");
     } else {
-        ret_code = lifecyclemgr::ReturnCode::SUCCESS;
-        LOG_DEBUG("Service(s) started successfully.");
+        stop_service_response_.ret_code() = lifecyclemgr::ReturnCode::SUCCESS;
+        LOG_DEBUG("Service(s) stop successfully.");
     }
 
-    lifecyclemgr::StopServiceResponse response;
-    response.ret_code() = ret_code;
-
-    const char* topic = ADSWManager::Get()->GetTopic(MessageType::STOP_SERVICE_RESPONSE);
     std::shared_ptr<DDSTransmitter> transmitter = ADSWManager::Get()->GetTransmitter();
-    std::shared_ptr<DDSMessageEndpoint> endpoint = transmitter->GetMessageEndpoint(topic);
 
-    // Write the response back to the DDS topic
-    if (endpoint != nullptr) {
-        endpoint->Write(reinterpret_cast<void*>(&response));
-    }
-    return true;
+    return transmitter->SendMessage(MessageType::STOP_SERVICE_RESPONSE, 
+                                    reinterpret_cast<void*>(&stop_service_response_));
 }
 
     

@@ -9,7 +9,8 @@ Service::Service(const std::string& name, ServiceType service_type, RecoveryPoli
       recovery_policy_(recovery_policy),
       is_enabled_(is_enable),
       service_state_(ServiceState::NOT_RUNNING),
-      packag_name_(name),
+      packag_name_(""),
+      launch_file_(""),
       max_nodes_(0),
       current_nodes_(0)
 {
@@ -43,6 +44,10 @@ void Service::SetServiceState(ServiceState state) {
 
 void Service::SetLaunchFile(const std::string& launchfile){
     launch_file_ = launchfile;
+}
+
+void Service::SetPackage(const std::string& package){
+    packag_name_ = package;
 }
 
 const std::string Service::GetPackage(){

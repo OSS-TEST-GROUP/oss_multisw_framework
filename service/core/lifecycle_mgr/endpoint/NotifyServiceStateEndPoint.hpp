@@ -15,7 +15,7 @@ using namespace lifecyclemgr;
 
 class NotifyServiceStateEndPoint : public DDSMessageEndPoint {
   public:
-    NotifyServiceStateEndPoint(std::string topic);
+    NotifyServiceStateEndPoint(MessageType msgtype, std::string topic);
     virtual ~NotifyServiceStateEndPoint();
 
     virtual void  OnDataAvailable() override;

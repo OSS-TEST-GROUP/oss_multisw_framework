@@ -20,6 +20,7 @@
 #include <fastdds/dds/topic/TypeSupport.hpp>
 
 #include "MessageEndPoint.hpp"
+#include "include/MessageType.hpp"
 
 using namespace eprosima::fastdds::dds;
 

@@ -8,11 +8,14 @@
 namespace lifecycle_manager {
 
 
-StartServiceEndPoint::StartServiceEndPoint(std::string topic) 
+StartServiceEndPoint::StartServiceEndPoint(MessageType msgtype, std::string topic) 
     : DDSMessageEndPoint(topic){
-
-    SetTypeSupport(std::make_shared<TypeSupport>(new StartServiceRequestPubSubType()));
-
+        
+    if (msgtype == MessageType::START_SERVICE_REQUEST){
+        SetTypeSupport(std::make_shared<TypeSupport>(new StartServiceRequestPubSubType()));
+    }else if (msgtype == MessageType::START_SERVICE_RESPONSE){
+        SetTypeSupport(std::make_shared<TypeSupport>(new StartServiceResponsePubSubType()));
+    }
 }
 
 StartServiceEndPoint::~StartServiceEndPoint() {

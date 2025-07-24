@@ -7,6 +7,7 @@
 
 #include "transmitter/DDSMessageEndpoint.hpp"
 #include "lifecycle/StopServiceRequestPubSubTypes.hpp"
+#include "MessageTypes.hpp"
 
 namespace ros2 {
 namespace adsw_manager {
@@ -15,7 +16,7 @@ using namespace lifecyclemgr;
 
 class StopServiceEndPoint : public DDSMessageEndpoint {
   public:
-    StopServiceEndPoint(std::string topic);
+    StopServiceEndPoint(MessageType msgtype, std::string topic);
     virtual ~StopServiceEndPoint();
 
     virtual std::string GetTopic();
