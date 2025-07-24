@@ -7,6 +7,7 @@
 
 #include "transmitter/DDSMessageEndpoint.hpp"
 #include "lifecycle/UpdateServiceListRequestPubSubTypes.hpp"
+#include "MessageTypes.hpp"
 
 namespace ros2 {
 namespace adsw_manager {
@@ -15,7 +16,7 @@ using namespace lifecyclemgr;
 
 class UpdateServiceListEndPoint : public DDSMessageEndpoint {
   public:
-    UpdateServiceListEndPoint(std::string topic);
+    UpdateServiceListEndPoint(MessageType msgtype, std::string topic);
     virtual ~UpdateServiceListEndPoint();
 
     virtual std::string GetTopic();

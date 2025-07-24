@@ -8,11 +8,14 @@
 
 namespace lifecycle_manager {
 
-UpdateServiceListEndPoint::UpdateServiceListEndPoint(std::string topic) 
+UpdateServiceListEndPoint::UpdateServiceListEndPoint(MessageType msgtype, std::string topic) 
     : DDSMessageEndPoint(topic){
 
-    SetTypeSupport(std::make_shared<TypeSupport>(new UpdateServiceListRequestPubSubType()));
-
+    if (msgtype == MessageType::UPDATE_SERVICE_LIST_REQUEST){
+        SetTypeSupport(std::make_shared<TypeSupport>(new UpdateServiceListRequestPubSubType()));
+    }else if (msgtype == MessageType::UPDATE_SERVICE_LIST_RESPONSE){
+        SetTypeSupport(std::make_shared<TypeSupport>(new UpdateServiceListResponsePubSubType()));
+    }
 }
 
 UpdateServiceListEndPoint::~UpdateServiceListEndPoint() {

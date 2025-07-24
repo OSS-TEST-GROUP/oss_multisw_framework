@@ -6,11 +6,12 @@
 namespace lifecycle_manager {
 
 
-LifecycleDiagReportEndPoint::LifecycleDiagReportEndPoint(std::string topic) 
+LifecycleDiagReportEndPoint::LifecycleDiagReportEndPoint(MessageType msgtype, std::string topic) 
     : DDSMessageEndPoint(topic){
 
-    SetTypeSupport(std::make_shared<TypeSupport>(new LifecycleDiagReportPubSubType()));
-
+    if (msgtype == MessageType::LIFECYCLE_DIAG_REPORT){
+        SetTypeSupport(std::make_shared<TypeSupport>(new LifecycleDiagReportPubSubType()));
+    }
 }
 
 LifecycleDiagReportEndPoint::~LifecycleDiagReportEndPoint() {

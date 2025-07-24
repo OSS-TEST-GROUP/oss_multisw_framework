@@ -28,6 +28,7 @@ class Service {
     void SetLaunchFile(const std::string& launchfile);
     const std::string GetLaunchFile(){return launch_file_;}
 
+    void SetPackage(const std::string& package);
     const std::string GetPackage();
     void SetRunningNodes(int32_t count);
     int32_t GetMaxNodes();

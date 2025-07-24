@@ -75,37 +75,45 @@ public:
 
     static void SetMessage(LifecycleDiagReport& message){
 
-        ::ServiceStatus value1, value2, value3;
+        ::ServiceStatus value1, value2, value3, value4;
 
-        value1.name() = "service1";
+        value1.name() = "sample_listener";
         value1.service_type() = ServiceType::NORMAL;
         value1.service_state() = ServiceState::RUNNING;
         value1.is_enabled() = true;
         value1.recovered_count() = 1;        
 
-        value2.name() = "service2";
+        value2.name() = "sample_talker";
         value2.service_type() = ServiceType::NORMAL;
         value2.service_state() = ServiceState::RUNNING;
         value2.is_enabled() = true;
         value2.recovered_count() = 0;        
 
-        value3.name() = "service3";
+        value3.name() = "managed_scan";
         value3.service_type() = ServiceType::ONESHOT;
         value3.service_state() = ServiceState::NOT_RUNNING;
         value3.is_enabled() = true;
         value3.recovered_count() = 1;        
 
-
+        value4.name() = "managed_lifecycle";
+        value4.service_type() = ServiceType::ONESHOT;
+        value4.service_state() = ServiceState::NOT_RUNNING;
+        value4.is_enabled() = true;
+        value4.recovered_count() = 1;     
+        
         message.service_list().push_back(value1);
         message.service_list().push_back(value2);
         message.service_list().push_back(value3);
+        message.service_list().push_back(value4);
     }
 
     static void SetMessage(SetServiceModeRequest& message){
 
-        message.service_list().push_back("service1");
-        message.service_list().push_back("service2");
-        message.service_list().push_back("service3");
+        message.service_list().push_back("sample_listener");
+        message.service_list().push_back("sample_talker");
+        message.service_list().push_back("managed_scan");
+        message.service_list().push_back("managed_lifecycle");
+
 
         message.is_group() = true;
         message.service_mode() = ServiceMode::NORMAL;
@@ -118,25 +126,32 @@ public:
 
     static void SetMessage(UpdateServiceListRequest& message){
 
-        ::Service value1, value2, value3;
-        value1.name() = "service1";
+        ::Service value1, value2, value3, value4;
+        value1.name() = "sample_listener";
         value1.service_type() = ServiceType::NORMAL;
         value1.recovery_policy() = RecoveryPolicy::ALWAYS;
         value1.is_enabled() = true;
 
-        value2.name() = "service2";
+        value2.name() = "sample_talker";
         value2.service_type() = ServiceType::NORMAL;
         value2.recovery_policy() = RecoveryPolicy::ON_SUCCESS;
         value2.is_enabled() = true;
 
-        value3.name() = "service3";
+        value3.name() = "managed_scan";
         value3.service_type() = ServiceType::ONESHOT;
         value3.recovery_policy() = RecoveryPolicy::MANUAL;
         value3.is_enabled() = true;
 
+        value4.name() = "managed_lifecycle";
+        value4.service_type() = ServiceType::ONESHOT;
+        value4.recovery_policy() = RecoveryPolicy::MANUAL;
+        value4.is_enabled() = true;
+
         message.service_list().push_back(value1);
         message.service_list().push_back(value2);
         message.service_list().push_back(value3);
+        message.service_list().push_back(value4);
+
     }
     static void SetMessage(UpdateServiceListResponse& message){ 
         message.ret_code() = ::ReturnCode::SUCCESS;
@@ -144,39 +159,45 @@ public:
 
     static void SetMessage(GetServiceStateRequest& message){
 
-        message.service_list().push_back("service1");
-        message.service_list().push_back("service2");
-        message.service_list().push_back("service3");
+        message.service_list().push_back("sample_listener");
+        message.service_list().push_back("sample_talker");
+        message.service_list().push_back("managed_scan");
+        message.service_list().push_back("managed_lifecycle");
 
         message.is_all_service() = true;
     }
     static void SetMessage(GetServiceStateResponse& message){
-
-        message.service_list().push_back("service1");
-        message.service_list().push_back("service2");
-        message.service_list().push_back("service3");
+        message.service_list().push_back("sample_listener");
+        message.service_list().push_back("sample_talker");
+        message.service_list().push_back("managed_scan");
+        message.service_list().push_back("managed_lifecycle");
 
         message.service_state_list().push_back(::ServiceState::RUNNING);
         message.service_state_list().push_back(::ServiceState::RUNNING_NO_RESPONSE);
         message.service_state_list().push_back(::ServiceState::RUNNING);
+        message.service_state_list().push_back(::ServiceState::INITIALIZING);
+
     }
     static void SetMessage(NotifyServiceState& message){
 
-        message.service_list().push_back("service1");
-        message.service_list().push_back("service2");
-        message.service_list().push_back("service3");
+        message.service_list().push_back("sample_listener");
+        message.service_list().push_back("sample_talker");
+        message.service_list().push_back("managed_scan");
+        message.service_list().push_back("managed_lifecycle");
 
         message.service_state_list().push_back(::ServiceState::RUNNING);
         message.service_state_list().push_back(::ServiceState::RUNNING_NO_RESPONSE);
+        message.service_state_list().push_back(::ServiceState::RUNNING);
         message.service_state_list().push_back(::ServiceState::RUNNING);
 
     }    
   
     static void SetMessage(StartServiceRequest& message){
 
-        message.service_list().push_back("service1");
-        message.service_list().push_back("service2");
-        message.service_list().push_back("service3");
+        message.service_list().push_back("sample_listener");
+        message.service_list().push_back("sample_talker");
+        message.service_list().push_back("managed_scan");
+        message.service_list().push_back("managed_lifecycle");
 
         message.is_group() = true;
     }
@@ -186,9 +207,10 @@ public:
     }
 
     static void SetMessage(StopServiceRequest& message){
-        message.service_list().push_back("service1");
-        message.service_list().push_back("service2");
-        message.service_list().push_back("service3");
+        message.service_list().push_back("sample_listener");
+        message.service_list().push_back("sample_talker");
+        message.service_list().push_back("managed_scan");
+        message.service_list().push_back("managed_lifecycle");
     }
     static void SetMessage(StopServiceResponse& message){
 

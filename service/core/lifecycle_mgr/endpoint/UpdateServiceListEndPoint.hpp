@@ -16,7 +16,7 @@ using namespace lifecyclemgr;
 
 class UpdateServiceListEndPoint : public DDSMessageEndPoint {
   public:
-    UpdateServiceListEndPoint(std::string topic);
+    UpdateServiceListEndPoint(MessageType msgtype, std::string topic);
     virtual ~UpdateServiceListEndPoint();
 
     virtual void  OnDataAvailable() override;

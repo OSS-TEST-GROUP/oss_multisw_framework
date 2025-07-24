@@ -8,11 +8,14 @@
 namespace ros2 {
 namespace adsw_manager {
     
-ROSDiscoveryInfoEndpoint::ROSDiscoveryInfoEndpoint(std::string topic) 
+ROSDiscoveryInfoEndpoint::ROSDiscoveryInfoEndpoint(MessageType msgtype, std::string topic) 
     : DDSMessageEndpoint() {
         
     topic_ = topic;
-    type_support_ = std::make_shared<TypeSupport>(new rmw_dds_common::msg::ParticipantEntitiesInfoPubSubType());
+    if (msgtype == MessageType::ROS2_DISCOVREY_INFO)
+    {
+        type_support_ = std::make_shared<TypeSupport>(new rmw_dds_common::msg::ParticipantEntitiesInfoPubSubType());
+    }
 }
 
 ROSDiscoveryInfoEndpoint::~ROSDiscoveryInfoEndpoint() {}

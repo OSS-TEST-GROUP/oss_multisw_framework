@@ -45,6 +45,9 @@ class ROSServiceController  : public ServiceController {
   private:
     std::shared_ptr<ROS2NodeController>  ros2node_controller_;
     std::shared_ptr<ContainerController>  container_controller_;
+
+    lifecyclemgr::StartServiceResponse start_service_response_;
+    lifecyclemgr::StopServiceResponse stop_service_response_;
 };
 
 } // namespace adsw_manager

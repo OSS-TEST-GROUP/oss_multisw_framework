@@ -7,11 +7,12 @@
 
 namespace lifecycle_manager {
 
-NotifyServiceStateEndPoint::NotifyServiceStateEndPoint(std::string topic) 
+NotifyServiceStateEndPoint::NotifyServiceStateEndPoint(MessageType msgtype, std::string topic) 
     : DDSMessageEndPoint(topic){
 
-    SetTypeSupport(std::make_shared<TypeSupport>(new NotifyServiceStatePubSubType()));
-
+    if (msgtype == MessageType::NOTIFY_SERVICE_STATE){
+        SetTypeSupport(std::make_shared<TypeSupport>(new NotifyServiceStatePubSubType()));
+    }
 }
 
 NotifyServiceStateEndPoint::~NotifyServiceStateEndPoint() {

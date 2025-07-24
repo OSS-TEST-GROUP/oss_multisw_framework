@@ -7,12 +7,14 @@
 namespace ros2 {
 namespace adsw_manager {
 
-UpdateServiceListEndPoint::UpdateServiceListEndPoint(std::string topic) 
+UpdateServiceListEndPoint::UpdateServiceListEndPoint(MessageType msgtype, std::string topic) 
     : DDSMessageEndpoint() {
-        
     topic_ = topic;
-    type_support_ = std::make_shared<TypeSupport>(new UpdateServiceListRequestPubSubType());
-
+    if (msgtype == MessageType::UPDATE_SERVICE_LIST_REQUEST){
+        type_support_ = std::make_shared<TypeSupport>(new UpdateServiceListRequestPubSubType());
+    }else if (msgtype == MessageType::UPDATE_SERVICE_LIST_RESPONSE){
+       type_support_ = std::make_shared<TypeSupport>(new UpdateServiceListResponsePubSubType()); 
+    }
 }
 
 UpdateServiceListEndPoint::~UpdateServiceListEndPoint() {

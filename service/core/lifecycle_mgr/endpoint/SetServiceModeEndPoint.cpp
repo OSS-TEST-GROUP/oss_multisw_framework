@@ -8,11 +8,14 @@
 
 namespace lifecycle_manager {
     
-SetServiceModeEndPoint::SetServiceModeEndPoint(std::string topic) 
+SetServiceModeEndPoint::SetServiceModeEndPoint(MessageType msgtype, std::string topic) 
     : DDSMessageEndPoint(topic){
-
-    SetTypeSupport(std::make_shared<TypeSupport>(new SetServiceModeRequestPubSubType()));
-
+    
+    if (msgtype == MessageType::SET_SERVICE_MODE_REQUST){
+        SetTypeSupport(std::make_shared<TypeSupport>(new SetServiceModeRequestPubSubType()));
+    }else if (msgtype == MessageType::SET_SERVICE_MODE_RESPONSE){
+        SetTypeSupport(std::make_shared<TypeSupport>(new SetServiceModeResponsePubSubType()));
+    }
 }
 
 SetServiceModeEndPoint::~SetServiceModeEndPoint() {

@@ -25,7 +25,7 @@ std::shared_ptr<Logger> Logger::getInstance()
 {
     // Note we need a custom deleter, since the destructor is protected.
     static std::shared_ptr<Logger> instance(
-        new Logger(LogLevel::DEBUG, ""),
+        new Logger(LogLevel::DEBUG, "adsw.log"),
         [](Logger* p)
         {
             delete p;

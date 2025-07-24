@@ -8,11 +8,14 @@
 namespace lifecycle_manager {
 
 
-GetServiceStateEndPoint::GetServiceStateEndPoint(std::string topic) 
+GetServiceStateEndPoint::GetServiceStateEndPoint(MessageType msgtype, std::string topic) 
     : DDSMessageEndPoint(topic){
 
-    SetTypeSupport(std::make_shared<TypeSupport>(new GetServiceStateRequestPubSubType()));
-
+    if (msgtype == MessageType::GET_SERVICE_STATE_REQUEST){
+        SetTypeSupport(std::make_shared<TypeSupport>(new GetServiceStateRequestPubSubType()));
+    }else if (msgtype == MessageType::GET_SERVICE_STATE_RESPONSE){
+        SetTypeSupport(std::make_shared<TypeSupport>(new GetServiceStateResponsePubSubType()));
+    }
 }
 
 GetServiceStateEndPoint::~GetServiceStateEndPoint() {

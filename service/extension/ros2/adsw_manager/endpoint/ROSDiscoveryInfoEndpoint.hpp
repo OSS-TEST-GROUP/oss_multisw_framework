@@ -7,13 +7,14 @@
 
 #include "transmitter/DDSMessageEndpoint.hpp"
 #include "ros2/ParticipantEntitiesInfoPubSubTypes.hpp"
+#include "MessageTypes.hpp"
 
 namespace ros2 {
 namespace adsw_manager {
 
 class ROSDiscoveryInfoEndpoint : public DDSMessageEndpoint {
   public:
-    ROSDiscoveryInfoEndpoint(std::string topic);
+    ROSDiscoveryInfoEndpoint(MessageType msgtype, std::string topic);
     virtual ~ROSDiscoveryInfoEndpoint();
 
     virtual std::string GetTopic();

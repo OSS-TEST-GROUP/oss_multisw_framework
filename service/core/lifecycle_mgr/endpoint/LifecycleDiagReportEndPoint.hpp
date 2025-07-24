@@ -16,7 +16,7 @@ using namespace lifecyclemgr;
 
 class LifecycleDiagReportEndPoint : public DDSMessageEndPoint {
   public:
-    LifecycleDiagReportEndPoint(std::string topic);
+    LifecycleDiagReportEndPoint(MessageType msgtype, std::string topic);
     virtual ~LifecycleDiagReportEndPoint();
 
     virtual void  OnDataAvailable() override;

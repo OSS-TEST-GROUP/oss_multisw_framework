@@ -8,12 +8,14 @@
 namespace ros2 {
 namespace adsw_manager {
     
-StartServiceEndPoint::StartServiceEndPoint(std::string topic) 
+StartServiceEndPoint::StartServiceEndPoint(MessageType msgtype, std::string topic) 
     : DDSMessageEndpoint() {
-        
     topic_ = topic;
-    type_support_ = std::make_shared<TypeSupport>(new StartServiceRequestPubSubType());
-
+    if (msgtype == MessageType::START_SERVICE_REQUEST){
+        type_support_ = std::make_shared<TypeSupport>(new StartServiceRequestPubSubType());
+    }else if (msgtype == MessageType::START_SERVICE_RESPONSE){
+        type_support_ = std::make_shared<TypeSupport>(new StartServiceResponsePubSubType());
+    }
 }
 
 StartServiceEndPoint::~StartServiceEndPoint() {
@@ -50,7 +52,6 @@ void StartServiceEndPoint::OnDataAvailable(){
             LOG_ERROR("Failed to retrieve service controller.");
         }
     }
-
 }
 
 } // namespace adsw_manager
