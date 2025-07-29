@@ -19,6 +19,7 @@ class ManagerBase {
     std::shared_ptr<Service> GetService(std::string name);
     std::shared_ptr<ServiceRegistry> GetRegistry();
     std::shared_ptr<PolicyManager> GetPolicy();
+    std::shared_ptr<StateManager> GetStateManager();
     
     const char* GetTopic(MessageType mtype);
     

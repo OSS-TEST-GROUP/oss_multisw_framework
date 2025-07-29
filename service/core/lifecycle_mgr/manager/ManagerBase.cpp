@@ -19,7 +19,11 @@ std::shared_ptr<ServiceRegistry> ManagerBase::GetRegistry(){
 std::shared_ptr<PolicyManager> ManagerBase::GetPolicy(){
     return lifecycle_.GetPolicy();
 }
-
+    
+std::shared_ptr<StateManager> ManagerBase::GetStateManager(){
+    return lifecycle_.GetState();
+}
+    
 const char* ManagerBase::GetTopic(MessageType mtype){
     
     EndPointFactory* factory = lifecycle_.GetEndpointFactory();

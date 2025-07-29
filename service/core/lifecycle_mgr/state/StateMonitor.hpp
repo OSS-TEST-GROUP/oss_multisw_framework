@@ -54,6 +54,10 @@ class StateMonitor : public ManagerBase {
     std::atomic<bool> stop_thread_{false};
 
     std::mutex lock_mutex_;
+
+    lifecyclemgr::GetServiceStateRequest get_request_;
+    lifecyclemgr::LifecycleDiagReport diag_report_;
+
 };
 
 } // namespace lifecycle_manager

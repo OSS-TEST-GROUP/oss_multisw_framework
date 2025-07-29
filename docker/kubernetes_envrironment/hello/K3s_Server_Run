@@ -11,6 +11,16 @@ docker save ros2-hello:latest -o ros2-hello.tar
 
 docker run --privileged -it -p 6443:6443 --cgroupns=host -v ${HOME}/Project/OSS/oss_multisw_framework:/root/workspace -v /run/user/1000:/run/user/1000 -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix:1 ros2-k3s-dev:latest bash
 
+#=============================================================
+sudo lsof -i :6443
+# or
+sudo netstat -tulpn | grep 6443
+# or
+ss -tulpn | grep 6443
+sudo kill <PID>
+# or use systemctl/service to stop system-managed services
+
+#=============================================================
 
 # In Docker Env
 # This script is used to set up a K3s server in a Docker container for testing purposes.
@@ -67,3 +77,78 @@ kubectl get pods
 # ros2-hello-all   0/1     Pending   0          7
 kubectl logs ros2-hello-all
 
+#inside docker image
+docker run -it --rm ros2-sample:latest
+# In the container:
+source /opt/ros/humble/setup.bash
+source /ros2_ws/install/setup.bash
+ros2 pkg list | grep managed_scan
+ros2 pkg list | grep sample
+
+kubectl exec -n default ros2-sample-all -- bash -c "source /opt/ros/humble/setup.bash && ros2 lifecycle list managed_scan_node"
+kubectl exec -n default ros2-sample-all -- ps -aux
+kubectl exec -n default ros2-sample-all -- ps -aux | grep managed_scan_node
+kubectl exec -n default ros2-sample-all -- bash -c "source /opt/ros/humble/setup.bash && ros2 lifecycle list managed_scan_node"
+kubectl exec -n default ros2-sample-all -- bash -c "source /opt/ros/humble/setup.bash && ros2 lifecycle list managed_scan_node --all"
+
+kubectl exec -n default ros2-sample-all -- bash -c "source /opt/ros/humble/setup.bash && ros2 lifecycle set managed_scan_node shutdown"
+kubectl exec -n default ros2-sample-all -- bash -c "source /opt/ros/humble/setup.bash && ros2 lifecycle get managed_scan_node"
+finalized [4] state
+kubectl exec -n default ros2-sample-all -- bash -c "source /opt/ros/humble/setup.bash && ros2 service list"
+
+
+# Configure the node (if not already configured)
+kubectl exec -n default ros2-sample-all -- bash -c "source /opt/ros/humble/setup.bash && ros2 lifecycle set managed_scan_node configure"
+
+# Activate the node
+kubectl exec -n default ros2-sample-all -- bash -c "source /opt/ros/humble/setup.bash && ros2 lifecycle set managed_scan_node activate"
+
+kubectl exec -n default ros2-sample-all -- bash -c "source /opt/ros/humble/setup.bash && source /ros2_ws/install/setup.bash && ros2 launch managed_scan start_managed_scan.launch.py"
+
+# container inside k3s
+kubectl exec -it ros2-sample-all -- /bin/sh
+
+# List all nodes in the ROS 2 system
+kubectl exec -n default ros2-sample-all -- bash -c "source /opt/ros/humble/setup.bash && ros2 node list"
+
+# List all nodes in the ROS 2 Lifecycle Nodes
+kubectl exec -n default ros2-sample-all -- bash -c "source /opt/ros/humble/setup.bash && ros2 lifecycle nodes"
+
+# General node
+kubectl exec -n default ros2-sample-all -- bash -c "source /opt/ros/humble/setup.bash && ros2 node info /talker"
+
+# Get pacakge node lists
+kubectl exec -n default ros2-sample-all -- \
+bash -c "source /opt/ros/humble/setup.bash && source /ros2_ws/install/setup.bash && ros2 pkg executables sample_ros2_app"
+sample_ros2_app listener
+sample_ros2_app talker
+pacakge + node list
+
+# =============================================================
+# If you have both managed_scan and sample_ros2_app in the same pod/container, and you use ros2 lifecycle set managed_scan_node shutdown, it will change the lifecycle state of the managed_scan node to "finalized".
+# However, the process (and thus the container) is still running. The node is in a state where it cannot be restarted without restarting the entire process that created it.
+Then If i config two apps in OSS/oss_multisw_framework/docker/kubernetes_envrironment/ros2/ros2-sample-check.yaml : managed_scan and sample_ros2_app. And If i terminate managed_scan only via ros2 lifecycle set .... shutdown. There's no way start managed_scan app only?
+
+GitHub Copilot
+Correct—if both managed_scan and sample_ros2_app are started by a single launch file or single process (as in your current YAML), and you use ros2 lifecycle set managed_scan_node shutdown, only the lifecycle state of the node changes. The process (and thus the container) is still running, but the node is in the "finalized" state and cannot be restarted without restarting the process.
+
+In this setup, you cannot restart only the managed_scan node from "finalized" state without restarting the whole container (and thus both apps).
+
+Why?
+The ROS 2 lifecycle only manages the node's internal state, not the process itself.
+Once a node is in "finalized", it cannot be brought back to "unconfigured" or "active" without restarting the process that created it.
+Since both nodes are in the same process/container, you cannot restart just one node's process.
+How to Enable Independent Restart
+If you want to be able to restart managed_scan independently:
+
+Run each app in a separate container (recommended for Kubernetes best practices).
+Each container should have its own command/launch file for its node.
+Then, you can restart the pod/container for just managed_scan without affecting sample_ros2_app.
+Example:
+
+One pod/container for managed_scan
+One pod/container for sample_ros2_app
+Summary:
+With your current YAML (both apps in one container), you cannot restart only managed_scan after shutdown.
+To enable independent restart, run each app in its own container. This is the standard Kubernetes approach for microservices and ROS 2 multi-node deployments.
+#=============================================================

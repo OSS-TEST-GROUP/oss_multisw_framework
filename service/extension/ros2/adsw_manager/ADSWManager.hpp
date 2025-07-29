@@ -11,6 +11,14 @@
 namespace ros2 {
 namespace adsw_manager {
 
+enum class AdswState{
+  ADSW_INIT,
+  ADSW_STARTED,
+  ADSW_RUNNING,
+  ADSW_PASUE,
+  ADSW_TERMINATE
+};
+
 class ADSWManager {
   public:
     ADSWManager();
@@ -22,6 +30,7 @@ class ADSWManager {
 
     bool Start();
     void Stop();
+    void Process();
 
     std::shared_ptr<DDSTransmitter> GetTransmitter();
     std::shared_ptr<ServiceRegistry> GetServiceRegistry();
@@ -31,6 +40,8 @@ class ADSWManager {
 
     const char* GetTopic(MessageType topic);
 
+    void SetState(AdswState state) { adsw_state_ = state; }
+    AdswState GetState() { return adsw_state_; }
 
   private:
     static std::shared_ptr<ADSWManager> getShared();
@@ -41,6 +52,10 @@ class ADSWManager {
     std::shared_ptr<ServiceMonitor> service_monitor_;
     std::shared_ptr<ROSServiceController> service_controller_;
     std::shared_ptr<EndPointFactory> endppoint_factory_;
+
+    AdswState adsw_state_;
+
+
 };
 
 } // namespace adsw_manager

@@ -58,6 +58,7 @@ class ServiceRegistry {
     std::unordered_map<std::string, std::set<std::shared_ptr<Service>>> group_;
 
     lifecyclemgr::GetServiceStateResponse get_service_response_;
+    bool ready_service_list_;
 };
 
 } // namespace adsw_manager

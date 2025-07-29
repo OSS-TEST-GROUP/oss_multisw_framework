@@ -45,23 +45,23 @@ EndPointFactory::~EndPointFactory() {
 
 int32_t EndPointFactory::Initialize(){
 
-    topic_lists_[MessageType::LIFECYCLE_DIAG_REPORT] = topic_diag_report;
+    topic_lists_[MessageType::LIFECYCLE_DIAG_REPORT] = MessageTopic::GetTopicStr(MessageType::LIFECYCLE_DIAG_REPORT);
 
-    topic_lists_[MessageType::GET_SERVICE_STATE_REQUEST] = topic_get_svc_state_req;
-    topic_lists_[MessageType::GET_SERVICE_STATE_RESPONSE] = topic_get_svc_state_resp;
-    topic_lists_[MessageType::NOTIFY_SERVICE_STATE] = topic_notify_svc_state;
+    topic_lists_[MessageType::GET_SERVICE_STATE_REQUEST] = MessageTopic::GetTopicStr(MessageType::GET_SERVICE_STATE_REQUEST);;
+    topic_lists_[MessageType::GET_SERVICE_STATE_RESPONSE] = MessageTopic::GetTopicStr(MessageType::GET_SERVICE_STATE_RESPONSE);;
+    topic_lists_[MessageType::NOTIFY_SERVICE_STATE] = MessageTopic::GetTopicStr(MessageType::NOTIFY_SERVICE_STATE);;
 
-    topic_lists_[MessageType::SET_SERVICE_MODE_REQUST] = topic_set_svc_req;
-    topic_lists_[MessageType::SET_SERVICE_MODE_RESPONSE] = topic_set_svc_resp;
+    topic_lists_[MessageType::SET_SERVICE_MODE_REQUST] = MessageTopic::GetTopicStr(MessageType::SET_SERVICE_MODE_REQUST);;
+    topic_lists_[MessageType::SET_SERVICE_MODE_RESPONSE] = MessageTopic::GetTopicStr(MessageType::SET_SERVICE_MODE_RESPONSE);;
 
-    topic_lists_[MessageType::START_SERVICE_REQUEST] = topic_start_svc_req;
-    topic_lists_[MessageType::START_SERVICE_RESPONSE] = topic_start_svc_resp;
+    topic_lists_[MessageType::START_SERVICE_REQUEST] = MessageTopic::GetTopicStr(MessageType::START_SERVICE_REQUEST);;
+    topic_lists_[MessageType::START_SERVICE_RESPONSE] = MessageTopic::GetTopicStr(MessageType::START_SERVICE_RESPONSE);;
 
-    topic_lists_[MessageType::STOP_SERVICE_REQUEST] = topic_stop_svc_req;
-    topic_lists_[MessageType::STOP_SERVICE_RESPONSE] = topic_stop_svc_resp;
+    topic_lists_[MessageType::STOP_SERVICE_REQUEST] = MessageTopic::GetTopicStr(MessageType::STOP_SERVICE_REQUEST);;
+    topic_lists_[MessageType::STOP_SERVICE_RESPONSE] = MessageTopic::GetTopicStr(MessageType::STOP_SERVICE_RESPONSE);;
 
-    topic_lists_[MessageType::UPDATE_SERVICE_LIST_REQUEST] = topic_update_svc_req;
-    topic_lists_[MessageType::UPDATE_SERVICE_LIST_RESPONSE] = topic_update_svc_resp;
+    topic_lists_[MessageType::UPDATE_SERVICE_LIST_REQUEST] = MessageTopic::GetTopicStr(MessageType::UPDATE_SERVICE_LIST_REQUEST);;
+    topic_lists_[MessageType::UPDATE_SERVICE_LIST_RESPONSE] = MessageTopic::GetTopicStr(MessageType::UPDATE_SERVICE_LIST_RESPONSE);;
 
     return topic_lists_.size();
 

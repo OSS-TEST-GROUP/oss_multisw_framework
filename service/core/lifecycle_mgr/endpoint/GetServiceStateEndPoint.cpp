@@ -25,8 +25,6 @@ GetServiceStateEndPoint::~GetServiceStateEndPoint() {
 
 void GetServiceStateEndPoint::OnDataAvailable(){
     
-    LOG_DEBUG("Message Delivery for " << GetTopic() );
-
     if (Read<GetServiceStateResponse>(resp_) == true){
 
         GetServiceStateResponse* response = reinterpret_cast<GetServiceStateResponse*>(&resp_);
@@ -36,9 +34,7 @@ void GetServiceStateEndPoint::OnDataAvailable(){
         if (manager != nullptr){
             manager->UpdateServicesState(response);            
         }
-
-     }
-
+    }
 }
 
 void GetServiceStateEndPoint::OnDataPublished(bool ret){

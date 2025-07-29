@@ -1,9 +1,11 @@
 #include "StateMonitor.hpp"
+#include "StateManager.hpp"
 
 #include "manager/ManagerBase.hpp"
 #include "transmitter/DDSTransmitter.hpp"
 #include "service/ServiceRegistry.hpp"
 #include "include/TypeConvert.hpp"
+#include "logger/Log.hpp"
 
 namespace lifecycle_manager {
 
@@ -88,39 +90,32 @@ void StateMonitor::NotifyLifecycleDiagnosticInfo(bool all){
 
     if (transmitter != nullptr)
     {
-        const char* topic = GetTopic(MessageType::LIFECYCLE_DIAG_REPORT);
-        
-        std::shared_ptr<DDSMessageEndPoint> endpoint = transmitter->GetMessageEndPoint(topic);
+        if (all == true){
+            std::shared_ptr<ServiceRegistry> registry = GetRegistry();
 
-        if (endpoint != nullptr){
-            LifecycleDiagReport report;
+            if (registry){
+                std::vector<std::shared_ptr<Service>> list = registry->GetServicesByGroup("");
 
-            if (all == true){
-                std::shared_ptr<ServiceRegistry> registry = GetRegistry();
-
-                if (registry){
-                    std::vector<std::shared_ptr<Service>> list = registry->GetServicesByGroup("");
-
-                    for( auto svc = list.begin(); svc != list.end(); ++svc ){
-                        
-                        lifecyclemgr::ServiceStatus service;
-                        
-                        getServiceState(*svc, service);
-                        report.service_list().push_back(service);
-                    }
-                }
-            }else{
-                
-                for( auto svc = udpated_service_list_.begin(); svc != udpated_service_list_.end(); ++svc ){
+                for( auto svc = list.begin(); svc != list.end(); ++svc ){
                         
                     lifecyclemgr::ServiceStatus service;
                         
                     getServiceState(*svc, service);
-                    report.service_list().push_back(service);
+                    diag_report_.service_list().push_back(service);
                 }
             }
-            endpoint->Write(reinterpret_cast<void*>(&report));
+        }else{
+                
+            for( auto svc = udpated_service_list_.begin(); svc != udpated_service_list_.end(); ++svc ){
+                        
+                lifecyclemgr::ServiceStatus service;
+                        
+                getServiceState(*svc, service);
+                diag_report_.service_list().push_back(service);
+            }
         }
+
+        transmitter->SendMessage(MessageType::LIFECYCLE_DIAG_REPORT, reinterpret_cast<void*>(&diag_report_));
     }
 }
 
@@ -169,24 +164,17 @@ void StateMonitor::RequestGetState(){
 
     if (transmitter != nullptr)
     {
-        const char* topic = GetTopic(MessageType::GET_SERVICE_STATE_REQUEST);
-        
-        std::shared_ptr<DDSMessageEndPoint> endpoint = transmitter->GetMessageEndPoint(topic);
+        std::shared_ptr<ServiceRegistry> registry = GetRegistry();
 
-        if (endpoint != nullptr){
-            GetServiceStateRequest data;
+        if (registry){
+            std::vector<std::string> list = registry->GetServicesNameByGroup("");
 
-            std::shared_ptr<ServiceRegistry> registry = GetRegistry();
-
-            if (registry){
-                std::vector<std::string> list = registry->GetServicesNameByGroup("");
-
-                for( auto svc = list.begin(); svc != list.end(); ++svc ){
-                    data.service_list().push_back(*svc);
-                }
-                data.is_all_service() = false;
+            for( auto svc = list.begin(); svc != list.end(); ++svc ){
+                get_request_.service_list().push_back(*svc);
             }
-            endpoint->Write(reinterpret_cast<void*>(&data));
+            get_request_.is_all_service() = false;
+            
+            transmitter->SendMessage(MessageType::GET_SERVICE_STATE_REQUEST, reinterpret_cast<void*>(&get_request_));
         }
     }
 }
@@ -194,8 +182,10 @@ void StateMonitor::RequestGetState(){
 void StateMonitor::updateServices(std::vector<std::string>* slist, std::vector<lifecyclemgr::ServiceState> *statelist){
 
     if (slist->size() != statelist->size()){
-
+        LOG_ERROR("service list size mismatch " << slist->size() << " != "  << statelist->size());
     }
+
+    std::set<std::shared_ptr<Service>> service_list;
 
     for (size_t idx=0; idx < slist->size(); ++idx){
             
@@ -207,7 +197,13 @@ void StateMonitor::updateServices(std::vector<std::string>* slist, std::vector<l
         if (service){
             service->SetServiceState(TypeConvert::ToServiceState(state));
             SetUpdateStateFlag(service);
+            service_list.insert(service);
         }
+    }
+
+    if (service_list.size() > 0){
+        std::shared_ptr<StateManager> manager = GetStateManager();
+        manager->ProcessServiceHandling(service_list);
     }
 }
 

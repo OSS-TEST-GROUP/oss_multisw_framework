@@ -53,6 +53,7 @@ set ( TRANSMITTER_SRC
     transmitter/DDSMessageEndPoint.cpp
     transmitter/DDSTransmitter.cpp
     transmitter/MessageEndPoint.cpp
+    transmitter/MessageQueue.cpp
 )
 
 set ( MISC_SRC

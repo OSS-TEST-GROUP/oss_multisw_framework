@@ -97,6 +97,8 @@ class TypeConvert {
         }
         return lifecyclemgr::RecoveryPolicy::R_DEFAULT;
     }    
+
+    
 };
 
 

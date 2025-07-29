@@ -1,18 +1,22 @@
 #include <algorithm>
 #include <iostream>
+#include <set>
 
 #include "ServiceRegistry.hpp"
 #include "include/TypeConvert.hpp"
+#include "manager/LifecycleFactory.hpp"
+#include "state/StateManager.hpp"
+#include "transmitter/DDSTransmitter.hpp"
 
 namespace lifecycle_manager {
 
 ServiceRegistry::ServiceRegistry() {}
 ServiceRegistry::~ServiceRegistry() {}
 
-
 bool ServiceRegistry::UpdateServiceList(UpdateServiceListRequest* update){
 
     std::vector<lifecyclemgr::Service> *slist = &update->service_list();
+    std::set<std::shared_ptr<Service>> service_set;
 
     for( auto svc = slist->begin(); svc != slist->end(); ++svc ){
         std::shared_ptr<Service> service = GetService(svc->name());
@@ -26,9 +30,22 @@ bool ServiceRegistry::UpdateServiceList(UpdateServiceListRequest* update){
                                                 TypeConvert::ToRecoveryPolicy(svc->recovery_policy()), 
                                                 svc->is_enabled());
         }
+        service_set.insert(service);
         service->Print();
     }
-    return true;
+
+    std::shared_ptr<DDSTransmitter> transmitter = LifecycleFactory::GetInstance()->GetTransmitter();
+
+    bool retval = transmitter->SendMessage(MessageType::UPDATE_SERVICE_LIST_RESPONSE, 
+                                    reinterpret_cast<void*>(&udpate_response_));
+
+    if (service_set.size() > 0){
+        std::shared_ptr<StateManager> manager = LifecycleFactory::GetInstance()->GetState();
+        if (manager != nullptr){
+            manager->ProcessServiceHandling(service_set);
+        }
+    }
+    return retval;       
 }
 
 void ServiceRegistry::AddGroup(std::string name){
