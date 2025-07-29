@@ -28,5 +28,4 @@ void MessageEndPoint::SetTypeSupport(std::shared_ptr<TypeSupport> typesupport){
 }
 
 
-
 } // namespace lifecycle_manager

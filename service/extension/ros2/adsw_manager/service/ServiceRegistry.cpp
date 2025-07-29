@@ -29,19 +29,16 @@ bool ServiceRegistry::LoadServiceList() {
     // Stub: Assume success, or extend for file/config source later
     LOG_DEBUG("ServiceRegistry::LoadServiceList start ");
 
-    if (LoadServiceSaved(SAVED_REGISTRY_BACKUP) == true){
-        return ProcessUpdateServiceListRequest();
+    ready_service_list_ = LoadServiceSaved(SAVED_REGISTRY_BACKUP);
+
+    if (ready_service_list_ == false){
+        ready_service_list_ = LoadServiceList("ros2-sample-speclist.yaml");
     }
 
-    if (LoadServiceList("ros2-sample-speclist.yaml") == true){
-        LOG_DEBUG("ServiceRegistry::LoadServiceList end ");
+    LOG_DEBUG("ServiceRegistry::LoadServiceList success =? " << ready_service_list_);
 
-        // Notify the service state after loading the service list
-        return ProcessUpdateServiceListRequest();
-    }
-
-    return true;
-
+    // Notify the service state after loading the service list
+    return ready_service_list_;
 }
 
 bool ServiceRegistry::LoadServiceList(const std::string& path) {
@@ -275,6 +272,11 @@ bool ServiceRegistry::ProcessGetServiceStateRequest(lifecyclemgr::GetServiceStat
 bool ServiceRegistry::ProcessUpdateServiceListRequest() {
     LOG_DEBUG("Processing UpdateServiceListRequest");
 
+    if (ready_service_list_ == false){
+        LOG_ERROR("Service list not ready  ");
+        return false;
+    }
+
     lifecyclemgr::UpdateServiceListRequest message;
 
     for (auto& service : services_){
@@ -297,10 +299,10 @@ bool ServiceRegistry::ProcessUpdateServiceListRequest() {
         endpoint->Write(&message);
         LOG_DEBUG("UpdateServiceListRequest sent with " << message.service_list().size() << " services.");
         return true;
-    } else {
-        LOG_ERROR("Failed to get DDSMessageEndpoint for UpdateServiceListRequest");
-        return false;
-    }
+    } 
+    
+    LOG_ERROR("Failed to get DDSMessageEndpoint for UpdateServiceListRequest");
+    return false;
 }
 
 bool ServiceRegistry::Save(){

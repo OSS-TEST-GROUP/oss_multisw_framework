@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "DDSMessageEndPoint.hpp"
+#include "MessageQueue.hpp"
 
 #include <fastdds/dds/domain/DomainParticipant.hpp>
 #include <fastdds/dds/publisher/DataWriterListener.hpp>
@@ -29,6 +30,8 @@ class DDSTransmitter {
     Publisher* GetPublisher();
     Subscriber* GetSubscriber();
 
+    bool SendMessage(MessageType mtype, void* ptr);
+
   private:
     DomainParticipant* participant_;
     Publisher* publisher_;
@@ -36,6 +39,7 @@ class DDSTransmitter {
 
     std::map<std::string, std::shared_ptr<DDSMessageEndPoint>> endpoints_;
 
+    std::shared_ptr<MessageQueue> message_queue_;
 };
 
 } // namespace lifecycle_manager

@@ -52,7 +52,10 @@ class ServiceRegistry {
   private:
     std::map<std::string, std::shared_ptr<Service>> services_;
     std::map<std::string, std::shared_ptr<std::vector<std::string>>> groups_;
-    std::mutex lock_mutex_;    
+    std::mutex lock_mutex_; 
+    
+    UpdateServiceListResponse   udpate_response_;
+
 };
 
 } // namespace lifecycle_manager

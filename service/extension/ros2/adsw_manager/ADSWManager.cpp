@@ -13,6 +13,8 @@ bool ADSWManager::Initialize() {
 
     LOG_DEBUG("ADSWManager::Initialize start ");
 
+    SetState(AdswState::ADSW_INIT);
+
     dds_transmitter_ = std::make_shared<DDSTransmitter>();
     service_registry_ = std::make_shared<ServiceRegistry>();
     service_monitor_ = std::make_shared<ServiceMonitor>();
@@ -44,6 +46,8 @@ bool ADSWManager::Start() {
     if (!service_registry_->LoadServiceList()) {
         return false;
     }
+    
+    SetState(AdswState::ADSW_STARTED);
     return true;
 }
 
@@ -57,7 +61,16 @@ void ADSWManager::Stop() {
     if (dds_transmitter_) {
         dds_transmitter_->Finalize();
     }
+    SetState(AdswState::ADSW_TERMINATE);
+}
 
+void ADSWManager::Process(){
+
+	if (GetState() == AdswState::ADSW_STARTED){
+        if (service_registry_->ProcessUpdateServiceListRequest() == true){
+    	    SetState(AdswState::ADSW_RUNNING);
+        }
+	}
 }
 
 std::shared_ptr<DDSTransmitter> ADSWManager::GetTransmitter() {

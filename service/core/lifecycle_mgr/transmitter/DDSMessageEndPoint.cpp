@@ -25,11 +25,12 @@ DDSMessageEndPoint::DDSMessageEndPoint(std::string topic)
     publisher_(nullptr),
     subscriber_(nullptr), 
     MessageEndPoint(topic){
-
+    
+    LOG_DEBUG("DDSMessageEndPoint create. " << GetTopic());
 }
 
 DDSMessageEndPoint::~DDSMessageEndPoint() {
-
+    LOG_DEBUG("DDSMessageEndPoint destroy. " << GetTopic());
 }
 
 
@@ -88,6 +89,9 @@ void DDSMessageEndPoint::Finalize(){
 bool DDSMessageEndPoint::Write(const void* const data)
 {
     bool ret = false;
+    LOG_DEBUG("Write message. [" << GetTopic() << "]");
+
+#if 0
     // Wait for the data endpoints discovery
     std::unique_lock<std::mutex> matched_lock(mutex_);
     cv_.wait(matched_lock, [&]()
@@ -95,10 +99,13 @@ bool DDSMessageEndPoint::Write(const void* const data)
                 // at least one has been discovered
                 return (is_stopped());
             });
-
+    LOG_DEBUG("Write message. [" << GetTopic() << "]");
     if (!is_stopped())
+#endif    
     {
         ret = (RETCODE_OK == writer_->write(data));
+
+        LOG_DEBUG("write message. " << GetTopic() << ", return = " << ret );
 
         OnDataPublished(ret);
     }
@@ -112,17 +119,17 @@ void DDSMessageEndPoint::on_publication_matched(
     if (info.current_count_change == 1)
     {
         matched_ = static_cast<int16_t>(info.current_count);
-        LOG_DEBUG("Publisher matched.");
+        LOG_DEBUG("Publisher matched. [" << GetTopic() << "] " << matched_);
         cv_.notify_one();
     }
     else if (info.current_count_change == -1)
     {
         matched_ = static_cast<int16_t>(info.current_count);
-        LOG_DEBUG("Publisher unmatched.");
+        LOG_DEBUG("Publisher unmatched. [" << GetTopic() << "]" << matched_);
     }
     else
     {
-        LOG_DEBUG(info.current_count_change << " is not a valid value for PublicationMatchedStatus current count change");
+        LOG_DEBUG(info.current_count_change << " is not a valid value for PublicationMatchedStatus current count change [" << GetTopic() << "]");
     }
 }
 
@@ -133,21 +140,22 @@ void DDSMessageEndPoint::on_subscription_matched(
 {
     if (info.current_count_change == 1)
     {
-        LOG_DEBUG("Subscriber matched.");
+        LOG_DEBUG("Subscriber matched. [" << GetTopic() << "]" << matched_);
     }
     else if (info.current_count_change == -1)
     {
-        LOG_DEBUG("Subscriber unmatched.");
+        LOG_DEBUG("Subscriber unmatched. [" << GetTopic() << "]" << matched_);
     }
     else
     {
-        LOG_DEBUG(info.current_count_change << " is not a valid value for SubscriptionMatchedStatus current count change");
+        LOG_DEBUG(info.current_count_change << " is not a valid value for SubscriptionMatchedStatus current count change  [" << GetTopic() << "]");
     }
 }
 
 void DDSMessageEndPoint::on_data_available(
         DataReader* reader)
 {
+    LOG_DEBUG("on_data_available() [" << GetTopic() << "]");
     OnDataAvailable();
 }
 

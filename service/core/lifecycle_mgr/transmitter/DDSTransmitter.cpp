@@ -45,6 +45,13 @@ bool DDSTransmitter::Initialize(){
         return false;
     }
 
+    message_queue_ = std::make_shared<MessageQueue>(this);
+
+    if (message_queue_ != nullptr){
+        message_queue_->Start();
+    }
+
+
     return true;    
 }
 
@@ -101,5 +108,19 @@ Subscriber* DDSTransmitter::GetSubscriber(){
     return subscriber_;
 }
 
+bool DDSTransmitter::SendMessage(MessageType mtype, void* ptr){
+
+    if (message_queue_ != nullptr){
+
+        MsgType message = std::make_pair(mtype, ptr);
+        message_queue_->SendMessage(message);
+
+        return true;
+    }
+
+    LOG_DEBUG("SendMessage failure !! " << static_cast<int32_t>(mtype)  );
+    return false;
+
+}
 
 } // namespace lifecycle_manager

@@ -79,9 +79,13 @@ std::cout << __FUNCTION__ << "::" << __LINE__ << std::endl;
         break;
 
         case CLIParser::MessageType::GET_SERVICE_STATE_REQUEST:
-        case CLIParser::MessageType::GET_SERVICE_STATE_RESPONSE:
         {
             type_ = std::make_shared<TypeSupport>(new GetServiceStateRequestPubSubType());
+        }
+        break;        
+        case CLIParser::MessageType::GET_SERVICE_STATE_RESPONSE:
+        {
+            type_ = std::make_shared<TypeSupport>(new GetServiceStateResponsePubSubType());
         }
         break;
 
@@ -92,30 +96,46 @@ std::cout << __FUNCTION__ << "::" << __LINE__ << std::endl;
         break;
 
         case CLIParser::MessageType::SET_SERVICE_MODE_REQUST:
-        case CLIParser::MessageType::SET_SERVICE_MODE_RESPONSE:
         {
             type_ = std::make_shared<TypeSupport>(new SetServiceModeRequestPubSubType());
+        }
+        break;        
+        case CLIParser::MessageType::SET_SERVICE_MODE_RESPONSE:
+        {
+            type_ = std::make_shared<TypeSupport>(new SetServiceModeResponsePubSubType());
         }
         break;
 
         case CLIParser::MessageType::START_SERVICE_REQUEST:
-        case CLIParser::MessageType::START_SERVICE_RESPONSE:
         {
             type_ = std::make_shared<TypeSupport>(new StartServiceRequestPubSubType());
+        }
+        break;        
+        case CLIParser::MessageType::START_SERVICE_RESPONSE:
+        {
+            type_ = std::make_shared<TypeSupport>(new StartServiceResponsePubSubType());
         }
         break;
 
         case CLIParser::MessageType::STOP_SERVICE_REQUEST:
-        case CLIParser::MessageType::STOP_SERVICE_RESPONSE:
         {
             type_ = std::make_shared<TypeSupport>(new StopServiceRequestPubSubType());
+        }
+        break;        
+        case CLIParser::MessageType::STOP_SERVICE_RESPONSE:
+        {
+            type_ = std::make_shared<TypeSupport>(new StopServiceResponsePubSubType());
         }
         break;
 
         case CLIParser::MessageType::UPDATE_SERVICE_LIST_REQUEST:
-        case CLIParser::MessageType::UPDATE_SERVICE_LIST_RESPONSE:
         {
             type_ = std::make_shared<TypeSupport>(new UpdateServiceListRequestPubSubType());
+        }
+        break;        
+        case CLIParser::MessageType::UPDATE_SERVICE_LIST_RESPONSE:
+        {
+            type_ = std::make_shared<TypeSupport>(new UpdateServiceListResponsePubSubType());
         }
         break;
     }

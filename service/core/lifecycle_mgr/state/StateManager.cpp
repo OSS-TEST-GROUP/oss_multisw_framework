@@ -33,32 +33,24 @@ bool StateManager::StartService(std::shared_ptr<Service> service) {
 
     if (transmitter != nullptr)
     {
-        const char* topic = GetTopic(MessageType::START_SERVICE_REQUEST);
-        
-        std::shared_ptr<DDSMessageEndPoint> endpoint = transmitter->GetMessageEndPoint(topic);
-
-        if (endpoint != nullptr){
-            StartServiceRequest data;
-
-            data.service_list().push_back(service->GetName());
-            data.is_group() = false;
+        start_request_.service_list().push_back(service->GetName());
+        start_request_.is_group() = false;
 
 #if 0
-            std::shared_ptr<ServiceRegistry> registry = GetRegistry();
+        std::shared_ptr<ServiceRegistry> registry = GetRegistry();
 
-            if (registry){
+        if (registry){
                 std::vector<std::string> list = registry->GetServicesNameByGroup("");
 
                 for( auto svc = list.begin(); svc != list.end(); ++svc ){
                     data->service_list().push_back(*svc);
                 }
                 data->is_group() = false;
-            }
-#endif            
-            endpoint->Write(reinterpret_cast<void*>(&data));
         }
+#endif            
+        return transmitter->SendMessage(MessageType::START_SERVICE_REQUEST, reinterpret_cast<void*>(&start_request_));
     }
-    return true;
+    return false;
 }
 
 void StateManager::StopService(std::shared_ptr<Service> service) {
@@ -67,19 +59,9 @@ void StateManager::StopService(std::shared_ptr<Service> service) {
 
     if (transmitter != nullptr)
     {
-        const char* topic = GetTopic(MessageType::STOP_SERVICE_REQUEST);
-        
-        std::shared_ptr<DDSMessageEndPoint> endpoint = transmitter->GetMessageEndPoint(topic);
-
-        if (endpoint != nullptr){
-            
-            StopServiceRequest data;
-
-            data.service_list().push_back(service->GetName());
-            data.is_group() = false;
-
-            endpoint->Write(reinterpret_cast<void*>(&data));
-        }
+        stop_request_.service_list().push_back(service->GetName());
+        stop_request_.is_group() = false;        
+        transmitter->SendMessage(MessageType::STOP_SERVICE_REQUEST, reinterpret_cast<void*>(&stop_request_));
     }
 }
 

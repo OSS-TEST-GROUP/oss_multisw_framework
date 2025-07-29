@@ -94,26 +94,48 @@ uint64_t DDSMessageEndpoint::GetPendingWriteData() {
     return 0;
 }
 
+
+void DDSMessageEndpoint::on_publication_matched(
+        DataWriter* /*writer*/,
+        const PublicationMatchedStatus& info)
+{
+    if (info.current_count_change == 1)
+    {
+        matched_ = static_cast<int16_t>(info.current_count);
+        LOG_DEBUG("Publisher matched. [" << GetTopic() << "]" << matched_);
+    }
+    else if (info.current_count_change == -1)
+    {
+        matched_ = static_cast<int16_t>(info.current_count);
+        LOG_DEBUG("Publisher unmatched. [" << GetTopic() << "]" << matched_);
+    }
+    else
+    {
+        LOG_DEBUG(info.current_count_change << " is not a valid value for PublicationMatchedStatus current count change [" << GetTopic() << "]");
+    }
+}
+
+
 void DDSMessageEndpoint::on_subscription_matched(DataReader* reader, const SubscriptionMatchedStatus& info)
 {
     if (info.current_count_change == 1)
     {
-        LOG_VERBOSE( "Subscriber matched. " << GetTopic() );
+        LOG_DEBUG( "Subscriber matched. [" << GetTopic() << "]" << matched_);
     }
     else if (info.current_count_change == -1)
     {
-        LOG_VERBOSE( "Subscriber unmatched. " << GetTopic() );
+        LOG_DEBUG( "Subscriber unmatched. [" << GetTopic() << "]" << matched_);
     }
     else
     {
         LOG_DEBUG( info.current_count_change
-                    << " is not a valid value for SubscriptionMatchedStatus current count change" );
+                    << " is not a valid value for SubscriptionMatchedStatus current count change [" << GetTopic() << "]");
     }
 }
 
 void DDSMessageEndpoint::on_data_available(DataReader* reader)
 {
-    LOG_VERBOSE( "on_data_available " << GetTopic() );
+    LOG_DEBUG( "on_data_available [" << GetTopic() << "]");
     
     OnDataAvailable();
 }

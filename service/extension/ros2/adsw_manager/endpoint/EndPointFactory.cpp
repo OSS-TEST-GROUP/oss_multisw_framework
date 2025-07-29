@@ -95,6 +95,7 @@ int32_t EndPointFactory::CreateEndPoints(std::shared_ptr<DDSTransmitter> transmi
                 msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndpoint>(start_service);
                 pubsub = PubSubType::PUBLISH_ONLY;
             }
+            break;
 
             case MessageType::STOP_SERVICE_REQUEST :{
                 std::shared_ptr<StopServiceEndPoint> stop_service = std::make_shared<StopServiceEndPoint>(key, val);

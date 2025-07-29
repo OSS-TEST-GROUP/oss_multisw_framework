@@ -36,8 +36,8 @@ class StateManager : public ManagerBase {
 
   private:
     std::shared_ptr<PolicyManager> policy_manager_;
-
-
+    lifecyclemgr::StartServiceRequest start_request_;
+    lifecyclemgr::StopServiceRequest stop_request_;
 };
 
 } // namespace lifecycle_manager

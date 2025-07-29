@@ -69,9 +69,21 @@ class DDSMessageEndpoint : public DataWriterListener, public DataReaderListener 
     uint64_t GetPendingReadData();
     uint64_t GetPendingWriteData();
 
-    void on_subscription_matched(DataReader* reader, const SubscriptionMatchedStatus& info) override;
-    void on_data_available(DataReader* reader) override;
-    
+
+    //! Publisher matched method
+    void on_publication_matched(
+            DataWriter* writer,
+            const PublicationMatchedStatus& info) override;
+
+    //! Subscription callback
+    void on_data_available(
+            DataReader* reader) override;
+
+    //! Subscriber matched method
+    void on_subscription_matched(
+            DataReader* reader,
+            const SubscriptionMatchedStatus& info) override;
+
   private:
     DomainParticipant* participant_;
     Publisher* publisher_;
@@ -81,7 +93,8 @@ class DDSMessageEndpoint : public DataWriterListener, public DataReaderListener 
 
     DataReader* data_reader_;
     DataWriter* data_writer_;
-    
+
+    int16_t matched_;
 };
 
 } // namespace lifecycle_manager
