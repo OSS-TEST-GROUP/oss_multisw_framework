@@ -1,4 +1,3 @@
-
 #ifndef ROS2_ADSW_MANAGER_CONTROL_HELPER_UTILS_HPP_
 #define ROS2_ADSW_MANAGER_CONTROL_HELPER_UTILS_HPP_
 
@@ -17,16 +16,50 @@ class HelperUtils{
     public:
 
     // Function to run shell command and return output
-    static std::string ExecCommand(const std::string& cmd) {
-        std::array<char, 128> buffer{};
+    static std::string ExecCommand(const std::string& cmd, const std::string& keyword, const int8_t maxline = 2) {
+        std::array<char, 1024> buffer{};
         std::string result;
+        int8_t line = 0;
         FILE* pipe = popen(cmd.c_str(), "r");
 
         if (!pipe)
             throw std::runtime_error("popen() failed!");
 
         while (fgets(buffer.data(), buffer.size(), pipe) != nullptr) {
-            result += buffer.data();
+            if (!keyword.empty()){
+                result = buffer.data();
+                if (result.find(keyword) != std::string::npos){
+                    break;
+                }
+            }else{
+                result += buffer.data();
+            }
+            if (++line > maxline){
+                break;
+            }
+        }
+
+        pclose(pipe);
+        return result;
+    }
+    static std::string ExecCommand(const std::string& cmd, const std::regex& re, const int8_t maxline = 2) {
+        std::array<char, 1024> buffer{};
+        std::string result;
+        std::smatch match;
+        int8_t line = 0;
+        FILE* pipe = popen(cmd.c_str(), "r");
+
+        if (!pipe)
+            throw std::runtime_error("popen() failed!");
+
+        while (fgets(buffer.data(), buffer.size(), pipe) != nullptr) {
+            result = buffer.data();
+            if (std::regex_search(result, match, re)) {
+                break;
+            }
+            if (++line > maxline){
+                break;
+            }
         }
 
         pclose(pipe);

@@ -41,6 +41,8 @@ ServiceControlAction PolicyOnSuccess::Evaluate(std::shared_ptr<Service> service)
             action  = ServiceControlAction::START;
         }break;
     }
+
+    return action;
 }
 
 } // namespace lifecycle_manager

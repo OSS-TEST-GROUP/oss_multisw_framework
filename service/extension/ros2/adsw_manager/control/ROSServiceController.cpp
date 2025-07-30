@@ -97,24 +97,47 @@ bool ROSServiceController::StartService(std::shared_ptr<Service> service){
     // If not, you need to implement or correct them.
     std::string launchFile = service->GetLaunchFile();
     if (launchFile.empty()){
-        command = basecommand + " ros2 run " + service->GetPackage() + " " + service->GetPackage() + " &";
+        command = basecommand + "bash -c \" ros2 run " + service->GetPackage() + " " + service->GetPackage() + " 2>&1 & \"";
     }else{
-        command = basecommand + " ros2 launch " + service->GetPackage() + " " + service->GetLaunchFile() + " &";
+        command = basecommand + "bash -c \" ros2 launch " + service->GetPackage() + " " + service->GetLaunchFile() + " 2>&1 & \"";
     }
 
-    int result = system(command.c_str());
-    
-    if (result == 0) {
-        LOG_DEBUG("StartService success :: " << command);
-        return true;
-    } else {
+    //int32_t result = system(command.c_str());
+
+    std::regex re(R"(process started with pid \[(\d+)\])");
+    std::string exeresult = HelperUtils::ExecCommand(command, re);
+    std::vector<std::string> lines = HelperUtils::SplitLines(exeresult);
+    /* parse exe command result 
+     * process started with pid [pid]
+     */
+    if (lines.size() > 0){
+        std::smatch match;
+
+        for (const auto& line : lines) {
+            if (std::regex_search(line, match, re)) {
+                // match[1] contains the PID as a string
+                uint64_t pid = std::stoi(match[1].str());
+                service->SetServiceState(ServiceState::RUNNING);
+                service->SetPID(pid);
+                LOG_DEBUG("StartService for  :: " << service->GetPackage() << ", pid = " << pid);
+                return true;
+            }
+        }
+    }else{
+        service->SetServiceState(ServiceState::NOT_RUNNING);
         LOG_ERROR("StartService failed :: " << command);
         return false;
     }
+
+    return false;
 }
 
 bool ROSServiceController::StopService(std::shared_ptr<Service> service){
-    uint64_t pid = GetPID(service); // Get the PID of the service if needed
+    uint64_t pid = service->GetPID();
+    
+    if (pid == 0){
+        pid = GetPID(service); // Get the PID of the service if needed
+    }
 
     if (pid == 0) {
         LOG_ERROR("Service " << service->GetName() << " is not running.");
@@ -128,15 +151,36 @@ bool ROSServiceController::StopService(std::shared_ptr<Service> service){
     std::string basecommand = GetContainer()->BaseCommand();
  
     std::string command = basecommand + " kill " + std::to_string(pid);
-    int result = system(command.c_str());
-    
-    if (result == 0) {
+
+    int32_t result = system(command.c_str());
+
+    if (result == 0){
         LOG_DEBUG("StopService success :: " << command);
+        service->SetServiceState(ServiceState::NOT_RUNNING);
         return true;
-    } else {
-        LOG_ERROR("StopService failed :: " << command);
-        return false;
+    }else{
+        LOG_ERROR("StopService error : " << command);
     }
+
+#if 0    
+    std::string keyword = "process has finished cleanly";
+    std::string exeresult = HelperUtils::ExecCommand(command, keyword);
+    std::vector<std::string> lines = HelperUtils::SplitLines(exeresult);
+
+    if (lines.size() > 0){
+
+        for (const auto& line : lines) {
+            if (line.find(keyword) != std::string::npos) {
+                service->SetServiceState(ServiceState::NOT_RUNNING);
+                LOG_DEBUG("StopService success  :: " << service->GetPackage() << ", pid = " << pid);
+                return true;
+            }
+        }
+    }
+#endif    
+    
+    LOG_ERROR("StopService failed :: " << service->GetPackage() << ", pid = " << pid);
+    return false;
 }
 
 bool ROSServiceController::GetNodeLists(std::shared_ptr<Service> service){
@@ -156,7 +200,7 @@ bool ROSServiceController::GetNodeLists(std::shared_ptr<Service> service){
 
     std::string command = basecommand + " ros2 pkg executables " + service->GetPackage();
     
-    std::string exeresult = HelperUtils::ExecCommand(command);
+    std::string exeresult = HelperUtils::ExecCommand(command, std::string("") , 10);
 
     std::vector<std::string> lines = HelperUtils::SplitLines(exeresult);
 
@@ -179,7 +223,7 @@ uint64_t ROSServiceController::GetPID(std::shared_ptr<Service> service){
 
     // Command to run inside the container
     try {
-        std::string output = HelperUtils::ExecCommand(command);
+        std::string output = HelperUtils::ExecCommand(command, std::string(""));
         std::vector<std::string> lines = HelperUtils::SplitLines(output);
 
         if (lines.empty()) {
@@ -262,6 +306,10 @@ bool ROSServiceController::ProcessServiceStopRequest(lifecyclemgr::StopServiceRe
     std::vector<std::string> service_list = message->service_list();
     bool is_group = message->is_group();
     bool result = false;
+
+    if (GetContainer()->ContainerSupported() == false){
+        is_group = false;
+    }
 
     if (service_list.empty()) {
         LOG_ERROR("No services provided to stop.");

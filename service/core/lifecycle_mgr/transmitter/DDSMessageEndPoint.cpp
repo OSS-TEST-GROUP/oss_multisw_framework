@@ -21,16 +21,18 @@ using namespace eprosima::fastdds::dds;
 namespace lifecycle_manager {
 
 DDSMessageEndPoint::DDSMessageEndPoint(std::string topic) 
-    : participant_(nullptr),
-    publisher_(nullptr),
-    subscriber_(nullptr), 
-    MessageEndPoint(topic){
-    
-    LOG_DEBUG("DDSMessageEndPoint create. " << GetTopic());
+    : MessageEndPoint(topic),
+        participant_(nullptr), 
+        publisher_(nullptr), 
+        subscriber_(nullptr), 
+        writer_(nullptr), 
+        reader_(nullptr) {
+
+    LOG_DEBUG("DDSMessageEndPoint destroy. " << GetTopic());
 }
 
 DDSMessageEndPoint::~DDSMessageEndPoint() {
-    LOG_DEBUG("DDSMessageEndPoint destroy. " << GetTopic());
+    
 }
 
 

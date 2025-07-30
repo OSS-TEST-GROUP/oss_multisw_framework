@@ -18,6 +18,8 @@ LifecycleManager::~LifecycleManager() {}
 bool LifecycleManager::Initialize() {
     LOG_DEBUG("LifecycleManager::Initialize" );
 
+    SetState(ManagerState::MANAGER_INIT);
+
     service_registry_ = std::make_shared<ServiceRegistry>();
     state_manager_ = std::make_shared<StateManager>(*this);
 
@@ -40,6 +42,7 @@ bool LifecycleManager::Initialize() {
 
 bool LifecycleManager::Start() {
     LOG_DEBUG("LifecycleManager::Start" );
+    SetState(ManagerState::MANAGER_STARTED);
 
     if (!state_manager_->Start()){
         LOG_ERROR("Failed to Start " );
@@ -60,11 +63,15 @@ bool LifecycleManager::Start() {
         return false;
     }   
 
+    SetState(ManagerState::MANAGER_RUNNING);
+
     return true;
 
 }
 
 void LifecycleManager::Stop() {
+
+    SetState(ManagerState::MANAGER_TERMINATE);
 
 }
 
@@ -76,7 +83,7 @@ EndPointFactory* LifecycleManager::GetEndpointFactory(){
     return endpoint_factory_;
 }
 
-std::shared_ptr<StateManager> LifecycleManager::GetState(){
+std::shared_ptr<StateManager> LifecycleManager::GetStateMgr(){
     return state_manager_;
 }
 
@@ -107,5 +114,16 @@ std::shared_ptr<Service> LifecycleManager::GetService(std::string name){
     return nullptr;
 }
 
+void LifecycleManager::SetState(ManagerState state){
+
+    if (manager_state_ == ManagerState::MANAGER_RUNNING){
+
+        if (state == ManagerState::MANAGER_TERMINATE){
+            // State changed to TERMINATE --> Stop all sub component !!
+            state_manager_->RequestStopAll();
+        }
+    }
+    manager_state_ = state;
+}
 
 } // namespace lifecycle_manager

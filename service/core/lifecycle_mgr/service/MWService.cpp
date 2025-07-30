@@ -4,10 +4,10 @@ namespace lifecycle_manager {
 
 MWService::MWService(int32_t code, const std::string& name, const std::string& exepath, bool active, const std::vector<ArgumentConfig>& args) :
     code_(code),
+    active_(active),
     pid_(-1),
     mw_service_name_(name),
     mw_service_path_(exepath),
-    active_(active),
     mw_run_args_(args)
 {
 

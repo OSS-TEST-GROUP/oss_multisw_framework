@@ -16,7 +16,7 @@ class LifecycleFactory {
     std::shared_ptr<LifecycleManager> GetManager();
 
     std::shared_ptr<DDSTransmitter> GetTransmitter();
-    std::shared_ptr<StateManager> GetState();
+    std::shared_ptr<StateManager> GetStateMgr();
     std::shared_ptr<StateMonitor> GetMonitor();
     std::shared_ptr<PolicyManager> GetPolicy();
     std::shared_ptr<MWServiceManager> GetMWService();    

@@ -1,4 +1,5 @@
 #include "PolicyManual.hpp"
+#include "logger/Log.hpp"
 
 namespace lifecycle_manager {
 
@@ -10,12 +11,38 @@ ServiceControlAction PolicyManual::Evaluate(std::shared_ptr<Service> service){
     ServiceState state = service->GetServiceState();
     ServiceControlAction action = ServiceControlAction::NONE;
 
+    LOG_DEBUG("PolicyManual state = " << static_cast<int32_t>(state));
+
     if (service->GetServiceMode() != ServiceMode::NORMAL){
         return action;
     }
 
     /* manual policy run via operator command or ?? */
+    switch(state){
+        case ServiceState::NOT_RUNNING :{
+            action  = ServiceControlAction::START;
+        }break;
 
+        case ServiceState::INITIALIZING :{
+            action = ServiceControlAction::NONE; 
+            // wait initialize finish
+        }break;
+
+        case ServiceState::RUNNING :{
+            // do nothing
+            action = ServiceControlAction::NONE; 
+        }break;
+
+        case ServiceState::RUNNING_NO_RESPONSE :{
+            // stop app and try run after terminated
+            action = ServiceControlAction::STOP; 
+        }break;
+
+        case ServiceState::TERMINATING :{
+            action  = ServiceControlAction::START;
+        }break;
+    }
+    
     return action;
 }
 

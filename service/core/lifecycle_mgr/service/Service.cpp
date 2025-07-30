@@ -1,6 +1,8 @@
 #include <iostream>
 
 #include "Service.hpp"
+#include "logger/Log.hpp"
+#include "include/Helper.hpp"
 
 namespace lifecycle_manager {
 
@@ -49,6 +51,8 @@ void Service::SetServiceState(ServiceState state){
     if (service_state_ != state){
         service_state_last_ = service_state_;
         service_state_ = state;
+        LOG_DEBUG("Service " << name_ << " state changed " << 
+            Helper::StateStr(service_state_last_) << " --> " << Helper::StateStr(service_state_));
     }
 }
 
@@ -72,8 +76,8 @@ void Service::ClearRecoveredCount(){
 void Service::Print(){
     
     std::cout << "service " << name_
-                        << ", " << static_cast<int32_t>(service_type_) 
-                        << ", " << static_cast<int32_t>(recovery_policy_) 
+                        << ", " << Helper::SvcTypeStr(service_type_) 
+                        << ", " << Helper::RecoveryStr(recovery_policy_) 
                         << ", " << static_cast<bool>(is_enabled_) << std::endl;
 
 }

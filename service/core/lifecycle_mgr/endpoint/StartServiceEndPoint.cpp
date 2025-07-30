@@ -31,12 +31,11 @@ void StartServiceEndPoint::OnDataAvailable(){
 
         StartServiceResponse* message = reinterpret_cast<StartServiceResponse*>(&resp_);
 
-        std::shared_ptr<StateManager> manager = LifecycleFactory::GetInstance()->GetState();
+        std::shared_ptr<StateManager> manager = LifecycleFactory::GetInstance()->GetStateMgr();
 
         if (manager != nullptr){
             manager->OnStart(message);            
         }
-
     }
 
 }

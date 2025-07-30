@@ -21,7 +21,7 @@ std::shared_ptr<PolicyManager> ManagerBase::GetPolicy(){
 }
     
 std::shared_ptr<StateManager> ManagerBase::GetStateManager(){
-    return lifecycle_.GetState();
+    return lifecycle_.GetStateMgr();
 }
     
 const char* ManagerBase::GetTopic(MessageType mtype){

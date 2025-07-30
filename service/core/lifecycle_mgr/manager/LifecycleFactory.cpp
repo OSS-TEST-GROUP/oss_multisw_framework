@@ -39,8 +39,8 @@ std::shared_ptr<DDSTransmitter> LifecycleFactory::GetTransmitter(){
     return GetManager()->GetTransmitter();
 }
 
-std::shared_ptr<StateManager> LifecycleFactory::GetState(){
-    return GetManager()->GetState();
+std::shared_ptr<StateManager> LifecycleFactory::GetStateMgr(){
+    return GetManager()->GetStateMgr();
 }
 
 std::shared_ptr<StateMonitor> LifecycleFactory::GetMonitor(){
