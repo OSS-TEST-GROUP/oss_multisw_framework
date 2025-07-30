@@ -40,6 +40,8 @@ void UpdateServiceListEndPoint::OnDataAvailable(){
 
         UpdateServiceListResponse* message = reinterpret_cast<UpdateServiceListResponse*>(&resp_);
 
+        LOG_DEBUG("Update Response : " << static_cast<int32_t>(message->ret_code()));
+
     }
 
 }

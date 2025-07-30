@@ -12,7 +12,8 @@ Service::Service(const std::string& name, ServiceType service_type, RecoveryPoli
       packag_name_(""),
       launch_file_(""),
       max_nodes_(0),
-      current_nodes_(0)
+      current_nodes_(0),
+      pid_(0)
 {
 }
 
@@ -78,7 +79,13 @@ int32_t Service::GetMaxNodes(){
     return max_nodes_;
 }
 
+void Service::SetPID(uint64_t pid){
+    pid_ = pid;
+}
 
+uint64_t Service::GetPID(){
+    return pid_;
+}
 
 } // namespace adsw_manager
 } // namespace ros2

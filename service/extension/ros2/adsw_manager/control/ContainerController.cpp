@@ -25,6 +25,7 @@ ContainerController::~ContainerController(){
 
 bool ContainerController::Initialize(){
     k3s_container_ = false;
+    return true;
 }
 
 void ContainerController::Finalize(){

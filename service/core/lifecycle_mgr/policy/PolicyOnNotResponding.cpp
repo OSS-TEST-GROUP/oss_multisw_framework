@@ -16,19 +16,23 @@ ServiceControlAction PolicyOnNotResponding::Evaluate(std::shared_ptr<Service> se
     if (service->GetServiceMode() != ServiceMode::NORMAL){
         return action;
     }
+
     switch(state){
         case ServiceState::NOT_RUNNING :{
+            action  = ServiceControlAction::START;
         }break;
 
         case ServiceState::INITIALIZING :{
+            action = ServiceControlAction::NONE; 
+            // wait initialize finish
         }break;
 
         case ServiceState::RUNNING :{
+            // do nothing
+            action = ServiceControlAction::NONE; 
         }break;
 
         case ServiceState::RUNNING_NO_RESPONSE :{
-            // stop app and try run after terminated
-            // start recovery
             action = ServiceControlAction::STOP; 
         }break;
 
@@ -36,6 +40,7 @@ ServiceControlAction PolicyOnNotResponding::Evaluate(std::shared_ptr<Service> se
             action  = ServiceControlAction::START;
         }break;
     }
+
 
     return action;
 }

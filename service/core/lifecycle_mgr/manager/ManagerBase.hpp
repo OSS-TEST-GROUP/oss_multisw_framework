@@ -23,7 +23,6 @@ class ManagerBase {
     
     const char* GetTopic(MessageType mtype);
     
-
   private:
     LifecycleManager& lifecycle_;
 };

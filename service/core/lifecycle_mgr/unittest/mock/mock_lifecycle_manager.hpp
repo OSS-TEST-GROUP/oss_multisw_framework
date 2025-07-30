@@ -13,7 +13,7 @@ public:
     MOCK_METHOD(void, Stop, (), ());
     MOCK_METHOD(std::shared_ptr<DDSTransmitter>, GetTransmitter, (), ());
     MOCK_METHOD(EndPointFactory*, GetEndpointFactory, (), ());
-    MOCK_METHOD(std::shared_ptr<StateManager>, GetState, (), ());
+    MOCK_METHOD(std::shared_ptr<StateManager>, GetStateMgr, (), ());
     MOCK_METHOD(std::shared_ptr<StateMonitor>, GetMonitor, (), ());
     MOCK_METHOD(std::shared_ptr<PolicyManager>, GetPolicy, (), ());
     MOCK_METHOD(std::shared_ptr<MWServiceManager>, GetMWService, (), ());
@@ -47,8 +47,8 @@ EndPointFactory* LifecycleManager::GetEndpointFactory() {
     return Mock_LifecycleManager->GetEndpointFactory();
 }
 
-std::shared_ptr<StateManager> LifecycleManager::GetState() {
-    return Mock_LifecycleManager->GetState();
+std::shared_ptr<StateManager> LifecycleManager::GetStateMgr() {
+    return Mock_LifecycleManager->GetStateMgr();
 }
 
 std::shared_ptr<StateMonitor> LifecycleManager::GetMonitor() {

@@ -33,6 +33,7 @@ class ServiceRegistry {
     std::vector<std::shared_ptr<Service>> GetServicesByGroup(std::string group);
     std::vector<std::string> GetServicesNameByGroup(std::string group);
     std::string GetGroupNameByService(std::shared_ptr<Service> service);
+    std::vector<std::string> GetGroupList();
 
     uint64_t GetServiceNum();
     uint64_t GetServiceNumInGroup(std::string group);
@@ -42,12 +43,13 @@ class ServiceRegistry {
     bool hasGroup(std::string name);
     std::shared_ptr<std::vector<std::string>> getGroup(std::string name);
 
-    bool vectorAdd(std::vector<std::string> vec, std::string item);
-    bool vectorRemove(std::vector<std::string> vec, std::string item);
+    bool vectorAdd(std::vector<std::string>& vec, std::string item);
+    bool vectorRemove(std::vector<std::string>& vec, std::string item);
     bool vectorHas(std::vector<std::string> vec, std::string item);
 
     bool hasService(std::string name);
     std::shared_ptr<Service> getService(std::string name);
+    std::string newGroup();
 
   private:
     std::map<std::string, std::shared_ptr<Service>> services_;

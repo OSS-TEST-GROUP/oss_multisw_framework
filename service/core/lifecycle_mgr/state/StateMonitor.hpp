@@ -58,6 +58,8 @@ class StateMonitor : public ManagerBase {
     lifecyclemgr::GetServiceStateRequest get_request_;
     lifecyclemgr::LifecycleDiagReport diag_report_;
 
+    int32_t loop_count_;
+
 };
 
 } // namespace lifecycle_manager

@@ -18,6 +18,10 @@ bool ServiceRegistry::UpdateServiceList(UpdateServiceListRequest* update){
     std::vector<lifecyclemgr::Service> *slist = &update->service_list();
     std::set<std::shared_ptr<Service>> service_set;
 
+    std::string group = newGroup();
+
+    AddGroup(group);
+
     for( auto svc = slist->begin(); svc != slist->end(); ++svc ){
         std::shared_ptr<Service> service = GetService(svc->name());
 
@@ -29,6 +33,8 @@ bool ServiceRegistry::UpdateServiceList(UpdateServiceListRequest* update){
                                                 TypeConvert::ToServiceType(svc->service_type()), 
                                                 TypeConvert::ToRecoveryPolicy(svc->recovery_policy()), 
                                                 svc->is_enabled());
+            // New Service Add to Registry
+            AddService(service, group);
         }
         service_set.insert(service);
         service->Print();
@@ -40,7 +46,7 @@ bool ServiceRegistry::UpdateServiceList(UpdateServiceListRequest* update){
                                     reinterpret_cast<void*>(&udpate_response_));
 
     if (service_set.size() > 0){
-        std::shared_ptr<StateManager> manager = LifecycleFactory::GetInstance()->GetState();
+        std::shared_ptr<StateManager> manager = LifecycleFactory::GetInstance()->GetStateMgr();
         if (manager != nullptr){
             manager->ProcessServiceHandling(service_set);
         }
@@ -121,7 +127,7 @@ std::vector<std::shared_ptr<Service>> ServiceRegistry::GetServicesByGroup(std::s
 
     std::vector<std::shared_ptr<Service>> group_list;
 
-    if (group.size() == 0){
+    if (group.empty()){
         // return all 
         for (auto& iter : services_) {
             group_list.push_back(iter.second);
@@ -150,7 +156,7 @@ std::vector<std::string> ServiceRegistry::GetServicesNameByGroup(std::string gro
 
     std::vector<std::string> group_list;
 
-    if (group.size() == 0){
+    if (group.empty()){
         // return all 
         for (auto& iter : services_) {
             group_list.push_back(iter.second->GetName());
@@ -184,6 +190,16 @@ std::string ServiceRegistry::GetGroupNameByService(std::shared_ptr<Service> serv
         }
     }
     return "";
+}
+    
+std::vector<std::string> ServiceRegistry::GetGroupList(){
+    std::vector<std::string> group_list;
+
+    for (const auto &iter : groups_)
+    {
+        group_list.push_back(iter.first);
+    }
+    return group_list;
 }
 
 
@@ -276,7 +292,7 @@ bool ServiceRegistry::vectorHas(std::vector<std::string> vec, std::string item){
     return false;
 }
 
-bool ServiceRegistry::vectorAdd(std::vector<std::string> vec, std::string item){
+bool ServiceRegistry::vectorAdd(std::vector<std::string>& vec, std::string item){
     
     if(std::find(vec.begin(), vec.end(), item) == vec.end()) { // vector내에 item 이 존재하지 않음
         vec.push_back(item);
@@ -286,7 +302,7 @@ bool ServiceRegistry::vectorAdd(std::vector<std::string> vec, std::string item){
     return false;
 }
 
-bool ServiceRegistry::vectorRemove(std::vector<std::string> vec, std::string item){
+bool ServiceRegistry::vectorRemove(std::vector<std::string>& vec, std::string item){
 
     auto iter = std::find(vec.begin(), vec.end(), item);
 
@@ -298,6 +314,15 @@ bool ServiceRegistry::vectorRemove(std::vector<std::string> vec, std::string ite
 
     return false;
 
+}
+
+std::string ServiceRegistry::newGroup(){
+    static int32_t groupid = 10;
+
+    std::string groupname = "group_" + std::to_string(groupid);
+    groupid += 10;
+    
+    return groupname;
 }
 
 

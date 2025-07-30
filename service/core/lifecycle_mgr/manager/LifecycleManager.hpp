@@ -3,6 +3,7 @@
 
 #include <memory>
 
+#include "include/ManagerState.hpp"
 
 namespace lifecycle_manager {
 
@@ -30,7 +31,7 @@ class LifecycleManager {
 
     EndPointFactory* GetEndpointFactory();
 
-    std::shared_ptr<StateManager> GetState();
+    std::shared_ptr<StateManager> GetStateMgr();
 
     std::shared_ptr<StateMonitor> GetMonitor();
     std::shared_ptr<PolicyManager> GetPolicy();
@@ -38,6 +39,9 @@ class LifecycleManager {
     std::shared_ptr<ServiceRegistry> GetRegistry();
 
     std::shared_ptr<Service> GetService(std::string name);
+
+    ManagerState GetState() { return manager_state_; }
+    void SetState(ManagerState state);
 
     // Unit test support: allow test subclasses to access dependency injection
   protected:
@@ -48,6 +52,8 @@ class LifecycleManager {
     std::shared_ptr<MWServiceManager> mw_service_manager_;
     std::shared_ptr<DDSTransmitter> msg_transmitter_;
     EndPointFactory* endpoint_factory_;
+
+    ManagerState     manager_state_;
 };
 
 } // namespace lifecycle_manager

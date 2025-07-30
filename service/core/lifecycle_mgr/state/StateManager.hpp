@@ -29,6 +29,8 @@ class StateManager : public ManagerBase {
     bool SetServiceMode(lifecyclemgr::SetServiceModeRequest* message);
     void ProcessServiceHandling(std::set<std::shared_ptr<Service>> service_list);
 
+    void RequestStopAll();
+
     void OnStart(lifecyclemgr::StartServiceResponse* message);
     void OnStop(lifecyclemgr::StopServiceResponse* message);
     
@@ -38,6 +40,8 @@ class StateManager : public ManagerBase {
     std::shared_ptr<PolicyManager> policy_manager_;
     lifecyclemgr::StartServiceRequest start_request_;
     lifecyclemgr::StopServiceRequest stop_request_;
+    lifecyclemgr::SetServiceModeResponse set_response_;
+
 };
 
 } // namespace lifecycle_manager

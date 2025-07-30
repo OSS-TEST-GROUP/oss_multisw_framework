@@ -23,7 +23,8 @@ bool DDSTransmitter::Initialize(){
          nullptr, StatusMask::none());
     if (participant_ == nullptr)
     {
-        throw std::runtime_error("Participant initialization failed");
+        LOG_ERROR("Participant initialization failed");
+        return false;
     }
 
     // Create the publisher
@@ -32,7 +33,8 @@ bool DDSTransmitter::Initialize(){
     publisher_ = participant_->create_publisher(pub_qos, nullptr, StatusMask::none());
     if (publisher_ == nullptr)
     {
-        throw std::runtime_error("Publisher initialization failed");
+        LOG_ERROR("Publisher initialization failed");
+        return false;
     }
 
     // Create the subscriber
@@ -41,7 +43,7 @@ bool DDSTransmitter::Initialize(){
     subscriber_ = participant_->create_subscriber(sub_qos, nullptr, StatusMask::none());
     if (subscriber_ == nullptr)
     {
-        std::cout << "Subscriber initialization failed." << std::endl;
+        LOG_ERROR("Subscriber initialization failed.");
         return false;
     }
 
@@ -50,7 +52,6 @@ bool DDSTransmitter::Initialize(){
     if (message_queue_ != nullptr){
         message_queue_->Start();
     }
-
 
     return true;    
 }
@@ -88,7 +89,7 @@ std::shared_ptr<DDSMessageEndPoint> DDSTransmitter::GetMessageEndPoint(std::stri
         LOG_DEBUG("GetEndpoint for " << topic << ", found " << search->first);
         return search->second;
     } else{ 
-        std::cout << "Not found\n";
+        LOG_ERROR("GetEndpoint Not found " << topic);
     }
     return nullptr;
     

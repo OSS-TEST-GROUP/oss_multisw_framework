@@ -11,6 +11,7 @@ enum class ServiceState {
     TERMINATING
 };
 
+
 } // namespace lifecycle_manager
 
 #endif // LIFECYCLE_SERVICE_STATE_HPP_

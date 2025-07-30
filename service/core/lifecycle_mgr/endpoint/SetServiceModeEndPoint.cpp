@@ -31,7 +31,7 @@ void SetServiceModeEndPoint::OnDataAvailable(){
 
         SetServiceModeRequest* message = reinterpret_cast<SetServiceModeRequest*>(&data_);
 
-        std::shared_ptr<StateManager> manager = LifecycleFactory::GetInstance()->GetState();
+        std::shared_ptr<StateManager> manager = LifecycleFactory::GetInstance()->GetStateMgr();
 
         if (manager != nullptr){
             manager->SetServiceMode(message);            

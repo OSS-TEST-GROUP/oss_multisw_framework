@@ -30,7 +30,7 @@ void StopServiceEndPoint::OnDataAvailable(){
 
         StopServiceResponse* message = reinterpret_cast<StopServiceResponse*>(&resp_);
 
-        std::shared_ptr<StateManager> manager = LifecycleFactory::GetInstance()->GetState();
+        std::shared_ptr<StateManager> manager = LifecycleFactory::GetInstance()->GetStateMgr();
 
         if (manager != nullptr){
             manager->OnStop(message);            

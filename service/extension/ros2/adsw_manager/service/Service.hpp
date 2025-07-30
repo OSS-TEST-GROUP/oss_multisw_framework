@@ -33,17 +33,21 @@ class Service {
     void SetRunningNodes(int32_t count);
     int32_t GetMaxNodes();
 
+    void SetPID(uint64_t pid);
+    uint64_t GetPID();
+
   private:
     std::string name_;
     ServiceType service_type_;
     RecoveryPolicy recovery_policy_;
     bool is_enabled_;
     ServiceState service_state_;
-    std::string launch_file_;
     std::string packag_name_;
+    std::string launch_file_;
 
     int32_t max_nodes_;
     int32_t current_nodes_;
+    uint64_t pid_;
 };
 
 } // namespace adsw_manager

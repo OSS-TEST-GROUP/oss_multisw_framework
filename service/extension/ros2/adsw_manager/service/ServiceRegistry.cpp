@@ -249,6 +249,11 @@ bool ServiceRegistry::ProcessGetServiceStateRequest(lifecyclemgr::GetServiceStat
     std::vector<std::string> service_list = message->service_list();
     bool is_all_service = message->is_all_service(); 
 
+    LOG_DEBUG("GetServiceStateRequest: " << service_list.size() << " all ?: " << is_all_service);
+
+    get_service_response_.service_list().clear();
+    get_service_response_.service_state_list().clear();
+    
     for (const auto& service : service_list) {
     
         std::shared_ptr<Service> service_ptr = GetService(service);

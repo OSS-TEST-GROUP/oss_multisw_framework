@@ -7,6 +7,8 @@
 #include "include/TypeConvert.hpp"
 #include "logger/Log.hpp"
 
+#include "manager/LifecycleFactory.hpp"
+
 namespace lifecycle_manager {
 
 StateMonitor::StateMonitor(LifecycleManager& lifecycle)
@@ -18,9 +20,6 @@ StateMonitor::~StateMonitor() {}
 bool StateMonitor::Start() {
     
     StartThread();
-
-    RunThread();
-
     return true;
 }
 
@@ -88,6 +87,8 @@ void StateMonitor::NotifyLifecycleDiagnosticInfo(bool all){
 
     std::shared_ptr<DDSTransmitter> transmitter = GetTransmitter();
 
+    diag_report_.service_list().clear();
+
     if (transmitter != nullptr)
     {
         if (all == true){
@@ -149,11 +150,27 @@ void StateMonitor::StopThread()
 
 void StateMonitor::RunThread()
 {
+    loop_count_ = 0;
+
     while(!stop_thread_)
 	{
 		std::this_thread::sleep_for(std::chrono::milliseconds(10000));
 
         RequestGetState();
+
+        // Test Code Start :: Stop Service
+
+        loop_count_++;
+
+        if (loop_count_ > 20){
+            // Test for stop request
+            std::shared_ptr<LifecycleManager> manager  = LifecycleFactory::GetInstance()->GetManager();
+
+            manager->SetState(ManagerState::MANAGER_TERMINATE);
+            loop_count_ = 0;
+            manager->SetState(ManagerState::MANAGER_RUNNING);
+        }
+        // Test Code End :: Stop Service
 	}
 }
 
@@ -167,14 +184,19 @@ void StateMonitor::RequestGetState(){
         std::shared_ptr<ServiceRegistry> registry = GetRegistry();
 
         if (registry){
-            std::vector<std::string> list = registry->GetServicesNameByGroup("");
+            std::vector<std::string> groups = registry->GetGroupList();
 
-            for( auto svc = list.begin(); svc != list.end(); ++svc ){
-                get_request_.service_list().push_back(*svc);
+            for (auto& group : groups){
+                std::vector<std::string> list = registry->GetServicesNameByGroup(group);                
+                get_request_.service_list().clear();
+                
+                for( auto svc = list.begin(); svc != list.end(); ++svc ){
+                    get_request_.service_list().push_back(*svc);
+                }
+                get_request_.is_all_service() = false;
+
+                transmitter->SendMessage(MessageType::GET_SERVICE_STATE_REQUEST, reinterpret_cast<void*>(&get_request_));
             }
-            get_request_.is_all_service() = false;
-            
-            transmitter->SendMessage(MessageType::GET_SERVICE_STATE_REQUEST, reinterpret_cast<void*>(&get_request_));
         }
     }
 }
