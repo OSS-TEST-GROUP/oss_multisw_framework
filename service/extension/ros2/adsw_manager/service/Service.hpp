@@ -31,6 +31,7 @@ class Service {
     void SetPackage(const std::string& package);
     const std::string GetPackage();
     void SetRunningNodes(int32_t count);
+    int32_t GetRunningNodes();
     int32_t GetMaxNodes();
 
     void SetPID(uint64_t pid);

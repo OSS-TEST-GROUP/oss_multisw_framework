@@ -44,8 +44,10 @@ set ( CONTROL_SRC
 )
 
 # IDL generation
-set(GENERATED_ROS2_DIR "${CMAKE_INSTALL_PREFIX}/generated/idl/ros2/idl/dds")
-set(GENERATED_LIFECYCLE_DIR "${CMAKE_INSTALL_PREFIX}/generated/idl/lifecycle/idl/dds")
+#set(GENERATED_ROS2_DIR "${CMAKE_INSTALL_PREFIX}/generated/idl/ros2/idl/dds")
+#set(GENERATED_LIFECYCLE_DIR "${CMAKE_INSTALL_PREFIX}/generated/idl/lifecycle/idl/dds")
+set(GENERATED_ROS2_DIR "${CMAKE_INSTALL_PREFIX}/generated/idl")
+set(GENERATED_LIFECYCLE_DIR "${CMAKE_INSTALL_PREFIX}/generated/idl")
 
 set(GENERATED_DDS_ROS2_FILES
                         ${GENERATED_ROS2_DIR}/ros2/GidPubSubTypes.cxx

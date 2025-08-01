@@ -1,6 +1,23 @@
+// Unit tests for DDSTransmitter class using Google Test and Google Mock
 #include <gtest/gtest.h>
+#include <gmock/gmock.h>
 
 #include "service/Service.cpp"  // Include actual implementation
+
+using ::testing::Return;
+using ::testing::_;
+using ::testing::A;
+using ::testing::ReturnRef;
+using ::testing::Values;
+using ::testing::SetArgPointee;
+using ::testing::SetArrayArgument;
+using ::testing::SaveArg;
+using ::testing::SaveArgPointee;
+using ::testing::DoAll;
+using ::testing::Args;
+using ::testing::AllOf;
+using ::testing::AtLeast;
+using ::testing::Combine;
 
 using namespace ros2::adsw_manager;
 
@@ -38,6 +55,41 @@ TEST_F(ServiceTest, IsEnabled_TC003) {
     Service ins2("AnotherService", ServiceType::NORMAL, RecoveryPolicy::ALWAYS, false);
     EXPECT_FALSE(ins2.IsEnabled());
 }
+
+TEST_F(ServiceTest, GetName_TC005) {
+    EXPECT_EQ(ins.GetName(), "TestService");
+}
+TEST_F(ServiceTest, GetPackageAndLaunchFile_TC006) {
+    ins.SetPackage("test_package");
+    EXPECT_EQ(ins.GetPackage(), "test_package");
+
+    ins.SetLaunchFile("test_launch_file");
+    EXPECT_EQ(ins.GetLaunchFile(), "test_launch_file");
+}
+
+TEST_F(ServiceTest, SetAndGetPID_TC007) {
+    ins.SetPID(12345);
+    EXPECT_EQ(ins.GetPID(), 12345);
+
+    ins.SetPID(67890);
+    EXPECT_EQ(ins.GetPID(), 67890);
+}
+TEST_F(ServiceTest, SetAndGetRunningNodes_TC008) {
+    ins.SetRunningNodes(5);
+    EXPECT_EQ(ins.GetMaxNodes(), 5);
+
+    ins.SetRunningNodes(10);
+    EXPECT_EQ(ins.GetMaxNodes(), 10);
+}
+
+TEST_F(ServiceTest, SetAndGetServiceState_TC012) {
+    ins.SetServiceState(ServiceState::INITIALIZING);
+    EXPECT_EQ(ins.GetServiceState(), ServiceState::INITIALIZING);
+
+    ins.SetServiceState(ServiceState::RUNNING);
+    EXPECT_EQ(ins.GetServiceState(), ServiceState::RUNNING);
+}
+
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);

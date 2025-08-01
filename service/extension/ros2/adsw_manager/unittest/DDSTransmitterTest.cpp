@@ -1,9 +1,27 @@
+// Unit tests for DDSTransmitter class using Google Test and Google Mock
 #include <gtest/gtest.h>
+#include <gmock/gmock.h>
 #include "transmitter/DDSTransmitter.cpp"  // Include implementation directl
-#include "transmitter/DDSMessageEndpoint.cpp"
 #include "logger/Logger.cpp"
 
 #include "mock/MockDDSMessageEndpoint.hpp"
+#include "mock/MockMessageQueue.hpp"
+
+using ::testing::Return;
+using ::testing::_;
+using ::testing::A;
+using ::testing::ReturnRef;
+using ::testing::Values;
+using ::testing::SetArgPointee;
+using ::testing::SetArrayArgument;
+using ::testing::SaveArg;
+using ::testing::SaveArgPointee;
+using ::testing::DoAll;
+using ::testing::Args;
+using ::testing::AllOf;
+using ::testing::AtLeast;
+using ::testing::Combine;
+
 
 using namespace ros2::adsw_manager;
 
@@ -63,17 +81,26 @@ TEST_F(DDSTransmitterTest, GetMessageEndPoint_TC002_null) {
 
 TEST_F(DDSTransmitterTest, GetDomain_TC001) {
     bool result = ins->Initialize();
+    EXPECT_TRUE(result);
     EXPECT_TRUE(ins->GetDomain() != nullptr);
 }
 
 TEST_F(DDSTransmitterTest, GetPublisher_TC001) {
     bool result = ins->Initialize();
+    EXPECT_TRUE(result);
     EXPECT_TRUE(ins->GetPublisher() != nullptr);
 }
 
 TEST_F(DDSTransmitterTest, GetSubscriber_TC001) {
     bool result = ins->Initialize();
+    EXPECT_TRUE(result);
     EXPECT_TRUE(ins->GetSubscriber() != nullptr);
+}
+TEST_F(DDSTransmitterTest, Finalize_TC001) {
+    ins->Finalize();
+    EXPECT_TRUE(ins->GetDomain() == nullptr);
+    EXPECT_TRUE(ins->GetPublisher() == nullptr);
+    EXPECT_TRUE(ins->GetSubscriber() == nullptr);
 }
 
 

@@ -19,13 +19,13 @@ bool ADSWManager::Initialize() {
     service_registry_ = std::make_shared<ServiceRegistry>();
     service_monitor_ = std::make_shared<ServiceMonitor>();
     service_controller_ = std::make_shared<ROSServiceController>();
-    endppoint_factory_ = std::make_shared<EndPointFactory>();
+    endpoint_factory_ = std::make_shared<EndPointFactory>();
 
     // initialize dependency : dds_transmitter --> endpoint_factory --> service_registry
     if (!dds_transmitter_->Initialize()) {
         return false;
     }
-    if (!endppoint_factory_->Initialize()){
+    if (!endpoint_factory_->Initialize()){
         return false;
     }
 
@@ -40,8 +40,8 @@ bool ADSWManager::Initialize() {
 }
 
 bool ADSWManager::Start() {
-    if (endppoint_factory_ != nullptr){
-        endppoint_factory_->CreateEndPoints(dds_transmitter_);
+    if (endpoint_factory_ != nullptr){
+        endpoint_factory_->CreateEndPoints(dds_transmitter_);
     }
     if (!service_registry_->LoadServiceList()) {
         return false;
@@ -98,8 +98,18 @@ std::shared_ptr<ROSServiceDiscovery> ADSWManager::GetServiceDiscovery() {
 
 
 const char* ADSWManager::GetTopic(MessageType topic){
-    return endppoint_factory_->GetTopic(topic);
+    return endpoint_factory_->GetTopic(topic);
 }
+
+
+void ADSWManager::SetState(AdswState state) { 
+    adsw_state_ = state; 
+}
+
+AdswState ADSWManager::GetState() { 
+    return adsw_state_; 
+}
+
 
 ADSWManager* ADSWManager::Get(){
    return getShared().get();
@@ -116,7 +126,6 @@ std::shared_ptr<ADSWManager> ADSWManager::getShared()
         });
     return instance;
 }
-
 
 } // namespace adsw_manager
 } // namespace ros2

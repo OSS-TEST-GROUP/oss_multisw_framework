@@ -9,13 +9,11 @@
 #include <vector>
 
 #include "Service.hpp"
-#include "core/lifecycle_mgr/include/ServiceState.hpp"
-#include "core/lifecycle_mgr/include/ServiceType.hpp"
-#include "core/lifecycle_mgr/include/RecoveryPolicy.hpp"
+#include "ServiceState.hpp"
+#include "ServiceType.hpp"
+#include "RecoveryPolicy.hpp"
 #include "lifecycle/GetServiceStateRequest.hpp"
 
-
-using namespace lifecycle_manager;
 
 namespace ros2 {
 namespace adsw_manager {

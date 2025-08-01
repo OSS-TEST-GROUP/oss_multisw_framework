@@ -25,8 +25,8 @@ public:
 
     MOCK_METHOD(std::shared_ptr<std::vector<std::string>>, getGroup, (std::string), ());
     MOCK_METHOD(bool, hasGroup, (std::string), ());
-    MOCK_METHOD(bool, vectorAdd, (std::vector<std::string>, std::string), ());
-    MOCK_METHOD(bool, vectorRemove, (std::vector<std::string>, std::string), ());
+    MOCK_METHOD(bool, vectorAdd, (std::vector<std::string>&, std::string), ());
+    MOCK_METHOD(bool, vectorRemove, (std::vector<std::string>&, std::string), ());
     MOCK_METHOD(bool, vectorHas, (std::vector<std::string>, std::string), ());
     MOCK_METHOD(bool, hasService, (std::string), ());
     MOCK_METHOD(std::shared_ptr<lifecycle_manager::Service>, getService, (std::string), ());    
@@ -88,10 +88,10 @@ bool ServiceRegistry::hasGroup(std::string name) {
     return Mock_ServiceRegistry->hasGroup(name);
 }
 
-bool ServiceRegistry::vectorAdd(std::vector<std::string> vec, std::string item) {
+bool ServiceRegistry::vectorAdd(std::vector<std::string>& vec, std::string item) {
     return Mock_ServiceRegistry->vectorAdd(vec, item);
 }
-bool ServiceRegistry::vectorRemove(std::vector<std::string> vec, std::string item) {
+bool ServiceRegistry::vectorRemove(std::vector<std::string>& vec, std::string item) {
     return Mock_ServiceRegistry->vectorRemove(vec, item);   
 }   
 
