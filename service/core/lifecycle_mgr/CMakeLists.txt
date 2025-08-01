@@ -61,7 +61,8 @@ set ( MISC_SRC
 )
 
 # IDL generation
-set(GENERATED_DIR "${CMAKE_INSTALL_PREFIX}/generated/idl/lifecycle/idl/dds")
+#set(GENERATED_DIR "${CMAKE_INSTALL_PREFIX}/generated/idl/lifecycle/idl/dds")
+set(GENERATED_DIR "${CMAKE_INSTALL_PREFIX}/generated/idl")
 set(GENERATED_DDS_FILES ${GENERATED_DIR}/lifecycle/LifecycleCommonPubSubTypes.cxx
                         ${GENERATED_DIR}/lifecycle/LifecycleCommonTypeObjectSupport.cxx
                         ${GENERATED_DIR}/lifecycle/LifecycleDiagReportPubSubTypes.cxx

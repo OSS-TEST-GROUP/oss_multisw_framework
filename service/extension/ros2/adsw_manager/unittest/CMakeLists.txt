@@ -31,8 +31,8 @@ link_libraries ( gtest gmock fastcdr fastdds yaml-cpp )
 
 ## Target binary
 add_executable ( ADSWServiceTest ServiceTest.cpp )
-add_executable ( ADSWServiceRegistryTest ServiceRegistryTest.cpp )
-add_executable ( ADSWServiceMonitorTest ServiceMonitorTest.cpp )
+add_executable ( ADSWServiceRegistryTest ServiceRegistryTest.cpp ../service/ServiceRegistry.cpp )
+add_executable ( ADSWServiceMonitorTest ServiceMonitorTest.cpp)
 add_executable ( ADSWDDSTransmitterTest DDSTransmitterTest.cpp 
                                     ${GENERATED_DIR}/lifecycle/LifecycleCommonTypeObjectSupport.cxx
                                     ${GENERATED_DIR}/lifecycle/LifecycleDiagReportPubSubTypes.cxx

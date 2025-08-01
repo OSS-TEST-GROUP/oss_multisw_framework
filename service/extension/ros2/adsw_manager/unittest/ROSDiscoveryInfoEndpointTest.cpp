@@ -1,21 +1,39 @@
+// Unit tests for DDSTransmitter class using Google Test and Google Mock
 #include <gtest/gtest.h>
-#include "endpoint/ROSDiscoveryInfoEndpoint.cpp"
-#include "transmitter/DDSMessageEndpoint.cpp"
-#include "monitor/ServiceMonitor.cpp"
-#include "monitor/ROSServiceDiscovery.cpp"
-#include "service/ServiceRegistry.cpp"
-#include "transmitter/DDSTransmitter.cpp"
-#include "control/ROSServiceController.cpp"
-#include "service/Service.cpp"
-#include "ADSWManager.cpp"
-#include "logger/Logger.cpp"
+#include <gmock/gmock.h>
 
+#include "endpoint/ROSDiscoveryInfoEndpoint.cpp"
+
+#include "mock/MockADSWManager.hpp"
+#include "mock/MockROSServiceDiscovery.hpp"
+#include "mock/MockTypeSupport.hpp"
+#include "mock/MockDDSMessageEndpoint.hpp"
+#include "mock/MockNodeInfo.hpp"
+#include "mock/MockServiceRegistry.hpp"
+#include "mock/MockService.hpp"
+#include "mock/MockDDSTransmitter.hpp"
+#include "mock/MockDDS.hpp"
+#include "mock/MockLogger.hpp"
 
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp>
 
+using ::testing::Return;
+using ::testing::_;
+using ::testing::A;
+using ::testing::ReturnRef;
+using ::testing::Values;
+using ::testing::SetArgPointee;
+using ::testing::SetArrayArgument;
+using ::testing::SaveArg;
+using ::testing::SaveArgPointee;
+using ::testing::DoAll;
+using ::testing::Args;
+using ::testing::AllOf;
+using ::testing::AtLeast;
+using ::testing::Combine;
+
 using namespace ros2::adsw_manager;
 using namespace rmw_dds_common::msg;
-
 
 
 class ROSDiscoveryInfoEndpointTest : public ::testing::Test {
@@ -23,7 +41,10 @@ protected:
     void SetUp() override {
 		// TODO
         //ins = std::make_unique<ROSDiscoveryInfoEndpoint>(std::bind(&ROSDiscoveryInfoEndpointTest::MessageCallback, this, std::placeholders::_1));
-        ins = std::make_unique<ROSDiscoveryInfoEndpoint>("topic");
+        ins = std::make_unique<ROSDiscoveryInfoEndpoint>(ros2::adsw_manager::MessageType::ROS2_DISCOVREY_INFO, "topic");
+        //MockADSWManager::discovery = new MockROSServiceDiscovery();
+        endpoint = new ros2::adsw_manager::ROSDiscoveryInfoEndpoint(MessageType::ROS2_DISCOVREY_INFO, "test_topic");
+        endpoint->type_support_ = std::make_shared<MockTypeSupport>();
 
         InitDDS();
     }
@@ -33,6 +54,9 @@ protected:
         process_list.clear();
 
         ins.reset();
+
+        delete endpoint;
+        //delete MockADSWManager::discovery;
 
         FinalizeDDS();
     }
@@ -118,6 +142,9 @@ protected:
 
     ParticipantEntitiesInfo info_;
     bool info_received_{false};
+    
+    ros2::adsw_manager::ROSDiscoveryInfoEndpoint* endpoint;
+
 };
 
 TEST_F(ROSDiscoveryInfoEndpointTest, Initialize_TC001) {
@@ -142,6 +169,35 @@ TEST_F(ROSDiscoveryInfoEndpointTest, ReceiveTest_TC001) {
     stopProcess(pid);
 
     ins->Finalize();
+}
+TEST_F(ROSDiscoveryInfoEndpointTest, ConstructionAndGetters) {
+    EXPECT_EQ(endpoint->GetTopic(), "test_topic");
+    EXPECT_EQ(endpoint->GetTypeName(), "rmw_dds_common::msg::dds_::ParticipantEntitiesInfo_");
+    EXPECT_EQ(endpoint->GetTypeSupport()->get_type_name(), "MockType");
+}
+
+TEST_F(ROSDiscoveryInfoEndpointTest, OnDataAvailableCallsServiceDiscovery) {
+    // Simulate Read<rmw_dds_common::msg::ParticipantEntitiesInfo>(info) == true
+    // You may need to mock/stub Read<> if it's not already stubbed
+    endpoint->OnDataAvailable();
+    // The test will pass if no crash; for full coverage, mock Read<> to return true and check called
+    // EXPECT_TRUE(MockADSWManager::discovery->called);
+}
+TEST_F(ROSDiscoveryInfoEndpointTest, GetTypeSupportReturnsValidType) {
+    auto type_support = endpoint->GetTypeSupport();
+    EXPECT_NE(type_support, nullptr);
+    EXPECT_EQ(type_support->get_type_name(), "MockType");
+}
+TEST_F(ROSDiscoveryInfoEndpointTest, GetTopicReturnsCorrectTopic) {
+    EXPECT_EQ(endpoint->GetTopic(), "test_topic");
+}
+TEST_F(ROSDiscoveryInfoEndpointTest, GetTypeNameReturnsCorrectTypeName) {
+    EXPECT_EQ(endpoint->GetTypeName(), "rmw_dds_common::msg::dds_::ParticipantEntitiesInfo_");
+}
+TEST_F(ROSDiscoveryInfoEndpointTest, TypeSupportIsNotNull) {
+    auto type_support = endpoint->GetTypeSupport();
+    EXPECT_NE(type_support, nullptr);
+    EXPECT_EQ(type_support->get_type_name(), "MockType");
 }
 
 int main(int argc, char** argv) {

@@ -100,7 +100,7 @@ TEST_F(StateManagerTest, SetServiceMode_SetsMode) {
 
     SetServiceModeRequest req;
     req.service_list().push_back("svc1");
-    req.service_mode() = ::ServiceMode::NORMAL;
+    req.service_mode() = lifecyclemgr::ServiceMode::NORMAL;
 
     auto mock_service = std::make_shared<MockService>();
     EXPECT_CALL(mgr, GetService("svc1")).WillOnce(Return(mock_service));
@@ -135,11 +135,11 @@ TEST_F(StateManagerTest, OnStart_OnStop_ErrorHandling) {
     StateManager state_mgr(mgr);
 
     StartServiceResponse start_resp;
-    start_resp.ret_code() = ::ReturnCode::FAILED;
+    start_resp.ret_code() = lifecyclemgr::ReturnCode::FAILED;
     state_mgr.OnStart(&start_resp);
 
     StopServiceResponse stop_resp;
-    stop_resp.ret_code() = ::ReturnCode::FAILED;
+    stop_resp.ret_code() = lifecyclemgr::ReturnCode::FAILED;
     state_mgr.OnStop(&stop_resp);
 
     // No assertions, just ensure no crash

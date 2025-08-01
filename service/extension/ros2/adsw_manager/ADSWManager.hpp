@@ -40,8 +40,8 @@ class ADSWManager {
 
     const char* GetTopic(MessageType topic);
 
-    void SetState(AdswState state) { adsw_state_ = state; }
-    AdswState GetState() { return adsw_state_; }
+    void SetState(AdswState state);
+    AdswState GetState();
 
   private:
     static std::shared_ptr<ADSWManager> getShared();
@@ -51,7 +51,7 @@ class ADSWManager {
     std::shared_ptr<ServiceRegistry> service_registry_;
     std::shared_ptr<ServiceMonitor> service_monitor_;
     std::shared_ptr<ROSServiceController> service_controller_;
-    std::shared_ptr<EndPointFactory> endppoint_factory_;
+    std::shared_ptr<EndPointFactory> endpoint_factory_;
 
     AdswState adsw_state_;
 

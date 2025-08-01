@@ -4,38 +4,94 @@
 #include <gmock/gmock.h>
 
 #include "transmitter/DDSMessageEndpoint.hpp"
-#include "lifecycle/LifecycleDiagReportPubSubTypes.hpp"
 
 using namespace eprosima::fastdds::dds;
 
 namespace ros2 {
 namespace adsw_manager {
 
+
 class MockDDSMessageEndpoint : public DDSMessageEndpoint {
   public:
-    MockDDSMessageEndpoint() {
-        type_support_ = std::make_shared<TypeSupport>(new LifecycleDiagReportPubSubType());
-    }
+    MockDDSMessageEndpoint() : DDSMessageEndpoint() {}
+    virtual ~MockDDSMessageEndpoint() {}
 
-    std::string GetTopic() {
-        return "TestTopic";
-    }
+    MOCK_METHOD(void, OnDataAvailable, (), (override));
+    MOCK_METHOD(bool, Write, (void* value), ());
+    MOCK_METHOD(std::string, GetTopic, (), (override));
+    MOCK_METHOD(std::string, GetTypeName, (), (override));
+    MOCK_METHOD(std::shared_ptr<TypeSupport>, GetTypeSupport, (), (override));
+    MOCK_METHOD(bool, Initialize, (DomainParticipant* participant, Publisher* publisher, Subscriber* subscriber), ());
+    MOCK_METHOD(void, Finalize, (), ());
 
-    std::string GetTypeName() {
-        return "LifecycleDiagReport";
-    }
+    MOCK_METHOD(uint64_t, GetPendingWriteData, (), ());
+    MOCK_METHOD(uint64_t, GetPendingReadData, (), ());
 
-    std::shared_ptr<TypeSupport> GetTypeSupport() {
-        return type_support_;
-    }
+    MOCK_METHOD(void, on_publication_matched,
+            (DataWriter* writer, const PublicationMatchedStatus& info), (override));
 
-    void OnDataAvailable() {
+    MOCK_METHOD(void, on_subscription_matched,
+            (DataReader* reader, const SubscriptionMatchedStatus& info), (override));
 
-    }
+    MOCK_METHOD(void, on_data_available, (DataReader* reader), (override));
 
     std::shared_ptr<TypeSupport> type_support_;
 };
 
+    MockDDSMessageEndpoint* Mock_DDSMessageEndpoint;
+
+    DDSMessageEndpoint::DDSMessageEndpoint(){
+        Mock_DDSMessageEndpoint = new MockDDSMessageEndpoint();
+    }
+
+    DDSMessageEndpoint::~DDSMessageEndpoint() {
+        Mock_DDSMessageEndpoint = nullptr;
+    }
+    bool DDSMessageEndpoint::Initialize(DomainParticipant* participant, Publisher* publisher, Subscriber* subscriber) {
+        return Mock_DDSMessageEndpoint->Initialize(participant, publisher, subscriber);
+    }
+    void DDSMessageEndpoint::Finalize() {
+        Mock_DDSMessageEndpoint->Finalize();
+    }
+
+
+    std::string DDSMessageEndpoint::GetTopic() {
+        return Mock_DDSMessageEndpoint->GetTopic();
+    }
+    std::string DDSMessageEndpoint::GetTypeName() {
+        return Mock_DDSMessageEndpoint->GetTypeName();
+    }
+    
+    std::shared_ptr<TypeSupport> DDSMessageEndpoint::GetTypeSupport() {
+        return Mock_DDSMessageEndpoint->GetTypeSupport();
+    }
+
+    bool DDSMessageEndpoint::Write(void* value) {
+        return Mock_DDSMessageEndpoint->Write(value);
+    }
+
+    void DDSMessageEndpoint::OnDataAvailable() {
+        Mock_DDSMessageEndpoint->OnDataAvailable();
+    }
+
+    uint64_t DDSMessageEndpoint::GetPendingWriteData() {
+        return Mock_DDSMessageEndpoint->GetPendingWriteData();
+    }
+
+    uint64_t DDSMessageEndpoint::GetPendingReadData() {
+        return Mock_DDSMessageEndpoint->GetPendingReadData();
+    }
+    void DDSMessageEndpoint::on_publication_matched(
+            DataWriter* writer, const PublicationMatchedStatus& info) {
+        Mock_DDSMessageEndpoint->on_publication_matched(writer, info);
+    }
+    void DDSMessageEndpoint::on_subscription_matched(
+            DataReader* reader, const SubscriptionMatchedStatus& info) {
+        Mock_DDSMessageEndpoint->on_subscription_matched(reader, info);
+    }
+    void DDSMessageEndpoint::on_data_available(DataReader* reader) {
+        Mock_DDSMessageEndpoint->on_data_available(reader);
+    }
 }
 }
 

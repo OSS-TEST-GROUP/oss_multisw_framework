@@ -75,6 +75,10 @@ void Service::SetRunningNodes(int32_t count){
 
 }
 
+int32_t Service::GetRunningNodes(){
+    return current_nodes_;
+}
+ 
 int32_t Service::GetMaxNodes(){
     return max_nodes_;
 }

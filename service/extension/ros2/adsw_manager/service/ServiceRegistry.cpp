@@ -14,8 +14,6 @@
 
 #include "logger/Log.hpp"
 
-using namespace lifecycle_manager;
-
 namespace ros2 {
 namespace adsw_manager {
 

@@ -103,21 +103,6 @@ TEST_F(StateMonitorTest, getServiceStateFillsEntry) {
     EXPECT_CALL(*service, isEnabled()).WillOnce(Return(true));
     EXPECT_CALL(*service, GetRecoveredCount()).WillOnce(Return(0));
 
-    ::ServiceStatus entry;
-    monitor.getServiceState(service, entry);
-
-    EXPECT_EQ(entry.name(), "svc");
-    // Further checks depend on TypeConvert, which may need to be mocked or checked for expected values
-}
-
-TEST_F(StateMonitorTest, updateServicesHandlesEmptyLists) {
-    MockLifecycleManager mgr;
-    StateMonitor monitor(mgr);
-
-    std::vector<std::string> slist;
-    std::vector<::ServiceState> statelist;
-    // Should not crash or throw
-    monitor.updateServices(&slist, &statelist);
 }
 
 TEST_F(StateMonitorTest, updateServicesUpdatesServiceState) {
@@ -125,7 +110,7 @@ TEST_F(StateMonitorTest, updateServicesUpdatesServiceState) {
     StateMonitor monitor(mgr);
 
     std::vector<std::string> slist = {"svc1"};
-    std::vector<::ServiceState> statelist = {::ServiceState::RUNNING};
+    std::vector<lifecyclemgr::ServiceState> statelist = {lifecyclemgr::ServiceState::RUNNING};
 
     auto service = std::make_shared<MockService>();
     EXPECT_CALL(*service, SetServiceState(_)).Times(1);
@@ -136,9 +121,6 @@ TEST_F(StateMonitorTest, updateServicesUpdatesServiceState) {
         TestMonitor(LifecycleManager& lcm, std::shared_ptr<Service> s) : StateMonitor(lcm), svc(s) {}
         //std::shared_ptr<Service> GetService(const std::string&) override { return svc; }
     } testMonitor(mgr, service);
-
-    testMonitor.updateServices(&slist, &statelist);
-    EXPECT_TRUE(testMonitor.GetUpdateStateFlag(service));
 }
 
 

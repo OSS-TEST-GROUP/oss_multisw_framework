@@ -1,10 +1,32 @@
+#include <algorithm>
+// Unit tests for DDSTransmitter class using Google Test and Google Mock
 #include <gtest/gtest.h>
-#include "service/ServiceRegistry.cpp"  // Include implementation directl
-#include "service/Service.cpp"
-#include "logger/Logger.cpp"
+#include <gmock/gmock.h>
+
+#include "service/ServiceRegistry.hpp"
+
+#include "mock/MockADSWManager.hpp"
+#include "mock/MockService.hpp"
+#include "mock/MockDDSTransmitter.hpp"
+#include "mock/MockLogger.hpp"
+#include "mock/MockDDSMessageEndpoint.hpp"
+
+using ::testing::Return;
+using ::testing::_;
+using ::testing::A;
+using ::testing::ReturnRef;
+using ::testing::Values;
+using ::testing::SetArgPointee;
+using ::testing::SetArrayArgument;
+using ::testing::SaveArg;
+using ::testing::SaveArgPointee;
+using ::testing::DoAll;
+using ::testing::Args;
+using ::testing::AllOf;
+using ::testing::AtLeast;
+using ::testing::Combine;
 
 using namespace ros2::adsw_manager;
-using namespace lifecycle_manager;
 
 class ServiceRegistryTest : public ::testing::Test {
 protected:
@@ -66,6 +88,7 @@ TEST_F(ServiceRegistryTest, GetServiceByGroup_TC005) {
 
     auto list = registry->GetServicesByGroup("Sensors");
     EXPECT_EQ(list.size(), 2);
+
     EXPECT_TRUE(std::find(list.begin(), list.end(), service1) != list.end());
     EXPECT_TRUE(std::find(list.begin(), list.end(), service2) != list.end());
 }
@@ -92,6 +115,31 @@ TEST_F(ServiceRegistryTest, ServiceCounts_TC007) {
     EXPECT_EQ(registry->GetServiceNumInGroup("G1"), 1);
     EXPECT_EQ(registry->GetServiceNumInGroup("G2"), 1);
 }
+
+TEST_F(ServiceRegistryTest, LoadServiceList_TC009) {
+    // Assuming LoadServiceList is implemented to load from a file or predefined list
+    EXPECT_TRUE(registry->LoadServiceList("path/to/service_list.json"));
+    EXPECT_GT(registry->GetServicesNum(), 0);
+}
+TEST_F(ServiceRegistryTest, SaveAndLoadServiceList_TC010) {
+    // Assuming Save and LoadServiceSaved are implemented
+    EXPECT_TRUE(registry->Save());
+    EXPECT_TRUE(registry->LoadServiceSaved("path/to/saved_service_list.json"));
+    EXPECT_GT(registry->GetServicesNum(), 0);
+}
+
+TEST_F(ServiceRegistryTest, LoadServiceSaved_TC011) {
+    // Assuming LoadServiceSaved is implemented to load from a YAML file
+    EXPECT_TRUE(registry->LoadServiceSaved("path/to/saved_service_list.yaml"));
+    EXPECT_GT(registry->GetServicesNum(), 0);
+}
+TEST_F(ServiceRegistryTest, ExtractRos2LaunchCommands_TC012) {
+    std::string script = "ros2 launch my_package my_launch_file.launch.py";
+    auto commands = registry->extractRos2LaunchCommands(script);
+    EXPECT_EQ(commands.size(), 1);
+    EXPECT_EQ(std::get<0>(commands[0]), "ros2 launch my_package my_launch_file.launch.py");
+}
+
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
