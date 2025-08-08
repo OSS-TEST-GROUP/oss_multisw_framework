@@ -1,0 +1,7 @@
+#include "AppInfo.idl"
+
+module adsw_manager_agl {
+    struct StartAppResponse {
+        ReturnCode ret_code;
+    };
+};

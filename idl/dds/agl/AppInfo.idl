@@ -1,0 +1,20 @@
+module adsw_manager_agl {
+    enum AppState {
+        UNKNOWN,
+        RESUMED,
+        INACTIVE,
+        PAUSED,
+        DETACHED
+    };
+
+    enum ReturnCode {
+        SUCCESS,
+        FAILED
+    };
+
+    struct AppInfo {
+        string app_name;
+        string app_path;
+        AppState app_state;
+    };
+};

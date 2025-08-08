@@ -1,0 +1,7 @@
+#include "AppInfo.idl"
+
+module adsw_manager_agl {
+    struct StopAppRequest {
+        AppInfo app_info;
+    };
+};
