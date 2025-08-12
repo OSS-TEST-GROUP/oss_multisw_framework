@@ -15,6 +15,7 @@ Service::Service(const std::string& name, ServiceType service_type, RecoveryPoli
       current_nodes_(0),
       pid_(0)
 {
+    
 }
 
 Service::~Service() {}

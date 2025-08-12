@@ -16,6 +16,7 @@
 
 #include "mock/MessageTransmitter_mock.hpp"
 #include "mock/ServiceExecutor_mock.hpp"
+#include "mock/MockLogger.hpp"
 
 using ::testing::Return;
 using ::testing::_;

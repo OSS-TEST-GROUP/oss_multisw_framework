@@ -45,6 +45,7 @@ set ( MAIN_SRC main.cc
                ${EXECUTOR_SRC}
                ${TRANSMITTER_SRC}
                ${DIAGNOSTIC_ANALYZER_SRC}
+               logger/Logger.cpp
 )
 
 ## Library

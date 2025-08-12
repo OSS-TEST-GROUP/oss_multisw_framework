@@ -8,6 +8,8 @@
 #include "diagnostic_analyzer/DiagPolicyRule.cpp"
 #include "diagnostic/VariantData.cpp"
 
+#include "mock/MockLogger.hpp"
+
 using namespace diagnostic_manager;
 
 class ConditionEvaluatorTest : public ::testing::Test {

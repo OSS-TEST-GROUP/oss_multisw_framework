@@ -22,8 +22,7 @@ using ::testing::Combine;
 class ContainerControllerTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        controller = new ros2::adsw_manager::ContainerController(
-            "deploy.yaml", "test-pod", "test-ns", "test-container");
+        controller = new ros2::adsw_manager::ContainerController();
     }
     void TearDown() override {
         delete controller;
@@ -37,11 +36,11 @@ TEST_F(ContainerControllerTest, InitializeAndFinalize) {
 }
 
 TEST_F(ContainerControllerTest, BaseCommand_K3sDisabled) {
-    EXPECT_EQ(controller->BaseCommand(), "");
+    EXPECT_EQ(controller->BaseCommand(""), "");
 }
 
 TEST_F(ContainerControllerTest, BaseRos2Command_K3sDisabled) {
-    EXPECT_EQ(controller->BaseRos2Command(), "");
+    EXPECT_EQ(controller->BaseRos2Command(""), "");
 }
 
 TEST_F(ContainerControllerTest, StartContainer_K3sDisabled) {
@@ -61,11 +60,11 @@ TEST_F(ContainerControllerTest, GetContainerLogs_K3sDisabled) {
 }
 TEST_F(ContainerControllerTest, BaseCommand_K3sEnabled) {
     controller->Initialize(); // Assuming this sets k3s_container_ to true
-    EXPECT_NE(controller->BaseCommand(), "");
+    EXPECT_NE(controller->BaseCommand(""), "");
 }
 TEST_F(ContainerControllerTest, BaseRos2Command_K3sEnabled) {
     controller->Initialize(); // Assuming this sets k3s_container_ to true
-    EXPECT_NE(controller->BaseRos2Command(), "");
+    EXPECT_NE(controller->BaseRos2Command(""), "");
 }
 TEST_F(ContainerControllerTest, StartContainer_K3sEnabled) {
     controller->Initialize(); // Assuming this sets k3s_container_ to true

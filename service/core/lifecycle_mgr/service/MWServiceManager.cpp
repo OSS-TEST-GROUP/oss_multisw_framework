@@ -28,7 +28,7 @@ MWServiceManager::~MWServiceManager() {}
 bool MWServiceManager::Initialize(){
     LOG_DEBUG("MWServiceManager::Initialize");
 
-    LoadMWConfig("/root/workspace/config_middleware.yaml");
+    LoadMWConfig("./config/config_middleware.yaml");
 
     return false;
 }
@@ -150,7 +150,15 @@ void MWServiceManager::RunMWServiceManagement(){
     for (auto& mws : mw_services_){
         LOG_INFO("Run MWService :: " << mws.first);
 
-        StartMWService(mws.second);
+        if (mws.first.compare("lifecycle_mgr") == 0) {
+            // Skip lifecycle_mgr service
+            LOG_INFO("Skip lifecycle_mgr service :: " << mws.first);
+            continue;
+        }
+        else{
+            LOG_DEBUG("Starting MWService :: " << mws.first << " , " << mws.first.compare("lifecycle_mgr"));
+            StartMWService(mws.second);
+        }
     }
 
 }

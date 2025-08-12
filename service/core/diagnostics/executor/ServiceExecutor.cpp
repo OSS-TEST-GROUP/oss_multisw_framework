@@ -2,6 +2,8 @@
 
 #include <optional>
 
+#include "logger/Log.hpp"
+
 namespace diagnostic_manager {
 
 bool ComparatorIntervalQueue::operator()(const std::shared_ptr<ServiceTask> l, std::shared_ptr<ServiceTask> r) const {
@@ -46,7 +48,7 @@ void ServiceExecutor::Stop() {
 
 void ServiceExecutor::SetExecutorNum(uint32_t num) {
     if (running_) {
-        std::cerr << "The executor num cannot be set while running." << std::endl;
+        LOG_ERROR("The executor num cannot be set while running.");
     }
     executor_num_ = num;
 }
@@ -199,7 +201,7 @@ void ServiceExecutor::RunScheduler(const uint32_t idx) {
     std::optional<TaskTime> next_wakeup_time;
 
     running_threads_.fetch_add(1U);
-    std::cout << "Starting the executor[" << idx << "]" << std::endl;
+    LOG_DEBUG("Starting the executor[" << idx << "]  started");
 
     while (running_) {
         // RequestTask handling
@@ -224,7 +226,7 @@ void ServiceExecutor::RunScheduler(const uint32_t idx) {
                 try {
                     task->Execute(request);
                 } catch (const std::exception& e) {
-                    std::cerr << "Exception during task execution: name=" << task->GetName() << ", " << e.what() << std::endl;
+                    LOG_ERROR("Exception during task execution: name=" << task->GetName() << ", " << e.what());
                 }
                 task.reset();
             }
@@ -259,7 +261,7 @@ void ServiceExecutor::RunScheduler(const uint32_t idx) {
             try {
                 task->Execute(nullptr);
             } catch (const std::exception& e) {
-                std::cerr << "Exception during task execution: name=" << task->GetName() << ", " << e.what() << std::endl;
+                LOG_ERROR("Exception during task execution: name=" << task->GetName() << ", " << e.what());
             }
 
             TaskTime next_exec_time = current + task->GetInterval();
@@ -290,7 +292,7 @@ void ServiceExecutor::RunScheduler(const uint32_t idx) {
         lk_request.unlock();
     }
 
-    std::cout << "Terminating the executor[" << idx << "]" << std::endl;
+    LOG_DEBUG("Terminating the executor[" << idx << "]");
     running_threads_.fetch_sub(1U);
 }
 

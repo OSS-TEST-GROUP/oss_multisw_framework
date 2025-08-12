@@ -3,6 +3,8 @@
 #include <sstream>
 #include <regex>
 
+#include "logger/Log.hpp"
+
 namespace diagnostic_manager {
 
 ConditionEvaluator::ConditionEvaluator(std::shared_ptr<DataManager> data_manager, std::shared_ptr<PolicyManager> policy_manager) :
@@ -22,14 +24,14 @@ bool ConditionEvaluator::EvaluateCondition(const std::string& condition) {
     }
 
     if (cond.operator_type == ConditionOperatorType::UNKNOWN) {
-        std::cerr << "Failed to parse a policy condition. condition=" << condition << std::endl;
+        LOG_ERROR("Failed to parse a policy condition. condition=" << condition);
         return false;
     }
 
     if (cond.operand_type == ConditionOperandType::UNKNOWN) {
         auto operand_type = EvaluateOperandType(cond);
         if (operand_type == ConditionOperandType::UNKNOWN) {
-            std::cerr << "Cannot evaluate the operand type. condition=" << condition << std::endl;
+            LOG_ERROR("Cannot evaluate the operand type. condition=" << condition);
             return false;
         }
         cond.operand_type = operand_type;
@@ -111,7 +113,7 @@ ConditionExpression ConditionEvaluator::ParseConditionExpression(const std::stri
 
     std::smatch match;
     if (!std::regex_match(condition, match, pattern) || match.size() != 4) {
-        std::cerr << "Invalid condition syntax: " << condition << std::endl;
+        LOG_ERROR("Invalid condition syntax: " << condition);
         return expression;
     }
 
@@ -187,7 +189,7 @@ void ConditionEvaluator::ConcatReleatedToken(std::vector<std::string>& token_lis
         }
         if (related) {
             if (idx + 1 >= token_list.size()) {
-                std::cerr << "Invalid condition. It ends with '" << related_token_list[idx] << "'." << std::endl;
+                LOG_ERROR("Invalid condition. It ends with '" << related_token_list[idx] << "'.");
                 return;
             }
             std::string new_token = related_token_list[related_token_idx] + " " + token_list[idx+1];
@@ -331,40 +333,40 @@ bool ConditionEvaluator::EvaluateOperandByOperator(T lh, T rh, ConditionOperator
         if constexpr (std::is_arithmetic_v<T>) {
             return lh >= rh;
         } else {
-            std::cerr << "Failed to evaluate condition. The operator 'EQUAL_ABOVE' is not supported with this type." << std::endl;
+            LOG_ERROR("Failed to evaluate condition. The operator 'EQUAL_ABOVE' is not supported with this type.");
             return false;
         }
     } else if (op == ConditionOperatorType::EQUAL_LESS) {
         if constexpr (std::is_arithmetic_v<T>) {
             return lh <= rh;
         } else {
-            std::cerr << "Failed to evaluate condition. The operator 'EQUAL_LESS' is not supported with this type." << std::endl;
+            LOG_ERROR("Failed to evaluate condition. The operator 'EQUAL_LESS' is not supported with this type.");
             return false;
         }
     } else if (op == ConditionOperatorType::ABOVE) {
         if constexpr (std::is_arithmetic_v<T>) {
             return lh > rh;
         } else {
-            std::cerr << "Failed to evaluate condition. The operator 'ABOVE' is not supported with this type." << std::endl;
+            LOG_ERROR("Failed to evaluate condition. The operator 'ABOVE' is not supported with this type.");
             return false;
         }
     } else if (op == ConditionOperatorType::LESS) {
         if constexpr (std::is_arithmetic_v<T>) {
             return lh < rh;
         } else {
-            std::cerr << "Failed to evaluate condition. The operator 'LESS' is not supported with this type." << std::endl;
+            LOG_ERROR("Failed to evaluate condition. The operator 'LESS' is not supported with this type.");
             return false;
         }
     }
 
-    std::cerr << "Failed to evaluate condition. The operator " << (uint32_t)op << " is not supported on this type " << std::endl;
+    LOG_ERROR("Failed to evaluate condition. The operator " << (uint32_t)op << " is not supported on this type ");
     return false;
 }
 
 template<typename T>
 bool ConditionEvaluator::EvaluateOperandByOperatorWithList(T lh, const std::string& rh, ConditionOperatorType op) {
     if (!IsArrayValue(rh)) {
-        std::cerr << "The operator 'IN' and 'NOT_IN' require a list value." << std::endl;
+        LOG_ERROR("The operator 'IN' and 'NOT_IN' require a list value.");
         return false;
     }
 
@@ -376,7 +378,7 @@ bool ConditionEvaluator::EvaluateOperandByOperatorWithList(T lh, const std::stri
         return list.count(lh) == 0;
     }
 
-    std::cerr << "Failed to evaluate condition. The operator " << (uint32_t)op << " is not supported on this type " << std::endl;
+    LOG_ERROR("Failed to evaluate condition. The operator " << (uint32_t)op << " is not supported on this type ");
     return false;
 }
 
@@ -405,7 +407,7 @@ bool ConditionEvaluator::FetchOrParseValue(const std::string& operand, T& out) {
     }).base(), trimmed.end());
 
     if (trimmed.empty()) {
-        std::cerr << "Empty string cannot be parsed." << std::endl;
+        LOG_ERROR("Empty string cannot be parsed.");
         return false;
     }
 
@@ -423,14 +425,14 @@ bool ConditionEvaluator::FetchOrParseValue(const std::string& operand, T& out) {
             std::transform(trimmed.begin(), trimmed.end(), std::back_inserter(lowered), ::tolower);
             if (lowered == "true") { out = true; return true; }
             if (lowered == "false") { out = false; return true; }
-            std::cerr << "Invalid boolean string: " << trimmed << std::endl;
+            LOG_ERROR("Invalid boolean string: " << trimmed);
             return false;
         } else {
             std::istringstream iss(trimmed);
             T value;
             iss >> value;
             if (iss.fail() || !iss.eof()) {
-                std::cerr << "Failed to parse value from string: " << trimmed << std::endl;
+                LOG_ERROR("Failed to parse value from string: " << trimmed);
                 return false;
             }
             out = value;
@@ -451,7 +453,7 @@ std::set<T> ConditionEvaluator::ParseArrayValue(const std::string& operand) {
     }), trimmed.end());
 
     if (trimmed.size() < 2 || trimmed.front() != '[' || trimmed.back() != ']') {
-        std::cerr << "Invalid array format: " << operand << std::endl;
+        LOG_ERROR("Invalid array format: " << operand);
         return result;
     }
 
@@ -466,7 +468,7 @@ std::set<T> ConditionEvaluator::ParseArrayValue(const std::string& operand) {
         if constexpr (std::is_same_v<T, std::string>) {
             // Must be quoted
             if (token.size() < 2 || token.front() != '"' || token.back() != '"') {
-                std::cerr << "String element must be quoted: " << token << std::endl;
+                LOG_ERROR("String element must be quoted: " << token);
                 result.clear();
                 return result;
             }
@@ -478,7 +480,7 @@ std::set<T> ConditionEvaluator::ParseArrayValue(const std::string& operand) {
             } else if (token == "false") {
                 result.insert(false);
             } else {
-                std::cerr << "Invalid boolean value: " << token << std::endl;
+                LOG_ERROR("Invalid boolean value: " << token);
                 result.clear();
                 return result;
             }
@@ -487,7 +489,7 @@ std::set<T> ConditionEvaluator::ParseArrayValue(const std::string& operand) {
             T value;
             val_stream >> value;
             if (val_stream.fail()) {
-                std::cerr << "Cannot convert to target type: " << token << std::endl;
+                LOG_ERROR("Cannot convert to target type: " << token);
                 result.clear();
                 return result;
             }

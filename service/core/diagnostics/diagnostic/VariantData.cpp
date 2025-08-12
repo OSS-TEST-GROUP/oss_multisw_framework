@@ -1,4 +1,5 @@
 #include "VariantData.hpp"
+#include "logger/Log.hpp"
 
 namespace diagnostic_manager {
 
@@ -71,7 +72,7 @@ VariantValue VariantData::GetValueAsVariantFromList(const std::string& name, uin
             value.type = std::type_index(typeid(std::wstring));
             if (index < val_list.size()) { value.value = val_list[index]; }
         } else {
-            std::cerr << "It's not an vector." << std::endl;
+            LOG_ERROR("It's not an vector. name=" << name);
         }
     }, v_list);
 
