@@ -189,6 +189,8 @@ uint64_t MessageTransmitter::GetSubscribeMessageNum() {
 void MessageTransmitter::ForwardDeliveredMessage(std::shared_ptr<Message> msg) {
     std::set<int64_t> subscriber_list;
 
+    std::cerr << "Forwarding message: " << msg->GetName() << std::endl;
+
     {
         std::lock_guard<std::mutex> subscription_lock(subscription_handling_mutex_);
         subscriber_list = GetSubscriptionIDList(msg->GetName(), msg->GetProtocolType());

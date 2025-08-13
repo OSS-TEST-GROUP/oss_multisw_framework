@@ -6,6 +6,8 @@
 #include <fastdds/dds/publisher/Publisher.hpp>
 #include <fastdds/dds/publisher/DataWriter.hpp>
 
+#include "logger/Log.hpp"
+
 namespace diagnostic_manager {
 
 DDSProtocol::DDSProtocol() : participant_(nullptr), subscriber_(nullptr) {
@@ -52,7 +54,7 @@ void DDSProtocol::Finalize() {
 
         auto factory = DomainParticipantFactory::get_instance();
         if (factory->delete_participant(participant_) != RETCODE_OK) {
-            std::cerr << "Failed to delete the participant." << std::endl;
+            LOG_ERROR("Failed to delete the participant.");
         }
     }
 }
@@ -78,29 +80,29 @@ bool DDSProtocol::PublishMessage(std::shared_ptr<Message> message) {
     }
 
     if (topic_info == nullptr) {
-        std::cerr << "Failed to publish the message. No topic_information. name=" << message->GetName();
+        LOG_ERROR("Failed to publish the message. No topic_information. name=" << message->GetName());
         return false;
     }
 
     if (topic_info->writer == nullptr) {
          if (!create_datawriter(topic_info)) {
-            std::cerr << "Failed to create a datawriter." << message->GetName() << std::endl;
+            LOG_ERROR("Failed to create a datawriter. name=" << message->GetName());
             return false;
          }
     }
 
     if (topic_info->remote_type == nullptr) {
-        std::cerr << "Failed to create dyanmic data type." << std::endl;
+        LOG_ERROR("Failed to create dynamic data type.");
         return false;
     }
     DynamicData::_ref_type dds_data = DynamicDataFactory::get_instance()->create_data(topic_info->remote_type);
     if (!SerializeMessage(dds_data, message->GetData())) {
-        std::cerr << "Failed to serialize the message. name=" << message->GetName() << std::endl;
+        LOG_ERROR("Failed to serialize the message. name=" << message->GetName());
         return false;
     }
 
     if (topic_info->writer->write(&dds_data) != RETCODE_OK) {
-        std::cerr << "Failed to write the message. name=" << message->GetName() << std::endl;
+        LOG_ERROR("Failed to write the message. name=" << message->GetName());
         return false;
     }
 
@@ -111,21 +113,26 @@ bool DDSProtocol::SubscribeMessage(const std::string& name) {
     std::lock_guard<std::mutex> lock(topic_handling_mutex_);
 
     subscribed_topic_.insert(name);
+    LOG_INFO("SubscribeMessage a type object. topic=" << name);
 
+    
     if (discovered_topic_.count(name) > 0) {
         auto topic_info = discovered_topic_[name];
         if (!register_type_object(topic_info)) {
-            std::cerr << "Failed to register a type object. topic=" << topic_info->topic_name << std::endl;
+            LOG_ERROR("Failed to register a type object. topic=" << topic_info->topic_name);
         }
         if (!create_datareader(topic_info)) {
-            std::cerr << "Failed to create a datareader. topic=" << topic_info->topic_name << std::endl;
+            LOG_ERROR("Failed to create a datareader. topic=" << topic_info->topic_name);
         }
     }
+    LOG_INFO("SubscribeMessage completed. topic=" << name  << ", " << discovered_topic_.count(name));
+
     return true;
 }
 
 bool DDSProtocol::UnsubscribeMessage(const std::string& name) {
     std::lock_guard<std::mutex> lock(topic_handling_mutex_);
+    LOG_INFO("UnsubscribeMessage a type object. topic=" << name);
 
     if (subscribed_topic_.count(name) == 0) {
         return false;
@@ -136,7 +143,7 @@ bool DDSProtocol::UnsubscribeMessage(const std::string& name) {
         auto topic_info = discovered_topic_[name];
         if (topic_info->reader) {
             if(!delete_datareader(topic_info)) {
-                std::cerr << "Failed to delete a datareader. topic=" << name << std::endl;
+                LOG_ERROR("Failed to delete a datareader. topic=" << name);
             }
         }
     }
@@ -189,7 +196,7 @@ bool DDSProtocol::SerializeMessage(DynamicData::_ref_type dds_data, std::shared_
         else if (type == std::type_index(typeid(std::vector<std::string>))) { dds_data->set_string_values(dds_data->get_member_id_by_name(member_name), variant_data->GetValue<std::vector<std::string>>(member_name)); }
         else if (type == std::type_index(typeid(std::vector<std::wstring>))) { dds_data->set_wstring_values(dds_data->get_member_id_by_name(member_name), variant_data->GetValue<std::vector<std::wstring>>(member_name)); }
         else {
-            std::cerr << "Not supported type. name=" << member_list[idx] << std::endl;
+            LOG_ERROR("Not supported type. name=" << member_list[idx]);
         }
     }
 
@@ -206,7 +213,7 @@ bool DDSProtocol::DeserializeMessage(DynamicData::_ref_type dds_data, std::share
 
         MemberDescriptor::_ref_type member_desc = {traits<MemberDescriptor>::make_shared()};
         if (member->get_descriptor(member_desc) != RETCODE_OK) {
-            std::cerr << "Failed to get member descriptor." << std::endl;
+            LOG_ERROR("Failed to get member descriptor.");
             continue;
         }
 
@@ -292,12 +299,21 @@ bool DDSProtocol::DeserializeMessage(DynamicData::_ref_type dds_data, std::share
                 TypeDescriptor::_ref_type type_desc = {traits<TypeDescriptor>::make_shared()};
                 member_desc->type()->get_descriptor(type_desc);
                 if (type_desc == nullptr) {
-                    std::cerr << "No type descriptor for sequence. name=" << name.c_str() << std::endl;
+                    LOG_ERROR("No type descriptor for sequence. name=" << name.c_str());
                 }
                 auto seq_type = type_desc->element_type()->get_kind();
 
-                if (!read_values_from_dynamic_data(dds_data, member, seq_type, variant_data)) {
-                    std::cerr << "Not supported sequence type." << std::endl;
+                if (seq_type == TK_STRUCTURE){
+                    std::shared_ptr<VariantData> child = std::make_shared<VariantData>();
+                    child->SetName(name.c_str());
+
+                    LOG_DEBUG("Recursive sequence of struct. " << name);
+                    DynamicData::_ref_type loan_data = dds_data->loan_value(member->get_id());
+                    if (DeserializeMessage(loan_data, child)) {
+                        variant_data->SetValue(name.c_str(), std::move(*child));
+                    }
+                }else if (!read_values_from_dynamic_data(dds_data, member, seq_type, variant_data)) {
+                    LOG_ERROR("Not supported sequence type.");
                 }
                 break;
             }
@@ -314,11 +330,10 @@ bool DDSProtocol::DeserializeMessage(DynamicData::_ref_type dds_data, std::share
             }
             case TK_ENUM:
             default: {
-                std::cerr << "Type of kind[" << (int32_t)type << "] is not supported yet." << std::endl;
+                LOG_ERROR("Type of kind[" << (int32_t)type << "] is not supported yet.");
             }
         }
     }
-
     return true;
 }
 
@@ -331,8 +346,8 @@ void DDSProtocol::load_dds_dynamic_idl(const std::string& path) {
     for (auto& iter : type_support_list) {
         parsed_dynamic_type_supports_[iter->type_support->get_type_name()] = iter;
     }
-    
-    std::cout << "loaded " << type_support_list.size() << " dynamic types." << std::endl;
+
+    LOG_INFO("loaded " << type_support_list.size() << " dynamic types.");
 }
 
 // FastDDS override method
@@ -361,7 +376,7 @@ void DDSProtocol::on_data_available(DataReader* reader) {
 
             // /* Publication GUID */
             // InstanceHandle_t publication_handle = info.publication_handle;
-            // std::cout << "- Received a message. " << reader->get_topicdescription()->get_name() << " publication_handle=" << publication_handle << std::endl;
+            LOG_DEBUG("Received a message. " << reader->get_topicdescription()->get_name());
 
             variant_data->SetName(topic_info->topic_name);
             if (DeserializeMessage(new_data, variant_data)) {
@@ -370,7 +385,7 @@ void DDSProtocol::on_data_available(DataReader* reader) {
                 );
                 ForwardMessage(message);
             } else{
-                std::cerr << "Failed to parse the message." << std::endl;
+                LOG_ERROR("Failed to parse the message.");
             }
         }
     }
@@ -379,16 +394,16 @@ void DDSProtocol::on_data_available(DataReader* reader) {
 void DDSProtocol::on_subscription_matched(DataReader* reader, const SubscriptionMatchedStatus& info) {
     if (info.current_count_change == 1)
     {
-        // std::cout << "Subscriber matched." << std::endl;
+        LOG_VERBOSE("Subscriber matched.");
     }
     else if (info.current_count_change == -1)
     {
-        // std::cout << "Subscriber unmatched." << std::endl;
+        LOG_VERBOSE("Subscriber unmatched.");
     }
     else
     {
-        std::cout << info.current_count_change
-                << " is not a valid value for SubscriptionMatchedStatus current count change" << std::endl;
+        LOG_ERROR(info.current_count_change
+                << " is not a valid value for SubscriptionMatchedStatus current count change");
     }
 }
 void DDSProtocol::on_data_writer_discovery(DomainParticipant* participant,
@@ -399,10 +414,10 @@ void DDSProtocol::on_data_writer_discovery(DomainParticipant* participant,
     bool need_to_subscribe = false;
     {
         std::lock_guard<std::mutex> lock(topic_handling_mutex_);
-
         if (discovered_topic_.count(info.topic_name.to_string()) > 0) {
             return;
         }
+        LOG_VERBOSE("on_data_writer_discovery: " << info.topic_name.to_string() << ", " << info.type_name.to_string());
 
         // Notify run thread that type has been discovered
         topic_info = std::make_shared<TopicInformation>();
@@ -422,11 +437,11 @@ void DDSProtocol::on_data_writer_discovery(DomainParticipant* participant,
 
     if (need_to_subscribe) {
         if (!register_type_object(topic_info)) {
-            std::cerr << "Failed to register a type object. topic=" << topic_info->topic_name << std::endl;
+            LOG_ERROR("Failed to register a type object. topic=" << topic_info->topic_name);
             return;
         }
         if (!create_datareader(topic_info)) {
-            std::cerr << "Failed to create a datareader. topic=" << topic_info->topic_name << std::endl;
+            LOG_ERROR("Failed to create a datareader. topic=" << topic_info->topic_name);
         }
     }
 }
@@ -488,7 +503,7 @@ bool DDSProtocol::register_type_object_from_dynamic_idl(std::shared_ptr<TopicInf
     topic_information->type_support = iter->second->type_support;
 
     if (topic_information->type_support->register_type(participant_) != RETCODE_OK) {
-        std::cerr << "Type registration failed for " << topic_information->topic_type << std::endl;
+        LOG_ERROR("Type registration failed for " << topic_information->topic_type);
         return false;
     }
     return true;
@@ -512,6 +527,8 @@ bool DDSProtocol::create_datareader(std::shared_ptr<TopicInformation> topic_info
     if (topic_information->reader == nullptr) {
         return false;
     }
+
+    LOG_INFO("Created datareader for topic: " << topic_information->topic_name << ", " << topic_information->topic_type);
 
     return true;
 }
@@ -562,7 +579,7 @@ bool DDSProtocol::create_datawriter(std::shared_ptr<TopicInformation> topic_info
 bool DDSProtocol::delete_datawriter(std::shared_ptr<TopicInformation> topic_information) {
     // Delete the DataWriter
     if (publisher_->delete_datawriter(topic_information->writer) != RETCODE_OK) {
-        std::cerr << "Failed to delete datawriter for topic: " << topic_information->topic_name << std::endl;
+        LOG_ERROR("Failed to delete datawriter for topic: " << topic_information->topic_name);
         return false;
     }
     topic_information->writer = nullptr;
@@ -570,7 +587,7 @@ bool DDSProtocol::delete_datawriter(std::shared_ptr<TopicInformation> topic_info
     // Delete the Topic (only if it's not in use by other entities)
     if (topic_information->reader == nullptr) {
         if (participant_->delete_topic(topic_information->topic) != RETCODE_OK) {
-            std::cerr << "Failed to delete topic for datawriter: " << topic_information->topic_name << std::endl;
+            LOG_ERROR("Failed to delete topic for datawriter: " << topic_information->topic_name);
             return false;
         }
         topic_information->topic = nullptr;
@@ -584,7 +601,7 @@ std::shared_ptr<TopicInformation> DDSProtocol::create_topic_information_from_dyn
     topic_information->topic_type = type;
 
     if (!register_type_object_from_dynamic_idl(topic_information)) {
-        std::cerr << "Failed to create topic_information from dynamic idl. type=" << type << std::endl;
+        LOG_ERROR("Failed to create topic_information from dynamic idl. type=" << type);
         return nullptr;
     }
     return topic_information;

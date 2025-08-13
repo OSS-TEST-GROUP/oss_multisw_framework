@@ -28,7 +28,7 @@ DDSMessageEndPoint::DDSMessageEndPoint(std::string topic)
         writer_(nullptr), 
         reader_(nullptr) {
 
-    LOG_DEBUG("DDSMessageEndPoint destroy. " << GetTopic());
+    LOG_DEBUG("DDSMessageEndPoint create. " << GetTopic());
 }
 
 DDSMessageEndPoint::~DDSMessageEndPoint() {
@@ -64,6 +64,7 @@ bool DDSMessageEndPoint::Initialize(DomainParticipant* participant, Publisher* p
         {
             throw std::runtime_error("DataWriter initialization failed");
         }
+        LOG_DEBUG("DDSMessageEndPoint [publisher created ]. " << GetTopic());
 
     }
 
@@ -77,6 +78,8 @@ bool DDSMessageEndPoint::Initialize(DomainParticipant* participant, Publisher* p
         {
             throw std::runtime_error("DataReader initialization failed");
         }
+        LOG_DEBUG("DDSMessageEndPoint [subscriber created ]. " << GetTopic());
+
     }
 
     return true;

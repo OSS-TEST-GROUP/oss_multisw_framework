@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include "request_msg/GetDiagInfoMessage.hpp"
+#include "logger/Log.hpp"
 
 using namespace std::placeholders;
 
@@ -19,7 +20,7 @@ bool DiagnosticPublisher::Initialize() {
         return std::make_shared<GetDiagInfoMessage>();
     });
     if (subscriber_id_ < 0) {
-        std::cerr << "Failed to register to the MessageTransmitter." << std::endl;
+        LOG_ERROR("Failed to register to the MessageTransmitter.");
         return false;
     }
     message_transmitter_->SubscribeMessage(subscriber_id_, "mmf/diagnosticmgr/DiagnosticInfoRequest", MessageProtocolType::DDS);
@@ -27,7 +28,7 @@ bool DiagnosticPublisher::Initialize() {
 
     publisher_task_id_ = service_executor_->AddTaskInterval("DiagnosticAnalyzerRequest", std::bind(&DiagnosticPublisher::HandlePublicationProcess, this, _1), TaskInterval(1000));
     if (publisher_task_id_ < 0) {
-        std::cerr << "Failed to create task for publising diag info." << std::endl;
+        LOG_ERROR("Failed to create task for publishing diag info.");
     }
 
     return true;
@@ -47,7 +48,7 @@ void DiagnosticPublisher::HandleDiagInfoMessage(std::shared_ptr<RequestBase> req
 
     auto func = handler_map.find(diag_req_msg->GetName());
     if (func == handler_map.end()) {
-        std::cerr << "Not supported request. " << diag_req_msg->GetName() << std::endl;
+        LOG_ERROR("Not supported request. " << diag_req_msg->GetName());
         return;
     }
 

@@ -24,8 +24,7 @@ bool ROSServiceController::Initialize(){
     
     ros2node_controller_ = std::make_shared<ROS2NodeController>();
 
-    container_controller_ = std::make_shared<ContainerController>("deployment_file_path_example.yaml", 
-        "pod_name_example", "namespace_example", "container_name_example");
+    container_controller_ = std::make_shared<ContainerController>();
     if (container_controller_ != nullptr){
         container_controller_->Initialize();
     }
@@ -90,7 +89,7 @@ bool ROSServiceController::StartService(std::shared_ptr<Service> service){
         return false;
     }
 
-    std::string basecommand = GetContainer()->BaseRos2Command();
+    std::string basecommand = GetContainer()->BaseRos2Command("");
     std::string command;
 
     // Assuming launchByFile, GetLauchFile, and GetPackageName are member functions or variables.
@@ -148,8 +147,8 @@ bool ROSServiceController::StopService(std::shared_ptr<Service> service){
 
     // Here we can use kubectl command to stop the container
     // For example, using system command to run kubectl
-    std::string basecommand = GetContainer()->BaseCommand();
- 
+    std::string basecommand = GetContainer()->BaseCommand("");
+
     std::string command = basecommand + " kill " + std::to_string(pid);
 
     int32_t result = system(command.c_str());
@@ -196,7 +195,7 @@ bool ROSServiceController::GetNodeLists(std::shared_ptr<Service> service){
     // sample_ros2_app listener
     // sample_ros2_app talker
 
-    std::string basecommand = GetContainer()->BaseRos2Command();
+    std::string basecommand = GetContainer()->BaseRos2Command("");
 
     std::string command = basecommand + " ros2 pkg executables " + service->GetPackage();
     
@@ -218,7 +217,7 @@ uint64_t ROSServiceController::GetPID(std::shared_ptr<Service> service){
         return 0;
     }
 
-    std::string basecommand = GetContainer()->BaseCommand();
+    std::string basecommand = GetContainer()->BaseCommand("");
     std::string command = basecommand + " ps aux";
 
     // Command to run inside the container

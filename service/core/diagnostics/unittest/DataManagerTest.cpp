@@ -2,6 +2,8 @@
 #include "diagnostic_analyzer/DataManager.cpp"
 #include "diagnostic/VariantData.cpp"
 
+#include "mock/MockLogger.hpp"
+
 using namespace diagnostic_manager;
 
 class DataManagerTest : public ::testing::Test {

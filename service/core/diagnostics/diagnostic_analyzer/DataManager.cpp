@@ -5,6 +5,8 @@
 #include <cctype>
 #include <type_traits>
 
+#include "logger/Log.hpp"
+
 namespace diagnostic_manager {
 
 bool DataManager::UpdateData(std::shared_ptr<VariantData> variant_data) {
@@ -63,7 +65,7 @@ bool DataManager::FetchValue(const std::string& path, T& out) {
     std::string key_name;
     std::vector<size_t> indices;
     if (!GetIndiciesInfo(tokens.back(), key_name, indices)) {
-        std::cerr << "FetchValue: Faile to get indices." << std::endl;
+        LOG_ERROR("FetchValue: Failed to get indices.");
         return false;
     }
 
@@ -79,7 +81,7 @@ bool DataManager::FetchValue(const std::string& path, T& out) {
         } else if constexpr(std::is_same_v<T, std::string>) {
             return current->GetString(key_name, out);
         } else {
-            std::cerr << "No Output. not supported type." << std::endl;
+            LOG_ERROR("No Output. not supported type.");
         }
     } else {
         if constexpr(std::is_same_v<T, int64_t>) {
@@ -93,7 +95,7 @@ bool DataManager::FetchValue(const std::string& path, T& out) {
         } else if constexpr(std::is_same_v<T, std::string>) {
             return current->GetStringFromList(key_name, indices[0], out);
         } else {
-            std::cerr << "No Output. not supported type." << std::endl;
+            LOG_ERROR("No Output. not supported type.");
         }
     }
 
@@ -120,7 +122,7 @@ bool DataManager::FetchValueAsVariant(const std::string& path, VariantValue& val
     std::string key_name;
     std::vector<size_t> indices;
     if (!GetIndiciesInfo(tokens.back(), key_name, indices)) {
-        std::cerr << "FetchValue: Faile to get indices." << std::endl;
+        LOG_ERROR("FetchValue: Failed to get indices.");
         return false;
     }
 
@@ -154,7 +156,7 @@ bool DataManager::GetIndiciesInfo(const std::string& token, std::string& key, st
     if (std::isalpha(static_cast<unsigned char>(token[0])) || token[0] == '_') {
         while (i < token.size() && token[i] != '[') {
             if (token[i] == ']') {
-                std::cerr << "GetIndiciesInfo: ']' without matching '[' in path. token=" << token << std::endl;
+                LOG_ERROR("GetIndiciesInfo: ']' without matching '[' in path. token=" << token);
                 return false;
             }
             key = token.substr(0, i+1);
@@ -166,7 +168,7 @@ bool DataManager::GetIndiciesInfo(const std::string& token, std::string& key, st
         if (token[i] == '[') {
             ++i;
             if (i >= token.size() || !std::isdigit(static_cast<unsigned char>(token[i]))) {
-                std::cerr << "FetchValue: Invalid index in path token = " << token << std::endl;
+                LOG_ERROR("FetchValue: Invalid index in path token = " << token);
                 return false;
             }
             size_t index = 0;
@@ -175,14 +177,14 @@ bool DataManager::GetIndiciesInfo(const std::string& token, std::string& key, st
                 ++i;
             }
             if (i >= token.size() || token[i] != ']') {
-                std::cerr << "FetchValue: Missing ']' in path token = " << token << std::endl;
+                LOG_ERROR("FetchValue: Missing ']' in path token = " << token);
                 return false;
             }
             indices.push_back(index);
             ++i; // move past ']'
         } else {
             // Unexpected character in token (should only be '[' or ']' at this point).
-            std::cerr << "FetchValue: Unexpected character '" << std::string(1, token[i]) << "' in path token = " << token << std::endl;
+            LOG_ERROR("FetchValue: Unexpected character '" << std::string(1, token[i]) << "' in path token = " << token);
             return false;
         }
     }
@@ -195,7 +197,7 @@ VariantData* DataManager::FindChildByExploring(std::shared_ptr<VariantData> root
     for (size_t i = 1; i < tokens.size() - 1; ++i) {
         const std::string& token = tokens[i];
         if (token.empty()) {
-            std::cerr << "FetchValue: Invalid empty token in path" << std::endl;
+            LOG_ERROR("FetchValue: Invalid empty token in path");
             return nullptr;
         }
 
@@ -203,7 +205,7 @@ VariantData* DataManager::FindChildByExploring(std::shared_ptr<VariantData> root
         std::string key_name;
         std::vector<size_t> indices;
         if (!GetIndiciesInfo(token, key_name, indices)) {
-            std::cerr << "FetchValue: Faile to get indices." << std::endl;
+            LOG_ERROR("FetchValue: Failed to get indices.");
         }
 
         if (i < tokens.size() - 1) {

@@ -10,6 +10,7 @@
 #include "mock/MessageProtocol_mock.hpp"
 #include "mock/ServiceExecutor_mock.hpp"
 #include "mock/RequestBase_mock.hpp"
+#include "mock/MockLogger.hpp"
 
 using ::testing::Return;
 using ::testing::_;

@@ -2,19 +2,20 @@
 #include <thread>
 
 #include "DiagnosticManager.hpp"
+#include "logger/Log.hpp"
 
 using namespace diagnostic_manager;
 
 int main(int argc, char* argv[]) {
-	std::cout << "Starting the DiagnosticManager." << std::endl;
+	LOG_DEBUG("Starting the DiagnosticManager.");
 
 	DiagnosticManager manager;
 	if (!manager.Initialize()) {
-		std::cerr << "Failed to initialize the DiagnosticManager." << std::endl;
+		LOG_ERROR("Failed to initialize the DiagnosticManager.");
 	}
 
 	if (!manager.Start()) {
-		std::cerr << "Failed to start the DiagnosticManager." << std::endl;
+		LOG_ERROR("Failed to start the DiagnosticManager.");
 	}
 
 	while (true) {

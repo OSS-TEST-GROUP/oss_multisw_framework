@@ -5,6 +5,8 @@
 #include <exception>
 #include <filesystem>
 
+#include "logger/Log.hpp"
+
 namespace fs = std::filesystem;
 namespace diagnostic_manager {
 
@@ -23,11 +25,11 @@ bool PolicyManager::LoadAllPolicy(const std::string& path) {
             }
         }
     } catch (const std::exception& e) {
-        std::cerr << "Error reading directory: " << e.what() << std::endl;
+        LOG_ERROR("Error reading directory: " << e.what());
         return false;
     }
 
-    std::cout << "A total of " << policies_.size() << " policies were loaded." << std::endl;
+    LOG_INFO("A total of " << policies_.size() << " policies were loaded.");
     return true;
 }
 

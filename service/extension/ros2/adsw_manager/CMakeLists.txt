@@ -28,6 +28,7 @@ set ( TRANSMIT_SRC
 set ( SERVICE_SRC
     service/ServiceRegistry.cpp
     service/Service.cpp
+    service/Container.cpp
 )
 
 set ( MONITOR_SRC
@@ -102,7 +103,16 @@ install ( TARGETS ${PROJECT_NAME}
     RUNTIME DESTINATION bin
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
-    )
+)
+
+# config
+install(
+    DIRECTORY
+        config
+    DESTINATION
+        bin
+    FILES_MATCHING PATTERN "*.yaml"
+)    
 
 
 # ROS2 idl

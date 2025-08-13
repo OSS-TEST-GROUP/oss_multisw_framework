@@ -9,6 +9,8 @@
 #include <iostream>
 #include <regex>
 
+#include "logger/Log.hpp"
+
 namespace diagnostic_manager {
 
 namespace fs = std::filesystem;
@@ -17,7 +19,7 @@ bool DDSDynamicIDLParser::Initialize(const std::string& idl_directory)
 {
     if (!fs::exists(idl_directory) || !fs::is_directory(idl_directory))
     {
-        std::cerr << "IDL directory not found or is not a directory: " << idl_directory << std::endl;
+        LOG_ERROR("IDL directory not found or is not a directory: " << idl_directory);
         return false;
     }
 
@@ -58,7 +60,7 @@ std::vector<std::shared_ptr<DynamicIDLTypeSupport>> DDSDynamicIDLParser::Parse(c
         auto builder = DynamicTypeBuilderFactory::get_instance()->create_type_w_uri(idl_path, iter, {idl_directory_});
         if (!builder)
         {
-            std::cerr << "Failed to parse IDL: " << idl_path << std::endl;
+            LOG_ERROR("Failed to parse IDL: " << idl_path);
             continue;
         }
 
@@ -75,7 +77,7 @@ std::vector<std::string> DDSDynamicIDLParser::ExtractStructNamesFromIDL(const st
     std::string idl_path = (fs::path(idl_directory_) / idl_name).string();
     std::ifstream file(idl_path);
     if (!file.is_open()) {
-        std::cerr << "Failed to open IDL file: " << idl_path << std::endl;
+        LOG_ERROR("Failed to open IDL file: " << idl_path);
         return {};
     }
 

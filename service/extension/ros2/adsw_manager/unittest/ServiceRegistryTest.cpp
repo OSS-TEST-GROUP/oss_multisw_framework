@@ -10,6 +10,8 @@
 #include "mock/MockDDSTransmitter.hpp"
 #include "mock/MockLogger.hpp"
 #include "mock/MockDDSMessageEndpoint.hpp"
+#include "mock/MockContainerController.hpp"
+#include "mock/MockContainer.hpp"
 
 using ::testing::Return;
 using ::testing::_;

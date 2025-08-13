@@ -86,8 +86,11 @@ std::set<std::shared_ptr<Service>> StateMonitor::GetUpdateServiceList(){
 void StateMonitor::NotifyLifecycleDiagnosticInfo(bool all){
 
     std::shared_ptr<DDSTransmitter> transmitter = GetTransmitter();
+    int32_t running_cnt = 0;
 
     diag_report_.service_list().clear();
+    diag_report_.is_started() = true;
+    diag_report_.total_services_num() = GetRegistry()->GetServiceNum();
 
     if (transmitter != nullptr)
     {
@@ -102,20 +105,26 @@ void StateMonitor::NotifyLifecycleDiagnosticInfo(bool all){
                     lifecyclemgr::ServiceStatus service;
                         
                     getServiceState(*svc, service);
+                    
+                    if(service.service_state() == lifecyclemgr::ServiceState::RUNNING ){
+                        running_cnt++;
+                    }
                     diag_report_.service_list().push_back(service);
                 }
             }
         }else{
-                
             for( auto svc = udpated_service_list_.begin(); svc != udpated_service_list_.end(); ++svc ){
-                        
                 lifecyclemgr::ServiceStatus service;
                         
                 getServiceState(*svc, service);
+                if(service.service_state() == lifecyclemgr::ServiceState::RUNNING ){
+                    running_cnt++;
+                }
                 diag_report_.service_list().push_back(service);
             }
         }
-
+        diag_report_.running_service_num() = running_cnt;
+        LOG_DEBUG("StateMonitor::NotifyLifecycleDiagnosticInfo - running service num = " << running_cnt);
         transmitter->SendMessage(MessageType::LIFECYCLE_DIAG_REPORT, reinterpret_cast<void*>(&diag_report_));
     }
 }
@@ -163,6 +172,7 @@ void StateMonitor::RunThread()
         loop_count_++;
 
         if (loop_count_ > 20){
+            NotifyLifecycleDiagnosticInfo(true);
             // Test for stop request
             std::shared_ptr<LifecycleManager> manager  = LifecycleFactory::GetInstance()->GetManager();
 

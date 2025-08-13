@@ -6,6 +6,7 @@
 #include <signal.h>
 
 #include "transmitter/dds/DDSDynamicIDLParser.cpp"
+#include "unittest/mock/MockLogger.hpp"
 
 using ::testing::Return;
 using ::testing::_;

@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "diagnostic/VariantData.cpp"
+#include "mock/MockLogger.hpp"
 
 using namespace diagnostic_manager;
 using namespace std::chrono_literals;

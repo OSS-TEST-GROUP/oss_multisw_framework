@@ -9,8 +9,8 @@ namespace adsw_manager {
 
 class MockContainerController : public ContainerController {
 public:
-    MockContainerController(const std::string& deployment_file_path = "", const std::string& pod_name = "", const std::string& namespace_ = "", const std::string& container_name = "")
-        : ContainerController(deployment_file_path, pod_name, namespace_, container_name) {}
+    MockContainerController()
+        : ContainerController() {}
 
     MOCK_METHOD(bool, Initialize, (), ());
     MOCK_METHOD(void, Finalize, (), ());
@@ -18,16 +18,18 @@ public:
     MOCK_METHOD(bool, StopContainer, (const std::string& container_name), ());
     MOCK_METHOD(bool, GetContainerStatus, (const std::string& container_name), ());
     MOCK_METHOD(bool, GetContainerLogs, (const std::string& container_name), ());
-    MOCK_METHOD(std::string, BaseCommand, (), ());
-    MOCK_METHOD(std::string, BaseRos2Command, (), ());
+    MOCK_METHOD(std::string, BaseCommand, (const std::string& container_name), ());
+    MOCK_METHOD(std::string, BaseRos2Command, (const std::string& container_name), ());
     MOCK_METHOD(bool, ContainerSupported, (), ());
+    MOCK_METHOD(std::shared_ptr<Container>, GetContainer, (const std::string& container_name), ());
+    MOCK_METHOD(bool, AddContainer, (std::shared_ptr<Container> container), ());
 };
 
 MockContainerController* Mock_ContainerController;
 
-ContainerController::ContainerController(const std::string& deployment_file_path, const std::string& pod_name, const std::string& namespace_, const std::string& container_name)
+ContainerController::ContainerController()
 {
-    Mock_ContainerController = new MockContainerController(deployment_file_path, pod_name, namespace_, container_name);
+    Mock_ContainerController = new MockContainerController();
 }
 
 ContainerController::~ContainerController() {
@@ -55,18 +57,24 @@ bool ContainerController::GetContainerLogs(const std::string& container_name) {
     return Mock_ContainerController->GetContainerLogs(container_name);
 }
 
-std::string ContainerController::BaseCommand() {
-    return Mock_ContainerController->BaseCommand();
+std::string ContainerController::BaseCommand(const std::string& container_name) {
+    return Mock_ContainerController->BaseCommand(container_name);
 }
 
-std::string ContainerController::BaseRos2Command() {
-    return Mock_ContainerController->BaseRos2Command();
+std::string ContainerController::BaseRos2Command(const std::string& container_name) {
+    return Mock_ContainerController->BaseRos2Command(container_name);
 }
 
 bool ContainerController::ContainerSupported() {
     return Mock_ContainerController->ContainerSupported();
 }
 
+std::shared_ptr<Container> ContainerController::GetContainer(const std::string& container_name) {
+    return Mock_ContainerController->GetContainer(container_name);
+}
+bool ContainerController::AddContainer(std::shared_ptr<Container> container) {
+    return Mock_ContainerController->AddContainer(container);
+}
 
 } // namespace adsw_manager
 } // namespace ros2

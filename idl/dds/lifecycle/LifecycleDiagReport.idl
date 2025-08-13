@@ -12,6 +12,9 @@ module lifecyclemgr {
 
     /* TopicName - mmf/lifecyclemgr/LifecycleDiagReport */
     struct LifecycleDiagReport {
+        boolean     is_started;
+        int32       running_service_num;
+        int32       total_services_num;        
         sequence<ServiceStatus> service_list;
     };
 };

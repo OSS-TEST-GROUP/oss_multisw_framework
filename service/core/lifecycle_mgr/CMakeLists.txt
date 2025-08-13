@@ -113,6 +113,15 @@ install ( TARGETS ${PROJECT_NAME}
     )
 
 
+# config
+install(
+    DIRECTORY
+        config
+    DESTINATION
+        bin
+    FILES_MATCHING PATTERN "*.yaml"
+)    
+
 # Lifecycle idl
 install(DIRECTORY
     ${CMAKE_SOURCE_DIR}/idl/dds/common

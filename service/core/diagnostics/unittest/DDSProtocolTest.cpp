@@ -10,6 +10,7 @@
 #include "transmitter/MessageProtocol.cpp"
 #include "transmitter/Message.cpp"
 #include "diagnostic/VariantData.cpp"
+#include "mock/MockLogger.hpp"
 
 using ::testing::Return;
 using ::testing::_;

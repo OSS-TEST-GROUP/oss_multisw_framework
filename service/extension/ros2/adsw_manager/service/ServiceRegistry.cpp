@@ -11,6 +11,8 @@
 #include "service/TypeConvert.hpp"
 #include "lifecycle/UpdateServiceListRequest.hpp"
 #include "transmitter/MessageQueue.hpp"
+#include "Container.hpp"
+#include "control/ContainerController.hpp"
 
 #include "logger/Log.hpp"
 
@@ -20,7 +22,7 @@ namespace adsw_manager {
 ServiceRegistry::ServiceRegistry() {}
 ServiceRegistry::~ServiceRegistry() {}
 
-constexpr const char* SAVED_REGISTRY_BACKUP = "saved-service-list.yaml";
+constexpr const char* SAVED_REGISTRY_BACKUP = "config/saved-service-list.yaml";
 
 
 bool ServiceRegistry::LoadServiceList() {
@@ -30,7 +32,7 @@ bool ServiceRegistry::LoadServiceList() {
     ready_service_list_ = LoadServiceSaved(SAVED_REGISTRY_BACKUP);
 
     if (ready_service_list_ == false){
-        ready_service_list_ = LoadServiceList("ros2-sample-speclist.yaml");
+        ready_service_list_ = LoadServiceList("config/ros2-sample-speclist.yaml");
     }
 
     LOG_DEBUG("ServiceRegistry::LoadServiceList success =? " << ready_service_list_);
@@ -378,19 +380,49 @@ bool ServiceRegistry::LoadServiceSaved(const std::string& path) {
 
         for (const auto& spec : specsNode) {
             auto containersNode = spec["containers"];
-            if (!containersNode || !containersNode.IsMap()) {
-                LOG_ERROR("Invalid or missing 'containers' mapping in spec");
+            if (!containersNode || !containersNode.IsSequence()) {
+                LOG_ERROR("Invalid or missing 'containers' sequence in spec");
                 continue;
             }
 
-            // containersNode is a map: groupName -> map { services: [...] }
-            for (auto it = containersNode.begin(); it != containersNode.end(); ++it) {
-                std::string groupStr = it->first.as<std::string>();
-                auto containerData = it->second;
+            // containersNode is a sequence: each item is a container (group)
+            std::shared_ptr<ROSServiceController> controller = ADSWManager::Get()->GetServiceController();
+            if (controller == nullptr) {
+                LOG_ERROR("ServiceController is not initialized.");
+                return false;
+            }
+            std::shared_ptr<ContainerController> container_controller_ = controller->GetContainer();
+
+            for (const auto& containerData : containersNode) {
+
+                // Extract container metadata
+                std::string groupname = containerData["name"].as<std::string>("");
+                std::string image = containerData["image"].as<std::string>("");
+                std::string deployFilePath = containerData["deploy-filepath"].as<std::string>("");
+                std::string namespace_ = containerData["namespace"].as<std::string>("");
+
+                if (namespace_.empty()){
+                    namespace_ = "default";  // Default namespace if not specified
+                    LOG_DEBUG("Using default namespace: " << namespace_);
+                } else {
+                    LOG_DEBUG("Using specified namespace: " << namespace_);
+                }
+
+                if (!groupname.empty() && !image.empty() && !deployFilePath.empty()) {
+                    LOG_DEBUG("Container required fields valid ");
+                    // create new container object
+                    std::shared_ptr<Container> container = std::make_shared<Container>(groupname, image, deployFilePath, namespace_);
+                    // Add container to the registry or manage it as needed
+                    LOG_DEBUG("Container created: " << groupname << " with image: " << image
+                              << " and deploy file: " << deployFilePath);       
+
+                    container_controller_->AddContainer(container); // Ensure the container is registered
+                }
+    
                 auto servicesNode = containerData["services"];
 
-                std::cout << "Group name: " << groupStr << std::endl;
-                AddGroup(groupStr);
+                std::cout << "Group name: " << groupname << std::endl;
+                AddGroup(groupname);
 
                 if (servicesNode && servicesNode.IsSequence()) {
                     for (const auto& serviceNode : servicesNode) {
@@ -407,16 +439,46 @@ bool ServiceRegistry::LoadServiceSaved(const std::string& path) {
                         std::string enableStr = serviceNode["enabled"].as<std::string>("");
                         std::string maxStr = serviceNode["max"].as<std::string>("");
 
+                        ServiceType serviceType = ServiceType::NORMAL;
+                        RecoveryPolicy recoveryPolicy = RecoveryPolicy::R_DEFAULT;
+                        bool enabled = true;
+                        if (!typeStr.empty()){
+                            if (typeStr == "NORMAL") {
+                                serviceType = ServiceType::NORMAL;
+                            } else if (typeStr == "ONESHOT") {
+                                serviceType = ServiceType::ONESHOT;
+                            }
+                        }
+
+                        if (!recoStr.empty()){
+                            if (recoStr == "ALWAYS") {
+                                recoveryPolicy = RecoveryPolicy::ALWAYS;
+                            } else if (recoStr == "ON_FAILURE") {
+                                recoveryPolicy = RecoveryPolicy::ON_FAILURE;
+                            } else if (recoStr == "ON_SUCCESS") {
+                                recoveryPolicy = RecoveryPolicy::ON_SUCCESS;
+                            } else if (recoStr == "ON_NOT_RESPONDING") {
+                                recoveryPolicy = RecoveryPolicy::ON_NOT_RESPONDING;
+                            } else if (recoStr == "MANUAL") {
+                                recoveryPolicy = RecoveryPolicy::MANUAL;
+                            }
+                        }
+                        if (enableStr == "false") {
+                            enabled = false;  // Default to false if not specified
+                        } else if (enableStr == "true") {
+                            enabled = true;
+                        }
+
                         std::shared_ptr<Service> service = std::make_shared<Service>(
                             nameStr, 
-                            ServiceType::NORMAL,
-                            RecoveryPolicy::ALWAYS,
-                            true  // You can parse enableStr if needed to adjust this
+                            serviceType,
+                            recoveryPolicy,
+                            enabled
                         );
 
                         service->SetPackage(pkgStr);
                         service->SetLaunchFile(lfileStr); 
-                        AddService(service, groupStr);
+                        AddService(service, groupname);
                     }
                 }
             }
