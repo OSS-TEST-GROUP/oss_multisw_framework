@@ -7,6 +7,7 @@
 #include "DiagnosticAnalyzer.hpp"
 #include "request_msg/AnalyzeRequestMessage.hpp"
 #include "request_msg/DiagMessage.hpp"
+#include "logger/Log.hpp"
 
 using namespace std::placeholders;
 
@@ -29,11 +30,11 @@ bool DiagnosticAnalyzer::Initialize() {
 
     policy_manager_ = std::make_shared<PolicyManager>();
     if (!policy_manager_->Initialize()) {
-        std::cerr << "Failed to initialize the PolicyManager." << std::endl;
+        LOG_ERROR("Failed to initialize the PolicyManager.");
         return false;
     }
     if (!policy_manager_->LoadAllPolicy(DIAG_CONFIG_PATH)) {
-        std::cerr << "Failed to load diagnostic policies." << std::endl;
+        LOG_ERROR("Failed to load diagnostic policies.");
         return false;
     }
 
@@ -43,7 +44,7 @@ bool DiagnosticAnalyzer::Initialize() {
         return std::make_shared<DiagMessage>();
     });
     if (subscriber_id_ < 0) {
-        std::cerr << "Failed to register to the MessageTransmitter." << std::endl;
+        LOG_ERROR("Failed to register to the MessageTransmitter.");
         return false;
     }
 

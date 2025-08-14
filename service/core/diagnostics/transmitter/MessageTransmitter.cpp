@@ -1,5 +1,6 @@
 #include "MessageTransmitter.hpp"
 #include "dds/DDSProtocol.hpp"
+#include "logger/Log.hpp"
 
 namespace diagnostic_manager {
 
@@ -36,7 +37,7 @@ int64_t MessageTransmitter::AddSubscriber(const std::string& name, ExecutorFunct
     std::shared_ptr<IncomingMessageBase> incoming_msg_base = creator();
     TaskID task_id = service_executor_->AddTask(name, std::move(func), *incoming_msg_base);
     if (task_id < 0) {
-        std::cerr << "Failed to create the executor task. name=" << name << std::endl;
+        LOG_ERROR("Failed to create the executor task. name=" << name);
         return -1;
     }
 
@@ -78,7 +79,7 @@ bool MessageTransmitter::PublishMessage(std::shared_ptr<Message> msg) {
 
     auto protocol = protocols_.find(msg->GetProtocolType());
     if (protocol == protocols_.end()) {
-        std::cerr << "The protocol type[" << (uint32_t)msg->GetProtocolType() << "] is not existed. msg_name=" << msg->GetName() << std::endl;
+        LOG_ERROR("The protocol type[" << (uint32_t)msg->GetProtocolType() << "] is not existed. msg_name=" << msg->GetName());
         return false;
     }
 
@@ -87,7 +88,7 @@ bool MessageTransmitter::PublishMessage(std::shared_ptr<Message> msg) {
 
 bool MessageTransmitter::SubscribeMessage(uint64_t subscriber_id, const std::string& name, MessageProtocolType type) {
     if (protocols_.count(type) == 0) {
-        std::cerr << "Not supported protocol. protocol=" << (uint32_t)type << std::endl;
+        LOG_ERROR("Not supported protocol. protocol=" << (uint32_t)type);
         return false;
     }
 
@@ -96,7 +97,7 @@ bool MessageTransmitter::SubscribeMessage(uint64_t subscriber_id, const std::str
         std::lock_guard<std::mutex> subscriber_lock(subscriber_handling_mutex_);
 
         if (subscriber_list_.count(subscriber_id) == 0) {
-            std::cerr << "Not registered subscriber." << std::endl;
+            LOG_ERROR("Not registered subscriber.");
             return false;
         }
 
@@ -125,7 +126,7 @@ bool MessageTransmitter::SubscribeMessage(uint64_t subscriber_id, const std::str
 
 bool MessageTransmitter::UnsubscribeMessage(uint64_t subscriber_id, const std::string& name, MessageProtocolType type) {
     if (protocols_.count(type) == 0) {
-        std::cerr << "Not supported protocol. protocol=" << (uint32_t)type << std::endl;
+        LOG_ERROR("Not supported protocol. protocol=" << (uint32_t)type);
         return false;
     }
 
@@ -134,7 +135,7 @@ bool MessageTransmitter::UnsubscribeMessage(uint64_t subscriber_id, const std::s
         std::lock_guard<std::mutex> subscriber_lock(subscriber_handling_mutex_);
 
         if (subscriber_list_.count(subscriber_id) == 0) {
-            std::cerr << "Not registered subscriber." << std::endl;
+            LOG_ERROR("Not registered subscriber.");
             return false;
         }
 
@@ -189,7 +190,7 @@ uint64_t MessageTransmitter::GetSubscribeMessageNum() {
 void MessageTransmitter::ForwardDeliveredMessage(std::shared_ptr<Message> msg) {
     std::set<int64_t> subscriber_list;
 
-    std::cerr << "Forwarding message: " << msg->GetName() << std::endl;
+    LOG_INFO("Forwarding message: " << msg->GetName());
 
     {
         std::lock_guard<std::mutex> subscription_lock(subscription_handling_mutex_);
