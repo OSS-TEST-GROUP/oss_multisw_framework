@@ -13,7 +13,7 @@ namespace adsw_manager::agl {
 
     bool AppController::LaunchApp(std::string appId, std::string contName) {
 
-        std::string cmd = "docker exec " + contName + "/usr/bin/flutter-auto -b /usr/share/flutter/" + appId + "/3.24.2/release --xdg-shell-app-id " + appId + "";
+        std::string cmd = "docker exec -d " + contName + " /usr/bin/flutter-auto -b /usr/share/flutter/" + appId + "/3.24.2/release --xdg-shell-app-id " + appId + "";
         int result = std::system(cmd.c_str());
 
         if(result == -1) {
@@ -32,9 +32,9 @@ namespace adsw_manager::agl {
 
     }
 
-    bool AppController::TerminateApp(std::string appId) {
+    bool AppController::TerminateApp(std::string appId, std::string contName) {
 
-        std::string cmd = "docker exec " + appId + " pkill flutter-auto";
+        std::string cmd = "docker exec " + contName + " pkill flutter-auto";
         int result = std::system(cmd.c_str());
 
         if(result == -1) {
@@ -69,10 +69,12 @@ namespace adsw_manager::agl {
         if(exit_code == 0) {
             std::cout << "AppController::IsAppRunning" << std::endl;
             return true;
-        } else {
-            std::cout << "Command execution failed (exit code: " << exit_code << ")" << std::endl;
+        } else if (exit_code == 1) {
+            std::cout << appId << " is not running." << std::endl;
             return false;
         }
+        std::cout << "Subcommand failed  (exit code: " << exit_code << ")" << std::endl;
+        return false;
 
     }
     

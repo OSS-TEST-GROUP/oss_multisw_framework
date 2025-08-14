@@ -64,7 +64,7 @@ namespace adsw_manager::agl {
 
         if(container_controller_->IsContainerRunning(contName)) {
             if(app_controller_->IsAppRunning(appId, contName)) {
-                bool result = app_controller_->TerminateApp(appId);
+                bool result = app_controller_->TerminateApp(appId, contName);
                 if(result) {
                     bool c_result = container_controller_->StopContainer(contName);
                     return c_result;

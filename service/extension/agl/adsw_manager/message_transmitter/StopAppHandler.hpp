@@ -19,14 +19,14 @@ namespace adsw_manager::agl {
             using RequestCallback = std::function<void(const adsw_manager_agl::StopAppRequest&)>;
 
             StopAppHandler() = default;
-            ~StopAppHandler();
+            virtual ~StopAppHandler();
 
             bool Initialize(eprosima::fastdds::dds::DomainParticipant* participant,
                             eprosima::fastdds::dds::Publisher* publisher,
                             eprosima::fastdds::dds::Subscriber* subscriber,
                             RequestCallback cb);
 
-            bool PublishResponse(const adsw_manager_agl::StopAppResponse& response);
+            virtual bool PublishResponse(const adsw_manager_agl::StopAppResponse& response);
 
         private:
             class RequestListener : public eprosima::fastdds::dds::DataReaderListener {

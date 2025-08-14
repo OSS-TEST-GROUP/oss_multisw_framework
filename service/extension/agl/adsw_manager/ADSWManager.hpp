@@ -23,25 +23,6 @@ namespace adsw_manager::agl {
             bool StartService();
             bool StopService();
 
-#ifdef UNIT_TEST
-        void InjectMocks(std::shared_ptr<ServiceRegistry> reg,
-                         std::shared_ptr<ServiceController> ctrl,
-                         std::shared_ptr<MessageTransmitter> tx,
-                         std::shared_ptr<ServiceMonitor> mon,
-                         std::shared_ptr<AppController> ac,
-                         std::shared_ptr<ContainerController> cc,
-                         eprosima::fastdds::dds::DomainParticipant* part)
-        {
-            service_registry_ = std::move(reg);
-            service_controller_ = std::move(ctrl);
-            message_transmitter_ = std::move(tx);
-            service_monitor_ = std::move(mon);
-            app_controller_ = std::move(ac);
-            container_controller_ = std::move(cc);
-            participant_ = part;
-        }
-#endif
-
         private:
             eprosima::fastdds::dds::DomainParticipant* participant_;
             std::shared_ptr<ServiceMonitor> service_monitor_;

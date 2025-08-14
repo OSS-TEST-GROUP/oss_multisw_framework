@@ -56,7 +56,9 @@ namespace adsw_manager::agl {
         );
 
         std::cout << "[DDSManager] Creating NotifyAppStateWriter...\n";
-        notify_app_state_writer_ = std::make_unique<NotifyAppStateWriter>();
+        if (!notify_app_state_writer_) {
+            notify_app_state_writer_ = std::make_unique<NotifyAppStateWriter>();
+        }
         std::cout << "[DDSManager] NotifyAppStateWriter created.\n";
 
         if (!notify_app_state_writer_->Initialize(publisher_, participant_)) {

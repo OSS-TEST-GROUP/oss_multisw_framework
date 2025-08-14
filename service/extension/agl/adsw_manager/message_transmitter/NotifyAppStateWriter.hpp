@@ -15,11 +15,11 @@ namespace adsw_manager::agl {
     class NotifyAppStateWriter {
         public:
             NotifyAppStateWriter() = default;
-            ~NotifyAppStateWriter();
+            virtual ~NotifyAppStateWriter();
             
             bool Initialize(eprosima::fastdds::dds::Publisher* publisher,
                             eprosima::fastdds::dds::DomainParticipant* participant);
-            bool Publish(const adsw_manager_agl::NotifyAppState& msg);
+            virtual bool Publish(const adsw_manager_agl::NotifyAppState& msg);
 
         private:
             eprosima::fastdds::dds::DomainParticipant* participant_{nullptr};

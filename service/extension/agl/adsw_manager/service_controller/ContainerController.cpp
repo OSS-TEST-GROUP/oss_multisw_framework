@@ -17,7 +17,14 @@ namespace adsw_manager::agl {
         std::string cmd = "docker ps -a | grep -q " + name;
         int result = std::system(cmd.c_str());
 
-        if(result == 0) {
+        if(result == -1) {
+            std::cout << "Command execution failed." << std::endl;
+            return false;
+        }
+
+        int exit_code = WEXITSTATUS(result);
+
+        if(exit_code == 0) {
             // container is already exist.
             std::string s_cmd = "docker start " + name;
             int s_result = std::system(s_cmd.c_str());
@@ -33,11 +40,11 @@ namespace adsw_manager::agl {
             } else {
                 return false;
             }
-        } else if (result == 1) {
+        } else if (exit_code == 1) {
             // container is not exist. need to creat docker container.
             std::string c_cmd = "docker run -it --net=host --user $(id -u):$(id -g) \
             -v /run/user/1001:/run/user/1001 --device /dev/dri:/dev/dri \
-            -e WAYLAND_DISPLAY=wayland-0 -e XDG_RUNTIME_DIR=/run/user/1001 adsw_monitor_image --name " + name;
+            -e WAYLAND_DISPLAY=wayland-0 -e XDG_RUNTIME_DIR=/run/user/1001 --name " + name +  " adsw_monitor_image sleep infinity";
             int c_result = std::system(c_cmd.c_str());
 
             if(c_result == -1) {
@@ -83,7 +90,14 @@ namespace adsw_manager::agl {
 
         int result = std::system(cmd.c_str());
 
-        if(result == 0) {
+        if (result == -1) {
+            std::cout << "Command execution failed." << std::endl;
+            return false;
+        }
+
+        int exit_code = WEXITSTATUS(result);
+
+        if(exit_code == 0) {
             std::cout << "ContainerController::IsContainerRunning" << std::endl;
             return true;
         } else if (result == 1) {

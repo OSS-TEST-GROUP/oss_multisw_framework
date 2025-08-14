@@ -24,7 +24,7 @@ namespace adsw_manager::agl {
             virtual bool Initialize(eprosima::fastdds::dds::DomainParticipant* participant);
             virtual void PublishAppState(const std::string& app_name, adsw_manager_agl::AppState state);
 
-            ~MessageTransmitter() = default;
+            virtual ~MessageTransmitter() = default;
 
         private:
             std::shared_ptr<DDSManager> dds_manager_;

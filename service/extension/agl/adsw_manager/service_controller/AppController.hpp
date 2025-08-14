@@ -10,7 +10,7 @@ namespace adsw_manager::agl {
         public:
             virtual bool Initialize();
             virtual bool LaunchApp(std::string appId, std::string contName);
-            virtual bool TerminateApp(std::string appId);
+            virtual bool TerminateApp(std::string appId, std::string contName);
             virtual bool IsAppRunning(std::string appId, std::string contName);
 
     };
