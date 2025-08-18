@@ -33,10 +33,10 @@ namespace adsw_manager::agl {
             virtual StopAppHandler* GetStopAppHandler() { return stop_app_handler_.get(); }
 
             #ifdef UNIT_TEST
-void InjectNotifyWriterForTest(std::unique_ptr<NotifyAppStateWriter> w) {
-  notify_app_state_writer_ = std::move(w);
-}
-#endif
+                void InjectNotifyWriterForTest(std::unique_ptr<NotifyAppStateWriter> w) {
+                    notify_app_state_writer_ = std::move(w);
+                }
+            #endif
 
         private:
             eprosima::fastdds::dds::DomainParticipant* participant_{nullptr};

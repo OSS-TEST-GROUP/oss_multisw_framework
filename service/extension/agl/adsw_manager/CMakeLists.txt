@@ -1,10 +1,8 @@
 cmake_minimum_required(VERSION 3.5)
 project(agl_adsw_manager)
 
-# Unittest
-if (BUILD_UNITTEST)
-	add_subdirectory(unittest)
-endif()
+find_package(fastcdr REQUIRED)
+find_package(fastdds REQUIRED)
 
 set(MESSAGE_TRANSMITTER
 	message_transmitter/MessageTransmitter.cpp
@@ -30,22 +28,37 @@ set(SERVICE_REGISTRY
     service_registry/ServiceRegistry.cpp
 )
 
-set(MAIN main.cpp 
-         ADSWManager.cpp 
-	 	 ${MESSAGE_TRANSMITTER} 
-	 	 ${SERVICE_CONTROLLER} 
-         ${SERVICE_MONITOR}
-         ${SERVICE_REGISTRY} 
-)
-
 set(GENERATED_AGL_DIR ${CMAKE_INSTALL_PREFIX}/generated/idl)
-
-include_directories(. service_registry message_transmitter service_controller ${GENERATED_AGL_DIR})
-link_libraries(fastcdr fastdds)
 
 file(GLOB GENERATED_AGL_FILES "${GENERATED_AGL_DIR}/agl/*.cxx")
 
-add_executable(${PROJECT_NAME} ${MAIN} ${GENERATED_AGL_FILES})
+add_library(agl_adsw_core STATIC
+			ADSWManager.cpp
+			${MESSAGE_TRANSMITTER}
+			${SERVICE_CONTROLLER}
+			${SERVICE_MONITOR}
+			${SERVICE_REGISTRY}
+			${GENERATED_AGL_FILES}
+)
+
+target_include_directories(agl_adsw_core PUBLIC
+							.
+							service_registry
+							message_transmitter
+							service_controller
+							${GENERATED_AGL_DIR})
+
+target_link_libraries(agl_adsw_core PUBLIC
+						fastcdr
+						fastdds)
+
+add_executable(${PROJECT_NAME} main.cpp)
+target_link_libraries(${PROJECT_NAME} PRIVATE agl_adsw_core)
+
+option(BUILD_UNITTEST "Build unit tests" OFF)
+if (BUILD_UNITTEST)
+  add_subdirectory(unittest)
+endif()
 
 # install(TARGET ${PROJECT_NAME}
 # 	RUNTIME DESTINATION bin
