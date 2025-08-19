@@ -1,8 +1,0 @@
-#include "AppInfo.idl"
-
-module adsw_manager_agl {
-    struct NotifyAppState {
-        string app_name;
-        AppState app_state;
-    };
-};

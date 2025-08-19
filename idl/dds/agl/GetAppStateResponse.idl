@@ -1,8 +1,0 @@
-#include "AppInfo.idl"
-
-module adsw_manager_agl {
-    struct GetAppStateResponse {
-        sequence<string> app_list;
-        sequence<AppState> app_state_list;
-    };
-};

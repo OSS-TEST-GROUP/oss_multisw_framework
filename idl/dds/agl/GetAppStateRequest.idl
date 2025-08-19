@@ -1,5 +1,0 @@
-module adsw_manager_agl {
-    struct GetAppStateRequest {
-        sequence<string> app_list;
-    };
-};

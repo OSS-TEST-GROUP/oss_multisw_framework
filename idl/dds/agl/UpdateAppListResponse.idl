@@ -1,7 +1,0 @@
-#include "AppInfo.idl"
-
-module adsw_manager_agl {
-    struct UpdateAppListResponse {
-        ReturnCode ret_code;
-    };
-};
