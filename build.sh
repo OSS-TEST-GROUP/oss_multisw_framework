@@ -102,30 +102,44 @@ do_prepare_build_environment()
   if [ ! -d "${CMAKE_TEMP_DIR}" ]; then
     mkdir "${CMAKE_TEMP_DIR}"
   fi
+
+  source ${PWD}/docker/build_environment/setup_environment.sh
+}
+
+do_build_cmd()
+{
+	build_ext=""
+	if [ "${1}" == "ext" ]; then build_ext="TRUE"; fi
+
+	# Build with cmake
+	pushd "${CMAKE_TEMP_DIR}" 1>/dev/null
+
+	cmake ../ \
+		-DBUILD_UNITTEST=${BUILD_UNITTEST} \
+		-DBUILD_EXTENSION=${build_ext} \
+		-DEXTENSION_PLATFORM=${EXTENSION_PLATFORM}
+	do_error_check
+	
+	make -j${CPU_CORES}
+	do_error_check
+	
+	make install
+	#do_error_check
+	
+	popd 1>/dev/null
 }
 
 do_build()
 {
-  echo "Start build ${PWD}"
+	echo "Start build ${PWD}"
 
-  do_parse_option $*
-  do_prepare_build_environment
+	do_parse_option $*
+	do_prepare_build_environment
 
-  # Build with cmake
-  pushd "${CMAKE_TEMP_DIR}" 1>/dev/null
+	do_build_cmd "core"
+	do_build_cmd "ext"
 
-  cmake ../ -DBUILD_UNITTEST=${BUILD_UNITTEST} -DEXTENSION_PLATFORM=${EXTENSION_PLATFORM}
-  do_error_check
-
-  make -j${CPU_CORES}
-  do_error_check
-
-  make install
-  #do_error_check
-
-  popd 1>/dev/null
-
-  echo "Finish."
+	echo "Finish."
 }
 
 do_build $*
