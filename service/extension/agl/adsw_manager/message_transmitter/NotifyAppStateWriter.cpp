@@ -1,7 +1,7 @@
 #include "NotifyAppStateWriter.hpp"
 
 using namespace eprosima::fastdds::dds;
-using namespace adsw_manager_agl;
+using namespace lifecyclemgr;
 
 namespace adsw_manager::agl {
 
@@ -22,11 +22,11 @@ namespace adsw_manager::agl {
             return false;
         }
 
-        type_ = TypeSupport(new NotifyAppStatePubSubType());
+        type_ = TypeSupport(new NotifyServiceStatePubSubType());
         type_.register_type(participant_);
 
         topic_ = participant_->create_topic(
-            "mmf/lifecyclemgr/NotifyAppState",
+            "mmf/lifecyclemgr/NotifyServiceState",
             type_.get_type_name(),
             TOPIC_QOS_DEFAULT
         );
@@ -46,7 +46,7 @@ namespace adsw_manager::agl {
         return true;
     }
 
-    bool NotifyAppStateWriter::Publish(const NotifyAppState& msg)
+    bool NotifyAppStateWriter::Publish(const NotifyServiceState& msg)
     {
         ReturnCode_t rc = writer_->write((void*)&msg);
         if (rc != RETCODE_OK) {

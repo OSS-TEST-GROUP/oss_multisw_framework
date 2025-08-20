@@ -4,14 +4,14 @@
 #include "service_registry/ServiceRegistry.hpp"
 #include <gmock/gmock.h>
 
-using namespace adsw_manager_agl;
+using namespace lifecyclemgr;
 
 class MockServiceRegistry : public adsw_manager::agl::ServiceRegistry {
 public:
     MOCK_METHOD(bool, Initialize, (), (override));
-    MOCK_METHOD(std::vector<AppInfo>, GetAppList, (), (override));
-    MOCK_METHOD(void, UpdateAppState, (const std::string&, AppState), (override));
-    MOCK_METHOD(const AppInfo*, GetAppInfo, (const std::string app_name), (override));
+    MOCK_METHOD(std::vector<ServiceStatus>, GetAppList, (), (override));
+    MOCK_METHOD(void, UpdateAppState, (const std::string&, ServiceState), (override));
+    MOCK_METHOD(const ServiceStatus*, GetAppInfo, (const std::string app_name), (override));
 };
 
 #endif

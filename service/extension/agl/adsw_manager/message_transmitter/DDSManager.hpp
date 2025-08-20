@@ -22,11 +22,11 @@ namespace adsw_manager::agl {
 
             virtual bool Initialize(eprosima::fastdds::dds::DomainParticipant* participant);
 
-            virtual void PublishNotifyAppState(const adsw_manager_agl::NotifyAppState& msg);
+            virtual void PublishNotifyAppState(const lifecyclemgr::NotifyServiceState& msg);
 
-            virtual void SetOnGetAppStateRequest(std::function<void(const adsw_manager_agl::GetAppStateRequest&)> cb);
-            virtual void SetOnStartAppRequest(std::function<void(const adsw_manager_agl::StartAppRequest&)> cb);
-            virtual void SetOnStopAppRequest(std::function<void(const adsw_manager_agl::StopAppRequest&)> cb);
+            virtual void SetOnGetAppStateRequest(std::function<void(const lifecyclemgr::GetServiceStateRequest&)> cb);
+            virtual void SetOnStartAppRequest(std::function<void(const lifecyclemgr::StartServiceRequest&)> cb);
+            virtual void SetOnStopAppRequest(std::function<void(const lifecyclemgr::StopServiceRequest&)> cb);
 
             virtual AppStateHandler* GetAppStateHandler() { return app_state_handler_.get(); }
             virtual StartAppHandler* GetStartAppHandler() { return start_app_handler_.get(); }
@@ -49,9 +49,9 @@ namespace adsw_manager::agl {
 
             std::unique_ptr<NotifyAppStateWriter> notify_app_state_writer_;
             
-            std::function<void(const adsw_manager_agl::GetAppStateRequest&)> on_get_app_state_request_;
-            std::function<void(const adsw_manager_agl::StartAppRequest&)> on_start_app_request_;
-            std::function<void(const adsw_manager_agl::StopAppRequest&)> on_stop_app_request_;
+            std::function<void(const lifecyclemgr::GetServiceStateRequest&)> on_get_app_state_request_;
+            std::function<void(const lifecyclemgr::StartServiceRequest&)> on_start_app_request_;
+            std::function<void(const lifecyclemgr::StopServiceRequest&)> on_stop_app_request_;
 
     };
 

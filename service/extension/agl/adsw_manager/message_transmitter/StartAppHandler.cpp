@@ -1,7 +1,7 @@
 #include "StartAppHandler.hpp"
 
 using namespace eprosima::fastdds::dds;
-using namespace adsw_manager_agl;
+using namespace lifecyclemgr;
 
 namespace adsw_manager::agl {
 
@@ -23,19 +23,19 @@ namespace adsw_manager::agl {
         publisher_ = publisher;
         subscriber_ = subscriber;
 
-        req_type_ = TypeSupport(new StartAppRequestPubSubType());
+        req_type_ = TypeSupport(new StartServiceRequestPubSubType());
         req_type_.register_type(participant_);
 
-        res_type_ = TypeSupport(new StartAppResponsePubSubType());
+        res_type_ = TypeSupport(new StartServiceResponsePubSubType());
         res_type_.register_type(participant_);
 
         req_topic_ = participant_->create_topic(
-            "mmf/lifecyclemgr/StartAppRequest",
+            "mmf/lifecyclemgr/StartServiceRequest",
             req_type_.get_type_name(),
             TOPIC_QOS_DEFAULT
         );
         res_topic_ = participant_->create_topic(
-            "mmf/lifecyclemgr/StartAppResponse",
+            "mmf/lifecyclemgr/StartServiceResponse",
             res_type_.get_type_name(),
             TOPIC_QOS_DEFAULT
         );
@@ -63,7 +63,7 @@ namespace adsw_manager::agl {
         return true;
     }
 
-    bool StartAppHandler::PublishResponse(const StartAppResponse& response) {
+    bool StartAppHandler::PublishResponse(const StartServiceResponse& response) {
         
         ReturnCode_t rc = writer_->write((void*)&response);
         if (rc!=RETCODE_OK) {

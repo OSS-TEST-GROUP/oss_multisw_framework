@@ -8,7 +8,7 @@
 #include <fastdds/dds/topic/Topic.hpp>
 #include <fastdds/dds/topic/TypeSupport.hpp>
 
-#include "agl/NotifyAppStatePubSubTypes.hpp"
+#include "lifecycle/NotifyServiceStatePubSubTypes.hpp"
 
 namespace adsw_manager::agl {
 
@@ -19,7 +19,7 @@ namespace adsw_manager::agl {
             
             bool Initialize(eprosima::fastdds::dds::Publisher* publisher,
                             eprosima::fastdds::dds::DomainParticipant* participant);
-            virtual bool Publish(const adsw_manager_agl::NotifyAppState& msg);
+            virtual bool Publish(const lifecyclemgr::NotifyServiceState& msg);
 
         private:
             eprosima::fastdds::dds::DomainParticipant* participant_{nullptr};

@@ -8,6 +8,7 @@
 #undef protected
 
 #include "common/AppUtils.hpp"
+#include "lifecycle/LifecycleDiagReport.hpp"
 #include "mock/MockServiceRegistry.hpp"
 #include "mock/MockMessageTransmitter.hpp"
 #include "mock/MockAppStateReader.hpp"
@@ -17,7 +18,7 @@
 
 using namespace adsw_manager::agl;
 using namespace testing;
-using namespace adsw_manager_agl;
+using namespace lifecyclemgr;
 using namespace eprosima::fastdds::dds;
 
 class ServiceMonitorTest : public ::testing::Test {
@@ -62,11 +63,11 @@ TEST_F(ServiceMonitorTest, Initialize_StoresDeps_AndReturnsTrue)
 TEST_F(ServiceMonitorTest, StartMonitoring_CreatesReadersFromRegistryList)
 {
     // 레지스트리 목록 준비
-    AppInfo a;
-    a.app_name() = "appA";
-    AppInfo b;
-    b.app_name() = "appB";
-    std::vector<AppInfo> list{a, b};
+    ServiceStatus a;
+    a.name() = "appA";
+    ServiceStatus b;
+    b.name() = "appB";
+    std::vector<ServiceStatus> list{a, b};
     EXPECT_CALL(*registry, GetAppList()).WillRepeatedly(Return(list));
 
     // 시작
@@ -83,7 +84,7 @@ TEST_F(ServiceMonitorTest, StartMonitoring_CreatesReadersFromRegistryList)
 TEST_F(ServiceMonitorTest, StopMonitoring_StopsThreadAndJoins)
 {
     // 레지스트리 비어도 start/stop 동작에는 문제 없음
-    std::vector<AppInfo> empty;
+    std::vector<ServiceStatus> empty;
     EXPECT_CALL(*registry, GetAppList()).WillRepeatedly(Return(empty));
 
     monitor.StartMonitoring();
@@ -97,18 +98,18 @@ TEST_F(ServiceMonitorTest, StopMonitoring_StopsThreadAndJoins)
 // ----------------------------- CheckAppState -----------------------------
 
 TEST_F(ServiceMonitorTest, CheckAppState_Timeout_TransitionsToDetached_AndPublishes) {
-    AppInfo info;
-    info.app_name() = "appA";
-    info.app_state() = AppState::RESUMED;
-    std::vector<AppInfo> list{info};
+    ServiceStatus info;
+    info.name() = "appA";
+    info.service_state() = ServiceState::RUNNING;
+    std::vector<ServiceStatus> list{info};
     
     EXPECT_CALL(*registry, GetAppList()).WillRepeatedly(Return(list));
 
     auto now = std::chrono::steady_clock::now();
     EmplaceReader("appA", now - std::chrono::seconds(10)); // 타임아웃 훨씬 이전
 
-    EXPECT_CALL(*registry, UpdateAppState("appA", AppState::DETACHED)).Times(1);
-    EXPECT_CALL(*transmitter, PublishAppState("appA", AppState::DETACHED)).Times(1);
+    EXPECT_CALL(*registry, UpdateAppState("appA", ServiceState::NOT_RUNNING)).Times(1);
+    EXPECT_CALL(*transmitter, PublishAppState()).Times(1);
 
     monitor.CheckAppState();
 }

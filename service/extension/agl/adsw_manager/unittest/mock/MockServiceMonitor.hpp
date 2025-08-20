@@ -4,8 +4,6 @@
 #include "service_monitor/ServiceMonitor.hpp"
 #include <gmock/gmock.h>
 
-using namespace adsw_manager_agl;
-
 class MockServiceMonitor : public adsw_manager::agl::ServiceMonitor {
 public:
     MOCK_METHOD(bool, Initialize, (eprosima::fastdds::dds::DomainParticipant*,

@@ -1,8 +1,7 @@
 #include "DDSManager.hpp"
-// #include <iostream>
 
 using namespace eprosima::fastdds::dds;
-using namespace adsw_manager_agl;
+using namespace lifecyclemgr;
 
 namespace adsw_manager::agl {
 
@@ -30,7 +29,7 @@ namespace adsw_manager::agl {
 
         app_state_handler_ = std::make_unique<AppStateHandler>();
         app_state_handler_->Initialize(participant_, publisher_, subscriber_,
-            [this](const GetAppStateRequest& req) {
+            [this](const GetServiceStateRequest& req) {
                 if (on_get_app_state_request_) {
                     on_get_app_state_request_(req);
                 }
@@ -39,7 +38,7 @@ namespace adsw_manager::agl {
 
         start_app_handler_ = std::make_unique<StartAppHandler>();
         start_app_handler_->Initialize(participant_, publisher_, subscriber_,
-            [this](const StartAppRequest& req) {
+            [this](const StartServiceRequest& req) {
                 if (on_start_app_request_) {
                     on_start_app_request_(req);
                 }
@@ -48,7 +47,7 @@ namespace adsw_manager::agl {
 
         stop_app_handler_ = std::make_unique<StopAppHandler>();
         stop_app_handler_->Initialize(participant_, publisher_, subscriber_,
-            [this](const StopAppRequest& req) {
+            [this](const StopServiceRequest& req) {
                 if (on_stop_app_request_) {
                     on_stop_app_request_(req);
                 }
@@ -72,25 +71,25 @@ namespace adsw_manager::agl {
 
     }
 
-    void DDSManager::PublishNotifyAppState(const NotifyAppState& msg) {
+    void DDSManager::PublishNotifyAppState(const NotifyServiceState& msg) {
         if (notify_app_state_writer_) {
             notify_app_state_writer_->Publish(msg);
         }
     }
 
-    void DDSManager::SetOnGetAppStateRequest(std::function<void(const GetAppStateRequest&)> cb) {
+    void DDSManager::SetOnGetAppStateRequest(std::function<void(const GetServiceStateRequest&)> cb) {
 
         on_get_app_state_request_ = cb;
 
     }
 
-    void DDSManager::SetOnStartAppRequest(std::function<void(const StartAppRequest&)> cb) {
+    void DDSManager::SetOnStartAppRequest(std::function<void(const StartServiceRequest&)> cb) {
 
         on_start_app_request_ = cb;
 
     }
 
-    void DDSManager::SetOnStopAppRequest(std::function<void(const StopAppRequest&)> cb) {
+    void DDSManager::SetOnStopAppRequest(std::function<void(const StopServiceRequest&)> cb) {
 
         on_stop_app_request_ = cb;
 

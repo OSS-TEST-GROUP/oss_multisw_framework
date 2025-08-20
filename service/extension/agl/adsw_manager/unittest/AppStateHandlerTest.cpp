@@ -8,8 +8,7 @@
 #include <fastdds/dds/publisher/Publisher.hpp>
 #include <fastdds/dds/subscriber/Subscriber.hpp>
 
-#include "agl/GetAppStateResponsePubSubTypes.hpp"
-#include "agl/GetAppStateRequestPubSubTypes.hpp"
+#include "lifecycle/GetServiceStateRequestPubSubTypes.hpp"
 
 #include "../common/AppUtils.hpp"
 
@@ -23,7 +22,7 @@ protected:
     static Subscriber* subscriber_;
 
     AppStateHandler test_handler;
-    AppStateHandler::RequestCallback cb = [](const adsw_manager_agl::GetAppStateRequest&){};
+    AppStateHandler::RequestCallback cb = [](const lifecyclemgr::GetServiceStateRequest&){};
 
     static void SetUpTestSuite() {
         DomainParticipantQos qos;
@@ -65,9 +64,9 @@ TEST_F(AppStateHandlerTest, AppStateHandler_Publish) {
     ASSERT_TRUE(test_handler.Initialize(participant_, publisher_, subscriber_, cb))
         << "Initialize failed -> writer_가 nullptr일 가능성 큼";
 
-    adsw_manager_agl::GetAppStateResponse res;
-    res.app_list().push_back("test");
-    res.app_state_list().push_back(adsw_manager_agl::AppState::RESUMED);
+    lifecyclemgr::GetServiceStateResponse res;
+    res.service_list().push_back("test");
+    res.service_state_list().push_back(lifecyclemgr::ServiceState::RUNNING);
 
     EXPECT_TRUE(test_handler.PublishResponse(res));
 

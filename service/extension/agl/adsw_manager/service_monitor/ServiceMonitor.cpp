@@ -3,7 +3,7 @@
 #include "common/AppUtils.hpp"
 
 using namespace eprosima::fastdds::dds;
-using namespace adsw_manager_agl;
+using namespace lifecyclemgr;
 
 namespace adsw_manager::agl {
 
@@ -21,7 +21,7 @@ namespace adsw_manager::agl {
         auto apps = service_registry_->GetAppList();
 
         for (const auto& app : apps) {
-            readers_[app.app_name()] = std::make_unique<AppStateReader>(participant_, app.app_name());
+            readers_[app.name()] = std::make_unique<AppStateReader>(participant_, app.name());
         }
 
         running_ = true;
@@ -56,19 +56,19 @@ namespace adsw_manager::agl {
             auto last_time = reader->GetLastReceivedTime();
 
             auto it = std::find_if(app_list.begin(), app_list.end(),
-                           [&](const AppInfo& app) { return app.app_name() == app_name; });
+                           [&](const ServiceStatus& app) { return app.name() == app_name; });
 
             if (it == app_list.end()) {
                 continue;
             }
 
-            const AppInfo& app_info = *it;
-            AppState expected_state = (now - last_time > timeout_) ? AppState::DETACHED : AppState::RESUMED;
+            const ServiceStatus& app_info = *it;
+            ServiceState expected_state = (now - last_time > timeout_) ? ServiceState::NOT_RUNNING : ServiceState::RUNNING;
 
-            if (app_info.app_state() != expected_state) {
-                std::cout << "[ServiceMonitor] App state update : " << app_info.app_state() << " >>> " << expected_state << std::endl;
+            if (app_info.service_state() != expected_state) {
+                std::cout << "[ServiceMonitor] App state update : " << app_info.service_state() << " >>> " << expected_state << std::endl;
                 service_registry_->UpdateAppState(app_name, expected_state);
-                message_transmitter_->PublishAppState(app_name, expected_state);
+                message_transmitter_->PublishAppState();
             }
         }
 

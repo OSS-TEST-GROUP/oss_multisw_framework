@@ -4,26 +4,26 @@
 #include <string>
 #include <ostream>
 
-#include "AppInfo.hpp"
+#include "LifecycleCommon.hpp"
 
 namespace adsw_manager::agl {
 
-    inline std::ostream& operator<<(std::ostream& os, adsw_manager_agl::AppState state) {
+    inline std::ostream& operator<<(std::ostream& os, lifecyclemgr::ServiceState state) {
         switch (state) {
-            case adsw_manager_agl::AppState::UNKNOWN:
-                os << "UNKNOWN";
+            case lifecyclemgr::ServiceState::NOT_RUNNING:
+                os << "NOT_RUNNING";
                 break;
-            case adsw_manager_agl::AppState::PAUSED:
-                os << "PAUSED";
+            case lifecyclemgr::ServiceState::INITIALIZING:
+                os << "INITIALIZING";
                 break;
-            case adsw_manager_agl::AppState::RESUMED:
-                os << "RESUMED";
+            case lifecyclemgr::ServiceState::RUNNING:
+                os << "RUNNING";
                 break;
-            case adsw_manager_agl::AppState::INACTIVE:
-                os << "INACTIVE";
+            case lifecyclemgr::ServiceState::RUNNING_NO_RESPONSE:
+                os << "RUNNING_NO_RESPONSE";
                 break;
-            case adsw_manager_agl::AppState::DETACHED:
-                os << "DETACHED";
+            case lifecyclemgr::ServiceState::TERMINATING:
+                os << "TERMINATING";
                 break;
             default:
                 os << "INVALID_STATE";
@@ -32,12 +32,12 @@ namespace adsw_manager::agl {
         return os;
     }
 
-    inline std::ostream& operator<<(std::ostream& os, adsw_manager_agl::ReturnCode code) {
+    inline std::ostream& operator<<(std::ostream& os, lifecyclemgr::ReturnCode code) {
         switch (code) {
-            case adsw_manager_agl::ReturnCode::SUCCESS:
+            case lifecyclemgr::ReturnCode::SUCCESS:
                 os << "SUCCESS";
                 break;
-            case adsw_manager_agl::ReturnCode::FAILED:
+            case lifecyclemgr::ReturnCode::FAILED:
                 os << "FAILED";
                 break;
             default:

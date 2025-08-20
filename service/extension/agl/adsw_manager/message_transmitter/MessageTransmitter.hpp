@@ -6,6 +6,7 @@
 #include "ServiceController.hpp"
 
 #include "common/AppUtils.hpp"
+#include "lifecycle/LifecycleDiagReport.hpp"
 
 #include <memory>
 
@@ -22,7 +23,7 @@ namespace adsw_manager::agl {
                   dds_manager_(std::move(dds_manager)) {}
 
             virtual bool Initialize(eprosima::fastdds::dds::DomainParticipant* participant);
-            virtual void PublishAppState(const std::string& app_name, adsw_manager_agl::AppState state);
+            virtual void PublishAppState();
 
             virtual ~MessageTransmitter() = default;
 
@@ -31,9 +32,9 @@ namespace adsw_manager::agl {
             std::shared_ptr<ServiceRegistry> service_registry_;
             std::shared_ptr<ServiceController> service_controller_;
             
-            void HandleGetAppStateRequest(const adsw_manager_agl::GetAppStateRequest& req);
-            void HandleStartAppRequest(const adsw_manager_agl::StartAppRequest& req);
-            void HandleStopAppRequest(const adsw_manager_agl::StopAppRequest& req);
+            void HandleGetAppStateRequest(const lifecyclemgr::GetServiceStateRequest& req);
+            void HandleStartAppRequest(const lifecyclemgr::StartServiceRequest& req);
+            void HandleStopAppRequest(const lifecyclemgr::StopServiceRequest& req);
     };
 
 } // namespace adsw_manager::agl

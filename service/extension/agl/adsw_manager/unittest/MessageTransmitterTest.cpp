@@ -9,7 +9,7 @@
 #include "message_transmitter/MessageTransmitter.hpp"
 
 using namespace adsw_manager::agl;
-using namespace adsw_manager_agl;
+using namespace lifecyclemgr;
 using ::testing::_;
 using ::testing::Return;
 using ::testing::Invoke;
@@ -64,18 +64,47 @@ TEST_F(MessageTransmitterTest, Initialize_CallsDDSManagerInitialize) {
 // ----------------------------- PublishAppState -----------------------------
 
 TEST_F(MessageTransmitterTest, PublishAppState_CallsDDSManagerPublish) {
-    NotifyAppState expected_msg;
-    expected_msg.app_name() = "test_app";
-    expected_msg.app_state() = AppState::RESUMED;
 
+    using ::testing::ContainerEq;
+
+    std::vector<ServiceStatus> apps;
+
+    ServiceStatus a; 
+    a.name("adsw_monitor"); 
+    a.service_state(ServiceState::NOT_RUNNING); 
+    apps.push_back(a);
+
+    ServiceStatus b; 
+    b.name("map");          
+    b.service_state(ServiceState::RUNNING);     
+    apps.push_back(b);
+
+    ServiceStatus c; 
+    c.name("radio");        
+    c.service_state(ServiceState::RUNNING_NO_RESPONSE);   
+    apps.push_back(c);
+
+    EXPECT_CALL(*registry, GetAppList())
+        .Times(1)
+        .WillOnce(::testing::Return(apps));
+
+    // 기대 벡터
+    const std::vector<std::string> expected_names = {"adsw_monitor", "map", "radio"};
+    const std::vector<ServiceState> expected_states = {
+        ServiceState::NOT_RUNNING, ServiceState::RUNNING, ServiceState::RUNNING_NO_RESPONSE
+    };
+
+    // 전달된 메시지의 두 벡터 검증
     EXPECT_CALL(*dds_manager, PublishNotifyAppState(_))
         .Times(1)
-        .WillOnce(Invoke([&](const NotifyAppState& msg){
-            EXPECT_EQ(msg.app_name(), expected_msg.app_name());
-            EXPECT_EQ(msg.app_state(), expected_msg.app_state());
+        .WillOnce(Invoke([&](const NotifyServiceState& msg){
+            // 컨테이너 매처로 순서까지 동일하게 확인
+            EXPECT_THAT(msg.service_list(), ContainerEq(expected_names));
+            EXPECT_THAT(msg.service_state_list(), ContainerEq(expected_states));
         }));
 
-    transmitter->PublishAppState("test_app", AppState::RESUMED);
+    transmitter->PublishAppState();
+
 }
 
 // ----------------------------- HandleGetAppStateRequest -----------------------------
@@ -89,7 +118,7 @@ TEST_F(MessageTransmitterTest, HandleGetAppStateRequest_PublishesStatesForGivenA
     using ::testing::SaveArg;
 
     // Initialize 성공 + 콜백 캡처
-    std::function<void(const GetAppStateRequest &)> on_get_cb;
+    std::function<void(const GetServiceStateRequest &)> on_get_cb;
     EXPECT_CALL(*dds_manager, Initialize(_)).WillOnce(Return(true));
     EXPECT_CALL(*dds_manager, SetOnGetAppStateRequest(_))
         .WillOnce(SaveArg<0>(&on_get_cb));
@@ -103,9 +132,9 @@ TEST_F(MessageTransmitterTest, HandleGetAppStateRequest_PublishesStatesForGivenA
         .WillRepeatedly(Return(get_handler_raw));
 
     // Registry 응답 준비: "app_ok"는 RESUMED, "missing"은 nullptr
-    AppInfo ok_info;
-    ok_info.app_name() = "app_ok";
-    ok_info.app_state() = AppState::RESUMED;
+    ServiceStatus ok_info;
+    ok_info.name() = "app_ok";
+    ok_info.service_state() = ServiceState::RUNNING;
 
     EXPECT_CALL(*registry, GetAppInfo("app_ok"))
         .WillOnce(Return(&ok_info));
@@ -113,25 +142,25 @@ TEST_F(MessageTransmitterTest, HandleGetAppStateRequest_PublishesStatesForGivenA
         .WillOnce(Return(nullptr));
 
     // PublishResponse로 넘어가는 응답 캡처
-    GetAppStateResponse captured;
+    GetServiceStateResponse captured;
     EXPECT_CALL(*get_handler_raw, PublishResponse(_))
         .WillOnce(DoAll(SaveArg<0>(&captured), Return(true)));
 
     ASSERT_TRUE(transmitter->Initialize(nullptr));
 
     // 콜백 실행 → 내부에서 HandleGetAppStateRequest 호출
-    GetAppStateRequest req;
-    req.app_list().push_back("app_ok");
-    req.app_list().push_back("missing");
+    GetServiceStateRequest req;
+    req.service_list().push_back("app_ok");
+    req.service_list().push_back("missing");
     ASSERT_TRUE(static_cast<bool>(on_get_cb));
     on_get_cb(req);
 
-    ASSERT_EQ(captured.app_list().size(), 2u);
-    ASSERT_EQ(captured.app_state_list().size(), 2u);
-    EXPECT_EQ(captured.app_list()[0], "app_ok");
-    EXPECT_EQ(captured.app_list()[1], "missing");
-    EXPECT_EQ(captured.app_state_list()[0], AppState::RESUMED);
-    EXPECT_EQ(captured.app_state_list()[1], AppState::UNKNOWN);
+    ASSERT_EQ(captured.service_list().size(), 2u);
+    ASSERT_EQ(captured.service_state_list().size(), 2u);
+    EXPECT_EQ(captured.service_list()[0], "app_ok");
+    EXPECT_EQ(captured.service_list()[1], "missing");
+    EXPECT_EQ(captured.service_state_list()[0], ServiceState::RUNNING);
+    EXPECT_EQ(captured.service_state_list()[1], ServiceState::NOT_RUNNING);
 
 }
 
@@ -146,7 +175,7 @@ TEST_F(MessageTransmitterTest, HandleStartAppRequest_CallsControllerAndPublishes
     using ::testing::SaveArg;
 
     // Initialize 성공 + Start 콜백만 캡처 (나머지는 허용)
-    std::function<void(const StartAppRequest &)> on_start_cb;
+    std::function<void(const StartServiceRequest &)> on_start_cb;
     EXPECT_CALL(*dds_manager, Initialize(_)).WillOnce(Return(true));
     EXPECT_CALL(*dds_manager, SetOnStartAppRequest(_))
         .WillOnce(SaveArg<0>(&on_start_cb));
@@ -163,14 +192,14 @@ TEST_F(MessageTransmitterTest, HandleStartAppRequest_CallsControllerAndPublishes
     EXPECT_CALL(*controller, StartService("test_app", ""))
         .WillOnce(Return(true));
 
-    StartAppResponse captured;
+    StartServiceResponse captured;
     EXPECT_CALL(*start_handler_raw, PublishResponse(_))
         .WillOnce(DoAll(SaveArg<0>(&captured), Return(true)));
 
     ASSERT_TRUE(transmitter->Initialize(nullptr));
 
-    StartAppRequest req;
-    req.app_info().app_name() = "test_app";
+    StartServiceRequest req;
+    req.service_list().push_back("test_app");
     ASSERT_TRUE(static_cast<bool>(on_start_cb));
     on_start_cb(req);
 
@@ -187,7 +216,7 @@ TEST_F(MessageTransmitterTest, HandleStartAppRequest_Failure_PublishesFailedResp
     using ::testing::SaveArg;
 
     // Initialize 중 Start 콜백 캡처
-    std::function<void(const StartAppRequest &)> on_start_cb;
+    std::function<void(const StartServiceRequest &)> on_start_cb;
     EXPECT_CALL(*dds_manager, Initialize(_)).WillOnce(Return(true));
     EXPECT_CALL(*dds_manager, SetOnStartAppRequest(_))
         .WillOnce(SaveArg<0>(&on_start_cb));
@@ -206,7 +235,7 @@ TEST_F(MessageTransmitterTest, HandleStartAppRequest_Failure_PublishesFailedResp
         EXPECT_CALL(*controller, StartService("test_app", ""))
             .WillOnce(Return(false));
         EXPECT_CALL(*start_handler_raw, PublishResponse(_))
-            .WillOnce(Invoke([](const StartAppResponse &r)
+            .WillOnce(Invoke([](const StartServiceResponse &r)
                              {
                                  EXPECT_EQ(r.ret_code(), ReturnCode::FAILED);
                                  return true; // PublishResponse가 bool이면 필요
@@ -215,8 +244,8 @@ TEST_F(MessageTransmitterTest, HandleStartAppRequest_Failure_PublishesFailedResp
 
     // 초기화하고 콜백 실행
     ASSERT_TRUE(transmitter->Initialize(nullptr));
-    StartAppRequest req;
-    req.app_info().app_name() = "test_app";
+    StartServiceRequest req;
+    req.service_list().push_back("test_app");
     ASSERT_TRUE(static_cast<bool>(on_start_cb));
     on_start_cb(req);
 }
@@ -232,7 +261,7 @@ TEST_F(MessageTransmitterTest, HandleStopAppRequest_CallsControllerAndPublishesS
     using ::testing::SaveArg;
 
     // Initialize 성공 + Stop 콜백 캡처
-    std::function<void(const StopAppRequest &)> on_stop_cb;
+    std::function<void(const StopServiceRequest &)> on_stop_cb;
     EXPECT_CALL(*dds_manager, Initialize(_)).WillOnce(Return(true));
     EXPECT_CALL(*dds_manager, SetOnStopAppRequest(_))
         .WillOnce(SaveArg<0>(&on_stop_cb));
@@ -249,15 +278,15 @@ TEST_F(MessageTransmitterTest, HandleStopAppRequest_CallsControllerAndPublishesS
     EXPECT_CALL(*controller, StopService("test_app", ""))
         .WillOnce(Return(true));
 
-    StopAppResponse captured;
+    StopServiceResponse captured;
     EXPECT_CALL(*stop_handler_raw, PublishResponse(_))
         .WillOnce(DoAll(SaveArg<0>(&captured), Return(true)));
 
     ASSERT_TRUE(transmitter->Initialize(nullptr));
 
-    StopAppRequest req;
+    StopServiceRequest req;
     // Start와 동일한 구조라고 가정 (app_info().app_name())
-    req.app_info().app_name() = "test_app";
+    req.service_list().push_back("test_app");
     ASSERT_TRUE(static_cast<bool>(on_stop_cb));
     on_stop_cb(req);
 
@@ -273,7 +302,7 @@ TEST_F(MessageTransmitterTest, HandleStopAppRequest_Failure_PublishesFailedRespo
     using ::testing::SaveArg;
 
     // Initialize 동안 Stop 콜백 캡처, 나머지 콜백은 허용
-    std::function<void(const StopAppRequest &)> on_stop_cb;
+    std::function<void(const StopServiceRequest &)> on_stop_cb;
     EXPECT_CALL(*dds_manager, Initialize(_)).WillOnce(Return(true));
     EXPECT_CALL(*dds_manager, SetOnStopAppRequest(_))
         .WillOnce(SaveArg<0>(&on_stop_cb));
@@ -292,7 +321,7 @@ TEST_F(MessageTransmitterTest, HandleStopAppRequest_Failure_PublishesFailedRespo
         EXPECT_CALL(*controller, StopService("test_app", ""))
             .WillOnce(Return(false));
         EXPECT_CALL(*stop_handler_raw, PublishResponse(_))
-            .WillOnce(::testing::Invoke([](const StopAppResponse &r)
+            .WillOnce(::testing::Invoke([](const StopServiceResponse &r)
                                         {
                                             EXPECT_EQ(r.ret_code(), ReturnCode::FAILED);
                                             return true; // PublishResponse가 bool 반환인 경우
@@ -302,8 +331,8 @@ TEST_F(MessageTransmitterTest, HandleStopAppRequest_Failure_PublishesFailedRespo
     // 초기화 후 콜백 실행 (→ 내부에서 HandleStopAppRequest 호출)
     ASSERT_TRUE(transmitter->Initialize(nullptr));
 
-    StopAppRequest req;
-    req.app_info().app_name() = "test_app";
+    StopServiceRequest req;
+    req.service_list().push_back("test_app");
 
     ASSERT_TRUE(static_cast<bool>(on_stop_cb));
     on_stop_cb(req);

@@ -8,7 +8,7 @@
 #include <fastdds/dds/publisher/Publisher.hpp>
 #include <fastdds/dds/subscriber/Subscriber.hpp>
 
-#include "agl/NotifyAppStatePubSubTypes.hpp"
+#include "lifecycle/NotifyServiceStatePubSubTypes.hpp"
 
 #include "../common/AppUtils.hpp"
 
@@ -57,9 +57,9 @@ TEST_F(NotifyAppStateWriterTest, NotifyAppStateWriter_Publish) {
     ASSERT_TRUE(test_writer.Initialize(publisher_, participant_))
         << "Initialize failed -> writer_가 nullptr일 가능성 큼";
 
-    adsw_manager_agl::NotifyAppState msg;
-    msg.app_name() = "hello";
-    msg.app_state() = adsw_manager_agl::AppState::DETACHED;
+    lifecyclemgr::NotifyServiceState msg;
+    msg.service_list().push_back("hello");
+    msg.service_state_list().push_back(lifecyclemgr::ServiceState::NOT_RUNNING);
 
     EXPECT_TRUE(test_writer.Publish(msg));
 

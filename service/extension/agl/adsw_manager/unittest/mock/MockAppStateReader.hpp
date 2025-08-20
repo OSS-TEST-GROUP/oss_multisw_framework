@@ -3,7 +3,7 @@
 
 #include "service_monitor/AppStateReader.hpp"
 
-using namespace adsw_manager_agl;
+using namespace lifecyclemgr;
 
 class MockAppStateReader : public adsw_manager::agl::AppStateReader {
 public:

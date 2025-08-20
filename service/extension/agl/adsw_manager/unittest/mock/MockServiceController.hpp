@@ -6,7 +6,7 @@
 #include "service_controller/ContainerController.hpp"
 #include <gmock/gmock.h>
 
-using namespace adsw_manager_agl;
+using namespace lifecyclemgr;
 
 class MockServiceController : public adsw_manager::agl::ServiceController {
 public:

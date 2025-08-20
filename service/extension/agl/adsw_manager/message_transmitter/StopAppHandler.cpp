@@ -1,7 +1,7 @@
 #include "StopAppHandler.hpp"
 
 using namespace eprosima::fastdds::dds;
-using namespace adsw_manager_agl;
+using namespace lifecyclemgr;
 
 namespace adsw_manager::agl {
 
@@ -23,19 +23,19 @@ namespace adsw_manager::agl {
         publisher_ = publisher;
         subscriber_ = subscriber;
 
-        req_type_ = TypeSupport(new StopAppRequestPubSubType());
+        req_type_ = TypeSupport(new StopServiceRequestPubSubType());
         req_type_.register_type(participant_);
 
-        res_type_ = TypeSupport(new StopAppResponsePubSubType());
+        res_type_ = TypeSupport(new StopServiceResponsePubSubType());
         res_type_.register_type(participant_);
 
         req_topic_ = participant_->create_topic(
-            "mmf/lifecyclemgr/StopAppRequest",
+            "mmf/lifecyclemgr/StopServiceRequest",
             req_type_.get_type_name(),
             TOPIC_QOS_DEFAULT
         );
         res_topic_ = participant_->create_topic(
-            "mmf/lifecyclemgr/StopAppResponse",
+            "mmf/lifecyclemgr/StopServiceResponse",
             res_type_.get_type_name(),
             TOPIC_QOS_DEFAULT
         );
@@ -63,7 +63,7 @@ namespace adsw_manager::agl {
         return true;
     }
 
-    bool StopAppHandler::PublishResponse(const StopAppResponse& response) {
+    bool StopAppHandler::PublishResponse(const StopServiceResponse& response) {
         
         ReturnCode_t rc = writer_->write((void*)&response);
         if (rc!=RETCODE_OK) {

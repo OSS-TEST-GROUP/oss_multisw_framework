@@ -28,9 +28,10 @@ set(SERVICE_REGISTRY
     service_registry/ServiceRegistry.cpp
 )
 
-set(GENERATED_AGL_DIR ${CMAKE_INSTALL_PREFIX}/generated/idl)
+set(GENERATED_IDL_DIR ${CMAKE_INSTALL_PREFIX}/generated/idl)
 
-file(GLOB GENERATED_AGL_FILES "${GENERATED_AGL_DIR}/agl/*.cxx")
+file(GLOB GENERATED_LIFECYCLE_FILES "${GENERATED_IDL_DIR}/lifecycle/*.cxx")
+file(GLOB GENERATED_AGL_FILES "${GENERATED_IDL_DIR}/agl/*.cxx")
 
 add_library(agl_adsw_core STATIC
 			ADSWManager.cpp
@@ -38,6 +39,7 @@ add_library(agl_adsw_core STATIC
 			${SERVICE_CONTROLLER}
 			${SERVICE_MONITOR}
 			${SERVICE_REGISTRY}
+			${GENERATED_LIFECYCLE_FILES}
 			${GENERATED_AGL_FILES}
 )
 
@@ -46,7 +48,7 @@ target_include_directories(agl_adsw_core PUBLIC
 							service_registry
 							message_transmitter
 							service_controller
-							${GENERATED_AGL_DIR})
+							${GENERATED_IDL_DIR})
 
 target_link_libraries(agl_adsw_core PUBLIC
 						fastcdr

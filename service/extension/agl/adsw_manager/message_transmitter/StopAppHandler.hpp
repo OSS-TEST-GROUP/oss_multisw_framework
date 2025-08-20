@@ -1,8 +1,7 @@
 #ifndef STOP_APP_HANDLER_HPP_
 #define STOP_APP_HANDLER_HPP_
 
-#include "agl/StopAppRequestPubSubTypes.hpp"
-#include "agl/StopAppResponsePubSubTypes.hpp"
+#include "lifecycle/StopServiceRequestPubSubTypes.hpp"
 
 #include <fastdds/dds/domain/DomainParticipant.hpp>
 #include <fastdds/dds/subscriber/Subscriber.hpp>
@@ -16,7 +15,7 @@
 namespace adsw_manager::agl {
     class StopAppHandler {
         public:
-            using RequestCallback = std::function<void(const adsw_manager_agl::StopAppRequest&)>;
+            using RequestCallback = std::function<void(const lifecyclemgr::StopServiceRequest&)>;
 
             StopAppHandler() = default;
             virtual ~StopAppHandler();
@@ -26,7 +25,7 @@ namespace adsw_manager::agl {
                             eprosima::fastdds::dds::Subscriber* subscriber,
                             RequestCallback cb);
 
-            virtual bool PublishResponse(const adsw_manager_agl::StopAppResponse& response);
+            virtual bool PublishResponse(const lifecyclemgr::StopServiceResponse& response);
 
         private:
             class RequestListener : public eprosima::fastdds::dds::DataReaderListener {
@@ -34,7 +33,7 @@ namespace adsw_manager::agl {
                     explicit RequestListener(RequestCallback cb) : callback_(std::move(cb)) {}
 
                     void on_data_available(eprosima::fastdds::dds::DataReader* reader) override {
-                        adsw_manager_agl::StopAppRequest msg;
+                        lifecyclemgr::StopServiceRequest msg;
                         eprosima::fastdds::dds::SampleInfo info;
                         if (reader->take_next_sample(&msg, &info) == eprosima::fastdds::dds::RETCODE_OK && info.valid_data) {
                             callback_(msg);

@@ -4,7 +4,7 @@
 #include "message_transmitter/MessageTransmitter.hpp"
 #include <gmock/gmock.h>
 
-using namespace adsw_manager_agl;
+using namespace lifecyclemgr;
 
 class MockMessageTransmitter : public adsw_manager::agl::MessageTransmitter {
 public:
@@ -14,9 +14,9 @@ public:
         : MessageTransmitter(reg, cont, dmgr) {}
     MockMessageTransmitter()
     : MessageTransmitter(nullptr, nullptr, nullptr) {}
-    
+
     MOCK_METHOD(bool, Initialize, (eprosima::fastdds::dds::DomainParticipant*), (override));
-    MOCK_METHOD(void, PublishAppState, (const std::string&, AppState), (override));
+    MOCK_METHOD(void, PublishAppState, (), (override));
 };
 
 #endif

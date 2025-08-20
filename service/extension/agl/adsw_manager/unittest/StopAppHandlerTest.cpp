@@ -8,8 +8,7 @@
 #include <fastdds/dds/publisher/Publisher.hpp>
 #include <fastdds/dds/subscriber/Subscriber.hpp>
 
-#include "agl/StopAppResponsePubSubTypes.hpp"
-#include "agl/StopAppRequestPubSubTypes.hpp"
+#include "lifecycle/StopServiceRequestPubSubTypes.hpp"
 
 #include "../common/AppUtils.hpp"
 
@@ -23,7 +22,7 @@ protected:
     static Subscriber* subscriber_;
 
     StopAppHandler test_handler;
-    StopAppHandler::RequestCallback cb = [](const adsw_manager_agl::StopAppRequest&){};
+    StopAppHandler::RequestCallback cb = [](const lifecyclemgr::StopServiceRequest&){};
 
     static void SetUpTestSuite() {
         DomainParticipantQos qos;
@@ -65,8 +64,8 @@ TEST_F(StopAppHandlerTest, StopAppHandler_Publish) {
     ASSERT_TRUE(test_handler.Initialize(participant_, publisher_, subscriber_, cb))
         << "Initialize failed -> writer_가 nullptr일 가능성 큼";
 
-    adsw_manager_agl::StopAppResponse res;
-    res.ret_code(adsw_manager_agl::ReturnCode::SUCCESS);
+    lifecyclemgr::StopServiceResponse res;
+    res.ret_code(lifecyclemgr::ReturnCode::SUCCESS);
 
     EXPECT_TRUE(test_handler.PublishResponse(res));
 

@@ -9,7 +9,7 @@
 #include <fastdds/dds/domain/DomainParticipant.hpp>
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp>
 
-#include "agl/NotifyAppStatePubSubTypes.hpp"
+#include "lifecycle/NotifyServiceStatePubSubTypes.hpp"
 
 #include "../common/AppUtils.hpp"
 
@@ -79,10 +79,9 @@ TEST_F(DDSManagerTest_Init, DDSManager_PublishNotify) {
     EXPECT_CALL(*mock, Publish(_)).Times(1).WillOnce(Return(true));
     uut_init->InjectNotifyWriterForTest(std::move(mock));
 
-    adsw_manager_agl::NotifyAppState msg;
-
-    msg.app_name() = "test";
-    msg.app_state() = adsw_manager_agl::AppState::DETACHED;
+    lifecyclemgr::NotifyServiceState msg;
+    msg.service_list().push_back("test");
+    msg.service_state_list().push_back(lifecyclemgr::ServiceState::NOT_RUNNING);
 
     uut_init->PublishNotifyAppState(msg);
 
@@ -92,13 +91,13 @@ TEST_F(DDSManagerTest_Init, DDSManager_PublishNotify) {
 
 TEST_F(DDSManagerTest_Init, SetOnGetAppStateRequest_StoresAndInvokes) {
 
-    MockFunction<void(const adsw_manager_agl::GetAppStateRequest&)> cb;
+    MockFunction<void(const lifecyclemgr::GetServiceStateRequest&)> cb;
 
     uut_init->SetOnGetAppStateRequest(cb.AsStdFunction());
 
     EXPECT_TRUE(static_cast<bool>(uut_init->on_get_app_state_request_));
 
-    adsw_manager_agl::GetAppStateRequest req;
+    lifecyclemgr::GetServiceStateRequest req;
     EXPECT_CALL(cb, Call(_)).Times(1);
     uut_init->on_get_app_state_request_(req);
 
@@ -108,13 +107,13 @@ TEST_F(DDSManagerTest_Init, SetOnGetAppStateRequest_StoresAndInvokes) {
 
 TEST_F(DDSManagerTest_Init, SetOnStartAppRequest_StoresAndInvokes) {
 
-    MockFunction<void(const adsw_manager_agl::StartAppRequest&)> cb;
+    MockFunction<void(const lifecyclemgr::StartServiceRequest&)> cb;
 
     uut_init->SetOnStartAppRequest(cb.AsStdFunction());
 
     EXPECT_TRUE(static_cast<bool>(uut_init->on_start_app_request_));
 
-    adsw_manager_agl::StartAppRequest req;
+    lifecyclemgr::StartServiceRequest req;
     EXPECT_CALL(cb, Call(_)).Times(1);
     uut_init->on_start_app_request_(req);
 
@@ -124,13 +123,13 @@ TEST_F(DDSManagerTest_Init, SetOnStartAppRequest_StoresAndInvokes) {
 
 TEST_F(DDSManagerTest_Init, SetOnStopAppRequest_StoresAndInvokes) {
 
-    MockFunction<void(const adsw_manager_agl::StopAppRequest&)> cb;
+    MockFunction<void(const lifecyclemgr::StopServiceRequest&)> cb;
 
     uut_init->SetOnStopAppRequest(cb.AsStdFunction());
 
     EXPECT_TRUE(static_cast<bool>(uut_init->on_stop_app_request_));
 
-    adsw_manager_agl::StopAppRequest req;
+    lifecyclemgr::StopServiceRequest req;
     EXPECT_CALL(cb, Call(_)).Times(1);
     uut_init->on_stop_app_request_(req);
 
