@@ -12,9 +12,16 @@ set ( OUTPUT_DIR ${PROJECT_TOP_DIR}/output/${CMAKE_SYSTEM_PROCESSOR}/${CMAKE_BUI
 
 ## Build Options
 set ( EXTENSION_PLATFORM "ROS2" CACHE STRING "Target platform for extension framework" )
+set ( BUILD_EXTENSION FALSE CACHE STRING "Build the extension framework for target platform" )
 set ( BUILD_UNITTEST FALSE CACHE STRING "Build the unittest" )
 
 ## Output directory Options
+if (NOT BUILD_EXTENSION)
+	set ( OUTPUT_DIR "${OUTPUT_DIR}/core" )
+else()
+	string ( TOLOWER "${EXTENSION_PLATFORM}" EXT_PLATFORM )
+	set ( OUTPUT_DIR "${OUTPUT_DIR}/extension/${EXT_PLATFORM}" )
+endif()
 set ( CMAKE_INSTALL_PREFIX ${OUTPUT_DIR} )
 set ( CMAKE_RUNTIME_OUTPUT_DIRECTORY "out/bin" )
 set ( CMAKE_LIBRARY_OUTPUT_DIRECTORY "out/lib" )
