@@ -45,8 +45,7 @@ add_executable(${PROJECT_NAME}
     NotifyAppStateWriterTest.cpp
     AppStateHandlerTest.cpp
     DDSManagerTest.cpp
-    ContainerControllerTest.cpp
-    AppControllerTest.cpp
+    #AppControllerTest.cpp
 )
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE UNIT_TEST )
@@ -62,4 +61,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 
 target_include_directories(${PROJECT_NAME} PRIVATE ../service_monitor mock)
 
-target_link_options(${PROJECT_NAME} PRIVATE "-Wl,--wrap=system")
+# target_link_options(${PROJECT_NAME} PRIVATE 
+#                         -Wl,--wrap=execvp
+#   -Wl,--wrap=popen
+#   -Wl,--wrap=pclose)

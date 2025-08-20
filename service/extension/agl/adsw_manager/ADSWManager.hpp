@@ -7,7 +7,6 @@
 #include "message_transmitter/DDSManager.hpp"
 #include "service_controller/ServiceController.hpp"
 #include "service_controller/AppController.hpp"
-#include "service_controller/ContainerController.hpp"
 
 #include <memory>
 
@@ -31,7 +30,6 @@ namespace adsw_manager::agl {
             std::shared_ptr<DDSManager> dds_manager_;
             std::shared_ptr<ServiceController> service_controller_;
             std::shared_ptr<AppController> app_controller_;
-            std::shared_ptr<ContainerController> container_controller_;
 
     };
 

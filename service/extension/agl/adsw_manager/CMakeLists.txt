@@ -15,7 +15,6 @@ set(MESSAGE_TRANSMITTER
 
 set(SERVICE_CONTROLLER
 	service_controller/ServiceController.cpp
-	service_controller/ContainerController.cpp
 	service_controller/AppController.cpp
 )
 

@@ -74,7 +74,7 @@ namespace adsw_manager::agl {
         res.ret_code(ReturnCode::SUCCESS);
 
         for (const auto& app_name : req.service_list()) {
-            bool result = service_controller_->StartService(app_name, "");
+            bool result = service_controller_->StartService(app_name);
 
             if (!result) {
                 // std::cerr << "[StartAppHandler] Failed to start app: " << app_name << std::endl;
@@ -93,7 +93,7 @@ namespace adsw_manager::agl {
         res.ret_code(ReturnCode::SUCCESS);
 
         for (const auto& app_name : req.service_list()) {
-            bool result = service_controller_->StopService(app_name, "");
+            bool result = service_controller_->StopService(app_name);
 
             if (!result) {
                 // std::cerr << "[StartAppHandler] Failed to stop app: " << app_name << std::endl;

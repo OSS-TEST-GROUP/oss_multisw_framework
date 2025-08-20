@@ -10,7 +10,6 @@
 #include "mock/MockServiceRegistry.hpp"
 #include "mock/MockServiceController.hpp"
 #include "mock/MockAppController.hpp"
-#include "mock/MockContainerController.hpp"
 #include "mock/MockMessageTransmitter.hpp"
 #include "mock/MockServiceMonitor.hpp"
 
@@ -25,7 +24,6 @@ protected:
 
     std::shared_ptr<NiceMock<MockServiceRegistry>> mock_registry;
     std::shared_ptr<NiceMock<MockAppController>> mock_app_controller;
-    std::shared_ptr<NiceMock<MockContainerController>> mock_cont_controller;
     std::shared_ptr<NiceMock<MockServiceController>> mock_controller;
     std::shared_ptr<NiceMock<MockMessageTransmitter>> mock_transmitter;
     std::shared_ptr<NiceMock<MockServiceMonitor>> mock_monitor;
@@ -33,16 +31,13 @@ protected:
     void SetUp() override {
         mock_registry = std::make_shared<NiceMock<MockServiceRegistry>>();
         mock_app_controller = std::make_shared<NiceMock<MockAppController>>();
-        mock_cont_controller = std::make_shared<NiceMock<MockContainerController>>();
-        mock_controller = std::make_shared<NiceMock<MockServiceController>>(
-                                mock_app_controller.get(), mock_cont_controller.get());
+        mock_controller = std::make_shared<NiceMock<MockServiceController>>(mock_app_controller.get());
         mock_transmitter = std::make_shared<NiceMock<MockMessageTransmitter>>();
         mock_monitor = std::make_shared<NiceMock<MockServiceMonitor>>();
 
         // UNIT_TEST 매크로 없이 직접 주입
         manager.service_registry_ = mock_registry;
         manager.app_controller_ = mock_app_controller;
-        manager.container_controller_ = mock_cont_controller;
         manager.service_controller_ = mock_controller;
         manager.message_transmitter_ = mock_transmitter;
         manager.service_monitor_ = mock_monitor;

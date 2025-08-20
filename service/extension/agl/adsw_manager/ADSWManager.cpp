@@ -28,11 +28,8 @@ namespace adsw_manager::agl {
         if (!app_controller_) {
             app_controller_ = std::make_shared<AppController>();
         }
-        if (!container_controller_) {
-            container_controller_ = std::make_shared<ContainerController>();
-        }
         if (!service_controller_) {
-            service_controller_ = std::make_shared<ServiceController>(app_controller_.get(), container_controller_.get());
+            service_controller_ = std::make_shared<ServiceController>(app_controller_.get());
         }
         if (!service_controller_->Initialize()) {
             return false;

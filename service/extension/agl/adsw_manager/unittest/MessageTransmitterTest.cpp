@@ -5,7 +5,6 @@
 #include "mock/MockServiceController.hpp"
 #include "mock/MockDDSManager.hpp"
 #include "mock/MockAppController.hpp"
-#include "mock/MockContainerController.hpp"
 #include "message_transmitter/MessageTransmitter.hpp"
 
 using namespace adsw_manager::agl;
@@ -20,15 +19,13 @@ protected:
     std::shared_ptr<MockServiceRegistry> registry;
     std::shared_ptr<MockServiceController> controller;
     std::shared_ptr<MockAppController> a_controller;
-    std::shared_ptr<MockContainerController> c_controller;
     std::shared_ptr<MockDDSManager> dds_manager;
     std::unique_ptr<MessageTransmitter> transmitter;
 
     void SetUp() override {
         registry = std::make_shared<MockServiceRegistry>();
         a_controller = std::make_shared<MockAppController>();
-        c_controller = std::make_shared<MockContainerController>();
-        controller = std::make_shared<MockServiceController>(a_controller.get(), c_controller.get());
+        controller = std::make_shared<MockServiceController>(a_controller.get());
         dds_manager = std::make_shared<MockDDSManager>();
         
         transmitter = std::make_unique<MessageTransmitter>(registry, controller, dds_manager);
@@ -189,7 +186,7 @@ TEST_F(MessageTransmitterTest, HandleStartAppRequest_CallsControllerAndPublishes
         .WillRepeatedly(Return(start_handler_raw));
 
     // Controller가 성공 리턴 → 응답은 SUCCESS여야 함
-    EXPECT_CALL(*controller, StartService("test_app", ""))
+    EXPECT_CALL(*controller, StartService("test_app"))
         .WillOnce(Return(true));
 
     StartServiceResponse captured;
@@ -232,7 +229,7 @@ TEST_F(MessageTransmitterTest, HandleStartAppRequest_Failure_PublishesFailedResp
     // StartService가 false → PublishResponse는 FAILED
     {
         InSequence seq;
-        EXPECT_CALL(*controller, StartService("test_app", ""))
+        EXPECT_CALL(*controller, StartService("test_app"))
             .WillOnce(Return(false));
         EXPECT_CALL(*start_handler_raw, PublishResponse(_))
             .WillOnce(Invoke([](const StartServiceResponse &r)
@@ -275,7 +272,7 @@ TEST_F(MessageTransmitterTest, HandleStopAppRequest_CallsControllerAndPublishesS
         .WillRepeatedly(Return(stop_handler_raw));
 
     // Controller가 성공 리턴 → 응답은 SUCCESS여야 함
-    EXPECT_CALL(*controller, StopService("test_app", ""))
+    EXPECT_CALL(*controller, StopService("test_app"))
         .WillOnce(Return(true));
 
     StopServiceResponse captured;
@@ -318,7 +315,7 @@ TEST_F(MessageTransmitterTest, HandleStopAppRequest_Failure_PublishesFailedRespo
     // StopService(false) → PublishResponse(FAILED)
     {
         InSequence seq;
-        EXPECT_CALL(*controller, StopService("test_app", ""))
+        EXPECT_CALL(*controller, StopService("test_app"))
             .WillOnce(Return(false));
         EXPECT_CALL(*stop_handler_raw, PublishResponse(_))
             .WillOnce(::testing::Invoke([](const StopServiceResponse &r)

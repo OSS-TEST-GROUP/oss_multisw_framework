@@ -9,9 +9,9 @@
 class MockAppController : public adsw_manager::agl::AppController {
 public:
     MOCK_METHOD(bool, Initialize, (), (override));
-    MOCK_METHOD(bool, LaunchApp, (std::string, std::string), (override));
-    MOCK_METHOD(bool, TerminateApp, (std::string, std::string), (override));
-    MOCK_METHOD(bool, IsAppRunning, (std::string, std::string), (override));
+    MOCK_METHOD(bool, LaunchApp, (std::string), (override));
+    MOCK_METHOD(bool, TerminateApp, (std::string), (override));
+    MOCK_METHOD(bool, IsAppRunning, (std::string), (override));
 };
 
 #endif
