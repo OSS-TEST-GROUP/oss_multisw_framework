@@ -1,163 +1,177 @@
 #include <gtest/gtest.h>
 #include "AppController.hpp"
 
+#include <fstream>
+#include <sstream>
 #include <string>
 #include <vector>
-#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <unistd.h>
+#include <sys/stat.h>
 
-// ====== 캡처용 전역 ======
-static int g_exec_child_exit_code = 0; // 자식 프로세스(=execvp 래퍼) 종료 코드
-static std::string g_last_exec_file;
-static std::vector<std::string> g_last_exec_argv;
-static int g_exec_call_count = 0;
-
-static std::vector<std::string> g_popen_cmds;  // popen에 들어온 커맨드 기록
-static std::string g_mock_load_state   = "loaded";
-static std::string g_mock_active_state = "active";
-
-// ====== real 심볼 선언 ======
-extern "C" {
-int  __real_execvp(const char* file, char* const argv[]);
-FILE* __real_popen(const char* cmd, const char* mode);
-int   __real_pclose(FILE* stream);
-}
-
-// ====== wrap 구현 ======
-// -Wl,--wrap=execvp
-extern "C" int __wrap_execvp(const char* file, char* const argv[]) {
-    // argv 캡처
-    g_last_exec_file = file ? file : "";
-    g_last_exec_argv.clear();
-    if (argv) {
-        for (char* const* p = argv; *p; ++p) {
-            g_last_exec_argv.emplace_back(*p ? *p : "");
-        }
-    }
-    g_exec_call_count++;
-
-    // 실제 exec는 절대 하지 않고, 바로 종료
-    _exit(g_exec_child_exit_code);
-    return -1; // 도달 불가(컴파일러 경고 억제)
-}
-
-// -Wl,--wrap=popen
-extern "C" FILE* __wrap_popen(const char* cmd, const char* mode) {
-    g_popen_cmds.emplace_back(cmd ? cmd : "");
-
-    // 요청된 show 항목에 따라 가짜 출력 생성
-    std::string s = cmd ? cmd : "";
-    std::string out;
-    if (s.find("LoadState") != std::string::npos) {
-        out = g_mock_load_state + "\n";
-    } else if (s.find("ActiveState") != std::string::npos) {
-        out = g_mock_active_state + "\n";
-    } else {
-        out = "";
-    }
-
-    FILE* f = tmpfile();
-    if (!f) return nullptr;
-    if (!out.empty()) {
-        fwrite(out.data(), 1, out.size(), f);
-        rewind(f);
-    }
-    return f;
-}
-
-// -Wl,--wrap=pclose
-extern "C" int __wrap_pclose(FILE* stream) {
-    if (stream) fclose(stream);
-    return 0;
-}
-
-// ====== 테스트 ======
 using namespace adsw_manager::agl;
 
-struct AppControllerCmdTest : ::testing::Test {
-    void SetUp() override {
-        g_exec_child_exit_code = 0;
-        g_last_exec_file.clear();
-        g_last_exec_argv.clear();
-        g_exec_call_count = 0;
+#ifndef MOCK_SYSCTL_DIR
+#define MOCK_SYSCTL_DIR "unittest/helpers"
+#endif
 
-        g_popen_cmds.clear();
-        g_mock_load_state   = "loaded";
-        g_mock_active_state = "active";
+#ifndef MOCK_SYSCTL_LOG
+#define MOCK_SYSCTL_LOG "sysctl.log"  // 빌드 디렉토리에 생성
+#endif
+
+namespace {
+std::string g_helpers_dir;
+std::string g_log_path;
+std::string g_old_path;
+
+static std::string DirnameOf(const char* file_macro) {
+    std::string p = file_macro ? file_macro : "";
+    auto pos = p.find_last_of("/\\");
+    return (pos == std::string::npos) ? std::string(".") : p.substr(0, pos);
+}
+
+// 파일 전체 읽기
+static std::string ReadAll(const std::string& p) {
+    std::ifstream ifs(p);
+    std::ostringstream oss;
+    oss << ifs.rdbuf();
+    return oss.str();
+}
+
+// 파일 비우기
+static void Truncate(const std::string& p) {
+    std::ofstream ofs(p, std::ios::trunc);
+    (void)ofs;
+}
+
+static void EnsureExecutable(const std::string& path) {
+    struct stat st{};
+    if (stat(path.c_str(), &st) == 0) {
+        // 소유자 실행권한 없으면 추가
+        if (!(st.st_mode & S_IXUSR)) {
+            chmod(path.c_str(), st.st_mode | S_IXUSR);
+        }
+    }
+}
+
+} // namespace
+
+// -------------------- 테스트 픽스처 --------------------
+class AppControllerTest : public ::testing::Test {
+protected:
+    static void SetUpTestSuite() {
+        // helpers 절대경로: <이 파일>/helpers
+        g_helpers_dir = DirnameOf(__FILE__) + "/helpers";
+        const std::string shim = g_helpers_dir + "/systemctl";
+
+        // 실행권한 보정(깃 권한이 안 먹힌 환경 대비)
+        EnsureExecutable(shim);
+
+        // 로그는 빌드/실행 디렉토리에 생성
+        g_log_path = "sysctl.log";
+        setenv("ADSW_TEST_SYSCTL_LOG", g_log_path.c_str(), 1);
+
+        // PATH 앞에 helpers 추가
+        const char *cur = getenv("PATH");
+        g_old_path = cur ? cur : "";
+        std::string new_path = g_helpers_dir + ":" + g_old_path;
+        setenv("PATH", new_path.c_str(), 1);
+
+        // ::setenv("ADSW_TEST_SYSCTL_LOG", MOCK_SYSCTL_LOG, 1);
+
+        // const char* cur = ::getenv("PATH");
+        // g_old_path = cur ? cur : "";
+        // std::string new_path = std::string(MOCK_SYSCTL_DIR) + ":" + g_old_path;
+        // ::setenv("PATH", new_path.c_str(), 1);
+    }
+
+    static void TearDownTestSuite() {
+        if (!g_old_path.empty()) ::setenv("PATH", g_old_path.c_str(), 1);
+    }
+
+    void SetUp() override {
+        Truncate(g_log_path);
+        ::unsetenv("ADSW_TEST_EXIT_CODE");
+        ::unsetenv("ADSW_TEST_LOAD_STATE");
+        ::unsetenv("ADSW_TEST_ACTIVE_STATE");
     }
 };
 
-// -------- LaunchApp(Command) --------
-TEST_F(AppControllerCmdTest, Launch_BuildsSystemctlStartWithServiceSuffix) {
-    AppController c;
-    ASSERT_TRUE(c.LaunchApp("adsw-monitor")); // child exit=0 -> 성공 취급
+// ----------------------------- LaunchApp -----------------------------
 
-    ASSERT_EQ(g_exec_call_count, 1);
-    EXPECT_EQ(g_last_exec_file, "systemctl");
-    ASSERT_EQ(g_last_exec_argv.size(), 3u);
-    EXPECT_EQ(g_last_exec_argv[0], "systemctl");
-    EXPECT_EQ(g_last_exec_argv[1], "start");
-    EXPECT_EQ(g_last_exec_argv[2], "adsw-monitor.service"); // 자동 .service 부착 확인
+TEST_F(AppControllerTest, Launch_BuildsSystemctlStartWithServiceSuffix) {
+    AppController c;
+    ::setenv("ADSW_TEST_EXIT_CODE", "0", 1); // 성공
+
+    ASSERT_TRUE(c.LaunchApp("adsw-monitor"));
+
+    const std::string log = ReadAll(g_log_path);
+    ASSERT_NE(log.find("systemctl start adsw-monitor.service"), std::string::npos)
+        << "LOG:\n" << log;
 }
 
-TEST_F(AppControllerCmdTest, Launch_KeepsDotServiceIfAlreadyGiven) {
+TEST_F(AppControllerTest, Launch_KeepsDotServiceIfAlreadyGiven) {
     AppController c;
+    ::setenv("ADSW_TEST_EXIT_CODE", "0", 1);
+
     ASSERT_TRUE(c.LaunchApp("speedometer.service"));
 
-    ASSERT_EQ(g_exec_call_count, 1);
-    EXPECT_EQ(g_last_exec_argv[1], "start");
-    EXPECT_EQ(g_last_exec_argv[2], "speedometer.service");
+    const std::string log = ReadAll(g_log_path);
+    ASSERT_NE(log.find("systemctl start speedometer.service"), std::string::npos)
+        << "LOG:\n" << log;
 }
 
-// -------- TerminateApp(Command) --------
-TEST_F(AppControllerCmdTest, Terminate_BuildsSystemctlStop) {
+TEST_F(AppControllerTest, Launch_ReturnsFalse_OnChildNonZeroButCommandStillCorrect) {
     AppController c;
+    ::setenv("ADSW_TEST_EXIT_CODE", "3", 1); // 실패로 처리
+
+    EXPECT_FALSE(c.LaunchApp("adsw-monitor"));
+
+    const std::string log = ReadAll(g_log_path);
+    ASSERT_NE(log.find("systemctl start adsw-monitor.service"), std::string::npos)
+        << "LOG:\n" << log;
+}
+
+// ----------------------------- TerminateApp -----------------------------
+
+TEST_F(AppControllerTest, Terminate_BuildsSystemctlStop) {
+    AppController c;
+    ::setenv("ADSW_TEST_EXIT_CODE", "0", 1);
+
     ASSERT_TRUE(c.TerminateApp("adsw-monitor"));
 
-    ASSERT_EQ(g_exec_call_count, 1);
-    EXPECT_EQ(g_last_exec_file, "systemctl");
-    ASSERT_EQ(g_last_exec_argv.size(), 3u);
-    EXPECT_EQ(g_last_exec_argv[1], "stop");
-    EXPECT_EQ(g_last_exec_argv[2], "adsw-monitor.service");
+    const std::string log = ReadAll(g_log_path);
+    ASSERT_NE(log.find("systemctl stop adsw-monitor.service"), std::string::npos)
+        << "LOG:\n" << log;
 }
 
-// -------- IsAppRunning(Command) --------
-TEST_F(AppControllerCmdTest, IsAppRunning_BuildsTwoShowQueriesWithValue) {
-    AppController c;
+// ----------------------------- IsAppRunning -----------------------------
 
-    // true를 반환하게끔 가짜 상태 지정
-    g_mock_load_state   = "loaded";
-    g_mock_active_state = "active";
+TEST_F(AppControllerTest, IsAppRunning_BuildsTwoShowQueriesWithValue) {
+    AppController c;
+    ::setenv("ADSW_TEST_LOAD_STATE", "loaded", 1);
+    ::setenv("ADSW_TEST_ACTIVE_STATE", "active", 1);
 
     EXPECT_TRUE(c.IsAppRunning("adsw-monitor"));
 
-    // popen이 두 번 호출되어야 함: LoadState, ActiveState
-    ASSERT_GE(g_popen_cmds.size(), 2u);
-    EXPECT_EQ(g_popen_cmds[0],
-              "systemctl show adsw-monitor.service -p LoadState --value");
-    EXPECT_EQ(g_popen_cmds[1],
-              "systemctl show adsw-monitor.service -p ActiveState --value");
+    const std::string log = ReadAll(g_log_path);
+    ASSERT_NE(log.find("systemctl show adsw-monitor.service -p LoadState --value"), std::string::npos)
+        << "LOG:\n" << log;
+    ASSERT_NE(log.find("systemctl show adsw-monitor.service -p ActiveState --value"), std::string::npos)
+        << "LOG:\n" << log;
 }
 
-TEST_F(AppControllerCmdTest, IsAppRunning_AppNameWithoutSuffix_StillQueriesServiceName) {
+TEST_F(AppControllerTest, IsAppRunning_AppNameWithoutSuffix_StillQueriesServiceName) {
     AppController c;
-    g_mock_load_state   = "loaded";
-    g_mock_active_state = "inactive"; // 반환값은 false지만 커맨드만 검증
+    ::setenv("ADSW_TEST_LOAD_STATE", "loaded", 1);
+    ::setenv("ADSW_TEST_ACTIVE_STATE", "inactive", 1);
 
-    (void)c.IsAppRunning("speedometer");
-    ASSERT_GE(g_popen_cmds.size(), 2u);
-    EXPECT_NE(g_popen_cmds[0].find("speedometer.service"), std::string::npos);
-    EXPECT_NE(g_popen_cmds[1].find("speedometer.service"), std::string::npos);
-}
+    EXPECT_FALSE(c.IsAppRunning("speedometer"));
 
-// -------- 실패 코드도 커맨드만 검증(선택) --------
-TEST_F(AppControllerCmdTest, Launch_ReturnsFalse_OnChildNonZeroButCommandStillCorrect) {
-    AppController c;
-    g_exec_child_exit_code = 3; // 자식 종료코드 3으로 설정 -> 실패 반환
-
-    EXPECT_FALSE(c.LaunchApp("adsw-monitor"));
-    ASSERT_EQ(g_exec_call_count, 1);
-    EXPECT_EQ(g_last_exec_argv[1], "start");
-    EXPECT_EQ(g_last_exec_argv[2], "adsw-monitor.service");
+    const std::string log = ReadAll(g_log_path);
+    ASSERT_NE(log.find("systemctl show speedometer.service -p LoadState --value"), std::string::npos)
+        << "LOG:\n" << log;
+    ASSERT_NE(log.find("systemctl show speedometer.service -p ActiveState --value"), std::string::npos)
+        << "LOG:\n" << log;
 }
