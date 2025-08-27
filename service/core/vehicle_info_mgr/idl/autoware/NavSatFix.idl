@@ -1,0 +1,32 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from sensor_msgs/msg/NavSatFix.msg
+// generated code does not contain a copyright notice
+
+#include "NavSatStatus.idl"
+#include "Header.idl"
+
+module sensor_msgs {
+  module msg {
+    typedef double double__9[9];
+    module NavSatFix_Constants {
+      const uint8 COVARIANCE_TYPE_UNKNOWN = 0;
+      const uint8 COVARIANCE_TYPE_APPROXIMATED = 1;
+      const uint8 COVARIANCE_TYPE_DIAGONAL_KNOWN = 2;
+      const uint8 COVARIANCE_TYPE_KNOWN = 3;
+    };
+    struct NavSatFix {
+      std_msgs::msg::Header header;
+      sensor_msgs::msg::NavSatStatus status;
+      @unit (value="degrees")
+      double latitude;
+      @unit (value="degrees")
+      double longitude;
+      @unit (value="m")
+      double altitude;
+      @unit (value="m^2")
+      double__9 position_covariance;
+
+      uint8 position_covariance_type;
+    };
+  };
+};

@@ -1,0 +1,21 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from tier4_perception_msgs/msg/traffic_light/TrafficLightRoi.msg
+// generated code does not contain a copyright notice
+
+#include "RegionOfInterest.idl"
+
+module tier4_perception_msgs {
+  module msg {
+    module TrafficLightRoi_Constants {
+      const uint8 CAR_TRAFFIC_LIGHT = 0;
+      const uint8 PEDESTRIAN_TRAFFIC_LIGHT = 1;
+    };
+    struct TrafficLightRoi {
+      sensor_msgs::msg::RegionOfInterest roi;
+
+      int64 traffic_light_id;
+
+      uint8 traffic_light_type;
+    };
+  };
+};
