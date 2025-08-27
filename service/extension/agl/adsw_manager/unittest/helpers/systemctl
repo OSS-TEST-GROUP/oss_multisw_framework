@@ -1,0 +1,28 @@
+#!/bin/sh
+# unittest/helpers/systemctl  (실행 가능 권한 필요: chmod +x)
+
+LOG="${ADSW_TEST_SYSCTL_LOG:-sysctl.log}"
+
+{
+  printf 'systemctl'
+  for arg in "$@"; do
+    printf ' %s' "$arg"
+  done
+  printf '\n'
+} >> "$LOG"
+
+if [ "$1" = "show" ]; then
+  for a in "$@"; do
+    if [ "$a" = "LoadState" ]; then
+      printf '%s\n' "${ADSW_TEST_LOAD_STATE:-loaded}"
+      exit 0
+    fi
+    if [ "$a" = "ActiveState" ]; then
+      printf '%s\n' "${ADSW_TEST_ACTIVE_STATE:-active}"
+      exit 0
+    fi
+  done
+  exit 0
+fi
+
+exit ${ADSW_TEST_EXIT_CODE:-0}

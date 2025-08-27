@@ -45,10 +45,13 @@ add_executable(${PROJECT_NAME}
     NotifyAppStateWriterTest.cpp
     AppStateHandlerTest.cpp
     DDSManagerTest.cpp
-    #AppControllerTest.cpp
+    AppControllerTest.cpp
 )
 
-target_compile_definitions(${PROJECT_NAME} PRIVATE UNIT_TEST )
+target_compile_definitions(${PROJECT_NAME} PRIVATE UNIT_TEST
+    MOCK_SYSCTL_DIR="${CMAKE_CURRENT_SOURCE_DIR}/unittest/helpers"
+    MOCK_SYSCTL_LOG="${CMAKE_CURRENT_BINARY_DIR}/sysctl.log" 
+)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
     agl_adsw_core
@@ -61,7 +64,4 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 
 target_include_directories(${PROJECT_NAME} PRIVATE ../service_monitor mock)
 
-# target_link_options(${PROJECT_NAME} PRIVATE 
-#                         -Wl,--wrap=execvp
-#   -Wl,--wrap=popen
-#   -Wl,--wrap=pclose)
+add_test(NAME AppControllerTest COMMAND AppControllerTest)

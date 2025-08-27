@@ -66,7 +66,7 @@ namespace adsw_manager::agl {
             ServiceState expected_state = (now - last_time > timeout_) ? ServiceState::NOT_RUNNING : ServiceState::RUNNING;
 
             if (app_info.service_state() != expected_state) {
-                std::cout << "[ServiceMonitor] App state update : " << app_info.service_state() << " >>> " << expected_state << std::endl;
+                std::cout << "[ServiceMonitor] App state update : [[" << app_info.name() << "]] " << app_info.service_state() << " >>> " << expected_state << std::endl;
                 service_registry_->UpdateAppState(app_name, expected_state);
                 message_transmitter_->PublishAppState();
             }
