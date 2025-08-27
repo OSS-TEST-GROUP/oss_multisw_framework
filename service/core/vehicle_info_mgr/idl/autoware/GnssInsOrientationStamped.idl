@@ -1,0 +1,15 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from autoware_sensing_msgs/msg/GnssInsOrientationStamped.msg
+// generated code does not contain a copyright notice
+
+#include "GnssInsOrientation.idl"
+#include "Header.idl"
+
+module autoware_sensing_msgs {
+  module msg {
+    struct GnssInsOrientationStamped {
+      std_msgs::msg::Header header;
+      autoware_sensing_msgs::msg::GnssInsOrientation orientation;
+    };
+  };
+};

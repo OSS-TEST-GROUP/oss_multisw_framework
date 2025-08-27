@@ -9,7 +9,7 @@ USER root
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt update && \
     apt install -y wget git cmake gdb libasio-dev libtinyxml2-dev libssl-dev libp11-dev softhsm2 libengine-pkcs11-openssl python3 python3-pip openjdk-11-jre \
-                   libyaml-cpp-dev && \
+                   libyaml-cpp-dev protobuf-compiler protobuf-compiler-grpc libprotobuf-dev libgrpc-dev libgrpc++-dev && \
     pip3 install -U colcon-common-extensions vcstool
 
 # Build libraries

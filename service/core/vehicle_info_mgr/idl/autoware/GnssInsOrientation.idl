@@ -1,0 +1,20 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from autoware_sensing_msgs/msg/GnssInsOrientation.msg
+// generated code does not contain a copyright notice
+
+#include "Quaternion.idl"
+
+module autoware_sensing_msgs {
+  module msg {
+    struct GnssInsOrientation {
+      geometry_msgs::msg::Quaternion orientation;
+
+      @unit (value="rad")
+      float rmse_rotation_x;
+
+      float rmse_rotation_y;
+
+      float rmse_rotation_z;
+    };
+  };
+};

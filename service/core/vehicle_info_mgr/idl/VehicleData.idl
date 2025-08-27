@@ -1,0 +1,5 @@
+struct VehicleDataTopic
+{
+    string path;
+    string value;
+};
