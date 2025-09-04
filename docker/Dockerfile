@@ -1,12 +1,11 @@
-# Multi Platform
-ARG BUILDPLATFORM
-ARG TARGETOS
-ARG TARGETARCH
+# Gobal 
+ARG SDKDIR=/opt
+ARG TARGET_ARCH="x86_64"
 
 ###################################################################################
 # Base image
 ###################################################################################
-FROM --platform=${BUILDPLATFORM} ubuntu:22.04 AS base-setup
+FROM --platform=$BUILDPLATFORM ubuntu:22.04 AS base-setup
 #LABEL org.opencontainers.image.authors="Brian.doh <brian.doh@obigo.com>"
 
 # Show platform information
@@ -18,19 +17,25 @@ ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
 ENV PYTHONUNBUFFERED=1
 
+ENV TZ=Asia/Seoul
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
 RUN rm -rf /var/lib/apt/lists/*
 RUN apt-get update && apt-get upgrade -y
 
 ###################################################################################
 # Install Build Environment
 ###################################################################################
-FROM base-setup AS builder
+FROM base-setup AS builder-x86_64
+
+ARG SDKDIR="/opt"
+ARG TARGET_ARCH="x86_64"
 
 LABEL maintainer="Brian.doh <brian.doh@obigo.com>"
 LABEL description="Setup Build environment and build/install Fast-DDS"
 LABEL version="0.0.1"
 
-ARG LIBRARIES_INSTALL_DIR=/opt
+WORKDIR /root/workspace
 
 RUN apt-get install -y --no-install-recommends \
     # Base
@@ -42,6 +47,7 @@ RUN apt-get install -y --no-install-recommends \
     ccache \
     ninja-build \
     curl \
+    file \
     unzip \
     rsync \
     # Dependencies
@@ -50,8 +56,14 @@ RUN apt-get install -y --no-install-recommends \
     libssl-dev \
     libp11-dev \
     libyaml-cpp-dev \
+    protobuf-compiler \
+    protobuf-compiler-grpc \
+    libprotobuf-dev \
+    libgrpc-dev \
+    libgrpc++-dev \
     softhsm2 \
     libengine-pkcs11-openssl \
+    libgtest-dev \
     python3 \
     python3-pip \
     openjdk-11-jre \
@@ -84,114 +96,169 @@ RUN pip3 install --no-cache-dir \
     black \
     isort
 
-# Build and Install Fast-DDS
-RUN mkdir -p /opt
-COPY sysroot-aarch64 /opt/sysroot-aarch64
-COPY toolchain-aarch64.cmake /opt
-
-ENV SYSROOT_DIR="/opt/sysroot-aarch64"
-
-RUN /bin/bash -c "mkdir -p ${LIBRARIES_INSTALL_DIR}/Fast-DDS \
-    && cd ${LIBRARIES_INSTALL_DIR}/Fast-DDS \
-    && wget https://raw.githubusercontent.com/eProsima/Fast-DDS/3.2.2/fastdds.repos \
-    && mkdir src \
-    && vcs import src < fastdds.repos \
-    # AMD64
-    && colcon build \
-        --merge-install \
-        --build-base build_amd64 \
-        --install-base install_amd64 \
-        --packages-up-to fastdds \
-    # ARM64
-    && VERBOSE=1 colcon build \
-        --event-handlers console_direct+ \
-        --merge-install \
-        --build-base build_aarch64 \
-        --install-base install_aarch64 \
-        --cmake-force-configure \
-        --cmake-args \
-        -DCMAKE_TOOLCHAIN_FILE=/opt/toolchain-aarch64.cmake \
-        -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-        -DCMAKE_VERBOSE_MAKEFILE=ON \
-    && cd - \
-"
-
-RUN /bin/bash -c "\
-    source ${LIBRARIES_INSTALL_DIR}/Fast-DDS/install_amd64/setup.bash \
-    && cd ${LIBRARIES_INSTALL_DIR} \
-    && git clone https://github.com/eProsima/Fast-DDS-Gen.git \
-    && cd Fast-DDS-Gen \
-    && chmod +x gradlew \
-	&& ls -al \
-    && ./gradlew clean \
-    && ./gradlew build ; ./gradlew install"
-
-ARG TARGETARCH
-RUN case "${TARGETARCH}" in \
-        amd64) echo "Optimizing for x86_64" ;; \
-        arm64) echo "Optimizing for aarch64" && \
-               echo "export CFLAGS='-march=armv8-a'" >> /etc/environment ;; \
-        *) echo "Unsupported architecture: ${TARGETARCH}" && exit 1 ;; \
-    esac
-
 ENV CCACHE_DIR=/tmp/ccache
+
 RUN mkdir -p ${CCACHE_DIR} && \
     ccache --set-config max_size=2G && \
     ccache --set-config compression=true && \
     ccache --show-stats
 
-WORKDIR /workspace
+RUN /bin/bash -c "mkdir -p ${SDKDIR}/Fast-DDS \
+    && cd ${SDKDIR}/Fast-DDS \
+    && wget https://raw.githubusercontent.com/eProsima/Fast-DDS/3.2.2/fastdds.repos \
+    && mkdir src \
+    && vcs import src < fastdds.repos \
+    && colcon build \
+        --merge-install \
+        --build-base build_x86_64 \
+        --install-base install_x86_64 \
+    && cd - \
+"
+
+RUN mkdir -p /tmp/oss-x86_64/lib \
+	&& cp -rpa ${SDKDIR}/Fast-DDS/install_x86_64/lib/*.so* /tmp/oss-x86_64/lib
+
+RUN /bin/bash -c " \
+    source ${SDKDIR}/Fast-DDS/install_x86_64/setup.bash \
+    && cd ${SDKDIR} \
+    && git clone https://github.com/eProsima/Fast-DDS-Gen.git \
+    && cd Fast-DDS-Gen \
+    && chmod +x gradlew \
+    && ls -al \
+    && ./gradlew clean \
+    && ./gradlew build -x test; ./gradlew install \
+"
+
+###################################################################################
+# Sysroot
+###################################################################################
+FROM builder-x86_64 AS builder-aarch64
+
+LABEL maintainer="Brian.doh <brian.doh@obigo.com>"
+LABEL description="Create a sysroot for Aarch64 platform using debootstrap"
+LABEL version="0.0.1"
+
+RUN sed -i 's|http://archive.ubuntu.com|http://mirror.kakao.com|g' /etc/apt/sources.list \
+	&& apt update \
+	&& apt install -y --no-install-recommends \
+	debootstrap \
+	qemu-user-static \
+	&& rm -rf /var/lib/apt/lists/*
+
+RUN debootstrap --arch=arm64 \
+	jammy \
+	${SDKDIR}/sysroot-aarch64 \
+	http://kr.ports.ubuntu.com/ubuntu-ports/
+
+RUN cat <<EOF > ${SDKDIR}/sysroot-aarch64/etc/apt/sources.list.d/ubuntu-aarch64.list
+deb http://ports.ubuntu.com/ubuntu-ports jammy main universe multiverse restricted
+deb http://ports.ubuntu.com/ubuntu-ports jammy-updates main universe multiverse restricted
+deb http://ports.ubuntu.com/ubuntu-ports jammy-security main universe multiverse restricted
+EOF
+
+RUN chroot ${SDKDIR}/sysroot-aarch64 /bin/bash -c "\
+	DEBIAN_FRONTEND=noninteractive apt update \
+	&& apt install -y --no-install-recommends \
+	libasio-dev \
+	libtinyxml2-dev \
+	libyaml-cpp-dev \
+	protobuf-compiler \
+	protobuf-compiler-grpc \
+	libprotobuf-dev \
+	libgrpc-dev \
+	libgrpc++-dev \
+	libssl-dev \
+	&& rm -rf /var/lib/apt/lists/* \
+"
+
+RUN cat <<EOF > ${SDKDIR}/toolchain-ros2-aarch64.cmake
+# Target system and processor architecture
+SET(CMAKE_SYSTEM_NAME Linux)
+SET(CMAKE_SYSTEM_PROCESSOR aarch64)
+
+# Cross compiler location
+SET(CMAKE_C_COMPILER /usr/bin/aarch64-linux-gnu-gcc)
+SET(CMAKE_CXX_COMPILER /usr/bin/aarch64-linux-gnu-g++)
+
+# Where target environment includes and libraries are
+SET(CMAKE_SYSROOT /opt/sysroot-aarch64/)
+SET(CMAKE_FIND_ROOT_PATH /opt/sysroot-aarch64/)
+
+# Search for programs in the build host directories
+SET(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+
+# Search for libraries and headers in the target directories
+SET(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+SET(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+
+# Optional: set C++ standard
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS ON )
+
+set(CMAKE_CXX_FLAGS_INIT "-Wno-error")
+EOF
+
+# Fast-DDS 
+RUN /bin/bash -c "\
+    cd ${SDKDIR}/Fast-DDS \
+    && colcon build \
+        --merge-install \
+        --build-base build_aarch64 \
+        --install-base install_aarch64 \
+        --cmake-force-configure \
+        --cmake-args \
+        -DCMAKE_TOOLCHAIN_FILE=${SDKDIR}/toolchain-ros2-aarch64.cmake \
+    && cd - \
+"
+
+RUN mkdir -p /tmp/oss-aarch64/lib \
+	&& cp -rpa ${SDKDIR}/Fast-DDS/install_aarch64/lib/*.so* /tmp/oss-aarch64/lib
 
 ###################################################################################
 # Build stage
 ###################################################################################
-FROM builder AS build-stage
+FROM builder-${TARGET_ARCH} AS build-stage
 
-ARG BUILD_UNITTEST=TRUE
+ARG BUILD_UNITTEST=FALSE
+ARG BUILD_EXTENSION=FALSE
 ARG EXTENSION_PLATFORM=ROS2
+ARG BUILD_TYPE=Release
+ARG CROSSCOMPILING=FALSE
+ARG TOOLCHAIN_FILE=
+
 COPY . .
 
-ENV CFLAGS="-O2"
-ENV CXXFLAGS="-O2"
-ENV LDFLAGS="-O1"
+ENV BUILD_MODE=${BUILD_TYPE}
 ENV MAKEFLAGS="$(nproc)"
-ENV BUILD_MODE=Release
 
 RUN ccache -C
-RUN mkdir -p /oss-analysis
 
-# AMD64
-RUN /bin/bash -c "\
-    source $LIBRARIES_INSTALL_DIR/Fast-DDS/install_amd64/setup.bash \
-    && mkdir -p /workspace/.build_amd64 \
-    && cd /workspace/.build_amd64 \
-    && BUILD_MODE=Debug cmake ../ \
-        -DBUILD_UNITTEST=${BUILD_UNITTEST} \
-        -DEXTENSION_PLATFORM=${EXTENSION_PLATFORM} \
-        -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-        -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-        -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-    && make -j${MAKEFLAGS} \
-    && make install \
-    && cd /workspace \
-"
+SHELL ["/bin/bash", "-c"]
 
-# ARM64
-RUN /bin/bash -c "\
-    source $LIBRARIES_INSTALL_DIR/Fast-DDS/install_aarch64/setup.bash \
-    && mkdir -p /workspace/.build_aarch64 \
-    && cd /workspace/.build_aarch64 \
-    && cmake ../ \
-        -DBUILD_UNITTEST=FALSE \
-        -DEXTENSION_PLATFORM=${EXTENSION_PLATFORM} \
-        -DCMAKE_TOOLCHAIN_FILE=/opt/toolchain-aarch64.cmake \
-        -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-        -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-        -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-    && make -j${MAKEFLAGS} \
-    && make install \
-    && cd /workspace \
-"
+RUN CMAKE_ARGS=(\
+		"-DEXTENSION_PLATFORM=${EXTENSION_PLATFORM}" \
+		"-DBUILD_EXTENSION=${BUILD_EXTENSION}" \
+		"-DBUILD_UNITTEST=${BUILD_UNITTEST}" \
+		"-DCMAKE_EXPORT_COMPILE_COMMANDS=ON" \
+		"-DCMAKE_CXX_COMPILER_LAUNCHER=ccache" \
+		"-DCMAKE_C_COMPILER_LAUNCHER=ccache" \
+	) \
+	&& if [ ${CROSSCOMPILING} = TRUE ]; then \
+		CMAKE_ARGS+=(\
+			"-DCMAKE_CROSSCOMPILING=${CROSSCOMPILING}" \
+			"-DCMAKE_TOOLCHAIN_FILE=${SDKDIR}/${TOOLCHAIN_FILE}" \
+		); \
+	fi \
+    && source ${SDKDIR}/Fast-DDS/install_${TARGET_ARCH}/setup.bash \
+    && mkdir -p /root/workspace/.build_${TARGET_ARCH} \
+    && cd /root/workspace/.build_${TARGET_ARCH} \
+	&& cmake ../ "${CMAKE_ARGS[@]}" \
+    && make install -j $(nproc) \
+    && cd /root/workspace
+
+RUN mkdir -p /tmp/oss-${TARGET_ARCH} \
+	&& cp -rpa /root/workspace/output/${TARGET_ARCH}/${BUILD_TYPE}/* /tmp/oss-${TARGET_ARCH}
 
 ###################################################################################
 # Runtime
@@ -199,7 +266,7 @@ RUN /bin/bash -c "\
 FROM ubuntu:22.04 AS runtime
 
 LABEL maintainer="Brian.doh <brian.doh@obigo.com>"
-LABEL description="Runtime Environment"
+LABEL description="Runtime Image"
 LABEL version="0.0.1"
 
 # Set base environment variables
@@ -207,7 +274,10 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
 
-RUN apt-get update && apt-get upgrade -y
+ENV TZ=Asia/Seoul
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+RUN sed -i 's|http://archive.ubuntu.com|http://mirror.kakao.com|g' /etc/apt/sources.list \
+	&& apt-get update && apt-get upgrade -y
 
 RUN apt-get install -y --no-install-recommends \
     libtinyxml2-9 \
@@ -218,66 +288,128 @@ RUN apt-get install -y --no-install-recommends \
     libyaml-cpp0.7 \
     && rm -rf /var/lib/apt/lists/*
 
-RUN groupadd -r ossuser \
-    && useradd -r -g ossuser -d /oss -s /bin/bash ossuser \
+RUN groupadd -r -g 1000 ossuser \
+    && useradd -r -u 1000 -g ossuser -d /oss -s /bin/bash ossuser \
     && mkdir -p /oss \
+    && mkdir -p /oss/lib \
     && chown -R ossuser:ossuser /oss
 
-WORKDIR /oss
+###################################################################################
+# ROS2 x86_64
+###################################################################################
+# Core
+###################################################################################
+FROM runtime AS runtime-core-x86_64
 
-COPY --from=build-stage --chown=ossuser:ossuser /workspace/output/aarch64/Release/bin /oss
-COPY --from=build-stage /opt/Fast-DDS/install_aarch64/lib/* /oss/lib
+COPY --from=build-stage --chown=ossuser:ossuser /tmp/oss-x86_64/core/bin /oss
+COPY --from=build-stage --chown=ossuser:ossuser /tmp/oss-x86_64/lib /oss/lib
+
+WORKDIR /oss
+USER ossuser
+
+ENV LD_LIBRARY_PATH=/oss/lib
+
+CMD ["./lifecycle_mgr"]
+###################################################################################
+# Extension
+###################################################################################
+FROM runtime AS runtime-ext-x86_64
+
+RUN mkdir -p /oss
+
+COPY --from=build-stage --chown=ossuser:ossuser /tmp/oss-x86_64/extension/ros2/bin /oss
+COPY --from=build-stage --chown=ossuser:ossuser /tmp/oss-x86_64/lib /oss/lib
+
+WORKDIR /oss
+USER ossuser
+
+ENV LD_LIBRARY_PATH=/oss/lib
+
+###################################################################################
+# ROS2 Aarch64
+###################################################################################
+# Core
+###################################################################################
+FROM runtime AS runtime-core-ros2
+
+COPY --from=build-stage --chown=ossuser:ossuser /tmp/oss-aarch64/core/bin /oss
+COPY --from=build-stage --chown=ossuser:ossuser /tmp/oss-aarch64/lib /oss/lib
+
+WORKDIR /oss
+USER ossuser
+
+ENV LD_LIBRARY_PATH=/oss/lib
+
+CMD ["./lifecycle_mgr"]
+
+###################################################################################
+# Extension
+###################################################################################
+FROM runtime AS runtime-ext-ros2
+
+COPY --from=build-stage --chown=ossuser:ossuser /tmp/oss-aarch64/extension/ros2/bin /oss
+COPY --from=build-stage --chown=ossuser:ossuser /tmp/oss-aarch64/lib /oss/lib
+
+WORKDIR /oss
+USER ossuser
+
+ENV LD_LIBRARY_PATH=/oss/lib
 
 ###################################################################################
 # Static Analysis stage
 ###################################################################################
-FROM builder AS static-analysis
+FROM build-stage AS static-analysis
 
-#RUN mkdir -p /workspace/reports \
-#    && find /workspace/service/ \
+#RUN mkdir -p /root/workspace/reports \
+#    && find /root/workspace/service/ \
 #        -not -path "*/unittest/*" \
 #        -name "*.cpp" \
-#        > /workspace/reports/files_to_cppcheck.txt || true
+#        > /root/workspace/reports/files_to_cppcheck.txt || true
 #
 ## Run CppCheck
 #RUN cppcheck --version \
 #    && cppcheck --enable=all \
 #        --xml \
 #        --xml-version=2 \
-#        --output-file=/workspace/reports/cppcheck-result.xml \
+#        --output-file=/root/workspace/reports/cppcheck-result.xml \
 #        --suppress=missingIncludeSystem \
 #        --suppress=unmatchedSuppression \
 #        --suppress=unusedFunction \
 #        --std=c++20 \
-#        --file-list=/workspace/files_to_cppcheck.txt || true
+#        --file-list=/root/workspace/files_to_cppcheck.txt || true
 
 # Run SlocCount
 #RUN mkdir -p /tmp/sloccount-clean \
-#    && find /workspace/service/ \
+#    && find /root/workspace/service/ \
 #        -not -path "*/unittest/*" \
 #        \( -name "*.cpp" -o -name "*.hpp" -o -name "*.h" \) \
 #        -exec cp --parents {} /tmp/sloccount-clean/ \\; 2>/dev/null || true
 #
 #RUN cd /tmp/sloccount-clean \
 #    && sloccount --duplicates --wide --details . \
-#        > /workspace/reports/sloccount-detailed.xml || true \
-#    && sloccount . > /workspace/reports/sloccount-summary.txt || true \
-#    && cd /workspace
+#        > /root/workspace/reports/sloccount-detailed.xml || true \
+#    && sloccount . > /root/workspace/reports/sloccount-summary.txt || true \
+#    && cd /root/workspace
 
 # CppLint
-#RUN find /workspace/service/ \
+#RUN find /root/workspace/service/ \
 #        -not -path "*/unittest/*" \
 #        \( -name "*.cpp" -o -name "*.hpp" -o -name "*.h" \) \
-#        > /workspace/reports/files_to_lintcheck.txt || true
+#        > /root/workspace/reports/files_to_lintcheck.txt || true
 #
-#RUN if [ -f /workspace/files_to_lintcheck.txt ]; then \
-#        cat /workspace/files_to_lintcheck.txt | xargs cpplint \
+#RUN if [ -f /root/workspace/files_to_lintcheck.txt ]; then \
+#        cat /root/workspace/files_to_lintcheck.txt | xargs cpplint \
 #            --filter=-whitespace/tab,-legal/copyright,-build/include_order \
 #            --linelength=120 \
 #            --extensions=cpp,cc,h,hpp \
 #            --output=vs7 \
 #            --counting=detailed \
-#            > /workspace/reports/cpplint-result.txt 2>&1 || true \
+#            > /root/workspace/reports/cpplint-result.txt 2>&1 || true \
 #    else \
-#        echo "No files to check" > /workspace/reports/cpplint-result.txt \
+#        echo "No files to check" > /root/workspace/reports/cpplint-result.txt \
 #    fi
+
+###################################################################################
+# Debug
+###################################################################################
+FROM --platform=$BUILDPLATFORM build-stage AS build-debug
