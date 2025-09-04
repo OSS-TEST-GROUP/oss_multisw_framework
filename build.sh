@@ -108,7 +108,7 @@ do_prepare_build_environment()
 
 do_build_cmd()
 {
-	build_ext=""
+	build_ext="FALSE"
 	if [ "${1}" == "ext" ]; then build_ext="TRUE"; fi
 
 	# Build with cmake
@@ -136,7 +136,9 @@ do_build()
 	do_parse_option $*
 	do_prepare_build_environment
 
-	do_build_cmd "core"
+	if [ "${EXTENSION_PLATFORM}" == "ROS2" ]; then
+		do_build_cmd "core"
+	fi
 	do_build_cmd "ext"
 
 	echo "Finish."

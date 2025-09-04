@@ -2,16 +2,16 @@ cmake_minimum_required(VERSION 3.14)
 project(vehicle_info_manager CXX)
 
 # Set the default installation directory to be inside the build directory
-set(CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/install")
+set(CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/install" CACHE STRING "Default installation directory")
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_BUILD_TYPE Debug)
+set(CMAKE_BUILD_TYPE Release)
 
 # Define project directories
 set(PROJECT_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
 set(PROJECT_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
-set(PROJECT_BUILD_DIR ${CMAKE_CURRENT_SOURCE_DIR}/build)
+#set(PROJECT_BUILD_DIR ${CMAKE_CURRENT_SOURCE_DIR}/build)
 set(PROJECT_TEST_DIR ${CMAKE_CURRENT_SOURCE_DIR}/tests)
 set(PROJECT_CONFIG_DIR ${CMAKE_CURRENT_SOURCE_DIR}/config)
 set(PROJECT_PROTO_DIR ${CMAKE_CURRENT_SOURCE_DIR}/proto)
@@ -79,7 +79,9 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR}) # For generated headers from pr
 #set(PROTO_FILE ${PROJECT_PROTO_DIR}/VISSv3.0.proto)
 
 # Find the gRPC C++ plugin
-find_program(GRPC_CPP_PLUGIN_EXECUTABLE NAMES grpc_cpp_plugin)
+find_program(GRPC_CPP_PLUGIN_EXECUTABLE NAMES grpc_cpp_plugin
+	PATHS /usr/local/bin /usr/bin
+	NO_CMAKE_FIND_ROOT_PATH)
 if(NOT GRPC_CPP_PLUGIN_EXECUTABLE)
     message(FATAL_ERROR "grpc_cpp_plugin not found.")
 endif()
@@ -271,9 +273,9 @@ target_link_libraries(vehicle_info_manager_app
 )
 
 # Configure output directories
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BUILD_DIR}/bin)
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BUILD_DIR}/lib)
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_BUILD_DIR}/lib)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "out/bin")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "out/lib")
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "out/lib")
 
 # Add test client executable
 add_executable(grpc_client_test
@@ -349,7 +351,9 @@ install(DIRECTORY
 )
 
 # --- Unit Testing Setup ---
-enable_testing()
+if (NOT CMAKE_CROSSCOMPILING)
+	enable_testing()
+endif()
 
 add_executable(unit_test
     unit_test/vss_tree_test.cpp
@@ -376,4 +380,6 @@ target_link_libraries(unit_test
 )
 
 include(GoogleTest)
-gtest_discover_tests(unit_test)
+if (NOT CMAKE_CROSSCOMPILING)
+	gtest_discover_tests(unit_test)
+endif()
