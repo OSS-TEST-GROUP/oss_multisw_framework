@@ -8,7 +8,7 @@
 #include "common/IBaseService.hpp"
 #include "common/DdsAbstraction.hpp"
 #include "OtacStatusStore.hpp"
-#include "OtamClientServiceMsgPubSubTypes.hpp"
+#include "ota_mgr/OtamClientServiceMsgPubSubTypes.hpp"
 #include <fastdds/dds/domain/DomainParticipant.hpp>
 #include <fastdds/dds/publisher/Publisher.hpp>
 #include <fastdds/dds/subscriber/Subscriber.hpp>
@@ -28,9 +28,9 @@ namespace ota_client::agl {
             void OnAppUpdateStatus(const OtaManager::NotifyAppUpdateStatus& msg);
 
         private:
-            eprosima::fastdds::dds::DomainParticipant* participant_;
-            eprosima::fastdds::dds::Publisher* publisher_;
-            eprosima::fastdds::dds::Subscriber* subscriber_;
+            eprosima::fastdds::dds::DomainParticipant* participant_{nullptr};
+            eprosima::fastdds::dds::Publisher* publisher_{nullptr};
+            eprosima::fastdds::dds::Subscriber* subscriber_{nullptr};
 
             std::unique_ptr<DdsAbstraction> registration_dds_;
             std::unique_ptr<DdsAbstraction> registration_response_dds_;

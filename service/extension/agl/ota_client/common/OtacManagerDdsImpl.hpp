@@ -29,6 +29,9 @@ namespace ota_client::agl {
             bool Write(std::shared_ptr<void> message) override;
             // void Read(std::shared_ptr<void> message) override;
             void SetOnMessage(OnMessageCB cb);
+            void Close();
+
+            ~OtacManagerDdsImpl();
 
         private:
             class ReaderListener : public eprosima::fastdds::dds::DataReaderListener {

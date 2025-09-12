@@ -19,6 +19,7 @@ namespace ota_client::agl {
             virtual bool Write(std::shared_ptr<void> message) = 0;
             // virtual void Read(std::shared_ptr<void> message) = 0;
             virtual void SetOnMessage(OnMessageCB cb) = 0;
+            virtual ~DdsAbstraction() = default;
     };
 };
 

@@ -1,19 +1,36 @@
 #include "OtacStatusStore.hpp"
 
-namespace ota_client::agl {
+namespace ota_client::agl
+{
 
-    bool OtacStatusStore::Initialize() {
+    bool OtacStatusStore::Initialize()
+    {
         app_status.emplace("adsw_monitor", "installed");
         return true;
     }
 
-    std::string OtacStatusStore::GetStatus(std::string app_name) {
-        return app_status[app_name];
+    std::optional<std::string> OtacStatusStore::GetStatus(const std::string& app_name) const
+    {
+        auto it = app_status.find(app_name);
+        if (it == app_status.end()) return std::nullopt;
+        return it->second;
     }
 
-    bool OtacStatusStore::UpdateStatus(std::string app_name, std::string status) {
+    std::vector<std::string> OtacStatusStore::GetAppNameList() const
+    {
+        std::vector<std::string> keys;
+        keys.reserve(app_status.size());
+
+        for (const auto &[k, _] : app_status) keys.push_back(k);
+
+        return keys;
+    }
+
+    bool OtacStatusStore::UpdateStatus(const std::string app_name, const std::string status)
+    {
         app_status[app_name] = status;
-        if (app_status.find(app_name)->second == status) {
+        if (app_status.find(app_name)->second == status)
+        {
             return true;
         }
         return false;

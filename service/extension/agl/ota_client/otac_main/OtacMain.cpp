@@ -23,8 +23,7 @@ namespace ota_client::agl {
 
     void OtacMain::Start() {
 
-        std::vector<std::string> app_list;
-        app_list.push_back("adsw_monitor");
+        std::vector<std::string> app_list = status_store_->GetAppNameList();
 
         std::cout << "OtacMain::Start\n";
         if(manager_service_->Start()) {

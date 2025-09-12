@@ -3,7 +3,6 @@
 
 #include <iostream>
 #include <memory>
-#include <unordered_map>
 
 #include "OtacManagerService.hpp"
 #include "OtacStatusStore.hpp"

@@ -15,7 +15,7 @@ namespace ota_client::agl
     bool OtacManagerService::Initialize()
     {
 
-        DomainParticipantQos participant_qos;
+        DomainParticipantQos participant_qos = PARTICIPANT_QOS_DEFAULT;
         participant_qos.name("ota client participant");
         participant_ = DomainParticipantFactory::get_instance()->create_participant(0, participant_qos);
 
@@ -92,27 +92,41 @@ namespace ota_client::agl
 
     void OtacManagerService::Stop()
     {
-        if (participant_ && publisher_) participant_->delete_publisher(publisher_);
-        if (participant_ && subscriber_) participant_->delete_subscriber(subscriber_);
-        if (participant_) DomainParticipantFactory::get_instance()->delete_participant(participant_);
+        if (participant_ && publisher_)
+            participant_->delete_publisher(publisher_);
+        if (participant_ && subscriber_)
+            participant_->delete_subscriber(subscriber_);
+        if (participant_)
+            DomainParticipantFactory::get_instance()->delete_participant(participant_);
     }
 
     bool OtacManagerService::PublishClientRegistration(std::string client_name, std::vector<std::string> app_list)
     {
 
-        auto reg = std::make_shared<SetOtaClientRegisteration>();
+        // auto reg = std::make_shared<SetOtaClientRegisteration>();
 
+        // reg->client_name(std::move(client_name));
+        // reg->app_list().assign(app_list.begin(), app_list.end());
+
+        // if (registration_dds_->Write(reg))
+        // {
+        //     return true;
+        // }
+        // else
+        // {
+        //     return false;
+        // }
+
+        auto reg = std::make_shared<OtaManager::SetOtaClientRegisteration>();
         reg->client_name(std::move(client_name));
-        reg->app_list().assign(app_list.begin(), app_list.end());
 
-        if (registration_dds_->Write(reg))
-        {
-            return true;
-        }
-        else
-        {
-            return false;
-        }
+        auto &seq = reg->app_list();
+        seq.clear();
+        seq.reserve(app_list.size());
+        for (const auto &s : app_list)
+            seq.push_back(s);
+
+        return registration_dds_->Write(reg);
     }
 
     void OtacManagerService::OnClientRegisterationResponse(const SetOtaClientRegisterationResponse &msg)
@@ -122,17 +136,20 @@ namespace ota_client::agl
 
     void OtacManagerService::OnManagerReady(const NotifyOtaManagerReady &msg)
     {
-        std::vector<std::string> app_list;
+        std::fprintf(stderr, "[SVC] OnManagerReady called\n");
+
+        std::vector<std::string> app_list = status_store_->GetAppNameList();
 
         std::cout << "Ota Manager is ready!\nCall PublishClientRegistration()\n";
+
         if (PublishClientRegistration("agl_ota_client", app_list))
-            std::cout << "Call Publish success.\n";
+            std::cout << "Successfully Call Publish.\n";
     }
 
     void OtacManagerService::OnAppUpdateStatus(const NotifyAppUpdateStatus &msg)
     {
-        std::cout << "App Update status update!!\n";
         status_store_->UpdateStatus(msg.app_name(), msg.status());
+        std::cout << "App Update Status Update complete.\n";
     }
 
 }
