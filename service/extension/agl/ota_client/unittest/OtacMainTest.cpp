@@ -21,12 +21,9 @@ using ::testing::DoAll;
 using ::testing::Invoke;
 using ::testing::SaveArg;
 
-using ota_client::agl::OtacMain;
-using ota_client::agl::OtacManagerService;
-using ota_client::agl::OtacStatusStore;
-using ota_client::agl::DdsAbstraction;
 using eprosima::fastdds::dds::SampleInfo;
 using OtaManager::SetOtaClientRegisteration;
+using namespace ota_client::agl;
 
 // Stop() 호출 여부를 보기 위한 Spy (다른 테스트에는 사용 안 함)
 class SpyManagerService : public OtacManagerService {
