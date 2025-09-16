@@ -49,7 +49,7 @@ install ( TARGETS ${PROJECT_NAME}
     RUNTIME DESTINATION bin
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
-    )
+)
 
 option(BUILD_UNITTEST "Build unit tests" OFF)
 if (BUILD_UNITTEST)

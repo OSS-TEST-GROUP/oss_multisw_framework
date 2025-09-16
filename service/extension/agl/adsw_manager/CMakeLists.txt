@@ -61,11 +61,11 @@ if (BUILD_UNITTEST)
   add_subdirectory(unittest)
 endif()
 
-# install(TARGET ${PROJECT_NAME}
-# 	RUNTIME DESTINATION bin
-# 	LIBRARY DESTINATION lib
-# 	ARCHIVE DESTINATION lib
-# )
+install(TARGET ${PROJECT_NAME}
+	RUNTIME DESTINATION bin
+	LIBRARY DESTINATION lib
+	ARCHIVE DESTINATION lib
+)
 
 # install(DIRECTORY
 # 	${CMAKE_SOURCE_DIR}/idl/dds/common

@@ -11,7 +11,7 @@
 #undef private
 #undef protected
 
-#include "OtamClientServiceMsg.hpp"
+#include "ota_mgr/OtamClientServiceMsg.hpp"
 
 #include <fastdds/dds/subscriber/SampleInfo.hpp>
 

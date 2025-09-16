@@ -13,7 +13,7 @@
 #include <fastdds/dds/topic/TypeSupport.hpp>
 
 #include "OtacManagerDdsImpl.hpp"
-#include "nooo/OtamClientServiceMsgPubSubTypes.hpp"
+#include "ota_mgr/OtamClientServiceMsgPubSubTypes.hpp"
 
 using namespace eprosima::fastdds::dds;
 using namespace std::chrono_literals;
