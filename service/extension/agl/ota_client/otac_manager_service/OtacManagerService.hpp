@@ -23,7 +23,7 @@ namespace ota_client::agl {
             bool Start() override;
             void Stop() override;
             bool PublishClientRegistration(std::string client_name, std::vector<std::string> app_list);
-            void OnClientRegisterationResponse(const OtaManager::SetOtaClientRegisterationResponse& msg);
+            void OnClientRegistrationResponse(const OtaManager::SetOtaClientRegistrationResponse& msg);
             void OnManagerReady(const OtaManager::NotifyOtaManagerReady& msg);
             void OnAppUpdateStatus(const OtaManager::NotifyAppUpdateStatus& msg);
 

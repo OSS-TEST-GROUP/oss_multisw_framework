@@ -62,18 +62,18 @@ protected:
 TEST_F(DdsEnv, LoopbackSingleInstanceInvokesCallback) {
     using namespace OtaManager;
 
-    TypeSupport ts(new SetOtaClientRegisterationPubSubType());
+    TypeSupport ts(new SetOtaClientRegistrationPubSubType());
 
     OtacManagerDdsImpl dds(participant_, publisher_, subscriber_, ts);
-    ASSERT_TRUE(dds.Create("ut/otac/SetOtaClientRegisteration", /*writer=*/true, /*reader=*/true));
+    ASSERT_TRUE(dds.Create("ut/otac/SetOtaClientRegistration", /*writer=*/true, /*reader=*/true));
 
     std::mutex m;
     std::condition_variable cv;
     bool got = false;
-    SetOtaClientRegisteration received;
+    SetOtaClientRegistration received;
 
     dds.SetOnMessage([&](std::shared_ptr<void> raw, const SampleInfo&) {
-        auto* msg = static_cast<SetOtaClientRegisteration*>(raw.get());
+        auto* msg = static_cast<SetOtaClientRegistration*>(raw.get());
         {
             std::lock_guard<std::mutex> lk(m);
             received = *msg;
@@ -82,7 +82,7 @@ TEST_F(DdsEnv, LoopbackSingleInstanceInvokesCallback) {
         cv.notify_one();
     });
 
-    auto to_send = std::make_shared<SetOtaClientRegisteration>();
+    auto to_send = std::make_shared<SetOtaClientRegistration>();
     to_send->client_name("tester");
     to_send->app_list().push_back("app1");
     to_send->app_list().push_back("app2");
@@ -105,23 +105,23 @@ TEST_F(DdsEnv, LoopbackSingleInstanceInvokesCallback) {
 TEST_F(DdsEnv, WriterOnlyToReaderOnlyDeliversMessage) {
     using namespace OtaManager;
 
-    const char* kTopic = "ut/otac/SetOtaClientRegisteration";
+    const char* kTopic = "ut/otac/SetOtaClientRegistration";
 
-    TypeSupport ts_w(new SetOtaClientRegisterationPubSubType());
+    TypeSupport ts_w(new SetOtaClientRegistrationPubSubType());
     OtacManagerDdsImpl writer(participant_, publisher_, subscriber_, ts_w);
     ASSERT_TRUE(writer.Create(kTopic, /*writer=*/true, /*reader=*/false));
 
-    TypeSupport ts_r(new SetOtaClientRegisterationPubSubType());
+    TypeSupport ts_r(new SetOtaClientRegistrationPubSubType());
     OtacManagerDdsImpl reader(participant_, publisher_, subscriber_, ts_r);
     ASSERT_TRUE(reader.Create(kTopic, /*writer=*/false, /*reader=*/true));
 
     std::mutex m;
     std::condition_variable cv;
     bool got = false;
-    SetOtaClientRegisteration received;
+    SetOtaClientRegistration received;
 
     reader.SetOnMessage([&](std::shared_ptr<void> raw, const SampleInfo&) {
-        auto* msg = static_cast<SetOtaClientRegisteration*>(raw.get());
+        auto* msg = static_cast<SetOtaClientRegistration*>(raw.get());
         {
             std::lock_guard<std::mutex> lk(m);
             received = *msg;
@@ -130,7 +130,7 @@ TEST_F(DdsEnv, WriterOnlyToReaderOnlyDeliversMessage) {
         cv.notify_one();
     });
 
-    auto to_send = std::make_shared<SetOtaClientRegisteration>();
+    auto to_send = std::make_shared<SetOtaClientRegistration>();
     to_send->client_name("writer_only");
     to_send->app_list().push_back("alpha");
 

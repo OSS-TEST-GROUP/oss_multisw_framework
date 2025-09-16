@@ -22,7 +22,7 @@ using ::testing::Invoke;
 using ::testing::SaveArg;
 
 using eprosima::fastdds::dds::SampleInfo;
-using OtaManager::SetOtaClientRegisteration;
+using OtaManager::SetOtaClientRegistration;
 using namespace ota_client::agl;
 
 // Stop() 호출 여부를 보기 위한 Spy (다른 테스트에는 사용 안 함)
@@ -89,8 +89,8 @@ TEST_F(OtacMainTest, Start_PublishesTwice_WhenStartOkAndFirstPublishOk) {
         .WillOnce(Return(apps));
 
     // OtacManagerService::Start() 경로가 true가 되도록 Create 4회 모두 성공
-    EXPECT_CALL(*reg_,       Create("/mmf/otamanager/otaclient_service/SetOtaClientRegisteration",        true,  false)).WillOnce(Return(true));
-    EXPECT_CALL(*reg_resp_,  Create("/mmf/otamanager/otaclient_service/SetOtaClientRegisterationResponse", false, true )).WillOnce(Return(true));
+    EXPECT_CALL(*reg_,       Create("/mmf/otamanager/otaclient_service/SetOtaClientRegistration",        true,  false)).WillOnce(Return(true));
+    EXPECT_CALL(*reg_resp_,  Create("/mmf/otamanager/otaclient_service/SetOtaClientRegistrationResponse", false, true )).WillOnce(Return(true));
     EXPECT_CALL(*mgr_ready_, Create("/mmf/otamanager/otaclient_service/NotifyOtaManagerReady",             false, true )).WillOnce(Return(true));
     EXPECT_CALL(*upd_,       Create("/mmf/otamanager/otaclient_service/NotifyAppUpdateStatus",            false, true )).WillOnce(Return(true));
 
@@ -107,7 +107,7 @@ TEST_F(OtacMainTest, Start_PublishesTwice_WhenStartOkAndFirstPublishOk) {
 
     ASSERT_EQ(writes.size(), 2u);
     for (auto& w : writes) {
-        auto msg = std::static_pointer_cast<SetOtaClientRegisteration>(w);
+        auto msg = std::static_pointer_cast<SetOtaClientRegistration>(w);
         ASSERT_TRUE(msg);
         EXPECT_EQ(msg->client_name(), "agl_ota_client");
         ASSERT_EQ(msg->app_list().size(), apps.size());
@@ -125,7 +125,7 @@ TEST_F(OtacMainTest, Start_WhenManagerStartFails_NoPublish) {
         .WillOnce(Return(apps));
 
     // 첫 Create에서 실패하도록 하여 Start() == false
-    EXPECT_CALL(*reg_, Create("/mmf/otamanager/otaclient_service/SetOtaClientRegisteration", true, false))
+    EXPECT_CALL(*reg_, Create("/mmf/otamanager/otaclient_service/SetOtaClientRegistration", true, false))
         .WillOnce(Return(false));
     // Publish는 불리지 않아야 함
     EXPECT_CALL(*reg_, Write(_)).Times(0);
@@ -140,8 +140,8 @@ TEST_F(OtacMainTest, Start_WhenFirstPublishFails_NoSecondPublish) {
         .Times(1)
         .WillOnce(Return(apps));
 
-    EXPECT_CALL(*reg_,       Create("/mmf/otamanager/otaclient_service/SetOtaClientRegisteration",        true,  false)).WillOnce(Return(true));
-    EXPECT_CALL(*reg_resp_,  Create("/mmf/otamanager/otaclient_service/SetOtaClientRegisterationResponse", false, true )).WillOnce(Return(true));
+    EXPECT_CALL(*reg_,       Create("/mmf/otamanager/otaclient_service/SetOtaClientRegistration",        true,  false)).WillOnce(Return(true));
+    EXPECT_CALL(*reg_resp_,  Create("/mmf/otamanager/otaclient_service/SetOtaClientRegistrationResponse", false, true )).WillOnce(Return(true));
     EXPECT_CALL(*mgr_ready_, Create("/mmf/otamanager/otaclient_service/NotifyOtaManagerReady",             false, true )).WillOnce(Return(true));
     EXPECT_CALL(*upd_,       Create("/mmf/otamanager/otaclient_service/NotifyAppUpdateStatus",            false, true )).WillOnce(Return(true));
 
