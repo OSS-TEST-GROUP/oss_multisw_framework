@@ -35,15 +35,15 @@ namespace ota_client::agl
         std::cout << "publisher and subscriber create complete\n";
 
         registration_dds_ = std::make_unique<OtacManagerDdsImpl>(participant_, publisher_, subscriber_,
-                                                                 TypeSupport(new SetOtaClientRegisterationPubSubType()));
+                                                                 TypeSupport(new SetOtaClientRegistrationPubSubType()));
 
         std::cout << "otac manager ddsimpl 1 create\n";
         registration_response_dds_ = std::make_unique<OtacManagerDdsImpl>(participant_, publisher_, subscriber_,
-                                                                          TypeSupport(new SetOtaClientRegisterationResponsePubSubType()));
+                                                                          TypeSupport(new SetOtaClientRegistrationResponsePubSubType()));
         registration_response_dds_->SetOnMessage([this](std::shared_ptr<void> raw, const SampleInfo &)
                                                  {
-            const auto& msg = *static_cast<SetOtaClientRegisterationResponse*>(raw.get());
-            this->OnClientRegisterationResponse(msg); });
+            const auto& msg = *static_cast<SetOtaClientRegistrationResponse*>(raw.get());
+            this->OnClientRegistrationResponse(msg); });
 
         manager_ready_dds_ = std::make_unique<OtacManagerDdsImpl>(participant_, publisher_, subscriber_,
                                                                   TypeSupport(new NotifyOtaManagerReadyPubSubType()));
@@ -59,8 +59,6 @@ namespace ota_client::agl
             const auto& msg = *static_cast<NotifyAppUpdateStatus*>(raw.get());
             this->OnAppUpdateStatus(msg); });
 
-        std::cout << "hello~~~~\n";
-
         return true;
     }
 
@@ -69,11 +67,11 @@ namespace ota_client::agl
 
         std::cout << "It is OtacManagerService::Start.\n";
 
-        if (!registration_dds_->Create("/mmf/otamanager/otaclient_service/SetOtaClientRegisteration", true, false))
+        if (!registration_dds_->Create("/mmf/otamanager/otaclient_service/SetOtaClientRegistration", true, false))
         {
             return false;
         }
-        if (!registration_response_dds_->Create("/mmf/otamanager/otaclient_service/SetOtaClientRegisterationResponse", false, true))
+        if (!registration_response_dds_->Create("/mmf/otamanager/otaclient_service/SetOtaClientRegistrationResponse", false, true))
         {
             return false;
         }
@@ -103,7 +101,7 @@ namespace ota_client::agl
     bool OtacManagerService::PublishClientRegistration(std::string client_name, std::vector<std::string> app_list)
     {
 
-        // auto reg = std::make_shared<SetOtaClientRegisteration>();
+        // auto reg = std::make_shared<SetOtaClientRegistration>();
 
         // reg->client_name(std::move(client_name));
         // reg->app_list().assign(app_list.begin(), app_list.end());
@@ -117,7 +115,7 @@ namespace ota_client::agl
         //     return false;
         // }
 
-        auto reg = std::make_shared<OtaManager::SetOtaClientRegisteration>();
+        auto reg = std::make_shared<OtaManager::SetOtaClientRegistration>();
         reg->client_name(std::move(client_name));
 
         auto &seq = reg->app_list();
@@ -129,7 +127,7 @@ namespace ota_client::agl
         return registration_dds_->Write(reg);
     }
 
-    void OtacManagerService::OnClientRegisterationResponse(const SetOtaClientRegisterationResponse &msg)
+    void OtacManagerService::OnClientRegistrationResponse(const SetOtaClientRegistrationResponse &msg)
     {
         std::cout << "Client id: " << msg.client_id() << "/ result: " << static_cast<std::int32_t>(msg.ret_code()) << std::endl;
     }

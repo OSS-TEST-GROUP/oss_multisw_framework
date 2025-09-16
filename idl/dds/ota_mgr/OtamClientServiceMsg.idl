@@ -1,0 +1,41 @@
+#include "common/ReturnValue.idl"
+
+/** 
+[Topic] “/mmf/otamanager/otaclient_service/SetOtaClientRegistration”
+**/
+module OtaManager {
+    struct SetOtaClientRegistration {
+        string client_name;
+        sequence<string> app_list;
+    };
+};
+
+/** 
+[Topic] “/mmf/otamanager/otaclient_service/SetOtaClientRegistrationResponse
+**/
+module OtaManager {
+    struct SetOtaClientRegistrationResponse {
+        long client_id;
+        ReturnValue ret_code;
+    };
+};
+
+/** 
+[Topic] “/mmf/otamanager/otaclient_service/NotifyOtaManagerReady”
+**/
+module OtaManager {
+    struct NotifyOtaManagerReady {
+    };
+};
+
+/** 
+[Topic] “/mmf/otamanager/otaclient_service/NotifyAppUpdateStatus”
+**/
+
+module OtaManager {
+    struct NotifyAppUpdateStatus {
+        @key long client_id;
+        string app_name;
+        string status;
+    };
+};

@@ -21,7 +21,7 @@ using ::testing::Return;
 using ::testing::SaveArg;
 
 using namespace ros2::ota_client;
-using OtaManager::SetOtaClientRegisteration;
+using OtaManager::SetOtaClientRegistration;
 using eprosima::fastdds::dds::SampleInfo;
 
 class OtacManagerServiceTest : public ::testing::Test {
@@ -43,11 +43,11 @@ protected:
 };
 
 TEST_F(OtacManagerServiceTest, Start_CallsCreateWithExpectedTopicsAndFlags) {
-    EXPECT_CALL(*reg_, Create("/mmf/otamanager/otaclient_service/SetOtaClientRegisteration",
+    EXPECT_CALL(*reg_, Create("/mmf/otamanager/otaclient_service/SetOtaClientRegistration",
                               /*is_writer*/true, /*is_reader*/false))
         .WillOnce(Return(true));
 
-    EXPECT_CALL(*reg_resp_, Create("/mmf/otamanager/otaclient_service/SetOtaClientRegisterationResponse",
+    EXPECT_CALL(*reg_resp_, Create("/mmf/otamanager/otaclient_service/SetOtaClientRegistrationResponse",
                                    /*is_writer*/false, /*is_reader*/true))
         .WillOnce(Return(true));
 
@@ -73,7 +73,7 @@ TEST_F(OtacManagerServiceTest, PublishClientRegistration_BuildsMessageAndWrites)
     const bool ok = svc_.PublishClientRegistration(client, apps);
     EXPECT_TRUE(ok);
 
-    auto reg_msg = std::static_pointer_cast<SetOtaClientRegisteration>(captured);
+    auto reg_msg = std::static_pointer_cast<SetOtaClientRegistration>(captured);
     ASSERT_TRUE(reg_msg != nullptr);
 
     EXPECT_EQ(reg_msg->client_name(), client);
@@ -106,7 +106,7 @@ TEST_F(OtacManagerServiceTest, OnManagerReady_GetsAppListAndPublishesRegistratio
     OtaManager::NotifyOtaManagerReady msg;
     svc_.OnManagerReady(msg);
 
-    auto reg_msg = std::static_pointer_cast<OtaManager::SetOtaClientRegisteration>(captured);
+    auto reg_msg = std::static_pointer_cast<OtaManager::SetOtaClientRegistration>(captured);
     ASSERT_TRUE(reg_msg);
     EXPECT_EQ(reg_msg->client_name(), "ros2_ota_client");
     ASSERT_EQ(reg_msg->app_list().size(), apps.size());
@@ -129,12 +129,12 @@ TEST_F(OtacManagerServiceTest, OnAppUpdateStatus_DelegatesToStoreUpdateStatus) {
     svc_.OnAppUpdateStatus(msg);
 }
 
-TEST_F(OtacManagerServiceTest, OnClientRegisterationResponse_PrintsClientIdAndResult) {
-    OtaManager::SetOtaClientRegisterationResponse resp;
+TEST_F(OtacManagerServiceTest, OnClientRegistrationResponse_PrintsClientIdAndResult) {
+    OtaManager::SetOtaClientRegistrationResponse resp;
     resp.client_id(1234);
 
     testing::internal::CaptureStdout();
-    svc_.OnClientRegisterationResponse(resp);
+    svc_.OnClientRegistrationResponse(resp);
     std::string out = testing::internal::GetCapturedStdout();
 
     EXPECT_NE(out.find("Client id: 1234"), std::string::npos);
