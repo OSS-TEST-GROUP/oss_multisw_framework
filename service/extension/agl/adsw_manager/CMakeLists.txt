@@ -61,7 +61,7 @@ if (BUILD_UNITTEST)
   add_subdirectory(unittest)
 endif()
 
-install(TARGET ${PROJECT_NAME}
+install(TARGETS ${PROJECT_NAME}
 	RUNTIME DESTINATION bin
 	LIBRARY DESTINATION lib
 	ARCHIVE DESTINATION lib
