@@ -1,6 +1,6 @@
 #include "OtacManagerService.hpp"
 #include "common/OtacManagerDdsImpl.hpp"
-#include "OtamClientServiceMsg.hpp"
+#include "ota_mgr/OtamClientServiceMsg.hpp"
 
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp>
 

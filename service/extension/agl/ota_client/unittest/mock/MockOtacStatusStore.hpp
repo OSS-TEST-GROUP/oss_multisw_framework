@@ -3,7 +3,7 @@
 
 #include <gmock/gmock.h>
 #include "OtacStatusStore.hpp"
-#include "OtamClientServiceMsg.hpp"
+#include "ota_mgr/OtamClientServiceMsg.hpp"
 #include <utility>  // std::declval
 
 class MockOtacStatusStore : public ota_client::agl::OtacStatusStore {

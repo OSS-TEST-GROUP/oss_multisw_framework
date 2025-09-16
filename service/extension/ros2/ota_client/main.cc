@@ -2,6 +2,8 @@
 
 #include "otac_main/OtacMain.hpp"
 
+using namespace ros2::ota_client;
+
 int main(int argc, char* argv[]) {
 	
 	OtacMain otac_main_;

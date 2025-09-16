@@ -12,7 +12,7 @@
 #include "mock/MockDdsAbstraction.hpp"
 #include "mock/MockOtacStatusStore.hpp"
 
-#include "OtamClientServiceMsg.hpp"
+#include "ota_mgr/OtamClientServiceMsg.hpp"
 #include <fastdds/dds/subscriber/SampleInfo.hpp>
 
 using ::testing::_;
