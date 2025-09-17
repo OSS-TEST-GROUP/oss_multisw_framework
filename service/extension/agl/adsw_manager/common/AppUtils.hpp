@@ -4,7 +4,7 @@
 #include <string>
 #include <ostream>
 
-#include "LifecycleCommon.hpp"
+#include "lifecycle/LifecycleCommon.hpp"
 
 namespace adsw_manager::agl {
 

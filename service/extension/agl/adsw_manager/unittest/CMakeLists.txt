@@ -29,6 +29,12 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 
 target_include_directories(${PROJECT_NAME} PRIVATE ../service_monitor mock ${GENERATED_IDL_DIR})
 
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+  UNIT_TEST
+  MOCK_SYSCTL_DIR="${CMAKE_CURRENT_SOURCE_DIR}/unittest/helpers"
+  MOCK_SYSCTL_LOG="${CMAKE_CURRENT_BINARY_DIR}/sysctl.log"
+)
+
 install ( TARGETS ${PROJECT_NAME}
     RUNTIME DESTINATION bin/unittest/agl/adsw_manager
     LIBRARY DESTINATION lib
