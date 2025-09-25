@@ -45,7 +45,7 @@ config_middleware:
     active : true    
   - code : 12
     name : vehicle_info_mgr
-    exepath : "./vehicle_info_mgr"
+    exepath : "./vehicle_info_manager_app"
     args :
       - arg_name : "arg1"
         description : ""
