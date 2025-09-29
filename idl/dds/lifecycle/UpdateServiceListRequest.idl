@@ -11,6 +11,7 @@ module lifecyclemgr {
 
     /* TopicName - mmf/lifecyclemgr/UpdateServiceListRequest */
     struct UpdateServiceListRequest {
+        OsType os_type;
         sequence<Service> service_list;
     };
 
