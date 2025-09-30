@@ -8,10 +8,10 @@ namespace lifecycle_manager {
 
 Service::Service() {}
 
-Service::Service(const std::string& name, const ServiceType type, const RecoveryPolicy policy, const bool enabled)
+Service::Service(const std::string& name, const ServiceType type, const RecoveryPolicy policy, const bool enabled, const OsType os)
     : name_(name), service_type_(type), recovery_policy_(policy), is_enabled_(enabled),
     service_mode_(ServiceMode::NORMAL), service_state_(ServiceState::NOT_RUNNING), 
-    service_state_last_(ServiceState::NOT_RUNNING), recovered_count_(0)
+    service_state_last_(ServiceState::NOT_RUNNING), recovered_count_(0), os_type_(os)
 {
 
 }
@@ -80,6 +80,10 @@ void Service::Print(){
                         << ", " << Helper::RecoveryStr(recovery_policy_) 
                         << ", " << static_cast<bool>(is_enabled_) << std::endl;
 
+}
+
+OsType Service::GetOsType(){
+    return os_type_;
 }
 
 } // namespace lifecycle_manager

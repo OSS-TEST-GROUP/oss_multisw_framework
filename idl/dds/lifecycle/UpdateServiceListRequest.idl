@@ -7,11 +7,11 @@ module lifecyclemgr {
         ServiceType service_type;
         RecoveryPolicy recovery_policy;
         boolean is_enabled;
+        OsType os_type;
     };
 
     /* TopicName - mmf/lifecyclemgr/UpdateServiceListRequest */
     struct UpdateServiceListRequest {
-        OsType os_type;
         sequence<Service> service_list;
     };
 

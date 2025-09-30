@@ -32,7 +32,8 @@ bool ServiceRegistry::UpdateServiceList(UpdateServiceListRequest* update){
             service = std::make_shared<Service>(svc->name(), 
                                                 TypeConvert::ToServiceType(svc->service_type()), 
                                                 TypeConvert::ToRecoveryPolicy(svc->recovery_policy()), 
-                                                svc->is_enabled());
+                                                svc->is_enabled(),
+                                                TypeConvert::ToOsType(svc->os_type()));
             // New Service Add to Registry
             AddService(service, group);
         }

@@ -7,6 +7,7 @@
 #include "ServiceState.hpp"
 #include "ServiceType.hpp"
 #include "RecoveryPolicy.hpp"
+#include "OsType.hpp"
 
 namespace ros2 {
 namespace adsw_manager {

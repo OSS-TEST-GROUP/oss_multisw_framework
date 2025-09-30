@@ -243,34 +243,36 @@ bool ServiceRegistry::ProcessGetServiceStateRequest(lifecyclemgr::GetServiceStat
         LOG_ERROR("GetServiceStateRequest is null");
         return false;
     }
+    if (TypeConvert::ToOsType(message->os_type()) == OsType::ROS2) {
+        std::shared_ptr<DDSTransmitter> transmitter = ADSWManager::Get()->GetTransmitter();
 
-    std::shared_ptr<DDSTransmitter> transmitter = ADSWManager::Get()->GetTransmitter();
+        std::vector<std::string> service_list = message->service_list();
+        bool is_all_service = message->is_all_service(); 
 
-    std::vector<std::string> service_list = message->service_list();
-    bool is_all_service = message->is_all_service(); 
+        LOG_DEBUG("GetServiceStateRequest: " << service_list.size() << " all ?: " << is_all_service);
 
-    LOG_DEBUG("GetServiceStateRequest: " << service_list.size() << " all ?: " << is_all_service);
-
-    get_service_response_.service_list().clear();
-    get_service_response_.service_state_list().clear();
+        get_service_response_.service_list().clear();
+        get_service_response_.service_state_list().clear();
     
-    for (const auto& service : service_list) {
+        for (const auto& service : service_list) {
     
-        std::shared_ptr<Service> service_ptr = GetService(service);
-        if (service_ptr != nullptr) {
+            std::shared_ptr<Service> service_ptr = GetService(service);
+            if (service_ptr != nullptr) {
             
-            ServiceState state = service_ptr->GetServiceState();
+                ServiceState state = service_ptr->GetServiceState();
 
-            get_service_response_.service_list().push_back(service);
-            get_service_response_.service_state_list().push_back(TypeConvert::ToServiceState(state));
-            LOG_DEBUG("Service: " << service << " State: " << static_cast<int>(state));
-        } else {
-            LOG_ERROR("Service not found: " << service);
+                get_service_response_.service_list().push_back(service);
+                get_service_response_.service_state_list().push_back(TypeConvert::ToServiceState(state));
+                LOG_DEBUG("Service: " << service << " State: " << static_cast<int>(state));
+            } else {
+                LOG_ERROR("Service not found: " << service);
+            }
         }
-    }
 
-    return transmitter->SendMessage(MessageType::GET_SERVICE_STATE_RESPONSE, 
-                                    reinterpret_cast<void*>(&get_service_response_));
+        return transmitter->SendMessage(MessageType::GET_SERVICE_STATE_RESPONSE, 
+                                        reinterpret_cast<void*>(&get_service_response_));
+    }
+    return true;
 
 }
 
@@ -293,6 +295,7 @@ bool ServiceRegistry::ProcessUpdateServiceListRequest() {
             service_info.service_type() = TypeConvert::ToServiceType(service_ptr->GetServiceType());
             service_info.recovery_policy() = TypeConvert::ToRecoveryPolicy(service_ptr->GetRecoveryPolicy());
             service_info.is_enabled() = service_ptr->IsEnabled();
+            service_info.os_type() = TypeConvert::ToOsType(OsType::ROS2);
             message.service_list().push_back(service_info);
         }   
     }

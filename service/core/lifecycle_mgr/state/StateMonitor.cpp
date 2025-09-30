@@ -199,7 +199,17 @@ void StateMonitor::RequestGetState(){
             for (auto& group : groups){
                 std::vector<std::string> list = registry->GetServicesNameByGroup(group);                
                 get_request_.service_list().clear();
-                
+
+                const std::string& name = list.front();
+                auto svc = registry->GetService(name);
+                if (!svc) {
+                    // 해당 서비스 없음
+                    LOG_ERROR("service not found.");
+                    return;
+                }
+                get_request_.os_type() = TypeConvert::ToOsType(svc->GetOsType()); 
+                // get_request_.os_type() = registry->GetService(list.front())->GetOsType();
+
                 for( auto svc = list.begin(); svc != list.end(); ++svc ){
                     get_request_.service_list().push_back(*svc);
                 }

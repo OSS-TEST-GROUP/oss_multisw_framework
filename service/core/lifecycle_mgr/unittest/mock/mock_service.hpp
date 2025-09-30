@@ -9,8 +9,8 @@ class MockService : public Service {
 public:
 
     MockService() : Service() {}
-    MockService(const std::string& name, const ServiceType type, const RecoveryPolicy policy, const bool enabled)
-        : Service(name, type, policy, enabled) {}       
+    MockService(const std::string& name, const ServiceType type, const RecoveryPolicy policy, const bool enabled, const OsType os)
+        : Service(name, type, policy, enabled, os) {}       
     virtual ~MockService() {}
 
     MOCK_METHOD(std::string, GetName, (), ());
@@ -26,12 +26,13 @@ public:
     MOCK_METHOD(void, IncreaseRecoveredCount, (), ());
     MOCK_METHOD(void, ClearRecoverdCount, (), ());
     MOCK_METHOD(void, Print, (), ());
+    MOCK_METHOD(OsType, GetOsType, (), ());
 };
 
 MockService* Mock_Service;
 
 Service::Service() {}
-Service::Service(const std::string& name, const ServiceType type, const RecoveryPolicy policy, const bool enabled) {}
+Service::Service(const std::string& name, const ServiceType type, const RecoveryPolicy policy, const bool enabled, const OsType os) {}
 Service::~Service() {}
 
 bool Service::isEnabled() {
@@ -85,6 +86,10 @@ void Service::ClearRecoveredCount() {
 
 void Service::Print() {
     Mock_Service->Print();
+}
+
+OsType Service::GetOsType() {
+    return Mock_Service->GetOsType();
 }
 
 } // namespace lifecycle_manager
