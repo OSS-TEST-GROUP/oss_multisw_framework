@@ -42,6 +42,9 @@ include_directories (
 link_libraries ( gtest gmock fastcdr fastdds yaml-cpp )
 
 
+enable_testing()
+include (GoogleTest)
+
 # Add test executable
 add_executable ( LifecycleManagerTest LifecycleManagerTest.cpp )
 add_executable ( DDSTransmitterTest DDSTransmitterTest.cpp )
@@ -54,6 +57,18 @@ add_executable ( StateManagerTest StateManagerTest.cpp )
 add_executable ( StateMonitorTest StateMonitorTest.cpp )
 add_executable ( ArgumentConfigTest ArgumentConfigTest.cpp )
 add_executable ( MWServiceTest MWServiceTest.cpp )
+
+gtest_discover_tests ( LifecycleManagerTest )
+gtest_discover_tests ( DDSTransmitterTest )
+gtest_discover_tests ( EndPointFactoryTest )
+gtest_discover_tests ( MWServiceManagerTest )
+gtest_discover_tests ( LFPolicyManagerTest )
+gtest_discover_tests ( ServiceRegistryTest )
+gtest_discover_tests ( ServiceTest )
+gtest_discover_tests ( StateManagerTest )
+gtest_discover_tests ( StateMonitorTest )
+gtest_discover_tests ( ArgumentConfigTest )
+gtest_discover_tests ( MWServiceTest )
 
 ## Install
 install ( TARGETS LifecycleManagerTest

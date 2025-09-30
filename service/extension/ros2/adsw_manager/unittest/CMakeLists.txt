@@ -29,18 +29,31 @@ include_directories (
 ## Library
 link_libraries ( gtest gmock fastcdr fastdds yaml-cpp )
 
+enable_testing()
+include (GoogleTest)
+
 ## Target binary
 add_executable ( ADSWServiceTest ServiceTest.cpp )
-add_executable ( ADSWServiceRegistryTest ServiceRegistryTest.cpp ../service/ServiceRegistry.cpp )
+add_executable ( ADSWServiceRegistryTest
+    ServiceRegistryTest.cpp
+    ../service/ServiceRegistry.cpp )
 add_executable ( ADSWServiceMonitorTest ServiceMonitorTest.cpp)
-add_executable ( ADSWDDSTransmitterTest DDSTransmitterTest.cpp 
-                                    ${GENERATED_DIR}/lifecycle/LifecycleCommonTypeObjectSupport.cxx
-                                    ${GENERATED_DIR}/lifecycle/LifecycleDiagReportPubSubTypes.cxx
-                                    ${GENERATED_DIR}/lifecycle/LifecycleDiagReportTypeObjectSupport.cxx
+add_executable ( ADSWDDSTransmitterTest
+    DDSTransmitterTest.cpp 
+    ${GENERATED_DIR}/lifecycle/LifecycleCommonTypeObjectSupport.cxx
+    ${GENERATED_DIR}/lifecycle/LifecycleDiagReportPubSubTypes.cxx
+    ${GENERATED_DIR}/lifecycle/LifecycleDiagReportTypeObjectSupport.cxx
 )
-add_executable ( ADSWROSDiscoveryInfoEndpointTest ROSDiscoveryInfoEndpointTest.cpp
-                                                  ${ROS2_GENEREATED_IDL}
+add_executable ( ADSWROSDiscoveryInfoEndpointTest
+    ROSDiscoveryInfoEndpointTest.cpp
+    ${ROS2_GENEREATED_IDL}
 )
+
+gtest_discover_tests ( ADSWServiceTest )
+gtest_discover_tests ( ADSWServiceRegistryTest )
+gtest_discover_tests ( ADSWServiceMonitorTest )
+gtest_discover_tests ( ADSWDDSTransmitterTest )
+gtest_discover_tests ( ADSWROSDiscoveryInfoEndpointTest )
 
 ## Install
 install ( TARGETS
@@ -48,7 +61,7 @@ install ( TARGETS
           ADSWServiceRegistryTest
           ADSWDDSTransmitterTest
           ADSWROSDiscoveryInfoEndpointTest
-    RUNTIME DESTINATION bin/unittest/ros2/adsw_manager
+    RUNTIME DESTINATION bin/unittest/adsw_manager
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
     )
