@@ -12,7 +12,7 @@ export BUILD_UNITTEST="FALSE"
 export EXTENSION_PLATFORM="ROS2"
 export SDK_DIR=/opt
 export TARGET_MF_NAME="ros2"
-export TARGET_ARCH="x86-64"
+export TARGET_ARCH="x86_64"
 export CMAKE_TOOLCHAIN_FILE=""
 
 
@@ -115,6 +115,7 @@ do_build_fastdds() {
 	pushd ${SDK_DIR}/Fast-DDS >/dev/null 2>&1
 	build_args=(
 		--merge-install
+		--parallel-workers ${CPU_CORES}
 		--build-base build/${TARGET_MF_NAME}_${TARGET_ARCH}
 		--install-base output/${TARGET_MF_NAME}_${TARGET_ARCH}
 	)
@@ -194,8 +195,8 @@ do_build_cmd() {
 	make -j${CPU_CORES}
 	do_error_check
 
-	make install
-	#do_error_check
+	make install -j${CPU_CORES}
+	do_error_check
 
 	popd 1>/dev/null
 }
