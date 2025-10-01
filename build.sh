@@ -158,6 +158,7 @@ do_parse_option()
 				;;
 			--build-unittest)
 				BUILD_UNITTEST="TRUE"
+				BUILD_MODE="Debug"
 				;;
 			--set-extension-platform=*)
 				EXTENSION_PLATFORM="${arg#*=}"
@@ -416,13 +417,14 @@ do_build_unittest_image()
 	#echo "Cross-compiling           : ${CROSSCOMPILING}"
 	#######################################################################
 
+	if [[ ${BUILD_UNITTEST} = FALSE ]]; then return; fi
 	if [[ ! -d ${WORKDIR}/output/x86_64/Debug/core/bin/unittest ]]; then return; fi
+
 	do_setup_docker_buildx
 
 	docker buildx build \
 		--platform "linux/amd64" \
 		--build-arg TARGETARCH="x86_64" \
-		--build-arg BUILDTYPE="Debug" \
 		-f docker/Dockerfile.rel \
 		--target unittest-x86_64 \
 		--load \
@@ -449,7 +451,6 @@ do_start_build_mmf()
 		-v ${PWD}/idl:/home/ossuser/workspace/idl \
 		-v ${PWD}/service:/home/ossuser/workspace/service \
 		-v ${PWD}/output:/home/ossuser/workspace/output \
-		-v ${PWD}/.build:/home/ossuser/workspace/.build \
 		${img_name} \
 		/home/ossuser/workspace/build.sh ${build_args}
 }
@@ -464,7 +465,7 @@ do_build()
 	do_pull_builder_image
 
 	do_start_build_mmf $*
-	do_build_unittest_image
+	#do_build_unittest_image
 }
 
 do_build $*
