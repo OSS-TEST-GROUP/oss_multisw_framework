@@ -19,7 +19,7 @@ public:
     MOCK_METHOD(Logger*, Get, (), ());
 };
 
-MockLogger* Mock_Logger;
+MockLogger* Mock_Logger = nullptr;
 
 Logger::Logger(LogLevel level, const std::string& filename) {}
 Logger::~Logger() {}
@@ -43,7 +43,8 @@ void Logger::verbose(const std::string msg) {
 }
 
 Logger* Logger::Get() {
-    return Mock_Logger->Get();
+    //return Mock_Logger->Get();
+    return Mock_Logger;
 }
 
 

@@ -46,6 +46,7 @@ protected:
         diag_info_registry = std::make_shared<DiagInfoRegistry>();
         message_transmitter = std::make_shared<MessageTransmitter>(service_executor_mock_);
         ins = new DiagnosticAnalyzer(service_executor_mock_, message_transmitter, diag_info_registry);
+        Mock_Logger = new MockLogger();
     }
     virtual void TearDown(){
         service_executor_mock_.reset();
@@ -54,6 +55,8 @@ protected:
         diag_info_registry.reset();
         delete Mock_MessageTransmitterMock;
         delete ins;
+        delete Mock_Logger;
+        Mock_Logger = nullptr;
     }
 
     template<typename ValueType>

@@ -28,10 +28,13 @@ class DDSDynamicIDLParserTest : public ::testing::Test {
 protected:
     void SetUp() override {
         parser = new DDSDynamicIDLParser();
+        Mock_Logger = new MockLogger();
     }
 
     void TearDown() override {
         delete parser;
+        delete Mock_Logger;
+        Mock_Logger = nullptr;
     }
 
     DDSDynamicIDLParser* parser;

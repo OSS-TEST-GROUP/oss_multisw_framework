@@ -33,11 +33,14 @@ class DDSProtocolTest : public ::testing::Test {
 protected:
     virtual void SetUp(){
         ins = new DDSProtocol;
+        Mock_Logger = new MockLogger();
     }
     virtual void TearDown(){
         stopAllProcess();
         process_list.clear();
         delete ins;
+        delete Mock_Logger;
+        Mock_Logger = nullptr;
     }
 
     pid_t startProcess(char* args[]) {

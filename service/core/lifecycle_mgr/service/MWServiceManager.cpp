@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <exception>
 #include <filesystem>
+#include <optional>
 
 #include "MWServiceManager.hpp"
 #include "logger/Log.hpp"
@@ -21,6 +22,11 @@ namespace fs = std::filesystem;
 
 namespace lifecycle_manager {
 
+std::optional<std::string> getEnv(const std::string& key) {
+    const char* val = std::getenv(key.c_str());
+    return val ? std::optional<std::string>(val) : std::nullopt;
+}
+
 MWServiceManager::MWServiceManager() {}
 MWServiceManager::~MWServiceManager() {}
 
@@ -28,7 +34,9 @@ MWServiceManager::~MWServiceManager() {}
 bool MWServiceManager::Initialize(){
     LOG_DEBUG("MWServiceManager::Initialize");
 
-    LoadMWConfig("./config/config_middleware.yaml");
+    std::string config_path = getEnv("MMF_CONFIG_PATH").value_or("config");
+    config_path.append("/config_middleware.yaml");
+    LoadMWConfig(config_path);
 
     return false;
 }
