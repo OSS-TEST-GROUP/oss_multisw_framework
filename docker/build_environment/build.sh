@@ -134,6 +134,9 @@ do_build_fastdds() {
 	fi
 	colcon build "${build_args[@]}"
 	do_error_check
+	mkdir -p ${WORKDIR}/output/${TARGET_ARCH}/lib
+	cp -P output/${TARGET_MF_NAME}_${TARGET_ARCH}/lib/*.so* ${WORKDIR}/output/${TARGET_ARCH}/lib
+	do_error_check
 	popd >/dev/null 2>&1
 }
 
@@ -210,6 +213,11 @@ do_build()
 		do_build_cmd "core"
 	fi
 	do_build_cmd "ext"
+	
+	if [[ ${CROSSCOMPILING} = FALSE && ${BUILD_UNITTEST} = TRUE ]]; then
+		EXTENSION_PLATFORM="AGL"
+		do_build_cmd "ext"
+	fi
 
 	echo "Finish."
 }
