@@ -26,24 +26,42 @@ namespace adsw_manager::agl {
                 this->HandleStopAppRequest(req);
             }
         );
+        dds_manager_->SetOnUpdateListResponse(
+            [this](const UpdateServiceListResponse& res) {
+                this->HandleUpdateListResponse(res);
+            }
+        );
         
         return true;
     }
 
     void MessageTransmitter::PublishAppState() {
 
-        auto app_list = service_registry_->GetAppList();
-        
+        auto pairs = service_registry_->GetNameStatePairs();
+
         NotifyServiceState msg;
+
+        msg.service_list().reserve(pairs.size());
+        msg.service_state_list().reserve(pairs.size());
 
         msg.os_type(OsType::AGL);
 
-        for (const auto& app : app_list) {
-            msg.service_list().push_back(app.name());
-            msg.service_state_list().push_back(app.service_state());
+        for (auto& [n, s] : pairs) {
+            msg.service_list().push_back(std::move(n));
+            msg.service_state_list().push_back(s);
         }
 
         dds_manager_->PublishNotifyAppState(msg);
+
+    }
+
+    void MessageTransmitter::PublishAppList() {
+
+        UpdateServiceListRequest msg;
+
+        msg.service_list(service_registry_->GetAppList());
+
+        dds_manager_->PublishUpdateAppList(msg);
 
     }
 
@@ -53,18 +71,17 @@ namespace adsw_manager::agl {
             
             std::vector<std::string> app_list;
             std::vector<ServiceState> app_state_list;
+            app_list.reserve(req.service_list().size());
+            app_state_list.reserve(req.service_list().size());
     
             for (const auto& app_name : req.service_list()) {
-                app_list.push_back(app_name);
-                const ServiceStatus* info = service_registry_->GetAppInfo(app_name);
-                // 존재하지 않는 앱일 때 
-                app_state_list.push_back(info ? info->service_state() : ServiceState::NOT_RUNNING);
-                //app_state_list.push_back(info->service_state());
+                app_list.emplace_back(app_name);
+                app_state_list.emplace_back(service_registry_->GetAppState(app_name));
             }
 
             GetServiceStateResponse res;
-            res.service_list().assign(app_list.begin(), app_list.end());
-            res.service_state_list().assign(app_state_list.begin(), app_state_list.end());
+            res.service_list(std::move(app_list));
+            res.service_state_list(std::move(app_state_list));
 
             dds_manager_->GetAppStateHandler()->PublishResponse(res);
 
@@ -116,6 +133,14 @@ namespace adsw_manager::agl {
             dds_manager_->GetStopAppHandler()->PublishResponse(res);
 
         }
+    }
+
+    void MessageTransmitter::HandleUpdateListResponse(const UpdateServiceListResponse& res) {
+
+        if (res.ret_code() == ReturnCode::SUCCESS) {
+            std::cout << "Update App List Success./n";
+        }
+
     }
     
 }

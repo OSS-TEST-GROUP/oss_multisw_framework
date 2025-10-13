@@ -17,6 +17,7 @@ public:
 
     MOCK_METHOD(bool, Initialize, (eprosima::fastdds::dds::DomainParticipant*), (override));
     MOCK_METHOD(void, PublishAppState, (), (override));
+    MOCK_METHOD(void, PublishAppList, (), (override));
 };
 
 #endif

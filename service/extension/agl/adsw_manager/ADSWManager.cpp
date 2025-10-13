@@ -57,6 +57,7 @@ namespace adsw_manager::agl {
 
     bool ADSWManager::StartService() {
 
+        message_transmitter_->PublishAppList();
         service_monitor_->StartMonitoring();
 
         return true;

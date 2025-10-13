@@ -20,9 +20,11 @@ class MockDDSManager : public adsw_manager::agl::DDSManager {
 public:
     MOCK_METHOD(bool, Initialize, (eprosima::fastdds::dds::DomainParticipant*), (override));
     MOCK_METHOD(void, PublishNotifyAppState, (const NotifyServiceState&), (override));
+    MOCK_METHOD(void, PublishUpdateAppList, (const UpdateServiceListRequest&), (override));
     MOCK_METHOD(void, SetOnGetAppStateRequest, (std::function<void(const GetServiceStateRequest&)> cb), (override));
     MOCK_METHOD(void, SetOnStartAppRequest, (std::function<void(const StartServiceRequest&)> cb), (override));
     MOCK_METHOD(void, SetOnStopAppRequest, (std::function<void(const StopServiceRequest&)> cb), (override));
+    MOCK_METHOD(void, SetOnUpdateListResponse, (std::function<void(const UpdateServiceListResponse&)> cb), (override));
 
     MOCK_METHOD(MockAppStateHandler*, GetAppStateHandler, (), (override));
     MOCK_METHOD(MockStartAppHandler*, GetStartAppHandler, (), (override));

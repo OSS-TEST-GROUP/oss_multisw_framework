@@ -54,18 +54,24 @@ namespace adsw_manager::agl {
             }
         );
 
-        std::cout << "[DDSManager] Creating NotifyAppStateWriter...\n";
         if (!notify_app_state_writer_) {
             notify_app_state_writer_ = std::make_unique<NotifyAppStateWriter>();
         }
-        std::cout << "[DDSManager] NotifyAppStateWriter created.\n";
-
         if (!notify_app_state_writer_->Initialize(publisher_, participant_)) {
             std::cerr << "[DDSManager] Failed to initialize NotifyAppStateWriter.\n";
             return false;
         }
 
-        std::cout << "[DDSManager] NotifyAppStateWriter initialized.\n";
+        if (!update_app_list_handler_) {
+            update_app_list_handler_ = std::make_unique<UpdateAppListHandler>();
+        }
+        update_app_list_handler_->Initialize(participant_, publisher_, subscriber_,
+            [this](const UpdateServiceListResponse& res) {
+                if (on_update_list_response_) {
+                    on_update_list_response_(res);
+                }
+            }
+        );
 
         return true;
 
@@ -74,6 +80,12 @@ namespace adsw_manager::agl {
     void DDSManager::PublishNotifyAppState(const NotifyServiceState& msg) {
         if (notify_app_state_writer_) {
             notify_app_state_writer_->Publish(msg);
+        }
+    }
+
+    void DDSManager::PublishUpdateAppList(const UpdateServiceListRequest& msg) {
+        if (update_app_list_handler_) {
+            update_app_list_handler_->Publish(msg);
         }
     }
 
@@ -92,6 +104,12 @@ namespace adsw_manager::agl {
     void DDSManager::SetOnStopAppRequest(std::function<void(const StopServiceRequest&)> cb) {
 
         on_stop_app_request_ = cb;
+
+    }
+
+    void DDSManager::SetOnUpdateListResponse(std::function<void(const UpdateServiceListResponse&)> cb) {
+
+        on_update_list_response_ = cb;
 
     }
 
