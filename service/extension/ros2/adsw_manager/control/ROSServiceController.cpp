@@ -6,6 +6,7 @@
 #include "transmitter/MessageQueue.hpp"
 #include "logger/Log.hpp"
 #include "HelperUtils.hpp"
+#include "service/TypeConvert.hpp"
 
 namespace ros2 {
 namespace adsw_manager {
@@ -255,44 +256,47 @@ bool ROSServiceController::ProcessServiceStartRequest(lifecyclemgr::StartService
         LOG_ERROR("Received null message in ProcessServiceStartRequest.");
         return false;
     }
-    std::vector<std::string> service_list = message->service_list();
-    bool is_group = message->is_group();
-    bool result = false;
+    if (TypeConvert::ToOsType(message->os_type()) == OsType::ROS2) {
+        std::vector<std::string> service_list = message->service_list();
+        bool is_group = message->is_group();
+        bool result = false;
 
-    if (GetContainer()->ContainerSupported() == false){
-        is_group = false;
-    }
+        if (GetContainer()->ContainerSupported() == false){
+            is_group = false;
+        }
 
-    if (service_list.empty()) {
-        LOG_ERROR("No services provided to start.");
-        result = false;
-    }
-    else{
-        LOG_DEBUG("Starting services: " << (is_group ? "Group" : "Individual") << " - " << service_list.size() << " services.");
-        if (is_group) {
-            for (const auto& service : service_list) {
-                result = StartGroup(service);
-            }
-        } else {
-            for (const auto& service : service_list) {
-                result = StartService(service);
+        if (service_list.empty()) {
+            LOG_ERROR("No services provided to start.");
+            result = false;
+        }
+        else{
+            LOG_DEBUG("Starting services: " << (is_group ? "Group" : "Individual") << " - " << service_list.size() << " services.");
+            if (is_group) {
+                for (const auto& service : service_list) {
+                    result = StartGroup(service);
+                }
+            } else {
+                for (const auto& service : service_list) {
+                    result = StartService(service);
+                }
             }
         }
+
+        /* send message via message queue.. do not use local variable --> calss variable */
+        if (!result) {
+            start_service_response_.ret_code() = lifecyclemgr::ReturnCode::FAILED;
+            LOG_ERROR("Failed to start service(s).");
+        } else {
+            start_service_response_.ret_code() = lifecyclemgr::ReturnCode::SUCCESS;
+            LOG_DEBUG("Service(s) started successfully.");
+        }
+
+        std::shared_ptr<DDSTransmitter> transmitter = ADSWManager::Get()->GetTransmitter();
+
+        return transmitter->SendMessage(MessageType::START_SERVICE_RESPONSE, 
+                                        reinterpret_cast<void*>(&start_service_response_));
     }
-
-   /* send message via message queue.. do not use local variable --> calss variable */
-    if (!result) {
-        start_service_response_.ret_code() = lifecyclemgr::ReturnCode::FAILED;
-        LOG_ERROR("Failed to start service(s).");
-    } else {
-        start_service_response_.ret_code() = lifecyclemgr::ReturnCode::SUCCESS;
-        LOG_DEBUG("Service(s) started successfully.");
-    }
-
-    std::shared_ptr<DDSTransmitter> transmitter = ADSWManager::Get()->GetTransmitter();
-
-    return transmitter->SendMessage(MessageType::START_SERVICE_RESPONSE, 
-                                    reinterpret_cast<void*>(&start_service_response_));
+    return true;
 }
 
 bool ROSServiceController::ProcessServiceStopRequest(lifecyclemgr::StopServiceRequest* message){
@@ -302,45 +306,48 @@ bool ROSServiceController::ProcessServiceStopRequest(lifecyclemgr::StopServiceRe
         LOG_ERROR("Received null message in ProcessServiceStopRequest.");
         return false;
     }
-    std::vector<std::string> service_list = message->service_list();
-    bool is_group = message->is_group();
-    bool result = false;
+    if (TypeConvert::ToOsType(message->os_type()) == OsType::ROS2) {
+        std::vector<std::string> service_list = message->service_list();
+        bool is_group = message->is_group();
+        bool result = false;
 
-    if (GetContainer()->ContainerSupported() == false){
-        is_group = false;
-    }
+        if (GetContainer()->ContainerSupported() == false){
+            is_group = false;
+        }
 
-    if (service_list.empty()) {
-        LOG_ERROR("No services provided to stop.");
-        result = false;
-    }
-    else{
-        LOG_DEBUG("Starting services: " << (is_group ? "Group" : "Individual") << " - " << service_list.size() << " services.");
+        if (service_list.empty()) {
+            LOG_ERROR("No services provided to stop.");
+            result = false;
+        }
+        else{
+            LOG_DEBUG("Stopping services: " << (is_group ? "Group" : "Individual") << " - " << service_list.size() << " services.");
 
-        if (is_group) {
-            for (const auto& service : service_list) {
-                result = StopGroup(service);
-            }
-        } else {
-            for (const auto& service : service_list) {
-                result = StopService(service);
+            if (is_group) {
+                for (const auto& service : service_list) {
+                    result = StopGroup(service);
+                }
+            } else {
+                for (const auto& service : service_list) {
+                    result = StopService(service);
+                }
             }
         }
+
+        /* send message via message queue.. do not use local variable --> calss variable */
+        if (!result) {
+            stop_service_response_.ret_code() = lifecyclemgr::ReturnCode::FAILED;
+            LOG_ERROR("Failed to stop service(s).");
+        } else {
+            stop_service_response_.ret_code() = lifecyclemgr::ReturnCode::SUCCESS;
+            LOG_DEBUG("Service(s) stop successfully.");
+        }
+
+        std::shared_ptr<DDSTransmitter> transmitter = ADSWManager::Get()->GetTransmitter();
+
+        return transmitter->SendMessage(MessageType::STOP_SERVICE_RESPONSE, 
+                                        reinterpret_cast<void*>(&stop_service_response_));
     }
-
-    /* send message via message queue.. do not use local variable --> calss variable */
-    if (!result) {
-        stop_service_response_.ret_code() = lifecyclemgr::ReturnCode::FAILED;
-        LOG_ERROR("Failed to stop service(s).");
-    } else {
-        stop_service_response_.ret_code() = lifecyclemgr::ReturnCode::SUCCESS;
-        LOG_DEBUG("Service(s) stop successfully.");
-    }
-
-    std::shared_ptr<DDSTransmitter> transmitter = ADSWManager::Get()->GetTransmitter();
-
-    return transmitter->SendMessage(MessageType::STOP_SERVICE_RESPONSE, 
-                                    reinterpret_cast<void*>(&stop_service_response_));
+    return true;
 }
 
     

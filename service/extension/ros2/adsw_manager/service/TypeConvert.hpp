@@ -77,6 +77,21 @@ class TypeConvert {
         }
         return lifecyclemgr::RecoveryPolicy::R_DEFAULT;
     }    
+
+    static OsType ToOsType(lifecyclemgr::OsType os) {
+        switch (os) {
+            case lifecyclemgr::OsType::ROS2 : return OsType::ROS2;
+            case lifecyclemgr::OsType::AGL : return OsType::AGL;
+            case lifecyclemgr::OsType::AUTOSAR : return OsType::AUTOSAR;
+        }
+    }
+    static lifecyclemgr::OsType ToOsType(OsType os) {
+        switch (os) {
+            case OsType::ROS2 : return lifecyclemgr::OsType::ROS2;
+            case OsType::AGL : return lifecyclemgr::OsType::AGL;
+            case OsType::AUTOSAR : return lifecyclemgr::OsType::AUTOSAR;
+        }
+    }
 };
 
 

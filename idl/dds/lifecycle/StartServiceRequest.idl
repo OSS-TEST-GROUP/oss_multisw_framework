@@ -5,6 +5,7 @@ module lifecyclemgr {
 
     /* TopicName - mmf/lifecyclemgr/StartServiceRequest */
     struct StartServiceRequest {
+        OsType os_type;
         sequence<string> service_list;
         boolean is_group;
     };

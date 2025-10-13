@@ -57,7 +57,7 @@ TEST_F(ServiceTest, SetAndGetServiceState) {
 
 // Add more tests for Service as needed
 TEST_F(ServiceTest, ParameterizedConstructor) {
-    Service s("TestService", ServiceType::NORMAL, RecoveryPolicy::ALWAYS, true);
+    Service s("TestService", ServiceType::NORMAL, RecoveryPolicy::ALWAYS, true, OsType::ROS2);
     EXPECT_EQ(s.GetName(), "TestService");
     EXPECT_EQ(s.GetServiceType(), ServiceType::NORMAL);
     EXPECT_EQ(s.GetRecoveryPolicy(), RecoveryPolicy::ALWAYS);
@@ -66,6 +66,7 @@ TEST_F(ServiceTest, ParameterizedConstructor) {
     EXPECT_EQ(s.GetServiceState(), ServiceState::NOT_RUNNING);
     EXPECT_EQ(s.GetLastServiceState(), ServiceState::NOT_RUNNING);
     EXPECT_EQ(s.GetRecoveredCount(), 0);
+    EXPECT_EQ(s.GetOsType(), OsType::ROS2);
 }
 
 TEST_F(ServiceTest, ServiceStateTransition) {
@@ -90,7 +91,7 @@ TEST_F(ServiceTest, RecoverdCountOperations) {
 }
 
 TEST_F(ServiceTest, PrintDoesNotThrow) {
-    Service s("PrintService", ServiceType::NORMAL, RecoveryPolicy::ALWAYS, false);
+    Service s("PrintService", ServiceType::NORMAL, RecoveryPolicy::ALWAYS, false, OsType::ROS2);
     EXPECT_NO_THROW(s.Print());
 }
 

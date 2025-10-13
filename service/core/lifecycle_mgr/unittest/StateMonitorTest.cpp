@@ -96,7 +96,7 @@ TEST_F(StateMonitorTest, getServiceStateFillsEntry) {
     StateMonitor monitor(mgr);
 
     auto service = std::make_shared<MockService>("svc", 
-        lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ALWAYS, true);
+        lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ALWAYS, true, lifecycle_manager::OsType::ROS2);
     EXPECT_CALL(*service, GetName()).WillOnce(Return("svc"));
     EXPECT_CALL(*service, GetServiceType()).WillOnce(Return(lifecycle_manager::ServiceType::NORMAL));
     EXPECT_CALL(*service, GetServiceState()).WillOnce(Return(lifecycle_manager::ServiceState::RUNNING));

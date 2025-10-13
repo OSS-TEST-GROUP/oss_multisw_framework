@@ -36,6 +36,7 @@ bool StateManager::StartService(std::shared_ptr<Service> service) {
      
     if (transmitter != nullptr)
     {
+        start_request_.os_type() = TypeConvert::ToOsType(service->GetOsType());
         start_request_.service_list().push_back(service->GetName());
         start_request_.is_group() = false;
         return transmitter->SendMessage(MessageType::START_SERVICE_REQUEST, reinterpret_cast<void*>(&start_request_));
@@ -51,6 +52,7 @@ void StateManager::StopService(std::shared_ptr<Service> service) {
 
     if (transmitter != nullptr)
     {
+        stop_request_.os_type() = TypeConvert::ToOsType(service->GetOsType());
         stop_request_.service_list().push_back(service->GetName());
         stop_request_.is_group() = false;        
         transmitter->SendMessage(MessageType::STOP_SERVICE_REQUEST, reinterpret_cast<void*>(&stop_request_));

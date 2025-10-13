@@ -7,6 +7,7 @@
 #include "include/ServiceType.hpp"
 #include "include/ServiceMode.hpp"
 #include "include/RecoveryPolicy.hpp"
+#include "include/OsType.hpp"
 
 namespace lifecycle_manager {
 
@@ -14,7 +15,7 @@ class Service {
 
   public:
     Service();
-    Service(const std::string& name, const ServiceType type, const RecoveryPolicy policy, const bool enabled);
+    Service(const std::string& name, const ServiceType type, const RecoveryPolicy policy, const bool enabled, const OsType os);
     virtual ~Service();
 
     std::string GetName();
@@ -35,6 +36,8 @@ class Service {
 
     void Print();
 
+    OsType GetOsType();
+
   private:
     std::string name_;
     ServiceType service_type_;
@@ -45,6 +48,8 @@ class Service {
     ServiceState service_state_;
     ServiceState service_state_last_;
     uint32_t recovered_count_;
+
+    OsType os_type_;
 
 };
 

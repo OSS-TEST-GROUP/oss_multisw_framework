@@ -73,6 +73,8 @@ void ServiceMonitor::NotifyServiceState() {
         if (endpoint != nullptr){
             lifecyclemgr::NotifyServiceState notify;
 
+            notify.os_type() = TypeConvert::ToOsType(OsType::ROS2);
+
             std::vector<std::shared_ptr<Service>> group = registry->GetServicesByGroup("");
 
             for (auto& iter : group) {

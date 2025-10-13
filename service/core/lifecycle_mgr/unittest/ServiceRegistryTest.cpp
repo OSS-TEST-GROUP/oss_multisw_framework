@@ -48,7 +48,7 @@ TEST_F(ServiceRegistryTest, GetServiceReturnsExpected) {
 // Add more tests for ServiceRegistry as needed
 TEST_F(ServiceRegistryTest, AddAndGetService) {
     ServiceRegistry registry;
-    auto service = std::make_shared<lifecycle_manager::Service>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true);
+    auto service = std::make_shared<lifecycle_manager::Service>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
     EXPECT_TRUE(registry.AddService(service, ""));
     auto fetched = registry.GetService("svc1");
     EXPECT_EQ(fetched, service);
@@ -56,7 +56,7 @@ TEST_F(ServiceRegistryTest, AddAndGetService) {
 
 TEST_F(ServiceRegistryTest, AddDuplicateServiceReturnsTrueButDoesNotDuplicate) {
     ServiceRegistry registry;
-    auto service = std::make_shared<lifecycle_manager::Service>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true);
+    auto service = std::make_shared<lifecycle_manager::Service>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
     EXPECT_TRUE(registry.AddService(service, ""));
     EXPECT_TRUE(registry.AddService(service, "")); // No duplicate check in AddService
     EXPECT_EQ(registry.GetServiceNum(), 1);
@@ -64,7 +64,7 @@ TEST_F(ServiceRegistryTest, AddDuplicateServiceReturnsTrueButDoesNotDuplicate) {
 
 TEST_F(ServiceRegistryTest, RemoveServiceRemovesIt) {
     ServiceRegistry registry;
-    auto service = std::make_shared<lifecycle_manager::Service>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true);
+    auto service = std::make_shared<lifecycle_manager::Service>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
     registry.AddService(service, "");
     registry.RemoveService("svc1");
     EXPECT_EQ(registry.GetService("svc1"), nullptr);
@@ -81,8 +81,8 @@ TEST_F(ServiceRegistryTest, AddAndRemoveGroup) {
 TEST_F(ServiceRegistryTest, GetServicesByGroupReturnsCorrectServices) {
     ServiceRegistry registry;
     registry.AddGroup("group1");
-    auto service1 = std::make_shared<lifecycle_manager::Service>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true);
-    auto service2 = std::make_shared<lifecycle_manager::Service>("svc2", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true);
+    auto service1 = std::make_shared<lifecycle_manager::Service>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
+    auto service2 = std::make_shared<lifecycle_manager::Service>("svc2", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
     registry.AddService(service1, "group1");
     registry.AddService(service2, "");
     auto group_services = registry.GetServicesByGroup("group1");
@@ -93,7 +93,7 @@ TEST_F(ServiceRegistryTest, GetServicesByGroupReturnsCorrectServices) {
 TEST_F(ServiceRegistryTest, GetServicesNameByGroupReturnsCorrectNames) {
     ServiceRegistry registry;
     registry.AddGroup("group1");
-    auto service1 = std::make_shared<lifecycle_manager::Service>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true);
+    auto service1 = std::make_shared<lifecycle_manager::Service>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
     registry.AddService(service1, "group1");
     auto names = registry.GetServicesNameByGroup("group1");
     ASSERT_EQ(names.size(), 1);
@@ -103,7 +103,7 @@ TEST_F(ServiceRegistryTest, GetServicesNameByGroupReturnsCorrectNames) {
 TEST_F(ServiceRegistryTest, GetGroupNameByServiceReturnsCorrectGroup) {
     ServiceRegistry registry;
     registry.AddGroup("group1");
-    auto service1 = std::make_shared<lifecycle_manager::Service>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true);
+    auto service1 = std::make_shared<lifecycle_manager::Service>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
     registry.AddService(service1, "group1");
     EXPECT_EQ(registry.GetGroupNameByService(service1), "group1");
 }
@@ -111,7 +111,7 @@ TEST_F(ServiceRegistryTest, GetGroupNameByServiceReturnsCorrectGroup) {
 TEST_F(ServiceRegistryTest, GetServiceNumAndGroupNum) {
     ServiceRegistry registry;
     registry.AddGroup("group1");
-    auto service1 = std::make_shared<lifecycle_manager::Service>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true);
+    auto service1 = std::make_shared<lifecycle_manager::Service>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
     registry.AddService(service1, "group1");
     EXPECT_EQ(registry.GetServiceNum(), 1);
     EXPECT_EQ(registry.GetGroupNum(), 1);
@@ -120,7 +120,7 @@ TEST_F(ServiceRegistryTest, GetServiceNumAndGroupNum) {
 TEST_F(ServiceRegistryTest, GetServiceNumInGroup) {
     ServiceRegistry registry;
     registry.AddGroup("group1");
-    auto service1 = std::make_shared<lifecycle_manager::Service>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true);
+    auto service1 = std::make_shared<lifecycle_manager::Service>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
     registry.AddService(service1, "group1");
     EXPECT_EQ(registry.GetServiceNumInGroup("group1"), 1);
     EXPECT_EQ(registry.GetServiceNumInGroup(""), 1);

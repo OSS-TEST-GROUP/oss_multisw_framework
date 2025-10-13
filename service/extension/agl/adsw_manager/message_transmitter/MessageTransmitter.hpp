@@ -24,6 +24,7 @@ namespace adsw_manager::agl {
 
             virtual bool Initialize(eprosima::fastdds::dds::DomainParticipant* participant);
             virtual void PublishAppState();
+            virtual void PublishAppList();
 
             virtual ~MessageTransmitter() = default;
 
@@ -35,6 +36,7 @@ namespace adsw_manager::agl {
             void HandleGetAppStateRequest(const lifecyclemgr::GetServiceStateRequest& req);
             void HandleStartAppRequest(const lifecyclemgr::StartServiceRequest& req);
             void HandleStopAppRequest(const lifecyclemgr::StopServiceRequest& req);
+            void HandleUpdateListResponse(const lifecyclemgr::UpdateServiceListResponse& res);
     };
 
 } // namespace adsw_manager::agl

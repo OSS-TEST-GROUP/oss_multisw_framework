@@ -45,29 +45,26 @@ namespace adsw_manager::agl {
     }
 
     void ServiceMonitor::CheckAppState() {
+        const auto now = std::chrono::steady_clock::now();
 
-        auto now  = std::chrono::steady_clock::now();
-        const auto& app_list = service_registry_->GetAppList();
+        for (auto& [app_name, reader] : readers_) {
+            const auto last_time = reader->GetLastReceivedTime();
 
-        for (auto& entry : readers_) {
-            const std::string& app_name = entry.first;
-            auto& reader = entry.second;
+            const ServiceState expected =
+                (now - last_time > timeout_) ? ServiceState::NOT_RUNNING
+                                             : ServiceState::RUNNING;
 
-            auto last_time = reader->GetLastReceivedTime();
+            auto info = service_registry_->GetAppInfo(app_name);
 
-            auto it = std::find_if(app_list.begin(), app_list.end(),
-                           [&](const ServiceStatus& app) { return app.name() == app_name; });
+            const ServiceState current = info->second;
 
-            if (it == app_list.end()) {
-                continue;
-            }
+            if (current != expected) {
+                std::cout << "[ServiceMonitor] App state update : [["
+                          << info->first.name() << "]] "
+                          << static_cast<int>(current) << " >>> "
+                          << static_cast<int>(expected) << std::endl;
 
-            const ServiceStatus& app_info = *it;
-            ServiceState expected_state = (now - last_time > timeout_) ? ServiceState::NOT_RUNNING : ServiceState::RUNNING;
-
-            if (app_info.service_state() != expected_state) {
-                std::cout << "[ServiceMonitor] App state update : [[" << app_info.name() << "]] " << app_info.service_state() << " >>> " << expected_state << std::endl;
-                service_registry_->UpdateAppState(app_name, expected_state);
+                service_registry_->UpdateAppState(app_name, expected);
                 message_transmitter_->PublishAppState();
             }
         }

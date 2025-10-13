@@ -5,6 +5,7 @@
 #include <ostream>
 
 #include "lifecycle/LifecycleCommon.hpp"
+#include "lifecycle/UpdateServiceListRequest.hpp"
 
 namespace adsw_manager::agl {
 
@@ -49,5 +50,11 @@ namespace adsw_manager::agl {
 
 
 } // namespace adsw_manager::agl
+
+namespace lifecyclemgr {
+    inline bool operator<(const Service& a, const Service& b) {
+        return a.name() < b.name();
+    }
+}
 
 #endif
