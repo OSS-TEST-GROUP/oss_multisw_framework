@@ -205,10 +205,14 @@ do_set_private_registry() {
 		if [[ ! -f /etc/docker/daemon.json ]]; then
 			sudo mkdir -p /etc/docker
 			echo '{"insecure-registries": []}' | sudo tee /etc/docker/daemon.json > /dev/null
-			sudo sed -i "s/\[\]/[\"${REGISTRY_ADDRESS}\"]/" /etc/docker/daemon.json
-			sudo systemctl restart docker
+		else
+			jq 'if has("insecure-registries") then . else . + {"insecure-registries": []} end' /etc/docker/daemon.json > /tmp/daemon.json
+			sudo cp /etc/docker/daemon.json /etc/docker/daemon.json.bak
+			sudo cp /tmp/daemon.json /etc/docker/daemon.json
 		fi
-
+		sudo sed -i "s/\[\]/[\"${REGISTRY_ADDRESS}\"]/" /etc/docker/daemon.json
+		sudo systemctl restart docker
+	
 		echo "${REGISTRY_PWD}" | docker login ${REGISTRY_ADDRESS} -u ${REGISTRY_ID} --password-stdin
 		do_error_check
 	fi
