@@ -134,6 +134,8 @@ pipeline {
             steps {
                 script {
                     sh '''
+                        #!/bin/bash
+                        set -e
                         if ! curl -u "${REGISTRY_ID}:${REGISTRY_PWD}" -s http://${IMAGE_REGISTRY}/v2/_catalog 2>/dev/null \
                             | grep -q "${APP_NAME}-builder"; then
                             docker build -t ${BUILDER_IMAGE} \
