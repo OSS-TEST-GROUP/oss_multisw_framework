@@ -58,14 +58,14 @@
       // Create listener for incoming registration messages
       registration_listener_ = std::make_shared<RegistrationListener>(this);
 
-      // SetOtaClientRegisteration
-      set_ota_client_reg_ = std::make_shared<OtaManager::SetOtaClientRegisterationPubSubType>();
+      // SetOtaClientRegistration
+      set_ota_client_reg_ = std::make_shared<OtaManager::SetOtaClientRegistrationPubSubType>();
       registration_dds_->Create(TOPIC_REGISTRATION, 
                                std::static_pointer_cast<void>(set_ota_client_reg_), 
                                std::static_pointer_cast<void>(registration_listener_));
 
-      // SetOtaClientRegisterationResponse
-      set_ota_client_reg_res_ = std::make_shared<OtaManager::SetOtaClientRegisterationResponsePubSubType>();
+      // SetOtaClientRegistrationResponse
+      set_ota_client_reg_res_ = std::make_shared<OtaManager::SetOtaClientRegistrationResponsePubSubType>();
       registration_response_dds_->Create(TOPIC_REGISTRATION_RESPONSE, 
                                std::static_pointer_cast<void>(set_ota_client_reg_res_), 
                                nullptr);
@@ -162,7 +162,7 @@
       }
   }
 
-  void OtamClientService::OnMessageReceived(const OtaManager::SetOtaClientRegisteration& registration_data) {
+  void OtamClientService::OnMessageReceived(const OtaManager::SetOtaClientRegistration& registration_data) {
       std::cout << "OtamClientService: Processing registration from client '"
                 << registration_data.client_name() << "' with "
                 << registration_data.app_list().size() << " applications." << std::endl;
@@ -199,8 +199,8 @@
 
   void OtamClientService::PublishRegistrationResponse(long client_id, ReturnValue ret_code) {
       try {
-          // Create SetOtaClientRegisterationResponse message
-          auto response_message = std::make_shared<OtaManager::SetOtaClientRegisterationResponse>();
+          // Create SetOtaClientRegistrationResponse message
+          auto response_message = std::make_shared<OtaManager::SetOtaClientRegistrationResponse>();
           response_message->client_id(client_id);
           response_message->ret_code(ret_code);
 
@@ -258,7 +258,7 @@
 
   void OtamClientService::RegistrationListener::on_data_available(eprosima::fastdds::dds::DataReader* reader) {
       // This callback is invoked by FastDDS when new registration data arrives
-      OtaManager::SetOtaClientRegisteration message;
+      OtaManager::SetOtaClientRegistration message;
       eprosima::fastdds::dds::SampleInfo info;
 
       try {

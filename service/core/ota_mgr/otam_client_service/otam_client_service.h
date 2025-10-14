@@ -109,7 +109,7 @@
       /**
        * @brief Handles incoming client registration messages
        * 
-       * Processes SetOtaClientRegisteration messages received from OTA clients.
+       * Processes SetOtaClientRegistration messages received from OTA clients.
        * Validates the registration data, updates internal client registry,
        * and sends appropriate registration response.
        * 
@@ -118,12 +118,12 @@
        * 
        * @note This method is called automatically by the DDS listener
        */
-      void OnMessageReceived(const OtaManager::SetOtaClientRegisteration& registration_data);
+      void OnMessageReceived(const OtaManager::SetOtaClientRegistration& registration_data);
 
       /**
        * @brief Publishes client registration response
        * 
-       * Sends a SetOtaClientRegisterationResponse message to the requesting client
+       * Sends a SetOtaClientRegistrationResponse message to the requesting client
        * with the assigned client ID and registration result.
        * 
        * @param client_id Unique identifier assigned to the client
@@ -152,7 +152,7 @@
       /**
        * @brief DDS instance for receiving client registration messages
        * 
-       * Subscribes to SetOtaClientRegisteration topic to receive
+       * Subscribes to SetOtaClientRegistration topic to receive
        * registration requests from OTA clients.
        */
       std::unique_ptr<OtamDdsImpl> registration_dds_;
@@ -160,7 +160,7 @@
       /**
        * @brief DDS instance for publishing registration responses
        * 
-       * Publishes SetOtaClientRegisterationResponse messages to
+       * Publishes SetOtaClientRegistrationResponse messages to
        * respond to client registration requests.
        */
       std::unique_ptr<OtamDdsImpl> registration_response_dds_;
@@ -181,8 +181,8 @@
        */
       std::unique_ptr<OtamDdsImpl> app_status_dds_;
 
-      std::shared_ptr<OtaManager::SetOtaClientRegisterationPubSubType> set_ota_client_reg_;
-      std::shared_ptr<OtaManager::SetOtaClientRegisterationResponsePubSubType> set_ota_client_reg_res_;
+      std::shared_ptr<OtaManager::SetOtaClientRegistrationPubSubType> set_ota_client_reg_;
+      std::shared_ptr<OtaManager::SetOtaClientRegistrationResponsePubSubType> set_ota_client_reg_res_;
       std::shared_ptr<OtaManager::NotifyOtaManagerReadyPubSubType> notify_ota_mgr_ready_;
       std::shared_ptr<OtaManager::NotifyAppUpdateStatusPubSubType> notify_app_update_status_;
 
@@ -191,7 +191,7 @@
        * @brief DDS listener for client registration messages
        * 
        * Implements DataReaderListener interface to handle incoming
-       * SetOtaClientRegisteration messages asynchronously.
+       * SetOtaClientRegistration messages asynchronously.
        */
       class RegistrationListener : public eprosima::fastdds::dds::DataReaderListener {
       public:
@@ -204,7 +204,7 @@
           /**
            * @brief Called when new data is available
            * 
-           * This callback is invoked by FastDDS when a new SetOtaClientRegisteration
+           * This callback is invoked by FastDDS when a new SetOtaClientRegistration
            * message is received. It reads the message and forwards it to the
            * parent service for processing.
            * 
@@ -251,10 +251,10 @@
       void SetupSubscribers();
 
       /** @brief Topic name for client registration messages */
-      static constexpr const char* TOPIC_REGISTRATION = "/mmf/otamanager/otaclient_service/SetOtaClientRegisteration";
+      static constexpr const char* TOPIC_REGISTRATION = "/mmf/otamanager/otaclient_service/SetOtaClientRegistration";
 
       /** @brief Topic name for registration response messages */
-      static constexpr const char* TOPIC_REGISTRATION_RESPONSE = "/mmf/otamanager/vehicleinfo_service/SetOtaClientRegisterationResponse";
+      static constexpr const char* TOPIC_REGISTRATION_RESPONSE = "/mmf/otamanager/vehicleinfo_service/SetOtaClientRegistrationResponse";
 
       /** @brief Topic name for manager ready notifications */
       static constexpr const char* TOPIC_MANAGER_READY = "/mmf/otamanager/otaclient_service/NotifyOtaManagerReady";
