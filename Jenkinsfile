@@ -225,7 +225,7 @@ pipeline {
                             --suppress=unusedFunction \
                             --suppress=missingInclude \
                             --std=c++20 \
-                            --file-list=${WORKSPACE}/output/reports/cppcheck/files_to_cppcheck.txt || true
+                            --file-list=${WORKSPACE}/output/reports/files_to_analysis.txt || true
                     '''
                 }
             }
