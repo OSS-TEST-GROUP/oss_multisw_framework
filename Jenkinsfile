@@ -255,17 +255,12 @@ pipeline {
                                 \\( -name "*.cpp" -o -name "*.hpp" -o -name "*.h" -o -name "*.cc" \\) \
                                 > ${WORKSPACE}/output/reports/files_to_analysis.txt
                         fi
-
-                        if [ -f ${WORKSPACE}/output/reports/cpplint/files_to_lintcheck.txt ]; then
-                            cat ${WORKSPACE}/output/reports/cpplint/files_to_lintcheck.txt | xargs cpplint \
-                                --filter=-whitespace/tab,-legal/copyright,-build/include_order,-build/c++11,-build/header_guard \
-                                --linelength=80 \
-                                --extensions=cpp,cc,h,hpp \
-                                --counting=detailed \
-                                > ${WORKSPACE}/output/reports/cpplint/cpplint-result.txt 2>&1 || true
-                        else
-                            echo "No files to check" > ${WORKSPACE}/output/reports/cpplint/cpplint-result.txt
-                        fi
+                        cat ${WORKSPACE}/output/reports/files_to_analysis.txt | xargs cpplint \
+                            --filter=-whitespace/tab,-legal/copyright,-build/include_order,-build/c++11,-build/header_guard \
+                            --linelength=80 \
+                            --extensions=cpp,cc,h,hpp \
+                            --counting=detailed \
+                            > ${WORKSPACE}/output/reports/cpplint/cpplint-result.txt 2>&1 || true
                     '''
                 }
             }
@@ -322,7 +317,6 @@ pipeline {
                                     mkdir -p ${workdir}/output/clang-tidy/${t}
                                     cp compile_commands.json ${workdir}/output/clang-tidy/${t}
                                     run-clang-tidy -p ${workdir}/output/clang-tidy/${t} \
-                                        -checks='bugprone-*,performance-*,modernize-*' \
                                         -j \$(nproc) \
                                         $(find ${src_dir} \
                                             -not -path "*/unittest/*" \
