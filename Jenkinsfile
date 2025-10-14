@@ -191,9 +191,6 @@ pipeline {
                         cd ${WORKSPACE}
                     '''
                 }
-                script {
-                    sh -c ''
-                }
             }
             post {
                 always {
