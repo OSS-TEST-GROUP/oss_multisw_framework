@@ -73,7 +73,7 @@ pipeline {
                                 sudo cp /etc/docker/daemon.json /etc/docker/daemon.json.bak
                                 sudo cp /tmp/daemon.json /etc/docker/daemon.json
                             fi
-                            sudo sed -i "s/\[\]/[\"${IMAGE_REGISTRY}\"]/" /etc/docker/daemon.json
+                            sudo sed -i "s/\\[\\]/[\"${IMAGE_REGISTRY}\"]/" /etc/docker/daemon.json
                             sudo systemctl restart docker
                         
                             echo "${REGISTRY_PWD}" | docker login ${IMAGE_REGISTRY} -u ${REGISTRY_ID} --password-stdin
