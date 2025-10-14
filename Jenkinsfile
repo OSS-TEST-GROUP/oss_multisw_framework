@@ -1,24 +1,26 @@
 pipeline {
     agent {
-        label 'OSS-Middleware'
+        label 'OSS-Agent'
     }
 
     environment {
         // Agent Node
-        AGENT_LABEL="OSS-Middleware"
+        AGENT_LABEL="OSS-Agent"
 
         // Docker Registry
-        IMAGE_REGISTRY = "172.16.10.66"
+        IMAGE_REGISTRY = "172.16.10.216:80"
         IMAGE_NAMESPACE = "oss"
-        APP_NAME = "oss-multimw"
+        APP_NAME = "oss-mmf"
+        REGISTRY_ID = "builder"
+        REGISTRY_PWD = "Obigoam1@se"
 
         // Dockerfile Path
         DOCKERFILE_PATH = "docker/Dockerfile" 
         // Docker images
-        BUILDER_IMAGE = "${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${APP_NAME}-builder"
-        RUNTIME_IMAGE = "${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${APP_NAME}"
-        ANALYSIS_IMAGE = "${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${APP_NAME}-analysis"
-        DEBUG_IMAGE = "${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${APP_NAME}-debug" 
+        BUILDER_IMAGE = "${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${APP_NAME}-builder:latest"
+        //RUNTIME_IMAGE = "${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${APP_NAME}"
+        //ANALYSIS_IMAGE = "${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${APP_NAME}-analysis"
+        //DEBUG_IMAGE = "${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${APP_NAME}-debug" 
 
         // Docker Buildx
         DOCKER_BUILDKIT = '1'
@@ -34,16 +36,18 @@ pipeline {
         EXTENSION_PLATFORM = 'ROS2'
         
         // Credentials
+        GITHUB_CREDENTIALS = 'github-cred'
         GITLAB_CREDENTIALS = 'brian.doh'
         REGISTRY_CREDENTIALS = 'Harbor_Jenkins'
         
+        GITHUB_REPO_URL = 'https://github.com/obigo-gov/oss_multisw_framework.git'
         GITOPS_REPO_URL = 'https://lotte-autops.com/oss_group1/oss_multisw_framework.git'
-        GIT_BRANCH = "dev_Brian-GOASP-1273"
+        GIT_BRANCH = "develop"
 
         // Sysroot
-        AGENT_DIR="/jenkins/agent"
-        SYSROOT_DIR = "${AGENT_DIR}/sysroot-aarch64"
-        TOOLCHAIN_FILE = "${AGENT_DIR}/toolchain-aarch64.cmake"
+        SDK_DIR="${HOME}/obigo-sdk"
+        //SYSROOT_DIR = "${SDK_DIR}/sysroot-aarch64"
+        //TOOLCHAIN_FILE = "${SDK_DIR}/toolchain-aarch64.cmake"
     }
 
    options {
@@ -53,35 +57,45 @@ pipeline {
     }
 
     stages {
-        stage('Setup Docker Buildx') {
+        stage('Setup Environment') {
             steps {
                 script {
+                    echo "Login Docker Private Registry. If registry didn't saved"
                     sh '''
-                        echo "Setting up Docker Buildx..."
-                        docker buildx rm ${BUILDX_BUILDER_NAME} || true
-                        docker buildx create --name ${BUILDX_BUILDER_NAME} --driver docker-container --use || true
-
-                        echo "Check builder information..."
-                        docker buildx inspect --bootstrap
-
-                        echo "Check supported platform information..."
-                        docker buildx inspect | grep Platforms
-
-                        echo "Check Qemu support"
-                        docker run --privileged --rm tonistiigi/binfmt --install arm64
+                        if ! docker info --format '{{json .RegistryConfig}}' 2>/dev/null \
+                            | grep -q "${IMAGE_REGISTRY}"; then
+                            if [ ! -f /etc/docker/daemon.json ]; then
+                                sudo mkdir -p /etc/docker
+                                echo '{"insecure-registries": []}' | sudo tee /etc/docker/daemon.json > /dev/null
+                            else
+                                jq 'if has("insecure-registries") then . else . + {"insecure-registries": []} end' \
+                                    /etc/docker/daemon.json > /tmp/daemon.json
+                                sudo cp /etc/docker/daemon.json /etc/docker/daemon.json.bak
+                                sudo cp /tmp/daemon.json /etc/docker/daemon.json
+                            fi
+                            sudo sed -i "s/\[\]/[\"${IMAGE_REGISTRY}\"]/" /etc/docker/daemon.json
+                            sudo systemctl restart docker
+                        
+                            echo "${REGISTRY_PWD}" | docker login ${IMAGE_REGISTRY} -u ${REGISTRY_ID} --password-stdin
+                        fi
                     '''
                 }
             }
         }
-
-        stage('Initialize') {
+        stage('Sync Sources') {
             steps {
-                script {
-                    echo "Checking out source code..."
-                }
-                git branch: "${GIT_BRANCH}",
-                    credentialsId: "${GITLAB_CREDENTIALS}",
-                    url: "${GITOPS_REPO_URL}"
+                echo "Cleaning up the workspace..."
+                cleanWs()
+
+                echo "Checking out source code..."
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: "*/${GIT_BRANCH}"]],
+                    userRemoteConfigs: [[
+                        url: "${GITHUB_REPO_URL}",
+                        credentialsId: "${GITHUB_CREDENTIALS}"
+                    ]]
+                ])
                 // Tag
                 script {
                     env.COMMIT_HASH = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
@@ -89,205 +103,284 @@ pipeline {
                     env.BUILD_DATE = sh(script: "date -u +'%Y-%m-%dT%H:%M:%SZ'", returnStdout: true).trim()
                     env.BRANCH_CLEAN = sh(script: "echo ${GIT_BRANCH} | sed 's/[^a-zA-Z0-9._-]/-/g'", returnStdout: true).trim()
                 }
+                // Dependency library - FastDDS
+                script {
+                    sh '''
+                        if [ ! -d ${SDK_DIR}/Fast-DDS ]; then
+                            if [ ! -d ${SDK_DIR}/venv ]; then
+                                python3 -m venv ${SDK_DIR}/venv
+                            fi
+                            . ${SDK_DIR}/venv/bin/activate
+                            if [ -z $(which vcs) ]; then
+                                pip3 install --no-cache-dir \
+                                    colcon-common-extensions \
+                                    vcstool \
+                                    >/dev/null 2>&1
+                            fi
+                            
+                            mkdir -p ${SDK_DIR}/Fast-DDS/src
+                            pushd ${SDK_DIR}/Fast-DDS >/dev/null 2>&1
+                            cd ${SDK_DIR}/Fast-DDS
+                            wget https://raw.githubusercontent.com/eProsima/Fast-DDS/3.2.2/fastdds.repos
+                            vcs import src < fastdds.repos
+                            sed -i "s#-Wpedantic##g" ${SDK_DIR}/Fast-DDS/src/fastdds/CMakeLists.txt
+                            deactivate
+                        fi
+                    '''
+                }
             }
         }
-
-        stage('Prepare sysroot for cross-compile') {
+        stage('Pull Builder Container') {
             steps {
-                sh '''
-                    if [ ! -f ${AGENT_DIR}/.aarch64_sysroot_completed ]; then
-                        if [ -d ${SYSROOT_DIR} ]; then
-                            rm -rf ${SYSROOT_DIR}
+                script {
+                    sh '''
+                        if ! curl -u "${REGISTRY_ID}:${REGISTRY_PWD}" -s http://${IMAGE_REGISTRY}/v2/_catalog 2>/dev/null \
+                            | grep -q "${APP_NAME}-builder"; then
+                            docker build -t ${BUILDER_IMAGE} \
+                                -f ${PWD}/docker/build_environment/Dockerfile .
+                            docker push ${BUILDER_IMAGE}
+                        else
+                            if [[ -z $(docker images -q "${BUILDER_IMAGE}" ]]; then
+                                docker pull ${BUILDER_IMAGE}
+                            fi
                         fi
-                    fi
-                    if [ ! -d ${SYSROOT_DIR} ]; then
-                        debootstrap --arch=arm64 jammy ${SYSROOT_DIR} http://ports.ubuntu.com/
-                        if [ ! -f ${AGENT_DIR}/ubuntu-arm64.list ]; then
-                            cat <<EOF > ${AGENT_DIR}/ubuntu-arm64.list
-deb http://ports.ubuntu.com/ubuntu-ports jammy main universe multiverse restricted
-deb http://ports.ubuntu.com/ubuntu-ports jammy-updates main universe multiverse restricted
-deb http://ports.ubuntu.com/ubuntu-ports jammy-security main universe multiverse restricted
-EOF
+                    '''
+                }
+                // Build Fast-DDS for x86_64 indisde builder
+                script {
+                   if (!fileExists("${SDK_DIR}/Fast-DDS/output")) {
+                       docker.image("${BUILDER_IMAGE}").inside('-u 1000:1000 -v ${SDK_DIR}:/opt') {
+                           sh '''
+                               #!/bin/bash
+                               set -e
+                               cd /opt/Fast-DDS
+                               colcon build \
+                                   --merge-install \
+                                   --parallel-workers $(nproc) \
+                                   --build-base build/ros2_x86_64 \
+                                   --install-base output/ros2_x86_64
+                           '''
+                       }
+                    }
+                }
+            }
+        }
+        // Static Analalysis
+        stage('SlocCount') {
+            steps {
+                script {
+                    echo "Running SlocCount..."
+                    sh '''
+                        if [ -d /tmp/sloccount-clean ]; then rm -rf /tmp/sloccount-clean; fi
+                        mkdir -p /tmp/sloccount-clean
+                        mkdir -p ${WORKSPACE}/output/reports/sloccount
+
+                        find ${WORKSPACE}/service/ \
+                            -not -path "*/unittest/*" \
+                            -not -path "*/rapidjson/*" \
+                            -not -path "*/nlohmann/*" \
+                            \\( -name "*.cpp" -o -name "*.hpp" -o -name "*.h" -o -name "*.cc" \\) \
+                            -exec cp --parents {} /tmp/sloccount-clean/ \\; 2>/dev/null || true
+
+                        cd /tmp/sloccount-clean
+                        if [ -z $(which sloccount) ]; then
+                            apt update && apt install sloccount -y
                         fi
-                        if [ ! -f ${AGENT_DIR}/toolchain-aarch64.cmake ]; then
-                            cat <<EOF > ${AGENT_DIR}/toolchain-aarch64.cmake
-# Target system and processor architecture
-SET(CMAKE_SYSTEM_NAME Linux)
-SET(CMAKE_SYSTEM_PROCESSOR aarch64)
-
-# Cross compiler location
-SET(CMAKE_C_COMPILER /usr/bin/aarch64-linux-gnu-gcc)
-SET(CMAKE_CXX_COMPILER /usr/bin/aarch64-linux-gnu-g++)
-
-# Where target environment includes and libraries are
-SET(CMAKE_FIND_ROOT_PATH /opt/sysroot-aarch64/)
-
-# Search for programs in the build host directories
-SET(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
-
-# Search for libraries and headers in the target directories
-SET(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
-SET(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
-
-# Optional: set C++ standard
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS ON )
-EOF
+                        sloccount --duplicates --wide --details . > ${WORKSPACE}/output/reports/sloccount/sloccount-detailed.xml || true
+                        sloccount . > ${WORKSPACE}/output/reports/sloccount/sloccount-summary.txt || true
+                        cd ${WORKSPACE}
+                    '''
+                }
+                script {
+                    sh -c ''
+                }
+            }
+            post {
+                always {
+                    sloccountPublish pattern: 'output/reports/sloccount/sloccount-detailed.xml'
+                    archiveArtifacts artifacts: 'output/reports/sloccount/sloccount-summary.txt', allowEmptyArchive: true
+                }
+            }
+        }
+        stage('Cppcheck') {
+            steps {
+                script {
+                    echo "Running Cppcheck..."
+                    sh '''
+                        mkdir -p ${WORKSPACE}/output/reports/cppcheck
+                        if [ ! -f ${WORKSPACE}/output/reports/files_to_analysis.txt ]; then
+                            find ${WORKSPACE}/service/ \
+                                -not -path "*/unittest/*" \
+                                -not -path "*/rapidjson/*" \
+                                -not -path "*/nlohmann/*" \
+                                \\( -name "*.cpp" -o -name "*.hpp" -o -name "*.h" -o -name "*.cc" \\) \
+                                > ${WORKSPACE}/output/reports/files_to_analysis.txt || true
                         fi
-                        cp ${AGENT_DIR}/ubuntu-arm64.list ${SYSROOT_DIR}/etc/apt/sources.list.d/
-                        chroot ${SYSROOT_DIR} /bin/bash -c '\
-                            DEBIAN_FRONTEND=noninteractive apt update \
-                            && apt install -y --no-install-recommends \
-                            libasio-dev \
-                            libtinyxml2-dev \
-                            libyaml-cpp-dev \
-                            && rm -rf /var/lib/apt/lists/*
+
+                        cppcheck --enable=all \
+                            --xml \
+                            --xml-version=2 \
+                            --output-file=${WORKSPACE}/output/reports/cppcheck/cppcheck-result.xml \
+                            --suppress=missingIncludeSystem \
+                            --suppress=unmatchedSuppression \
+                            --suppress=unusedFunction \
+                            --suppress=missingInclude \
+                            --std=c++20 \
+                            --file-list=${WORKSPACE}/output/reports/cppcheck/files_to_cppcheck.txt || true
+                    '''
+                }
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'output/reports/cppcheck/cppcheck-result.xml', allowEmptyArchive: true
+                    recordIssues(
+                        tools: [
+                            cppCheck(name: 'CppCheck', pattern: 'output/reports/cppcheck/cppcheck-result.xml')
+                        ]
+                    )
+                }
+            }
+        }
+        stage('CppLint') {
+            steps {
+                script {
+                    echo "Running CppLint..."
+                    sh '''
+                        mkdir -p ${WORKSPACE}/output/reports/cpplint
+                        if [ ! -f ${WORKSPACE}/output/reports/files_to_analysis.txt ]; then
+                            find ${WORKSPACE}/service/ \
+                                -not -path "*/unittest/*" \
+                                -not -path "*/rapidjson/*" \
+                                -not -path "*/nlohmann/*" \
+                                \\( -name "*.cpp" -o -name "*.hpp" -o -name "*.h" -o -name "*.cc" \\) \
+                                > ${WORKSPACE}/output/reports/files_to_analysis.txt
+                        fi
+
+                        if [ -f ${WORKSPACE}/output/reports/cpplint/files_to_lintcheck.txt ]; then
+                            cat ${WORKSPACE}/output/reports/cpplint/files_to_lintcheck.txt | xargs cpplint \
+                                --filter=-whitespace/tab,-legal/copyright,-build/include_order,-build/c++11,-build/header_guard \
+                                --linelength=80 \
+                                --extensions=cpp,cc,h,hpp \
+                                --counting=detailed \
+                                > ${WORKSPACE}/output/reports/cpplint/cpplint-result.txt 2>&1 || true
+                        else
+                            echo "No files to check" > ${WORKSPACE}/output/reports/cpplint/cpplint-result.txt
+                        fi
+                    '''
+                }
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'output/reports/cpplint/cpplint-result.txt', allowEmptyArchive: true
+                    recordIssues(
+                        tools: [
+                            cppLint(name: 'CppLint', pattern: 'output/reports/cpplint/cpplint-result.txt')
+                        ]
+                    )
+                    
+                }
+            }
+        }
+        stage('Clang-tidy') {
+            steps {
+                script {
+                    sh 'bash -c "mkdir -p ${WORKSPACE}/output"'
+                    def dockerArgs = [
+                        '-u 1000:1000',
+                        '-w /home/ossuser/workspace',
+                        "-e BUILD_MODE=Debug",
+                        "-v ${SDK_DIR}:/opt",
+                        "-v ${WORKSPACE}/CMakeLists.txt:/home/ossuser/workspace/CMakeLists.txt",
+                        "-v ${WORKSPACE}/service:/home/ossuser/workspace/service",
+                        "-v ${WORKSPACE}/idl:/home/ossuser/workspace/idl",
+                        "-v ${WORKSPACE}/output:/home/ossuser/workspace/output"
+                    ].join(' ')
+                    docker.image("${BUILDER_IMAGE}").inside(dockerArgs) {
+                        sh '''
+                            bash -c '
+                            set -e
+                            workdir=/home/ossuser/workspace
+                            mkdir -p ${workdir}/output/reports/clang-tidy
+                            targets=(core ros2 agl)
+                            source /opt/Fast-DDS/output/ros2_x86_64/setup.bash
+                            for t in ${targets[@]}; do
+                                echo "configure for ${t^^}"
+                                mkdir -p ${workdir}/.build/${t}
+                                cd ${workdir}/.build/${t}
+                                build_ext=TRUE
+                                src_dir=${workdir}/service/extension
+                                if [[ ${t} = core ]]; then
+                                    build_ext=FALSE
+                                    src_dir=${workdir}/service/core
+                                fi
+                                cmake ${workdir} \
+                                    -DBUILD_UNITTEST=FALSE \
+                                    -DBUILD_EXTENSION=${build_ext} \
+                                    -DEXTENSION_PLATFORM=${t^^} \
+                                    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+                                if [ -f compile_commands.json ]; then
+                                    mkdir -p ${workdir}/output/clang-tidy/${t}
+                                    cp compile_commands.json ${workdir}/output/clang-tidy/${t}
+                                    run-clang-tidy -p ${workdir}/output/clang-tidy/${t} \
+                                        -checks='bugprone-*,performance-*,modernize-*' \
+                                        -j \$(nproc) \
+                                        $(find ${src_dir} \
+                                            -not -path "*/unittest/*" \
+                                            -not -path "*/rapidjson/*" \
+                                            -not -path "*/nlohmann/*" \
+                                            \\( -name "*.cpp" -o -name "*.hpp" -o -name "*.h" -o -name "*.cc" \\)) \
+                                        > ${workdir}/output/reports/clang-tidy/clang-tidy-${t}.txt 2>&1 || true
+                                fi
+                            done
+                            '
+                        '''
+                    }
+                }
+                script {
+                    sh '''
+                        bash -c '
+                            set -e
+                            workdir=/home/ossuser/workspace
+                            report_dir=${WORKSPACE}/output/reports/clang-tidy
+                            targets=(core ros2 agl)
+                            for t in ${targets[@]}; do
+                                if [[ -f ${report_dir}/clang-tidy-${t}.txt ]]; then
+                                    sed -i "s#\${workdir}#\${WORKSPACE}#g" \
+                                        ${report_dir}/clang-tidy-${t}.txt
+                                fi
+                            done
                         '
-                        touch ${AGENT_DIR}/.aarch64_sysroot_completed
-                    fi
-                    cp ${AGENT_DIR}/toolchain-aarch64.cmake .
-                    cp -rpa ${SYSROOT_DIR} .
-                '''.stripIndent() 
-            }
-        }
-        stage('Builder Stage') {
-            steps {
+                    '''
+                }
                 script {
                     sh '''
-                        echo "Building builder image (AMD64 for development)..."
-                        docker buildx build \
-                            --platform ${PLATFORM_AMD64} \
-                            --build-arg BUILD_UNITTEST=${BUILD_UNITTEST} \
-                            --build-arg EXTENSION_PLATFORM=${EXTENSION_PLATFORM} \
-                            -f ${DOCKERFILE_PATH} \
-                            --target build-stage \
-                            --load \
-                            -t ${BUILDER_IMAGE}:${IMAGE_TAG} \
-                            .
+                        workdir=/home/ossuser/workspace
+                        if [ -d ${workdir}/clang-tidy ]; then
+                            rm -rf ${workdir}/clang-tidy
+                        fi
+                        if [ -d ${workdir}/.build ]; then
+                            rm -rf ${workdir}/.build
+                        fi
                     '''
                 }
             }
-        }
-        stage('Runtime Stage') {
-            steps {
-                script {
-                    sh '''
-                        echo "Building runtime image (ARM64 for target deployment)..."
-                        docker buildx build \
-                            --platform ${PLATFORM_ARM64} \
-                            -f ${DOCKERFILE_PATH} \
-                            --target runtime \
-                            --load \
-                            -t ${RUNTIME_IMAGE}:${IMAGE_TAG} \
-                            .
-                    '''
-                }
-            }
-        }
-        stage('Static Analysis') {
-            parallel {
-                stage('Cppcheck') {
-                    steps {
-                        script {
-                            echo "Running Cppcheck..."
-                            sh 'mkdir -p ${WORKSPACE}/reports'
-                            docker.image("${BUILDER_IMAGE}:${IMAGE_TAG}").inside("-v ${WORKSPACE}/reports:/workspace/reports") {
-                                sh """
-                                    mkdir -p /workspace/reports/cppcheck
-                                    find /workspace/service/ \
-                                        -not -path "*/unittest/*" \
-                                        -name "*.cpp" \
-                                        > /workspace/reports/cppcheck/files_to_cppcheck.txt || true
-
-                                    cppcheck --enable=all \
-                                        --xml \
-                                        --xml-version=2 \
-                                        --output-file=/workspace/reports/cppcheck/cppcheck-result.xml \
-                                        --suppress=missingIncludeSystem \
-                                        --suppress=unmatchedSuppression \
-                                        --suppress=unusedFunction \
-                                        --std=c++20 \
-                                        --file-list=/workspace/reports/cppcheck/files_to_cppcheck.txt || true
-                                """
-                            }
-                        }
-                    }
-                    post {
-                        always {
-                            publishCppcheck pattern: 'reports/cppcheck/cppcheck-result.xml'
-                            archiveArtifacts artifacts: 'reports/cppcheck/cppcheck-result.xml', allowEmptyArchive: true
-                        }
-                    }
-                }
-                stage('SlocCount') {
-                    steps {
-                        script {
-                            echo "Running SlocCount..."
-                            sh 'mkdir -p ${WORKSPACE}/reports'
-                            docker.image("${BUILDER_IMAGE}:${IMAGE_TAG}").inside("-v ${WORKSPACE}/reports:/workspace/reports") {
-                                sh '''
-                                    mkdir -p /tmp/sloccount-clean
-                                    mkdir -p /workspace/reports/sloccount
-
-                                    find /workspace/service/ \
-                                        -not -path "*/unittest/*" \
-                                        \\( -name "*.cpp" -o -name "*.hpp" -o -name "*.h" \\) \
-                                        -exec cp --parents {} /tmp/sloccount-clean/ \\; 2>/dev/null || true
-
-                                    cd /tmp/sloccount-clean
-                                    if [ -z $(which sloccount) ]; then
-                                        apt update && apt install sloccount -y
-                                    fi
-                                    sloccount --duplicates --wide --details . > /workspace/reports/sloccount/sloccount-detailed.xml || true
-                                    sloccount . > /workspace/reports/sloccount/sloccount-summary.txt || true
-                                    cd /workspace
-                                '''
-                            }
-                        }
-                    }
-                    post {
-                        always {
-                            sloccountPublish pattern: 'reports/sloccount/sloccount-detailed.xml'
-                            archiveArtifacts artifacts: 'reports/sloccount/sloccount-summary.txt', allowEmptyArchive: true
-                        }
-                    }
-                } 
-                stage('CppLint') {
-                    steps {
-                        script {
-                            echo "Running CppLint..."
-                            sh 'mkdir -p ${WORKSPACE}/reports'
-                            docker.image("${BUILDER_IMAGE}:${IMAGE_TAG}").inside("-v ${WORKSPACE}/reports:/workspace/reports") {
-                                sh '''
-                                    mkdir -p /workspace/reports/cpplint
-                                    find /workspace/service/ \
-                                        -not -path "*/unittest/*" \
-                                        \\( -name "*.cpp" -o -name "*.hpp" -o -name "*.h" \\) \
-                                        > /workspace/reports/cpplint/files_to_lintcheck.txt
-                                    
-                                    if [ -f /workspace/reports/cpplint/files_to_lintcheck.txt ]; then
-                                        cat /workspace/reports/cpplint/files_to_lintcheck.txt | xargs cpplint \
-                                            --filter=-whitespace/tab,-legal/copyright,-build/include_order \
-                                            --linelength=120 \
-                                            --extensions=cpp,cc,h,hpp \
-                                            --output=vs7 \
-                                            --counting=detailed \
-                                            > /workspace/reports/cpplint/cpplint-result.txt 2>&1 || true
-                                    else
-                                        echo "No files to check" > /workspace/reports/cpplint/cpplint-result.txt
-                                    fi
-                                '''
-                            }
-                        }
-                    }
-                    post {
-                        always {
-                            archiveArtifacts artifacts: 'reports/cpplint/cpplint-result.txt', allowEmptyArchive: true
-                        }
-                    }
+            post {
+                always {
+                    recordIssues(
+                        tools: [
+                            clangTidy(id: 'Core', name: 'Core', pattern: 'output/reports/clang-tidy/clang-tidy-core.txt'),
+                            clangTidy(id: 'Ext-ros2', name: 'Extension for ROS2', pattern: 'output/reports/clang-tidy/clang-tidy-ros2.txt'),
+                            clangTidy(id: 'Ext-agl', name: 'Extension for AGL', pattern: 'output/reports/clang-tidy/clang-tidy-agl.txt')
+                        ],
+                        aggregatingResults: true,
+                        qualityGates: [[threshold: 1000, type: 'TOTAL', unstable: true]]
+                    )
+                    archiveArtifacts artifacts: 'output/reports/clang-tidy/clang-tidy-core.txt', allowEmptyArchive: true
+                    archiveArtifacts artifacts: 'output/reports/clang-tidy/clang-tidy-ros2.txt', allowEmptyArchive: true
+                    archiveArtifacts artifacts: 'output/reports/clang-tidy/clang-tidy-agl.txt', allowEmptyArchive: true
                 }
             }
         }
     }
 }
+
