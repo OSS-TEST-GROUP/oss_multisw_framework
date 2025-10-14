@@ -7,14 +7,21 @@
 #include "rapidjson/document.h"
 #include <chrono>
 #include <thread>
+#include <optional>
 
 class ServiceManagerTest : public ::testing::Test {
 protected:
+    std::optional<std::string> getEnv(const std::string& key) {
+        const char* val = std::getenv(key.c_str());
+        return val ? std::optional<std::string>(val) : std::nullopt;
+    }
     void SetUp() override {
         request_queue = std::make_shared<ThreadSafeQueue<std::shared_ptr<RequestData>>>();
-        vss_tree = std::make_shared<viss::VSSTree>("../config/viss.him");
+        config_path = getEnv("VEHICLE_CONFIG_PATH").value_or("config");
+        config_path.append("/viss.him");
+        vss_tree = std::make_shared<viss::VSSTree>(config_path);
         if (!vss_tree->isValid()) {
-            FAIL() << "Failed to load VSS tree from ../config/viss.him";
+            FAIL() << "Failed to load VSS tree from " << config_path;
         }
         service_manager = std::make_unique<ServiceManager>(request_queue, vss_tree);
         manager_thread = std::thread([this]() { service_manager->run(); });
@@ -31,6 +38,7 @@ protected:
     std::shared_ptr<viss::VSSTree> vss_tree;
     std::unique_ptr<ServiceManager> service_manager;
     std::thread manager_thread;
+    std::string config_path;
 };
 
 TEST_F(ServiceManagerTest, ProcessGetRequest) {

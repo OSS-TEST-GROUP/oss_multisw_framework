@@ -40,8 +40,12 @@ protected:
 
         // Register to manager
         manager.UpdateData(engine);
+        Mock_Logger = new MockLogger();
     }
-
+    virtual void TearDown() {
+        delete Mock_Logger;
+        Mock_Logger = nullptr;
+    }
     DataManager manager;
 };
 

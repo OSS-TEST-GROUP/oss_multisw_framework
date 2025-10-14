@@ -10,13 +10,20 @@
 
 class VssSubscriptionManagerTest : public ::testing::Test {
 protected:
+    std::optional<std::string> getEnv(const std::string& key) {
+        const char* val = std::getenv(key.c_str());
+        return val ? std::optional<std::string>(val) : std::nullopt;
+    }
+
     void SetUp() override {
         data_store = std::make_shared<VssDataStore>();
         response_pool = std::make_shared<ObjectPool<PooledResponseMap>>();
         // The test must be run from the build directory.
-        vss_tree = std::make_shared<viss::VSSTree>("../config/viss.him");
+        config_path = getEnv("VEHICLE_CONFIG_PATH").value_or("config");
+        config_path.append("/viss.him");
+        vss_tree = std::make_shared<viss::VSSTree>(config_path);
         if (!vss_tree->isValid()) {
-            FAIL() << "Failed to load VSS tree from ../config/viss.him";
+            FAIL() << "Failed to load VSS tree from " << config_path;
         }
         sub_manager = std::make_shared<VssSubscriptionManager>(data_store, response_pool, vss_tree);
     }
@@ -29,6 +36,7 @@ protected:
     std::shared_ptr<ObjectPool<PooledResponseMap>> response_pool;
     std::shared_ptr<viss::VSSTree> vss_tree;
     std::shared_ptr<VssSubscriptionManager> sub_manager;
+	std::string config_path;
 };
 
 TEST_F(VssSubscriptionManagerTest, AddAndRemoveSubscription) {

@@ -1,0 +1,35 @@
+---
+Checks: >
+  modernize-use-override,
+  modernize-use-nullptr,
+  modernize-deprecated-headers,
+  -modernize-use-trailing-return-type,
+  readability-*,
+  performance-*,
+  bugprone-*,
+  clang-analyzer-*,
+  misc-*,
+  cppcoreguidelines-*,
+  -cppcoreguidelines-pro-bounds-array-to-pointer-decay,
+  -cppcoreguidelines-pro-type-reinterpret-cast,
+  -cppcoreguidelines-owning-memory,
+  -cppcoreguidelines-avoid-magic-numbers
+
+WarningsAsErrors: >
+  bugprone-*,
+  clang-analyzer-*
+
+AnalyzeTemporaryDtors: false
+
+FormatStyle: none
+
+CheckOptions:
+  - key:             modernize-use-nullptr.NullMacros
+    value:           'NULL'
+  - key:             modernize-use-override.IgnoreDestructors
+    value:           '1'
+  - key:             readability-identifier-naming.VariableCase
+    value:           lower_case
+  - key:             readability-identifier-naming.FunctionCase
+    value:           camelBack
+

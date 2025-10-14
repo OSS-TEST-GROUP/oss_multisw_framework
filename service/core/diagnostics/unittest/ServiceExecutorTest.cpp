@@ -31,11 +31,14 @@ protected:
         Mock_ServiceTaskMock = new ServiceTaskMock;
 
         ins = new ServiceExecutor();
+        Mock_Logger = new MockLogger();
     }
     virtual void TearDown(){
         delete ins;
 
         delete Mock_ServiceTaskMock;
+        delete Mock_Logger;
+        Mock_Logger = nullptr;
     }
 
     ServiceExecutor* ins;

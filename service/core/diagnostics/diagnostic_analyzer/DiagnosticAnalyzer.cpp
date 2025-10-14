@@ -3,6 +3,7 @@
 #include <string>
 #include <mutex>
 #include <regex>
+#include <optional>
 
 #include "DiagnosticAnalyzer.hpp"
 #include "request_msg/AnalyzeRequestMessage.hpp"
@@ -13,7 +14,12 @@ using namespace std::placeholders;
 
 namespace diagnostic_manager {
 
-const std::string DIAG_CONFIG_PATH = "config";
+std::optional<std::string> getEnvVariable(const std::string& key) {
+	const char* val = std::getenv(key.c_str());
+	return val ? std::optional<std::string>(val) : std::nullopt;
+}
+
+//const std::string DIAG_CONFIG_PATH = "config";
 
 DiagnosticAnalyzer::DiagnosticAnalyzer(std::shared_ptr<ServiceExecutor> service_executor, std::shared_ptr<MessageTransmitter> msg_transmitter,
     std::shared_ptr<DiagInfoRegistry> diag_info_registry)
@@ -33,7 +39,8 @@ bool DiagnosticAnalyzer::Initialize() {
         LOG_ERROR("Failed to initialize the PolicyManager.");
         return false;
     }
-    if (!policy_manager_->LoadAllPolicy(DIAG_CONFIG_PATH)) {
+    std::string config_path = getEnvVariable("DIAG_CONFIG_PATH").value_or("config");
+    if (!policy_manager_->LoadAllPolicy(config_path.c_str())) {
         LOG_ERROR("Failed to load diagnostic policies.");
         return false;
     }

@@ -341,45 +341,49 @@ install(TARGETS vehicle_info_manager_app
 install(FILES
     config/vissv3.0-schema.json
     config/viss.him
-    DESTINATION config
+    DESTINATION bin/config
 )
 
 # Install the forest directory
 install(DIRECTORY
     config/forest/
-    DESTINATION config/forest
+    DESTINATION bin/config/forest
 )
 
 # --- Unit Testing Setup ---
-if (NOT CMAKE_CROSSCOMPILING)
+if (BUILD_UNITTEST)
 	enable_testing()
-endif()
+	
+	add_executable(VehicleInfoMgrTest
+	    unittest/vss_tree_test.cpp
+	    unittest/utils_test.cpp
+	    unittest/vss_data_store_test.cpp
+	    unittest/vss_subscription_manager_test.cpp
+	    unittest/service_manager_test.cpp
+	    src/core/VssTreeParser.cpp
+	    src/common/Utils.cpp
+	    src/core/VssDataStore.cpp
+	    src/core/VssSubscriptionManager.cpp
+	    src/core/ServiceManager.cpp
+	    src/common/StatusCodes.cpp
+	)
+	
+	target_include_directories(VehicleInfoMgrTest
+	    PRIVATE
+	    ${PROJECT_INCLUDE_DIR}
+	)
+	
+	target_link_libraries(VehicleInfoMgrTest
+	    PRIVATE
+	    gtest_main
+	)
+	
+	include(GoogleTest)
+	gtest_discover_tests(VehicleInfoMgrTest)
 
-add_executable(unit_test
-    unit_test/vss_tree_test.cpp
-    unit_test/utils_test.cpp
-    unit_test/vss_data_store_test.cpp
-    unit_test/vss_subscription_manager_test.cpp
-    unit_test/service_manager_test.cpp
-    src/core/VssTreeParser.cpp
-    src/common/Utils.cpp
-    src/core/VssDataStore.cpp
-    src/core/VssSubscriptionManager.cpp
-    src/core/ServiceManager.cpp
-    src/common/StatusCodes.cpp
-)
-
-target_include_directories(unit_test
-    PRIVATE
-    ${PROJECT_INCLUDE_DIR}
-)
-
-target_link_libraries(unit_test
-    PRIVATE
-    gtest_main
-)
-
-include(GoogleTest)
-if (NOT CMAKE_CROSSCOMPILING)
-	gtest_discover_tests(unit_test)
+	install (TARGETS VehicleInfoMgrTest
+		RUNTIME DESTINATION bin/unittest/vehicle_info_mgr
+		LIBRARY DESTINATION lib
+		ARCHIVE DESTINATION lib
+	)
 endif()

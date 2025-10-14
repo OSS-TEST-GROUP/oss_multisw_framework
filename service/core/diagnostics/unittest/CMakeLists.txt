@@ -45,6 +45,9 @@ include_directories (
 ## Library
 link_libraries ( gtest gmock fastcdr fastdds yaml-cpp )
 
+enable_testing()
+include (GoogleTest)
+
 ## Target binary
 add_executable ( DiagInfoRegistryTest DiagInfoRegistryTest.cpp )
 add_executable ( DiagInfoTest DiagInfoTest.cpp )
@@ -63,6 +66,25 @@ add_executable ( PolicyManagerTest PolicyManagerTest.cpp )
 add_executable ( DataManagerTest DataManagerTest.cpp )
 add_executable ( DiagnosticAnalyzerTest DiagnosticAnalyzerTest.cpp )
 add_executable ( ConditionEvalulatorTest ConditionEvalulatorTest.cpp )
+
+# Activate CTest
+gtest_discover_tests ( DiagInfoRegistryTest )
+gtest_discover_tests ( DiagInfoTest )
+gtest_discover_tests ( ServiceExecutorTest )
+gtest_discover_tests ( ServiceTaskTest )
+gtest_discover_tests ( RequestBaseTest )
+gtest_discover_tests ( VariantDataTest )
+gtest_discover_tests ( MessageTransmitterTest )
+gtest_discover_tests ( MessageTest )
+gtest_discover_tests ( DDSProtocolTest )
+gtest_discover_tests ( DDSDynamicIDLParserTest )
+gtest_discover_tests ( ReferenceMessageTest )
+gtest_discover_tests ( DiagPolicyRuleTest )
+gtest_discover_tests ( DiagPolicyTest )
+gtest_discover_tests ( PolicyManagerTest )
+gtest_discover_tests ( DataManagerTest )
+gtest_discover_tests ( DiagnosticAnalyzerTest )
+gtest_discover_tests ( ConditionEvalulatorTest )
 
 ## Install
 install ( TARGETS DiagInfoRegistryTest

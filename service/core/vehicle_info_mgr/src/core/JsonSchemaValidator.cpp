@@ -29,7 +29,7 @@ JsonSchemaValidator& JsonSchemaValidator::getInstance() {
 JsonSchemaValidator::JsonSchemaValidator(const std::string& schemaPath) {
     std::string path_to_use = schemaPath;
     if (path_to_use.empty()) {
-        path_to_use = "../config/vissv3.0-schema.json";
+        path_to_use = "config/vissv3.0-schema.json";
     }
 
     std::ifstream ifs(path_to_use);

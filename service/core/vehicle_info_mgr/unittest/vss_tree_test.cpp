@@ -6,9 +6,16 @@
 
 class VssTreeTest : public ::testing::Test {
 protected:
+    std::optional<std::string> getEnv(const std::string& key) {
+        const char* val = std::getenv(key.c_str());
+        return val ? std::optional<std::string>(val) : std::nullopt;
+    }
+
     void SetUp() override {
         // The test must be run from the build directory.
-        vss_tree = new viss::VSSTree("../config/viss.him");
+        config_path = getEnv("VEHICLE_CONFIG_PATH").value_or("config");
+        config_path.append("/viss.him");
+        vss_tree = new viss::VSSTree(config_path);
         if (!vss_tree->isValid()) {
             FAIL() << "Failed to load VSS tree from ../config/viss.him";
         }
@@ -19,6 +26,7 @@ protected:
     }
 
     viss::VSSTree* vss_tree;
+    std::string config_path;
 };
 
 TEST_F(VssTreeTest, FindNodeBySimplePath) {

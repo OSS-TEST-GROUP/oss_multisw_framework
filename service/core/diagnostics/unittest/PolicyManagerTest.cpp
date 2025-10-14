@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <optional>
 
 #include "diagnostic_analyzer/PolicyManager.cpp"
 #include "diagnostic_analyzer/DiagPolicy.cpp"
@@ -15,16 +16,24 @@ using namespace diagnostic_manager;
 
 class PolicyManagerTest : public ::testing::Test {
 protected:
-    const std::string config_path = "config";
+    std::optional<std::string> getEnv(const std::string& key) {
+        const char* val = std::getenv(key.c_str());
+        return val ? std::optional<std::string>(val) : std::nullopt;
+    }
 
     void SetUp() override {
         ins = new PolicyManager;
+        config_path = getEnv("DIAG_CONFIG_PATH").value_or("config");
+        Mock_Logger = new MockLogger();
     }
 
     void TearDown() override {
         delete ins;
+        delete Mock_Logger;
+        Mock_Logger = nullptr;
     }
 
+    std::string config_path;
     PolicyManager* ins;
 };
 

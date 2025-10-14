@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <typeinfo>
 #include <filesystem>
+#include <optional>
 
 #include "VissServerApp.h"
 #include "grpc_transport.h"
@@ -79,10 +80,18 @@ void VissServerApp::run() {
 }
 
 // ################### Main Entry Point ###################
+std::optional<std::string> getEnv(const std::string& key) {
+    const char* val = std::getenv(key.c_str());
+    return val ? std::optional<std::string>(val) : std::nullopt;
+}
+
 int main(int argc, char** argv) {
     // Default paths relative to the executable for a typical installation structure
-    std::string himPath = "../config/viss.him"; 
-    std::string schemaPath = "../config/vissv3.0-schema.json";
+    std::string configPath = getEnv("VEHICLE_CONFIG_PATH").value_or("config");
+    std::string himPath = configPath.append("/viss.him"); 
+    std::string schemaPath = configPath.append("/vissv3.0-schema.json");
+    //std::string himPath = "config/viss.him"; 
+    //std::string schemaPath = "config/vissv3.0-schema.json";
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];

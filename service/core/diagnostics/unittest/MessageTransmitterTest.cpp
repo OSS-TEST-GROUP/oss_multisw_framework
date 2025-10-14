@@ -41,6 +41,7 @@ protected:
         Mock_DDSProtocol = new DDSProtocolMock;
 
         ins = new MessageTransmitter(service_executor_mock_);
+        Mock_Logger = new MockLogger();
     }
     virtual void TearDown(){
         delete ins;
@@ -50,6 +51,8 @@ protected:
         message_protocol_mock_.reset();
         Mock_MessageProtocolMock = nullptr;
         delete Mock_DDSProtocol;
+        delete Mock_Logger;
+        Mock_Logger = nullptr;
     }
 
     MessageTransmitter* ins;

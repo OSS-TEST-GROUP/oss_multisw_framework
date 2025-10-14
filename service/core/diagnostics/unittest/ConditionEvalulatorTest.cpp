@@ -18,12 +18,15 @@ protected:
         data_manager = std::make_shared<DataManager>();
         policy_manager = std::make_shared<PolicyManager>();
         ins = new ConditionEvaluator(data_manager, policy_manager);
+        Mock_Logger = new MockLogger();
     }
 
     virtual void TearDown(){
         delete ins;
         data_manager.reset();
         policy_manager.reset();
+        delete Mock_Logger;
+        Mock_Logger = nullptr;
     }
 
     template<typename ValueType>

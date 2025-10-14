@@ -10,9 +10,12 @@ class VariantDataTest : public ::testing::Test {
 protected:
     virtual void SetUp() {
         ins = new VariantData();
+        Mock_Logger = new MockLogger();
     }
     virtual void TearDown(){
         delete ins;
+        delete Mock_Logger;
+        Mock_Logger = nullptr;
     }
 
     VariantData* ins;
