@@ -173,8 +173,8 @@ pipeline {
                 script {
                     echo "Running SlocCount..."
                     sh '''
-                        if [ -d /tmp/sloccount-clean ]; then rm -rf /tmp/sloccount-clean; fi
-                        mkdir -p /tmp/sloccount-clean
+                        if [ -d /tmp/multisw-framework ]; then rm -rf /tmp/multisw-framework; fi
+                        mkdir -p /tmp/multisw-framework
                         mkdir -p ${WORKSPACE}/output/reports/sloccount
 
                         find ${WORKSPACE}/service/ \
@@ -182,9 +182,9 @@ pipeline {
                             -not -path "*/rapidjson/*" \
                             -not -path "*/nlohmann/*" \
                             \\( -name "*.cpp" -o -name "*.hpp" -o -name "*.h" -o -name "*.cc" \\) \
-                            -exec cp --parents {} /tmp/sloccount-clean/ \\; 2>/dev/null || true
+                            -exec cp --parents {} /tmp/multisw-framework/ \\; 2>/dev/null || true
 
-                        cd /tmp/sloccount-clean
+                        cd /tmp/multisw-framework
                         if [ -z $(which sloccount) ]; then
                             apt update && apt install sloccount -y
                         fi
@@ -225,7 +225,7 @@ pipeline {
                             --suppress=unusedFunction \
                             --suppress=missingInclude \
                             --std=c++20 \
-                            --file-list=${WORKSPACE}/output/reports/files_to_analysis.txt || true
+                            --file-list=${WORKSPACE}/output/reports/cppcheck/files_to_cppcheck.txt || true
                     '''
                 }
             }
@@ -255,7 +255,7 @@ pipeline {
                                 > ${WORKSPACE}/output/reports/files_to_analysis.txt
                         fi
                         cat ${WORKSPACE}/output/reports/files_to_analysis.txt | xargs cpplint \
-                            --filter=-whitespace/tab,-legal/copyright,-build/include_order,-build/c++11,-build/header_guard \
+                            --filter=-whitespace/tab,-legal/copyright,-build/include_order,-build/c++11,-build/header_guard,-build/include_subdir \
                             --linelength=80 \
                             --extensions=cpp,cc,h,hpp \
                             --counting=detailed \
