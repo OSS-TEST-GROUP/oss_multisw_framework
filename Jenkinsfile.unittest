@@ -208,7 +208,7 @@ pipeline {
                         '-w /home/ossuser/workspace',
                         "-v ${WORKSPACE}/.build:/home/ossuser/workspace/.build",
                         "-v ${WORKSPACE}/idl:/home/ossuser/workspace/idl",
-                        "-v ${WORKSPACE}/output:/home/ossuser/workspace/output"
+                        "-v ${WORKSPACE}/output:/home/ossuser/workspace/output",
                         "-v ${WORKSPACE}/docker/build_environment/run_unittest.sh:/home/ossuser/workspace/run_unittest.sh"
                     ].join(' ')
                     docker.image("${BUILDER_IMAGE}").inside(dockerArgs) {
