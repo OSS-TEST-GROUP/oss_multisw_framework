@@ -374,6 +374,33 @@ pipeline {
                 }
             }
         }
+		stage('Build for x86_64') {
+			steps {
+				script {
+					sh 'bash -c "mkdir -p ${WORKSPACE}/output"'
+					def dockerArgs = [
+					'-u 1000:1000',
+					'-w /home/ossuser/workspace',
+					"-e BUILD_MODE=Debug",
+					"-v ${SDK_DIR}:/opt",
+					"-v ${WORKSPACE}/docker/build_environment/build.sh:/home/ossuser/workspace/build.sh",
+					"-v ${WORKSPACE}/CMakeLists.txt:/home/ossuser/workspace/CMakeLists.txt",
+					"-v ${WORKSPACE}/idl:/home/ossuser/workspace/idl",
+					"-v ${WORKSPACE}/service:/home/ossuser/workspace/service",
+					"-v ${WORKSPACE}/output:/home/ossuser/workspace/output"
+					].join(' ')
+					docker.image("${BUILDER_IMAGE}").inside(dockerArgs) {
+						sh '''
+							bash -c '
+								set -e
+								cd /home/ossuser/workspace
+								./build.sh --build-unittest --extension-platform=ROS2
+							'
+						'''
+					}
+				}
+			}
+		}
     }
 }
 
