@@ -1,0 +1,226 @@
+pipeline {
+    agent {
+        label 'OSS-Agent'
+    }
+
+    environment {
+        // Agent Node
+        AGENT_LABEL="OSS-Agent"
+
+        // Docker Registry
+        IMAGE_REGISTRY = "172.16.10.216:80"
+        IMAGE_NAMESPACE = "oss"
+        APP_NAME = "oss-mmf"
+        REGISTRY_ID = "builder"
+        REGISTRY_PWD = "Obigoam1@se"
+
+        // Dockerfile Path
+        DOCKERFILE_PATH = "docker/Dockerfile" 
+        // Docker images
+        BUILDER_IMAGE = "${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${APP_NAME}-builder:latest"
+        //RUNTIME_IMAGE = "${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${APP_NAME}"
+        //ANALYSIS_IMAGE = "${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${APP_NAME}-analysis"
+        //DEBUG_IMAGE = "${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${APP_NAME}-debug" 
+
+        // Docker Buildx
+        DOCKER_BUILDKIT = '1'
+        BUILDX_BUILDER_NAME = 'multiarch-builder'
+        
+        // Multi Architecture
+        PLATFORM_AMD64 = 'linux/amd64'
+        PLATFORM_ARM64 = 'linux/arm64'
+        PLATFORMS_ALL = 'linux/amd64,linux/arm64'
+
+        // Project
+        BUILD_UNITTEST = 'TRUE'
+        EXTENSION_PLATFORM = 'ROS2'
+        
+        // Credentials
+        GITHUB_CREDENTIALS = 'github-cred'
+        GITLAB_CREDENTIALS = 'brian.doh'
+        REGISTRY_CREDENTIALS = 'Harbor_Jenkins'
+        
+        GITHUB_REPO_URL = 'https://github.com/obigo-gov/oss_multisw_framework.git'
+        GITOPS_REPO_URL = 'https://lotte-autops.com/oss_group1/oss_multisw_framework.git'
+        GIT_BRANCH = "develop"
+
+        // Sysroot
+        SDK_DIR="${HOME}/obigo-sdk"
+        //SYSROOT_DIR = "${SDK_DIR}/sysroot-aarch64"
+        //TOOLCHAIN_FILE = "${SDK_DIR}/toolchain-aarch64.cmake"
+    }
+
+   options {
+        timeout(time: 120, unit: 'MINUTES')
+        disableConcurrentBuilds()
+        timestamps()
+    }
+
+    stages {
+        stage('Setup Environment') {
+            steps {
+                script {
+                    echo "Login Docker Private Registry. If registry didn't saved"
+                    sh '''
+                        if ! docker info --format '{{json .RegistryConfig}}' 2>/dev/null \
+                            | grep -q "${IMAGE_REGISTRY}"; then
+                            if [ ! -f /etc/docker/daemon.json ]; then
+                                sudo mkdir -p /etc/docker
+                                echo '{"insecure-registries": []}' | sudo tee /etc/docker/daemon.json > /dev/null
+                            else
+                                jq 'if has("insecure-registries") then . else . + {"insecure-registries": []} end' \
+                                    /etc/docker/daemon.json > /tmp/daemon.json
+                                sudo cp /etc/docker/daemon.json /etc/docker/daemon.json.bak
+                                sudo cp /tmp/daemon.json /etc/docker/daemon.json
+                            fi
+                            sudo sed -i "s/\\[\\]/[\"${IMAGE_REGISTRY}\"]/" /etc/docker/daemon.json
+                            sudo systemctl restart docker
+                        
+                            echo "${REGISTRY_PWD}" | docker login ${IMAGE_REGISTRY} -u ${REGISTRY_ID} --password-stdin
+                        fi
+                    '''
+                }
+            }
+        }
+        stage('Sync Sources') {
+            steps {
+                echo "Cleaning up the workspace..."
+                cleanWs()
+
+                echo "Checking out source code..."
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: "*/${GIT_BRANCH}"]],
+                    userRemoteConfigs: [[
+                        url: "${GITHUB_REPO_URL}",
+                        credentialsId: "${GITHUB_CREDENTIALS}"
+                    ]]
+                ])
+                // Tag
+                script {
+                    env.COMMIT_HASH = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+                    env.IMAGE_TAG = "${BUILD_NUMBER}-${COMMIT_HASH}"
+                    env.BUILD_DATE = sh(script: "date -u +'%Y-%m-%dT%H:%M:%SZ'", returnStdout: true).trim()
+                    env.BRANCH_CLEAN = sh(script: "echo ${GIT_BRANCH} | sed 's/[^a-zA-Z0-9._-]/-/g'", returnStdout: true).trim()
+                }
+                // Dependency library - FastDDS
+                script {
+                    sh '''
+                        if [ ! -d ${SDK_DIR}/Fast-DDS ]; then
+                            if [ ! -d ${SDK_DIR}/venv ]; then
+                                python3 -m venv ${SDK_DIR}/venv
+                            fi
+                            . ${SDK_DIR}/venv/bin/activate
+                            if [ -z $(which vcs) ]; then
+                                pip3 install --no-cache-dir \
+                                    colcon-common-extensions \
+                                    vcstool \
+                                    >/dev/null 2>&1
+                            fi
+                            
+                            mkdir -p ${SDK_DIR}/Fast-DDS/src
+                            pushd ${SDK_DIR}/Fast-DDS >/dev/null 2>&1
+                            cd ${SDK_DIR}/Fast-DDS
+                            wget https://raw.githubusercontent.com/eProsima/Fast-DDS/3.2.2/fastdds.repos
+                            vcs import src < fastdds.repos
+                            sed -i "s#-Wpedantic##g" ${SDK_DIR}/Fast-DDS/src/fastdds/CMakeLists.txt
+                            deactivate
+                        fi
+                    '''
+                }
+            }
+        }
+        stage('Pull Builder Container') {
+            steps {
+                script {
+                    sh '''
+                        #!/bin/bash
+                        set -e
+                        if ! curl -u "${REGISTRY_ID}:${REGISTRY_PWD}" -s http://${IMAGE_REGISTRY}/v2/_catalog 2>/dev/null \
+                            | grep -q "${APP_NAME}-builder"; then
+                            docker build -t ${BUILDER_IMAGE} \
+                                -f ${PWD}/docker/build_environment/Dockerfile .
+                            docker push ${BUILDER_IMAGE}
+                        else
+                            if [ -z $(docker images -q "${BUILDER_IMAGE}") ]; then
+                                docker pull ${BUILDER_IMAGE}
+                            fi
+                        fi
+                    '''
+                }
+                // Build Fast-DDS for x86_64 indisde builder
+                script {
+                   if (!fileExists("${SDK_DIR}/Fast-DDS/output")) {
+                       docker.image("${BUILDER_IMAGE}").inside('-u 1000:1000 -v ${SDK_DIR}:/opt') {
+                           sh '''
+                               #!/bin/bash
+                               set -e
+                               cd /opt/Fast-DDS
+                               colcon build \
+                                   --merge-install \
+                                   --parallel-workers $(nproc) \
+                                   --build-base build/ros2_x86_64 \
+                                   --install-base output/ros2_x86_64
+                           '''
+                       }
+                    }
+                }
+            }
+        }
+        stage('Build for x86_64') {
+            steps {
+                script {
+                    sh '''
+                        bash -c '
+                            mkdir -p ${WORKSPACE}/output
+                            mkdir -p ${WORKSPACE}/.build
+                        '
+                    '''
+                    def dockerArgs = [
+                    '-u 1000:1000',
+                    '-w /home/ossuser/workspace',
+                    "-e BUILD_MODE=Debug",
+                    "-v ${SDK_DIR}:/opt",
+                    "-v ${WORKSPACE}/.build:/home/ossuser/workspace/.build",
+                    "-v ${WORKSPACE}/docker/build_environment/build.sh:/home/ossuser/workspace/build.sh",
+                    "-v ${WORKSPACE}/CMakeLists.txt:/home/ossuser/workspace/CMakeLists.txt",
+                    "-v ${WORKSPACE}/idl:/home/ossuser/workspace/idl",
+                    "-v ${WORKSPACE}/service:/home/ossuser/workspace/service",
+                    "-v ${WORKSPACE}/output:/home/ossuser/workspace/output"
+                    ].join(' ')
+                    docker.image("${BUILDER_IMAGE}").inside(dockerArgs) {
+                        sh '''
+                            bash -c '
+                                set -e
+                                cd /home/ossuser/workspace
+                                ./build.sh --build-unittest --extension-platform=ROS2
+                            '
+                        '''
+                    }
+                }
+            }
+        }
+        stage('Run Unittest') {
+            steps {
+                scripts {
+                    def dockerArgs = [
+                        '-u 1000:1000',
+                        '-w /home/ossuser/workspace',
+                        "-v ${WORKSPACE}/.build:/home/ossuser/workspace/.build",
+                        "-v ${WORKSPACE}/idl:/home/ossuser/workspace/idl",
+                        "-v ${WORKSPACE}/output:/home/ossuser/workspace/output"
+                        "-v ${WORKSPACE}/docker/build_environment/run_unittest.sh:/home/ossuser/workspace/run_unittest.sh"
+                    ].join(' ')
+                    docker.image("${BUILDER_IMAGE}").inside(dockerArgs) {
+                        sh '''
+                            bash -c '
+                                ./run_unittest.sh
+                            '
+                            '''
+                    }
+                }
+            }
+        }
+    }
+}
+
