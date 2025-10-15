@@ -37,6 +37,7 @@ link_libraries (
 add_subdirectory(otam_common)
 add_subdirectory(otam_main)
 add_subdirectory(otam_client_service)
+add_subdirectory(otam_server_service)
 
 # Add test directory
 # Ensure that tests are only built when explicitly requested (e.g., by CI or developers)
@@ -54,6 +55,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     OtamMain
     # OtamDdsImpl
     OtamClientService
+    OtamServerService
 )
 
 install ( TARGETS ${PROJECT_NAME}
@@ -67,3 +69,7 @@ install(DIRECTORY
     ${CMAKE_SOURCE_DIR}/idl/dds/ota_mgr
     DESTINATION bin/idl
 )
+
+# config
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/config/config.json
+    DESTINATION bin/config)

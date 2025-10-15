@@ -3,7 +3,7 @@
 
   #include "otam_common/service.h"
   #include "otam_common/otam_dds_impl.h"
-  #include "otam_common/dds_define.h"
+  #include "otam_common/idl_headers.h"
   // IDL 생성된 파일들 포함
   #include "generated/idl/ota_mgr/OtamClientServiceMsg.hpp"
   #include "generated/idl/ota_mgr/OtamClientServiceMsgPubSubTypes.hpp"
