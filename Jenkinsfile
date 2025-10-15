@@ -142,7 +142,7 @@ pipeline {
                                 -f ${PWD}/docker/build_environment/Dockerfile .
                             docker push ${BUILDER_IMAGE}
                         else
-                            if [[ -z $(docker images -q "${BUILDER_IMAGE}") ]]; then
+                            if [ -z $(docker images -q "${BUILDER_IMAGE}") ]; then
                                 docker pull ${BUILDER_IMAGE}
                             fi
                         fi
