@@ -219,6 +219,14 @@ pipeline {
                             '''
                     }
                 }
+                scripts {
+                    junit allowEmptyResults: true, testResults: 'output/unittest-results/**/junit_results.xml'
+                }
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'output/unittest-results/**/junit_results.xml', fingerprint: true
+                }
             }
         }
     }
