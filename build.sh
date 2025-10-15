@@ -9,7 +9,7 @@ export BUILDER_CONTAINER_NAME="oss-mmf-builder"
 export BUILDER_CONTAINER_TAG="latest"
 export CONTAINER_IMAGE_NAME="oss-mmwf-ros2-x86_64"
 export CONTAINER_IMAGE_TAG=""
-export REGISTRY_ADDRESS="172.16.10.72:80"
+export REGISTRY_ADDRESS="172.16.10.216:80"
 export REGISTRY_ID="builder"
 export REGISTRY_PWD="Obigoam1@se"
 export DOCKER_TARGET="build-stage"
@@ -455,6 +455,7 @@ do_start_build_mmf()
 		-v ${PWD}/idl:/home/ossuser/workspace/idl \
 		-v ${PWD}/service:/home/ossuser/workspace/service \
 		-v ${PWD}/output:/home/ossuser/workspace/output \
+		-v ${PWD}/.build:/home/ossuser/workspace/.build \
 		${img_name} \
 		/home/ossuser/workspace/build.sh ${build_args}
 }
