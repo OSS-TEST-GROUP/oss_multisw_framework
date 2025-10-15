@@ -202,7 +202,7 @@ pipeline {
         }
         stage('Run Unittest') {
             steps {
-                scripts {
+                script {
                     def dockerArgs = [
                         '-u 1000:1000',
                         '-w /home/ossuser/workspace',
@@ -216,10 +216,10 @@ pipeline {
                             bash -c '
                                 ./run_unittest.sh
                             '
-                            '''
+                        '''
                     }
                 }
-                scripts {
+                script {
                     junit allowEmptyResults: true, testResults: 'output/unittest-results/**/junit_results.xml'
                 }
             }
