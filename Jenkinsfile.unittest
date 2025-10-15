@@ -214,6 +214,7 @@ pipeline {
                     docker.image("${BUILDER_IMAGE}").inside(dockerArgs) {
                         sh '''
                             bash -c '
+                                cd /home/ossuser/workspace
                                 ./run_unittest.sh
                             '
                         '''
