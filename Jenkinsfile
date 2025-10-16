@@ -278,7 +278,6 @@ pipeline {
         stage('Clang-tidy') {
             steps {
                 script {
-                    sh 'bash -c "mkdir -p ${WORKSPACE}/output"'
                     def dockerArgs = [
                         '-u 1000:1000',
                         '-w /home/ossuser/workspace',
