@@ -221,7 +221,10 @@ pipeline {
                     }
                 }
                 script {
-                    junit allowEmptyResults: true, testResults: 'output/unittest-results/**/junit_results.xml'
+                    def result = junit allowEmptyResults: true, testResults: 'output/unittest-results/**/junit_results.xml'
+                    if (result.failCount > 0) {
+                        currentBuild.result = "UNSTABLE"
+                    }
                 }
             }
             post {
