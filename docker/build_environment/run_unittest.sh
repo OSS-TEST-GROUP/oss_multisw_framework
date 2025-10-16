@@ -26,6 +26,6 @@ do
 		--label-add ${label} \
 		--output-junit ${RESULT_DIR}/${label}/junit_results.xml \
 		--output-on-failure \
-		--no-compress-output
+		--no-compress-output || true
 done
 
