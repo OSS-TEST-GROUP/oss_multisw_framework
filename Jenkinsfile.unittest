@@ -204,6 +204,7 @@ pipeline {
             steps {
                 script {
                     def dockerArgs = [
+                        '--network=host',
                         '-u 1000:1000',
                         '-w /home/ossuser/workspace',
                         "-v ${WORKSPACE}/.build:/home/ossuser/workspace/.build",
