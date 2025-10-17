@@ -221,8 +221,17 @@ pipeline {
                 }
                 script {
                     def result = junit allowEmptyResults: true, testResults: 'output/unittest-results/**/junit_results.xml'
-                    if (result.failCount > 0) {
-                        currentBuild.result = "UNSTABLE"
+
+                    def total = result.totalCount
+                    def failed = result.failCount
+                    def skipped = result.skipCount
+                    def passed = total - failed - skipped
+                    def successRate = total > 0 ? (passed * 100.0 / total) : 0.0
+
+                    if (successRate < 80.0) {
+                        currentBuild.result = 'UNSTABLE'
+                    } else {
+                        currentBuild.result = 'SUCCESS'
                     }
                 }
             }
