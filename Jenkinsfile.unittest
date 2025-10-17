@@ -84,9 +84,6 @@ pipeline {
         }
         stage('Sync Sources') {
             steps {
-                echo "Cleaning up the workspace..."
-                cleanWs()
-
                 echo "Checking out source code..."
                 checkout([
                     $class: 'GitSCM',
@@ -207,6 +204,7 @@ pipeline {
                         '--network=host',
                         '-u 1000:1000',
                         '-w /home/ossuser/workspace',
+                        '-e JAVA_OPTS=-Dorg.jenkinsci.plugins.durabletask.BourneShellScript.HEARTBEAT_CHECK_INTERVAL=86400',
                         "-v ${WORKSPACE}/.build:/home/ossuser/workspace/.build",
                         "-v ${WORKSPACE}/idl:/home/ossuser/workspace/idl",
                         "-v ${WORKSPACE}/output:/home/ossuser/workspace/output",
@@ -235,5 +233,11 @@ pipeline {
             }
         }
     }
+    post {
+        always {
+            echo "Cleaning workspace after all stages..."
+            sh 'git clean -fdx || true'
+            cleanWs(deleteDirs: true, notFailBuild: true, disableDeferredWipeout: true)
+        }
+    }
 }
-
