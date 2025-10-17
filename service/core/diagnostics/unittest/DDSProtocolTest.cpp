@@ -54,18 +54,40 @@ protected:
         return pid;
     }
     int32_t stopProcess(pid_t pid) {
-        kill(pid, SIGTERM);
+    if (pid <= 0) return -1;
 
-        int32_t status;
+    if (kill(pid, SIGTERM) == -1 && errno != ESRCH) {
+        perror("kill failed");
+        return -1;
+    }
+
+    int32_t status = 0;
+    for (int i = 0; i < 20; ++i) {
+        pid_t result = waitpid(pid, &status, WNOHANG);
+        if (result == pid) break;
+        if (result == -1 && errno == ECHILD) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
+    if (kill(pid, 0) == 0) {
+        kill(pid, SIGKILL);
         waitpid(pid, &status, 0);
+    }
 
-        process_list.erase(pid);
-        return status;
+    return status;
+//        kill(pid, SIGTERM);
+//
+//        int32_t status;
+//        waitpid(pid, &status, 0);
+//
+//        process_list.erase(pid);
+//        return status;
     }
     void stopAllProcess() {
-        for (auto& iter : process_list) {
+        for (auto iter : process_list) {
             stopProcess(iter);
         }
+        process_list.clear();
     }
     std::set<pid_t> process_list;
 
@@ -109,8 +131,14 @@ TEST_F(DDSProtocolTest, SubscribeMessage_TC001) {
     }
 
     EXPECT_EQ(1, ins->discovered_topic_.size());
-    EXPECT_TRUE(ins->discovered_topic_["/HelloWorldTopic"]->topic != nullptr);
-    EXPECT_TRUE(ins->discovered_topic_["/HelloWorldTopic"]->reader != nullptr);
+
+	auto it = ins->discovered_topic_.find("/HelloWorldTopic");
+	ASSERT_TRUE(it != ins->discovered_topic_.end());
+	ASSERT_TRUE(it->second != nullptr) << "TopicInformation shared_ptr is null";
+	EXPECT_TRUE(it->second->topic != nullptr);
+	EXPECT_TRUE(it->second->reader != nullptr);
+    //EXPECT_TRUE(ins->discovered_topic_["/HelloWorldTopic"]->topic != nullptr);
+    //EXPECT_TRUE(ins->discovered_topic_["/HelloWorldTopic"]->reader != nullptr);
 
     stopProcess(pid);
 
@@ -142,8 +170,14 @@ TEST_F(DDSProtocolTest, UnsubscribeMessage_TC001) {
     EXPECT_EQ(1, ins->discovered_topic_.size());
 
     ins->UnsubscribeMessage("/HelloWorldTopic");
-    EXPECT_TRUE(ins->discovered_topic_["/HelloWorldTopic"]->topic == nullptr);
-    EXPECT_TRUE(ins->discovered_topic_["/HelloWorldTopic"]->reader == nullptr);
+
+	auto it = ins->discovered_topic_.find("/HelloWorldTopic");
+	ASSERT_TRUE(it != ins->discovered_topic_.end());
+	ASSERT_TRUE(it->second != nullptr) << "TopicInformation shared_ptr is null";
+	EXPECT_TRUE(it->second->topic == nullptr);
+	EXPECT_TRUE(it->second->reader == nullptr);
+    //EXPECT_TRUE(ins->discovered_topic_["/HelloWorldTopic"]->topic == nullptr);
+    //EXPECT_TRUE(ins->discovered_topic_["/HelloWorldTopic"]->reader == nullptr);
     
 
     stopProcess(pid);
@@ -156,42 +190,71 @@ TEST_F(DDSProtocolTest, SerializeMessage_TC001) {
 }
 
 TEST_F(DDSProtocolTest, DeserializeMessage_TC001) {
-    constexpr uint32_t MAX_WAIT_COUNT = 100;
+//    constexpr uint32_t MAX_WAIT_COUNT = 100;
+//    std::shared_ptr<Message> received_message;
+//
+//    ins->SetForwardCallback([&] (std::shared_ptr<Message> msg) {
+//        received_message = msg;
+//    });
+
+    using namespace std::chrono_literals;
+
+    std::mutex m;
+    std::condition_variable cv;
     std::shared_ptr<Message> received_message;
 
-    ins->SetForwardCallback([&] (std::shared_ptr<Message> msg) {
-        received_message = msg;
+    ins->SetForwardCallback([&](std::shared_ptr<Message> msg) {
+        {
+            std::lock_guard<std::mutex> lk(m);
+            received_message = std::move(msg);
+        }
+        cv.notify_one();
     });
+
+    constexpr uint32_t MAX_WAIT_COUNT = 100;
 
     EXPECT_TRUE(ins->Initialize());
     ins->SubscribeMessage("/HelloWorldTopic");
 
-    char* args[] = {"test/HelloWorldPublisher", 0};
+    //char* args[] = {"test/HelloWorldPublisher", 0};
+    //pid_t pid = startProcess(args);
+    //if (pid == -1) {
+    //    std::cerr << "Failed to start test publisher" << std::endl;
+    //    FAIL();
+    //}
+
+
+    //uint32_t wait_count = 0;
+    //while (wait_count < MAX_WAIT_COUNT) {
+    //    if (received_message != nullptr) {
+    //        break;
+    //    }
+
+    //    wait_count++;
+    //    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    //}
+
+    //ins->UnsubscribeMessage("/HelloWorldTopic");
+    //stopProcess(pid);
+
+    char* args[] = { (char*)"test/HelloWorldPublisher", nullptr };
     pid_t pid = startProcess(args);
-    if (pid == -1) {
-        std::cerr << "Failed to start test publisher" << std::endl;
-        FAIL();
+    ASSERT_NE(pid, -1) << "Failed to start test publisher";
+
+    {
+        std::unique_lock<std::mutex> lk(m);
+        bool ok = cv.wait_for(lk, 50ms * MAX_WAIT_COUNT, [&]{
+            return (bool)received_message;
+        });
+        ASSERT_TRUE(ok) << "Timed out waiting for received_message";
     }
-
-
-    uint32_t wait_count = 0;
-    while (wait_count < MAX_WAIT_COUNT) {
-        if (received_message != nullptr) {
-            break;
-        }
-
-        wait_count++;
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    }
-
-    ins->UnsubscribeMessage("/HelloWorldTopic");
-    stopProcess(pid);
 
     EXPECT_EQ("/HelloWorldTopic", received_message->GetName());
     EXPECT_EQ(MessageProtocolType::DDS, received_message->GetProtocolType());
     EXPECT_EQ("DataTypeTest", received_message->GetTypeName());
     
     std::shared_ptr<VariantData> data = received_message->GetData();
+    ASSERT_TRUE(data) << "Data is null";
     EXPECT_EQ(11, data->GetValue<char>("v_char8"));
     EXPECT_EQ(12, data->GetValue<wchar_t>("v_char16"));
     EXPECT_EQ(13, data->GetValue<uint8_t>("v_uint8"));
@@ -223,6 +286,10 @@ TEST_F(DDSProtocolTest, DeserializeMessage_TC001) {
     EXPECT_EQ(std::vector<bool>({false, true}), data->GetValue<std::vector<bool>>("seq_bool"));
     EXPECT_EQ(std::vector<std::string>({"abc", "def"}), data->GetValue<std::vector<std::string>>("seq_string"));
 
+    ins->UnsubscribeMessage("/HelloWorldTopic");
+    stopProcess(pid);
+
+    ins->SetForwardCallback(nullptr);
     ins->Finalize();
 }
 
