@@ -7,7 +7,7 @@
 #include "otam_client_service/otam_client_service.h"
 #include "mock/mock_otam_dds_impl.h"
 #include "generated/idl/ota_mgr/OtamClientServiceMsg.hpp"
-#include "otam_common/idl_headers.h"
+#include "otam_common/otam_dds_idl.h"
 
 using ::testing::_;
 using ::testing::Return;

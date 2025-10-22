@@ -1,7 +1,7 @@
   #ifndef OTAM_DDS_IMPL_H_
   #define OTAM_DDS_IMPL_H_
 
-  #include "dds_abstraction.h"
+  #include "otam_dds.h"
   #include <fastdds/dds/domain/DomainParticipant.hpp>
   #include <fastdds/dds/publisher/Publisher.hpp>
   #include <fastdds/dds/subscriber/Subscriber.hpp>
@@ -28,7 +28,7 @@
    * 
    * @see DdsAbstraction
    */
-  class OtamDdsImpl : public DdsAbstraction {
+  class OtamDdsImpl : public OtamDds {
   public:
       /**
        * @brief Default constructor

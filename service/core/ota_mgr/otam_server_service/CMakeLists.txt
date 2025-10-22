@@ -21,8 +21,8 @@ add_library(OtamServerService STATIC ${OTAM_CLIENT_SERVICE_SRCS})
 
 # (Optional) If OtamServerService itself depends on other libraries, link them here.
 # For now, it's self-contained with standard library includes.
-#target_link_libraries(OtamServerService PRIVATE 
-#    OtamDdsImpl
-#)
+target_link_libraries(OtamServerService PRIVATE
+    curl
+)
 
 message(STATUS "CMAKE_CURRENT_SOURCE_DIR = ${CMAKE_CURRENT_SOURCE_DIR}")

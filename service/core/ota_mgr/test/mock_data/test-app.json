@@ -1,0 +1,36 @@
+{
+  "metadata": {
+    "name": "test-app",
+    "namespace": "argocd"
+  },
+  "spec": {
+    "project": "default",
+    "source": {
+      "repoURL": "https://github.com/example/repo.git",
+      "targetRevision": "main",
+      "path": "test-app"
+    },
+    "destination": {
+      "server": "https://kubernetes.default.svc",
+      "namespace": "test"
+    },
+    "syncPolicy": {
+      "automated": {
+        "prune": false,
+        "selfHeal": false
+      }
+    }
+  },
+  "status": {
+    "sync": {
+      "status": "OutOfSync",
+      "revision": "xyz789abc012"
+    },
+    "operationState": {
+      "phase": "None"
+    },
+    "health": {
+      "status": "Progressing"
+    }
+  }
+}

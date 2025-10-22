@@ -1,10 +1,11 @@
-#pragma once
+#ifndef OTAM_SERVER_SERVICE_H_
+#define OTAM_SERVER_SERVICE_H_
 
 #include <memory>
 #include <map>
 #include <string>
-#include "otam_common/service.h"
-#include "otam_common/api_client.h"
+#include "otam_common/otam_service.h"
+#include "otam_server_api_client.h"
 #include "otam_app_settings.h"
 #include "otam_server_result_types.h"
 
@@ -18,7 +19,7 @@ struct OtamServerConfig {
     std::map<std::string, std::string> headers;
 };
 
-class OtamServerService : public Service {
+class OtamServerService : public OtamService {
 public:
     OtamServerService() = default;
     ~OtamServerService() override = default;
@@ -30,22 +31,24 @@ public:
     void SetConfigPath(std::string path);
 
     // === ArgoCD Token 생성 ===
-    SessionResult CreateOtaSession(const std::string& user_info_json) override; // now calls ArgoCD API
-    ResultCode    DestroyOtaSession();
+    SessionResult CreateOtaSession(const std::string& user_info_json); // now calls ArgoCD API
+    ReturnValue    DestroyOtaSession();
 
     AppSettingsResult    GetOtaSettings(const std::string& app_name);
     AppUpdateStateResult GetOtaUpdateState(const std::string& app_name);
-    ResultCode           RunOtaUpdate(const std::string& app_name);
-    ResultCode           SetOtaSettings(const std::string& app_name, const std::string& app_settings_json);
+    ReturnValue           RunOtaUpdate(const std::string& app_name);
+    ReturnValue           SetOtaSettings(const std::string& app_name, const std::string& app_settings_json);
 
 private:
     OtamServerConfig LoadConfigFromFile(const std::string& path);
-    std::map<std::string, std::string> ParseResponse(const std::string& response_json);
-
+    
 private:
+    ServiceState                         state_{ServiceState::UNINITIALIZED};
     std::string                          session_id_;
     std::shared_ptr<OtamAppSettings>     app_settings_;
-    std::unique_ptr<ApiClient>           api_client_;
+    std::unique_ptr<OtamServerApiClient>           api_client_;
     std::string                          config_path_{"config.json"};
     OtamServerConfig                     config_;
 };
+
+#endif //OTAM_SERVER_SERVICE_H_

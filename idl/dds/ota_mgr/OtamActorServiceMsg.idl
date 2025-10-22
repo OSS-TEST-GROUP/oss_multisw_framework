@@ -1,0 +1,90 @@
+#include "common/ReturnValue.idl"
+
+/**
+[Topic] “/mmf/otamanager/otaactor_service/GetAppUpdateSettings”
+**/
+module OtaManager {
+// Define a Request struct
+    struct GetAppUpdateSettings {
+        @key long id;          // Request ID
+        string app_name;
+    };
+};
+
+/**
+[Topic] “/mmf/otamanager/otaactor_service/GetAppUpdateSettingsResponse”
+**/
+module OtaManager {
+    struct GetAppUpdateSettingsResponse {
+        @key long id; // Response ID (matching the Request ID)
+        string app_name;
+        string app_settings;
+        ReturnValue ret_code;
+    };
+};
+
+/**
+[Topic] “/mmf/otamanager/otaactor_service/SetAppUpdateSettings”
+**/
+module OtaManager {
+    struct SetAppUpdateSettings {
+        @key long id;          // Request ID
+        string app_name;
+        string app_settings;      
+    };
+};
+
+/**
+[Topic] “/mmf/otamanager/otaactor_service/SetAppUpdateSettingsResponse”
+**/
+module OtaManager {
+    // Define a Response struct
+    struct SetAppUpdateSettingsResponse {
+        @key long id;  // Response ID (matching the Request ID)
+        ReturnValue ret_code;
+    };
+};
+
+
+/**
+[Topic] “/mmf/otamanager/otaactor_service/GetAppUpdateState”
+**/
+module OtaManager {
+    struct GetAppUpdateState {
+        @key long id;          // Request ID
+        string app_name;
+    };
+};
+
+/**
+[Topic] “/mmf/otamanager/otaactor_service/GetAppUpdateStateResponse”
+**/
+module OtaManager {
+    struct GetAppUpdateStateResponse {
+        @key long id; // Response ID (matching the Request ID)
+        string app_name;
+        string app_state_info;
+        ReturnValue ret_code;
+    };
+};
+
+/**
+[Topic] “/mmf/otamanager/otaactor_service/SetAppUpdate”
+**/
+module OtaManager {
+    struct SetAppUpdate {
+        @key long id;          // Request ID
+        string app_name;
+    };
+};
+
+/**
+[Topic] “/mmf/otamanager/otaactor_service/SetAppUpdateResponse”
+**/
+module OtaManager {
+    struct SetAppUpdateResponse {
+        @key long id; // Response ID (matching the Request ID)
+        string app_name;
+        ReturnValue ret_code;
+    };
+};

@@ -37,14 +37,14 @@
       }
   }
 
-   void OtamClientService::Start() {
+  void OtamClientService::Start() {
       std::cout << "OtamClientService: Starting OtamClientService." << std::endl;
       NotifyManagerReady();
-   }
+  }
 
-      void OtamClientService::Stop() {
+  void OtamClientService::Stop() {
       std::cout << "OtamClientService: Stopping OtamClientService." << std::endl;
-   }
+  }
 
   void OtamClientService::InitializeDDS() {
       // Create DDS implementation instances for each message type

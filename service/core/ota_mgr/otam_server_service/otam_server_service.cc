@@ -1,6 +1,6 @@
-#include "otam_server_service.hpp"
-#include "otam_server_api_client_impl.hpp"
-#include "otam_app_settings.hpp"
+#include "otam_server_service.h"
+#include "otam_server_api_client_impl.h"
+#include "otam_app_settings.h"
 
 #include <nlohmann/json.hpp>
 #include <fstream>
@@ -11,7 +11,7 @@ using json = nlohmann::json;
 
 // ===== Lifecycle =====
 void OtamServerService::Initialize() {
-    if (state_ != ServiceState::Uninitialized) {
+    if (state_ != ServiceState::UNINITIALIZED) {
         std::cout << "[OtamServerService] Already initialized.\n";
         return;
     }
@@ -24,29 +24,29 @@ void OtamServerService::Initialize() {
     std::cout << "[OtamServerService] Loaded ArgoCD config: "
               << config_.server_url << " user=" << config_.username << "\n";
 
-    state_ = ServiceState::Initialized;
+    state_ = ServiceState::INITIALIZED;
     std::cout << "OtamServerService Initialized." << std::endl;
 }
 
 void OtamServerService::Start() {
-    if (state_ == ServiceState::Started) return;
-    if (state_ == ServiceState::Uninitialized) Initialize();
+    if (state_ == ServiceState::STARTED) return;
+    if (state_ == ServiceState::UNINITIALIZED) Initialize();
 
     try {
         if (!api_client_) {
             api_client_ = std::make_unique<OtamServerApiClientImpl>(
                 config_.server_url, config_.headers);
         }
-        state_ = ServiceState::Started;
+        state_ = ServiceState::STARTED;
         std::cout << "OtamServerService Started." << std::endl;
     } catch (const std::exception& e) {
         std::cerr << "[OtamServerService] Start failed: " << e.what() << "\n";
-        state_ = ServiceState::Uninitialized;
+        state_ = ServiceState::UNINITIALIZED;
     }
 }
 
 void OtamServerService::Stop() {
-    state_ = ServiceState::Stopped;
+    state_ = ServiceState::STOPPED;
     std::cout << "OtamServerService Stopped." << std::endl;
 }
 
@@ -54,9 +54,9 @@ void OtamServerService::Stop() {
 SessionResult OtamServerService::CreateOtaSession(
     const std::string& /*user_info_json*/) {
     SessionResult result;
-    result.ret_code = ResultCode::FAIL;
+    result.ret_code = ReturnValue::FAIL;
 
-    if (state_ != ServiceState::Started || !api_client_) {
+    if (state_ != ServiceState::STARTED || !api_client_) {
         std::cerr << "[OtamServerService] Not ready.\n";
         return result;
     }
@@ -84,7 +84,7 @@ SessionResult OtamServerService::CreateOtaSession(
         if (j.contains("token") && j["token"].is_string()) {
             session_id_ = j["token"].get<std::string>();
             result.session_id = session_id_;
-            result.ret_code = ResultCode::SUCCESS;
+            result.ret_code = ReturnValue::SUCCESS;
 
             // Set Authorization header for subsequent requests.
             api_client_->SetAuthToken(session_id_);
@@ -102,31 +102,17 @@ SessionResult OtamServerService::CreateOtaSession(
     return result;
 }
 
-// ===== Helper =====
-std::map<std::string, std::string> OtamServerService::ParseResponse(const std::string& response_json) {
-    std::map<std::string, std::string> out;
-    try {
-        auto j = json::parse(response_json);
-        for (auto& [k, v] : j.items()) {
-            out[k] = v.is_string() ? v.get<std::string>() : v.dump();
-        }
-    } catch (...) {
-        std::cerr << "[OtamServerService] Failed to parse JSON response.\n";
-    }
-    return out;
-}
-
 // ========== Public OTA methods ==========
-ResultCode OtamServerService::DestroyOtaSession() {
+ReturnValue OtamServerService::DestroyOtaSession() {
     std::cout << "[OtamServerService] DestroyOtaSession Not Supported.\n";
 }
 
 AppSettingsResult OtamServerService::GetOtaSettings(
     const std::string& app_name) {
     AppSettingsResult result;
-    result.ret_code = ResultCode::FAIL;
+    result.ret_code = ReturnValue::FAIL;
 
-    if (state_ != ServiceState::Started || !api_client_) {
+    if (state_ != ServiceState::STARTED || !api_client_) {
         std::cerr << "[OtamServerService] Not ready.\n";
         return result;
     }
@@ -148,7 +134,7 @@ AppSettingsResult OtamServerService::GetOtaSettings(
             j["spec"]["syncPolicy"].contains("automated")) {
             result.app_settings =
                 j["spec"]["syncPolicy"]["automated"].dump(2);
-            result.ret_code = ResultCode::SUCCESS;
+            result.ret_code = ReturnValue::SUCCESS;
             std::cout << "[OtamServerService] Automated policy for "
                       << app_name << ":\n"
                       << result.app_settings << std::endl;
@@ -170,9 +156,9 @@ AppSettingsResult OtamServerService::GetOtaSettings(
 AppUpdateStateResult OtamServerService::GetOtaUpdateState(
     const std::string& app_name) {
     AppUpdateStateResult result;
-    result.ret_code = ResultCode::FAIL;
+    result.ret_code = ReturnValue::FAIL;
 
-    if (state_ != ServiceState::Started || !api_client_) {
+    if (state_ != ServiceState::STARTED || !api_client_) {
         std::cerr << "[OtamServerService] Not ready.\n";
         return result;
     }
@@ -193,36 +179,71 @@ AppUpdateStateResult OtamServerService::GetOtaUpdateState(
         if (j.contains("status") &&
             j["status"].contains("sync") &&
             j["status"]["sync"].contains("status")) {
-            result.app_state_info =
-                j["status"]["sync"]["status"].get<std::string>();
-            result.ret_code = ResultCode::SUCCESS;
+            std::string sync_status = j["status"]["sync"]["status"].get<std::string>();
+
+            // Synced: Git 상태와 클러스터 리소스가 일치함
+            // OutOfSync: 클러스터 리소스가 Git과 불일치
+            // Unknown: 아직 Sync 상태 계산 중
+
+            // Extract revision from .status.sync.revision
+            std::string revision = "Unknown";
+            if (j["status"]["sync"].contains("revision")) {
+                revision = j["status"]["sync"]["revision"].get<std::string>();
+            }
+
+            // Extract operationState if exists
+            std::string operation_state = "None";
+            if (j["status"].contains("operationState") &&
+                j["status"]["operationState"].contains("phase")) {
+                operation_state = j["status"]["operationState"]["phase"].get<std::string>();
+            }
+            // operationState phases: Running, Succeeded, Failed, Error, Terminating
+
+            // Create JSON object with status, revision, and operationState fields
+            nlohmann::json state_json;
+            state_json["status"] = sync_status;
+            state_json["revision"] = revision;
+            state_json["operationState"] = operation_state;
+            result.app_state_info = state_json.dump();
+            result.ret_code = ReturnValue::SUCCESS;
+
             std::cout << "[OtamServerService] Sync status for "
                       << app_name << ": "
                       << result.app_state_info << std::endl;
         } else {
-            result.app_state_info = "unknown";
+            // Create JSON object with unknown status
+            nlohmann::json state_json;
+            state_json["status"] = "Failed";
+            state_json["revision"] = "Unknown";
+            state_json["operationState"] = "None";
+            result.app_state_info = state_json.dump();
             std::cerr << "[OtamServerService] Sync status not found for "
                       << app_name << ".\n";
         }
     } catch (const std::exception& e) {
         std::cerr << "[OtamServerService] GetOtaUpdateState failed: "
                   << e.what() << "\n";
-        result.app_state_info = "error";
+        // Create JSON object with error status
+        nlohmann::json state_json;
+        state_json["status"] = "error";
+        state_json["revision"] = "Unknown";
+        state_json["operationState"] = "None";
+        result.app_state_info = state_json.dump();
     }
 
     return result;
 }
 
-ResultCode OtamServerService::RunOtaUpdate(
+ReturnValue OtamServerService::RunOtaUpdate(
     const std::string& app_name) {
-    if (state_ != ServiceState::Started || !api_client_) {
+    if (state_ != ServiceState::STARTED || !api_client_) {
         std::cerr << "[OtamServerService] Not ready.\n";
-        return ResultCode::FAIL;
+        return ReturnValue::FAIL;
     }
     if (session_id_.empty()) {
         std::cerr << "[OtamServerService] No ArgoCD token. "
                   << "Call CreateOtaSession() first.\n";
-        return ResultCode::FAIL;
+        return ReturnValue::FAIL;
     }
 
     try {
@@ -247,31 +268,31 @@ ResultCode OtamServerService::RunOtaUpdate(
         if (j.contains("status") || j.contains("message")) {
             std::cout << "[OtamServerService] Sync triggered for "
                       << app_name << ".\n";
-            return ResultCode::SUCCESS;
+            return ReturnValue::SUCCESS;
         } else {
             std::cerr << "[OtamServerService] Sync response unexpected.\n";
-            return ResultCode::FAIL;
+            return ReturnValue::FAIL;
         }
     } catch (const std::exception& e) {
         std::cerr << "[OtamServerService] RunOtaUpdate failed: "
                   << e.what() << "\n";
         api_client_->RemoveHeader("Content-Type");
-        return ResultCode::FAIL;
+        return ReturnValue::FAIL;
     }
 }
 
-ResultCode OtamServerService::SetOtaSettings(
+ReturnValue OtamServerService::SetOtaSettings(
     const std::string& app_name,
     const std::string& app_settings_json) {
-    if (state_ != ServiceState::Started || !api_client_) {
+    if (state_ != ServiceState::STARTED || !api_client_) {
         std::cerr << "[OtamServerService] Not ready.\n";
-        return ResultCode::FAIL;
+        return ReturnValue::FAIL;
     }
 
     if (session_id_.empty()) {
         std::cerr << "[OtamServerService] No ArgoCD token. "
                   << "Call CreateOtaSession() first.\n";
-        return ResultCode::FAIL;
+        return ReturnValue::FAIL;
     }
 
     try {
@@ -288,7 +309,7 @@ ResultCode OtamServerService::SetOtaSettings(
         } else {
             std::cerr << "[OtamServerService] Invalid argument "
                       << "(use 'on' or 'off').\n";
-            return ResultCode::FAIL;
+            return ReturnValue::FAIL;
         }
 
         body["patchType"] = "merge";
@@ -306,13 +327,13 @@ ResultCode OtamServerService::SetOtaSettings(
 
         std::cout << "[OtamServerService] Patch response: "
                   << response << std::endl;
-        return ResultCode::SUCCESS;
+        return ReturnValue::SUCCESS;
 
     } catch (const std::exception& e) {
         std::cerr << "[OtamServerService] SetOtaSettings failed: "
                   << e.what() << "\n";
         api_client_->RemoveHeader("Content-Type");
-        return ResultCode::FAIL;
+        return ReturnValue::FAIL;
     }
 }
 
@@ -342,19 +363,4 @@ OtamServerConfig OtamServerService::LoadConfigFromFile(const std::string& path) 
     }
 
     return cfg;
-}
-
-std::map<std::string, std::string> OtamServerService::ParseResponse(const std::string& response_json) {
-    std::map<std::string, std::string> out;
-    try {
-        auto j = json::parse(response_json);
-        if (j.contains("ret_code"))   out["ret_code"]   = std::to_string(j["ret_code"].get<int>());
-        if (j.contains("session_id")) out["session_id"] = j["session_id"].get<std::string>();
-        if (j.contains("detail"))     out["detail"]     = j["detail"].is_string()
-                                                        ? j["detail"].get<std::string>()
-                                                        : j["detail"].dump();
-    } catch (...) {
-        // parsing 실패 시 빈 맵 반환 → 호출부에서 FAIL 처리
-    }
-    return out;
 }

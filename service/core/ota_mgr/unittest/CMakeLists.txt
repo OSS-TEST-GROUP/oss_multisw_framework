@@ -50,6 +50,26 @@ install ( TARGETS otam_main_tests
     ARCHIVE DESTINATION lib
     )
 
-# # Add the tests to CTest.
-# include(GoogleTest)
-# gtest_discover_tests(otam_main_tests)
+##################
+# otam_server_service
+##################
+add_executable(otam_server_test 
+    test_otam_server_service.cc
+)
+
+target_link_libraries(otam_server_test PRIVATE
+    OtamServerService
+    gtest
+    gmock
+)
+
+target_include_directories(otam_server_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/mock
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+)
+
+install ( TARGETS otam_server_test
+    RUNTIME DESTINATION bin/unittest/ota_mgr/test
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib
+    )

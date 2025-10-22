@@ -6,7 +6,7 @@
 #include <cstdint> // For uint32_t
 
 /**
- * @file dds_abstraction.h
+ * @file otam_dds.h
  * @brief Defines the abstract DdsAbstraction class for DDS communication.
  */
 
@@ -15,13 +15,13 @@
  * This class provides a common interface for creating DDS instances,
  * setting QoS, writing, and reading DDS messages.
  */
-class DdsAbstraction {
+class OtamDds {
  public:
   /**
    * @brief Virtual destructor for DdsAbstraction.
    * Ensures proper cleanup of derived DDS implementation classes.
    */
-  virtual ~DdsAbstraction() = default;
+  virtual ~OtamDds() = default;
 
   /**
    * @brief Creates necessary DDS communication instances for a given topic.

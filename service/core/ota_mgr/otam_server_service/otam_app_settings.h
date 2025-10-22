@@ -1,4 +1,5 @@
-#pragma once
+#ifndef OTAM_APP_SETTINGS_H_
+#define OTAM_APP_SETTINGS_H_
 #include <string>
 #include <map>
 #include <stdexcept>
@@ -30,3 +31,5 @@ public:
 private:
     std::map<std::string, AppSetting> app_settings_map; // app_name -> setting
 };
+
+#endif  // OTAM_APP_SETTINGS_H_

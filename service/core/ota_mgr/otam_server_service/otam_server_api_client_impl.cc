@@ -1,4 +1,4 @@
-#include "otam_server_api_client_impl.hpp"
+#include "otam_server_api_client_impl.h"
 #include <curl/curl.h>
 #include <sstream>
 #include <iostream>

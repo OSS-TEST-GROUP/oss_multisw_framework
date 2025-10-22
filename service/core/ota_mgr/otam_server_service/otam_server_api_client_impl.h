@@ -1,15 +1,19 @@
-#pragma once
-#include "otam_common/api_client.h"
+#ifndef OTAM_SERVER_API_CLIENT_IMPL_H_
+#define OTAM_SERVER_API_CLIENT_IMPL_H_
+#include "otam_server_api_client.h"
 #include <string>
 #include <map>
 
-class OtamServerApiClientImpl : public ApiClient {
+class OtamServerApiClientImpl : public OtamServerApiClient {
 public:
     explicit OtamServerApiClientImpl(
         const std::string& base_url,
         const std::map<std::string, std::string>& default_headers = {})
         : base_url_(base_url),
           default_headers_(default_headers) {}
+
+    OtamServerApiClientImpl() = default;
+    ~OtamServerApiClientImpl() override = default;
 
     std::string Get(
         const std::string& endpoint,
@@ -31,10 +35,10 @@ public:
         const std::string& endpoint,
         const std::string& body) override;
 
-    void SetAuthToken(const std::string& token);
+    void SetAuthToken(const std::string& token) override;
     void AddHeader(const std::string& key,
-                   const std::string& value);
-    void RemoveHeader(const std::string& key);
+                   const std::string& value) override;
+    void RemoveHeader(const std::string& key) override;
 
 private:
     std::string SendRequest(const std::string& method,
@@ -44,3 +48,5 @@ private:
     std::string base_url_;
     std::map<std::string, std::string> default_headers_;
 };
+
+#endif //OTAM_SERVER_API_CLIENT_IMPL_H_

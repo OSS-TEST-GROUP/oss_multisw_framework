@@ -1,18 +1,21 @@
-#pragma once
+#ifndef OTAM_SERVER_RESULT_TYPES_H_
+#define OTAM_SERVER_RESULT_TYPES_H_
 #include <string>
-#include "otam_common/idl_headers.h"
+#include "otam_common/otam_dds_idl.h"
 
 struct SessionResult {
-    ResultCode   ret_code{ResultCode::UNKNOWN};
+    ReturnValue   ret_code{ReturnValue::UNKNOWN};
     std::string  session_id;
 };
 
 struct AppSettingsResult {
-    ResultCode   ret_code{ResultCode::UNKNOWN};
+    ReturnValue   ret_code{ReturnValue::UNKNOWN};
     std::string  app_settings;  // JSON string
 };
 
 struct AppUpdateStateResult {
-    ResultCode   ret_code{ResultCode::UNKNOWN};
+    ReturnValue   ret_code{ReturnValue::UNKNOWN};
     std::string  app_state_info; // JSON string
 };
+
+#endif //OTAM_SERVER_RESULT_TYPES_H_

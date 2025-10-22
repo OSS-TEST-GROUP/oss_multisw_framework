@@ -5,14 +5,14 @@
 #include <vector>
 #include <string>
 
-#include "otam_common/service.h"
+#include "otam_common/otam_service.h"
 
 class OtamMain {
  public:
   OtamMain();
   ~OtamMain();
 
-  OtamMain(std::vector<std::shared_ptr<Service>> services) : units_(std::move(services)) {}
+  OtamMain(std::vector<std::shared_ptr<OtamService>> services) : units_(std::move(services)) {}
 
   // Creates and initializes all units in the OTA Manager. [cite: 11]
   void Initialize();
@@ -25,10 +25,7 @@ class OtamMain {
 
  private:
   // Vector to hold pointers to the main classes of other units.
-  std::vector<std::shared_ptr<Service>> units_;
-
-  // Helper function to handle errors during unit creation/start.
-  void HandleUnitError(const std::string& unit_name, const std::string& error_message);
+  std::vector<std::shared_ptr<OtamService>> units_;
 };
 
 #endif  // OTAM_MAIN_H_

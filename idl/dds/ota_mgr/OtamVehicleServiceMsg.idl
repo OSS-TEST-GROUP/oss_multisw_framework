@@ -1,0 +1,23 @@
+#include "common/ReturnValue.idl"
+
+/**
+[Topic] “/mmf/otamanager/vehicleinfo_service/GetVehicleInfo”
+**/
+module OtaManager {
+    struct GetVehicleInfo {
+        @key long id; //Request ID
+        string name;
+    };
+};
+
+/**
+[Topic] “/mmf/otamanager/vehicleinfo_service/GetVehicleInfoResponse”
+**/
+module OtaManager {
+    struct GetVehicleInfoResponse {
+        @key long id; // Response ID (matching the Request ID)
+        string name;
+        string value;
+        ReturnValue ret_code;
+    };
+};
