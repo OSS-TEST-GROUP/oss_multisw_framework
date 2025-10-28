@@ -350,6 +350,12 @@ install(DIRECTORY
     DESTINATION bin/config/forest
 )
 
+# idl generated sources
+install(DIRECTORY
+    ${GENERATED_IDL_DIR}/
+    DESTINATION bin/idl/vehicle_info_mgr
+)
+
 # --- Unit Testing Setup ---
 if (BUILD_UNITTEST)
 	enable_testing()
