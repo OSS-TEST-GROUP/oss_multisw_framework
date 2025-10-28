@@ -352,8 +352,13 @@ install(DIRECTORY
 
 # idl generated sources
 install(DIRECTORY
-    ${GENERATED_IDL_DIR}/
+    ${PROJECT_IDL_DIR}/
     DESTINATION bin/idl/vehicle_info_mgr
+)
+
+install(DIRECTORY
+    ${GENERATED_IDL_DIR}/
+    DESTINATION generated/idl/vehicle_info_mgr
 )
 
 # --- Unit Testing Setup ---
