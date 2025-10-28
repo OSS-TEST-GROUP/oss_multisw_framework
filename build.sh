@@ -377,9 +377,7 @@ do_pull_builder_image()
 		docker push ${REGISTRY_ADDRESS}/oss/${BUILDER_CONTAINER_NAME}:${BUILDER_CONTAINER_TAG}
 		do_error_check
 	else
-		if [[ -z $(docker images -q "${img_name}" 2>/dev/null) ]]; then
-			docker pull ${img_name}
-		fi
+		docker pull ${img_name}
 	fi
 }
 
