@@ -14,7 +14,7 @@ add_library(OtamVehicleService STATIC ${OTAM_VEHICLE_SERVICE_SRCS})
 
 # (Optional) If OtamVehicleService itself depends on other libraries, link them here.
 # For now, it's self-contained with standard library includes.
-target_link_libraries(OtamVehicleService PRIVATE 
+target_link_libraries(OtamVehicleService PRIVATE
     OtamDdsImpl
 )
 

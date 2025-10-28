@@ -36,22 +36,22 @@ class OtamActorServiceAdapter : public OtamService {
 OtamMain::OtamMain() {
   // Constructor: Initializes the shared pointers for each service.
   // In a real application, you might use a factory or dependency injection.
+  auto diagnostic_service = std::make_shared<OtamDiagnosticService>();
   auto server_service = std::make_shared<OtamServerService>();
   auto client_service = std::make_shared<OtamClientService>();
   auto vehicle_service = std::make_shared<OtamVehicleService>();
-  auto diagnostic_service = std::make_shared<OtamDiagnosticService>();
   auto actor_service_adapter = std::make_shared<OtamActorServiceAdapter>();
 
   // Connect OtamActorService with all required services
+  actor_service_adapter->GetActorService()->SetOtamDiagnosticService(diagnostic_service.get());
   actor_service_adapter->GetActorService()->SetOtamServerService(server_service.get());
   actor_service_adapter->GetActorService()->SetOtamClientService(client_service.get());
   actor_service_adapter->GetActorService()->SetOtamVehicleService(vehicle_service.get());
-  actor_service_adapter->GetActorService()->SetOtamDiagnosticService(diagnostic_service.get());
 
+  units_.push_back(diagnostic_service);
   units_.push_back(server_service);
   units_.push_back(client_service);
   units_.push_back(vehicle_service);
-  units_.push_back(diagnostic_service);
   units_.push_back(actor_service_adapter);
 }
 

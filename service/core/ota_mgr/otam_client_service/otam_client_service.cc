@@ -44,42 +44,60 @@
 
   void OtamClientService::Stop() {
       std::cout << "OtamClientService: Stopping OtamClientService." << std::endl;
+
+      // Destroy all DDS instances
+      if (registration_dds_) {
+          std::cout << "OtamClientService: Destroying registration_dds_" << std::endl;
+          registration_dds_->Destroy();
+      }
+      if (registration_response_dds_) {
+          std::cout << "OtamClientService: Destroying registration_response_dds_" << std::endl;
+          registration_response_dds_->Destroy();
+      }
+      if (manager_ready_dds_) {
+          std::cout << "OtamClientService: Destroying manager_ready_dds_" << std::endl;
+          manager_ready_dds_->Destroy();
+      }
+      if (app_status_dds_) {
+          std::cout << "OtamClientService: Destroying app_status_dds_" << std::endl;
+          app_status_dds_->Destroy();
+      }
   }
 
   void OtamClientService::InitializeDDS() {
       // Create DDS implementation instances for each message type
       // Each instance manages a separate DDS communication channel
 
-      registration_dds_ = std::make_unique<OtamDdsImpl>();
-      registration_response_dds_ = std::make_unique<OtamDdsImpl>();
-      manager_ready_dds_ = std::make_unique<OtamDdsImpl>();
-      app_status_dds_ = std::make_unique<OtamDdsImpl>();
+      registration_dds_ = std::make_unique<OtamDdsImpl<OtaManager::SetOtaClientRegistration>>();
+      registration_response_dds_ = std::make_unique<OtamDdsImpl<OtaManager::SetOtaClientRegistrationResponse>>();
+      manager_ready_dds_ = std::make_unique<OtamDdsImpl<OtaManager::NotifyOtaManagerReady>>();
+      app_status_dds_ = std::make_unique<OtamDdsImpl<OtaManager::NotifyAppUpdateStatus>>();
 
       // Create listener for incoming registration messages
       registration_listener_ = std::make_shared<RegistrationListener>(this);
 
       // SetOtaClientRegistration
       set_ota_client_reg_ = std::make_shared<OtaManager::SetOtaClientRegistrationPubSubType>();
-      registration_dds_->Create(TOPIC_REGISTRATION, 
-                               std::static_pointer_cast<void>(set_ota_client_reg_), 
+      registration_dds_->Create(TOPIC_REGISTRATION,
+                               std::static_pointer_cast<void>(set_ota_client_reg_),
                                std::static_pointer_cast<void>(registration_listener_));
 
       // SetOtaClientRegistrationResponse
       set_ota_client_reg_res_ = std::make_shared<OtaManager::SetOtaClientRegistrationResponsePubSubType>();
-      registration_response_dds_->Create(TOPIC_REGISTRATION_RESPONSE, 
-                               std::static_pointer_cast<void>(set_ota_client_reg_res_), 
+      registration_response_dds_->Create(TOPIC_REGISTRATION_RESPONSE,
+                               std::static_pointer_cast<void>(set_ota_client_reg_res_),
                                nullptr);
 
       // NotifyOtaManagerReady
       notify_ota_mgr_ready_ = std::make_shared<OtaManager::NotifyOtaManagerReadyPubSubType>();
-      manager_ready_dds_->Create(TOPIC_MANAGER_READY, 
-                               std::static_pointer_cast<void>(notify_ota_mgr_ready_), 
+      manager_ready_dds_->Create(TOPIC_MANAGER_READY,
+                               std::static_pointer_cast<void>(notify_ota_mgr_ready_),
                                nullptr);
 
       // NotifyAppUpdateStatus
       notify_app_update_status_ = std::make_shared<OtaManager::NotifyAppUpdateStatusPubSubType>();
-      app_status_dds_->Create(TOPIC_APP_STATUS, 
-                               std::static_pointer_cast<void>(notify_app_update_status_), 
+      app_status_dds_->Create(TOPIC_APP_STATUS,
+                               std::static_pointer_cast<void>(notify_app_update_status_),
                                nullptr);
 
       std::cout << "OtamClientService: DDS instances created." << std::endl;

@@ -2,9 +2,10 @@
 
 #include <iostream>
 #include <utility>
+#include <nlohmann/json.hpp>
 
 constexpr const char*
-    OtamVehicleService::kVehicleInfoRequestTopic;
+    OtamVehicleService::kVissRequestTopic;
 constexpr const char*
     OtamVehicleService::kVehicleInfoResponseTopic;
 
@@ -20,20 +21,22 @@ void OtamVehicleService::Initialize() {
 
   std::cout << "Initializing OtamVehicleService..." << std::endl;
 
-  // Create DDS implementation for GetVehicleInfo (publisher)
-  auto request_dds = std::make_shared<OtamDdsImpl>();
-  get_vehicle_info_ = std::make_shared<OtaManager::GetVehicleInfoPubSubType>();
+    // Create DDS implementation for VissRequest (publisher)
+  auto viss_request_dds = std::make_shared<OtamDdsImpl<VissRequestTopic>>();
+  viss_request_ = std::make_shared<VissRequestTopicPubSubType>();
 
-  request_dds->Create(kVehicleInfoRequestTopic, std::static_pointer_cast<void>(get_vehicle_info_), nullptr);
-  RegisterDds(kVehicleInfoRequestTopic, request_dds);
+  viss_request_dds->Create(kVissRequestTopic,
+                           std::static_pointer_cast<void>(viss_request_),
+                           nullptr);
+  RegisterDds(kVissRequestTopic, viss_request_dds);
 
-  // Create DDS implementation for GetVehicleInfoResponse (subscriber)
-  auto response_dds = std::make_shared<OtamDdsImpl>();
-  get_vehicle_info_res_ = std::make_shared<OtaManager::GetVehicleInfoResponsePubSubType>();
+  // Create DDS implementation for VISS response (subscriber)
+  auto response_dds = std::make_shared<OtamDdsImpl<VissRequestTopic>>();
+  viss_response_ = std::make_shared<VissRequestTopicPubSubType>();
   response_listener_ = std::make_shared<ResponseListener>(this);
 
   response_dds->Create(kVehicleInfoResponseTopic,
-                       std::static_pointer_cast<void>(get_vehicle_info_res_),
+                       std::static_pointer_cast<void>(viss_response_),
                        std::static_pointer_cast<void>(response_listener_));
 
   RegisterDds(kVehicleInfoResponseTopic, response_dds);
@@ -49,6 +52,14 @@ void OtamVehicleService::Start() {
 
 void OtamVehicleService::Stop() {
     std::cout << "OtamVehicleService: Stopping OtamVehicleService." << std::endl;
+
+    // Destroy all DDS instances
+    for (auto& pair : dds_registry_) {
+        if (pair.second) {
+            std::cout << "OtamVehicleService: Destroying DDS for topic: " << pair.first << std::endl;
+            pair.second->Destroy();
+        }
+    }
 }
 
 void OtamVehicleService::RequestVehicleInfo(
@@ -60,54 +71,69 @@ void OtamVehicleService::RequestVehicleInfo(
     return;
   }
 
-  auto dds = GetDds(kVehicleInfoRequestTopic);
+  auto dds = GetDds(kVissRequestTopic);
   if (!dds) {
     std::cerr << "DDS not found for topic: "
-              << kVehicleInfoRequestTopic << std::endl;
+              << kVissRequestTopic << std::endl;
     return;
   }
 
-  // Create and publish request message
-  auto request_msg = std::make_shared<OtaManager::GetVehicleInfo>();
-  request_msg->id(request_id);
-  request_msg->name(name);
-  
-  dds->Write(request_msg);
+  // Generate unique request ID string
+  std::string request_id_str = "otam-" + std::to_string(request_id);
+
+  // Create response topic name (using kVehicleInfoResponseTopic as response channel)
+  std::string response_topic_name = kVehicleInfoResponseTopic;
+
+  // Create inner request JSON
+  nlohmann::json request_inner = {
+      {"action", "get"},
+      {"path", name},
+      {"requestId", request_id_str}
+  };
+
+  // Create outer request JSON with topic and request payload
+  nlohmann::json request_outer = {
+      {"topic", response_topic_name},
+      {"request", request_inner.dump()}
+  };
+
+  // Create VissRequestTopic message and set payload
+  auto viss_msg = std::make_shared<VissRequestTopic>();
+  viss_msg->payload(request_outer.dump());
+
+  std::cout << "Sending VissRequest to " << kVissRequestTopic << std::endl;
+  std::cout << "Payload: " << request_outer.dump(2) << std::endl;
+
+  // Send the message via DDS
+  dds->Write(std::static_pointer_cast<void>(viss_msg));
 }
 
 void OtamVehicleService::OnVehicleInfoResponseReceived(
-    const OtaManager::GetVehicleInfoResponse& msg) {
-  std::cout << "\n=== Vehicle Info Response Received ===" << "\n"
-            << "  ID: " << msg.id() << "\n"
-            << "  Name: " << msg.name() << "\n"
-            << "  Value: " << msg.value() << "\n"
-            << "  Return Code: "
-            << static_cast<int>(msg.ret_code()) << "\n"
-            << "======================================\n"
+    int32_t request_id,
+    const std::string& name,
+    const std::string& value) {
+  std::cout << "\n=== VISS Vehicle Info Response Received ===" << "\n"
+            << "  Request ID: " << request_id << "\n"
+            << "  Path (Name): " << name << "\n"
+            << "  Value: " << value << "\n"
+            << "==========================================\n"
             << std::endl;
 
-  // Process the response based on ret_code
-  switch (msg.ret_code()) {
-    case ReturnValue::SUCCESS:
-      std::cout << "Successfully retrieved: " << msg.name()
-                << " = " << msg.value() << std::endl;
-      vehicle_info_[msg.name()] = msg.value();
+  // Store the vehicle info
+  if (!name.empty() && !value.empty()) {
+    std::cout << "Successfully retrieved: " << name
+              << " = " << value << std::endl;
+    vehicle_info_[name] = value;
 
-      // Notify all registered callbacks
-      for (const auto& callback : callbacks_) {
-        if (callback) {
-          callback(msg.id(), msg.name(), msg.value());
-        }
+    // Notify all registered callbacks
+    for (const auto& callback : callbacks_) {
+      if (callback) {
+        callback(request_id, name, value);
       }
-      break;
-    case ReturnValue::FAIL:
-      std::cerr << "Failed to retrieve: " << msg.name()
-                << std::endl;
-      break;
-    case ReturnValue::UNKNOWN:
-    default:
-      std::cerr << "Unknown result for: " << msg.name() << std::endl;
-      break;
+    }
+  } else {
+    std::cerr << "Failed to retrieve vehicle info: empty name or value"
+              << std::endl;
   }
 }
 
@@ -128,13 +154,13 @@ void OtamVehicleService::RegisterCallback(VehicleInfoCallback callback) {
 
 void OtamVehicleService::RegisterDds(
     const std::string& topic_name,
-    std::shared_ptr<OtamDdsImpl> dds) {
+    std::shared_ptr<OtamDdsImpl<VissRequestTopic>> dds) {
   dds_registry_[topic_name] = dds;
   std::cout << "Registered DDS for topic: " << topic_name
             << std::endl;
 }
 
-std::shared_ptr<OtamDdsImpl> OtamVehicleService::GetDds(
+std::shared_ptr<OtamDdsImpl<VissRequestTopic>> OtamVehicleService::GetDds(
     const std::string& topic_name) {
   auto it = dds_registry_.find(topic_name);
   if (it != dds_registry_.end()) {
@@ -144,16 +170,47 @@ std::shared_ptr<OtamDdsImpl> OtamVehicleService::GetDds(
 }
 
 void OtamVehicleService::ResponseListener::on_data_available(eprosima::fastdds::dds::DataReader* reader) {
-    // This callback is invoked by FastDDS when new registration data arrives
-    OtaManager::GetVehicleInfoResponse message;
+    // This callback is invoked by FastDDS when new VISS response arrives
+    VissRequestTopic message;
     eprosima::fastdds::dds::SampleInfo info;
 
     try {
         // Attempt to read the next available message
         if (reader->take_next_sample(&message, &info) == eprosima::fastdds::dds::RETCODE_OK) {
             if (info.valid_data) {
-                // Forward the message to the service for processing
-                service_->OnVehicleInfoResponseReceived(message);
+                std::cout << "ResponseListener: Received VISS response" << std::endl;
+                std::cout << "Payload: " << message.payload() << std::endl;
+
+                try {
+                    // Parse the JSON payload
+                    nlohmann::json response_json = nlohmann::json::parse(message.payload());
+
+                    // Extract fields from VISS response
+                    // Expected format: {"action":"get", "requestId":"...", "path":"...", "value":"...", ...}
+                    std::string action = response_json.value("action", "");
+                    std::string request_id = response_json.value("requestId", "");
+                    std::string path = response_json.value("path", "");
+                    std::string value = response_json.value("value", "");
+
+                    // Extract numeric request ID from "otam-<id>" format
+                    int32_t id = 0;
+                    if (request_id.find("otam-") == 0) {
+                        id = std::stoi(request_id.substr(5));
+                    }
+
+                    std::cout << "Parsed VISS response: action=" << action
+                              << ", requestId=" << request_id
+                              << ", path=" << path
+                              << ", value=" << value << std::endl;
+
+                    // Forward to service for processing
+                    service_->OnVehicleInfoResponseReceived(id, path, value);
+
+                } catch (const nlohmann::json::parse_error& e) {
+                    std::cerr << "ResponseListener: JSON parse error: " << e.what() << std::endl;
+                } catch (const std::exception& e) {
+                    std::cerr << "ResponseListener: Error processing response: " << e.what() << std::endl;
+                }
             } else {
                 std::cout << "ResponseListener: Received invalid data sample" << std::endl;
             }

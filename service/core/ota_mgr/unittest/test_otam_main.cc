@@ -11,7 +11,7 @@ class OtamMainTest : public ::testing::Test {
   std::shared_ptr<MockService> mock_service_1;
   std::shared_ptr<MockService> mock_service_2;
   std::shared_ptr<MockDiagnosticService> mock_diagnostic_service;
-  std::vector<std::shared_ptr<Service>> mock_services_vector;
+  std::vector<std::shared_ptr<OtamService>> mock_services_vector;
 
   void SetUp() override {
     mock_service_1 = std::make_shared<MockService>();

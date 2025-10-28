@@ -12,6 +12,10 @@
 #include <functional>
 #include <vector>
 
+// VissRequest IDL generated types
+#include "vehicle_info_mgr/VissRequest.hpp"
+#include "vehicle_info_mgr/VissRequestPubSubTypes.hpp"
+
 // OTA Manager Vehicle Service
 // Manages DDS communication for vehicle information requests/responses
 class OtamVehicleService : public OtamService {
@@ -30,10 +34,14 @@ class OtamVehicleService : public OtamService {
   void RequestVehicleInfo(int32_t request_id,
                           const std::string& name);
 
-  // Callback when vehicle info response is received
-  // @param msg: Received response message
+  // Callback when vehicle info response is received from VISS
+  // @param request_id: Request ID
+  // @param name: Vehicle info name (path)
+  // @param value: Vehicle info value from VISS
   void OnVehicleInfoResponseReceived(
-      const OtaManager::GetVehicleInfoResponse& msg);
+      int32_t request_id,
+      const std::string& name,
+      const std::string& value);
 
   std::string GetVehicleInfo(const std::string& topic_name);
 
@@ -44,27 +52,28 @@ class OtamVehicleService : public OtamService {
 
  private:
   // Registry of DDS abstractions keyed by topic name
-  std::map<std::string, std::shared_ptr<OtamDdsImpl>>
+  std::map<std::string, std::shared_ptr<OtamDdsImpl<VissRequestTopic>>>
       dds_registry_;
 
   // Flag indicating if service is initialized
   bool is_initialized_;
 
   // Topic name constants
-  static constexpr const char* kVehicleInfoRequestTopic =
-      "/mmf/otamanager/vehicleinfo_service/GetVehicleInfo";
+  static constexpr const char* kVissRequestTopic = "/VIN/Vehicle";
   static constexpr const char* kVehicleInfoResponseTopic =
       "/mmf/otamanager/vehicleinfo_service/GetVehicleInfoResponse";
 
   std::shared_ptr<OtaManager::GetVehicleInfoPubSubType> get_vehicle_info_;
   std::shared_ptr<OtaManager::GetVehicleInfoResponsePubSubType> get_vehicle_info_res_;
+  std::shared_ptr<VissRequestTopicPubSubType> viss_request_;
+  std::shared_ptr<VissRequestTopicPubSubType> viss_response_;
 
   // Register a DDS abstraction
   void RegisterDds(const std::string& topic_name,
-                   std::shared_ptr<OtamDdsImpl> dds);
+                   std::shared_ptr<OtamDdsImpl<VissRequestTopic>> dds);
 
   // Get DDS abstraction by topic name
-  std::shared_ptr<OtamDdsImpl> GetDds(
+  std::shared_ptr<OtamDdsImpl<VissRequestTopic>> GetDds(
       const std::string& topic_name);
 
   class ResponseListener : public eprosima::fastdds::dds::DataReaderListener {

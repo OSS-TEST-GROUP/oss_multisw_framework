@@ -1,7 +1,7 @@
 #ifndef MOCK_OTAM_DDS_IMPL_H_
 #define MOCK_OTAM_DDS_IMPL_H_
 
-#include "otam_common/dds_abstraction.h"
+#include "otam_common/otam_dds.h"
 #include <gmock/gmock.h>
 #include <memory>
 #include <string>
@@ -21,7 +21,7 @@
  * requiring actual DDS infrastructure. It uses Google Mock framework
  * to provide mock implementations of all DDS operations.
  */
-class MockOtamDdsImpl : public DdsAbstraction {
+class MockOtamDdsImpl : public OtamDds {
 public:
     /**
      * @brief Default constructor
@@ -38,6 +38,7 @@ public:
     MOCK_METHOD(void, SetQos, (uint32_t qos), (override));
     MOCK_METHOD(void, Write, (std::shared_ptr<void> message), (override));
     MOCK_METHOD(void, Read, (std::shared_ptr<void> message), (override));
+    MOCK_METHOD(void, Destroy, (), (override));
 };
 
 #endif // MOCK_OTAM_DDS_IMPL_H_

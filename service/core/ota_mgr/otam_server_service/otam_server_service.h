@@ -13,7 +13,7 @@ class OtamServerApiClientImpl;
 
 struct OtamServerConfig {
     std::string config_path;
-    std::string server_url{"https://localhost:8080"};
+    std::string server_url{"http://localhost:8080"};
     std::string username;
     std::string password;
     std::map<std::string, std::string> headers;
@@ -31,7 +31,7 @@ public:
     void SetConfigPath(std::string path);
 
     // === ArgoCD Token 생성 ===
-    SessionResult CreateOtaSession(const std::string& user_info_json); // now calls ArgoCD API
+    SessionResult CreateOtaSession(); // now calls ArgoCD API
     ReturnValue    DestroyOtaSession();
 
     AppSettingsResult    GetOtaSettings(const std::string& app_name);
@@ -47,7 +47,7 @@ private:
     std::string                          session_id_;
     std::shared_ptr<OtamAppSettings>     app_settings_;
     std::unique_ptr<OtamServerApiClient>           api_client_;
-    std::string                          config_path_{"config.json"};
+    std::string                          config_path_{"config/otam_config.json"};
     OtamServerConfig                     config_;
 };
 

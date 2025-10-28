@@ -1,0 +1,37 @@
+# Vehicle Information Mock Data
+# This file contains vehicle data that will be returned by the mock VISS server
+# when RequestVehicleInfo is called.
+
+vehicle_info:
+  # Vehicle Identification Information
+  Vehicle.VehicleIdentification.VIN: "KMHXX00XXXX000000"
+  Vehicle.VehicleIdentification.Model: "Test Vehicle Model"
+  Vehicle.VehicleIdentification.Year: "2025"
+  Vehicle.VehicleIdentification.Brand: "Test Brand"
+  Vehicle.VehicleIdentification.Type: "Sedan"
+
+  # Vehicle State Information (Used by OtamActorService)
+  Vehicle.LowVoltageSystemState: "Active"
+  Vehicle.Speed: "0"
+
+  # Battery Information
+  Vehicle.Powertrain.TractionBattery.StateOfCharge.Current: "85.5"
+  Vehicle.Powertrain.TractionBattery.StateOfHealth: "98.0"
+  Vehicle.Powertrain.TractionBattery.Temperature.Average: "25.3"
+
+  # Location Information
+  Vehicle.CurrentLocation.Latitude: "37.5665"
+  Vehicle.CurrentLocation.Longitude: "126.9780"
+  Vehicle.CurrentLocation.Altitude: "38.0"
+
+  # Additional Vehicle Status
+  Vehicle.IsBrokenDown: "false"
+  Vehicle.IsMoving: "false"
+  Vehicle.AverageSpeed: "0.0"
+  Vehicle.TripMeterReading: "12345.6"
+  Vehicle.OdometerReading: "50000.0"
+
+  # ECU Information
+  Vehicle.ECU.SoftwareVersion: "1.2.3"
+  Vehicle.ECU.HardwareVersion: "2.0.0"
+  Vehicle.ECU.SerialNumber: "ECU123456789"

@@ -249,18 +249,24 @@ class OtamActorService: public OtamService {
   /**
    * @brief DDS registry mapping topic names to DDS implementations
    */
-  std::map<std::string, std::unique_ptr<OtamDdsImpl>> dds_registry_;
+  std::map<std::string, std::unique_ptr<OtamDds>> dds_registry_;
 
   /**
    * @brief Create DDS implementation for a specific topic
+   * @tparam MessageType The DDS message type
    * @param topic_name Topic name
    * @param type_support TypeSupport shared pointer
    * @param listener DataReaderListener shared pointer (optional)
    */
+  template<typename MessageType>
   void CreateDdsForTopic(
       const std::string& topic_name,
       std::shared_ptr<void> type_support,
-      std::shared_ptr<void> listener = nullptr);
+      std::shared_ptr<void> listener = nullptr) {
+    auto dds_impl = std::make_unique<OtamDdsImpl<MessageType>>();
+    dds_impl->Create(topic_name, type_support, listener);
+    dds_registry_[topic_name] = std::move(dds_impl);
+  }
 
   /**
    * @brief Process pending update request when all vehicle info is collected

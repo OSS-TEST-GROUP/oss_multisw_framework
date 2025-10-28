@@ -39,6 +39,14 @@ void OtamServerService::Start() {
         }
         state_ = ServiceState::STARTED;
         std::cout << "OtamServerService Started." << std::endl;
+
+        // Create OTA session (ArgoCD token)
+        SessionResult session_result = CreateOtaSession();
+        if (session_result.ret_code != ReturnValue::SUCCESS) {
+            std::cerr << "[OtamServerService] Failed to create OTA session.\n";
+            state_ = ServiceState::UNINITIALIZED;
+            return;
+        }
     } catch (const std::exception& e) {
         std::cerr << "[OtamServerService] Start failed: " << e.what() << "\n";
         state_ = ServiceState::UNINITIALIZED;
@@ -51,8 +59,7 @@ void OtamServerService::Stop() {
 }
 
 // ===== ArgoCD Token 생성 =====
-SessionResult OtamServerService::CreateOtaSession(
-    const std::string& /*user_info_json*/) {
+SessionResult OtamServerService::CreateOtaSession() {
     SessionResult result;
     result.ret_code = ReturnValue::FAIL;
 
@@ -105,6 +112,7 @@ SessionResult OtamServerService::CreateOtaSession(
 // ========== Public OTA methods ==========
 ReturnValue OtamServerService::DestroyOtaSession() {
     std::cout << "[OtamServerService] DestroyOtaSession Not Supported.\n";
+    return ReturnValue::SUCCESS;
 }
 
 AppSettingsResult OtamServerService::GetOtaSettings(
@@ -347,6 +355,7 @@ OtamServerConfig OtamServerService::LoadConfigFromFile(const std::string& path) 
         std::cerr << "[OtamServerService] config.json not found: " << path << "\n";
         return cfg;
     }
+    std::cout << "[OtamServerService] config.json found: " << path << "\n";
 
     try {
         json j;

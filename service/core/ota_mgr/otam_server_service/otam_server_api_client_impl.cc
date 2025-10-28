@@ -91,29 +91,34 @@ std::string OtamServerApiClientImpl::SendRequest(
 std::string OtamServerApiClientImpl::Get(
     const std::string& ep,
     const std::string& body) {
-    return SendRequest("GET", ep, body);
+    std::string method = "GET";
+    return SendRequest(method, ep, body);
 }
 
 std::string OtamServerApiClientImpl::Post(
     const std::string& ep,
     const std::string& body) {
-    return SendRequest("POST", ep, body);
+    std::string method = "POST";
+    return SendRequest(method, ep, body);
 }
 
 std::string OtamServerApiClientImpl::Put(
     const std::string& ep,
     const std::string& body) {
-    return SendRequest("PUT", ep, body);
+    std::string method = "PUT";
+    return SendRequest(method, ep, body);
 }
 
 std::string OtamServerApiClientImpl::Delete(
     const std::string& ep,
     const std::string& body) {
-    return SendRequest("DELETE", ep, body);
+    std::string method = "DELETE";
+    return SendRequest(method, ep, body);
 }
 
 std::string OtamServerApiClientImpl::Patch(
     const std::string& ep,
     const std::string& body) {
-    return SendRequest("PATCH", ep, body);
+    std::string method = "PATCH";
+    return SendRequest(method, ep, body);
 }

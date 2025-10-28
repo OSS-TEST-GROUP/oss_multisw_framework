@@ -58,64 +58,64 @@ void OtamActorService::Initialize() {
     auto get_settings_type =
         std::make_shared<OtaManager::GetAppUpdateSettingsPubSubType>();
     get_app_update_settings_listener_ = std::make_shared<GetAppUpdateSettingsListener>(this);
-    CreateDdsForTopic(kTopicGetAppUpdateSettings,
+    CreateDdsForTopic<OtaManager::GetAppUpdateSettings>(kTopicGetAppUpdateSettings,
                       get_settings_type, get_app_update_settings_listener_);
 
     // Initialize GetAppUpdateSettingsResponse (Response)
     auto get_settings_resp_type =
         std::make_shared<OtaManager::GetAppUpdateSettingsResponsePubSubType>();
-    CreateDdsForTopic(kTopicGetAppUpdateSettingsResponse,
+    CreateDdsForTopic<OtaManager::GetAppUpdateSettingsResponse>(kTopicGetAppUpdateSettingsResponse,
                       get_settings_resp_type);
 
     // Initialize SetAppUpdateSettings (Request)
     auto set_settings_type =
         std::make_shared<OtaManager::SetAppUpdateSettingsPubSubType>();
     set_app_update_settings_listener_ = std::make_shared<SetAppUpdateSettingsListener>(this);
-    CreateDdsForTopic(kTopicSetAppUpdateSettings,
+    CreateDdsForTopic<OtaManager::SetAppUpdateSettings>(kTopicSetAppUpdateSettings,
                       set_settings_type, set_app_update_settings_listener_);
 
     // Initialize SetAppUpdateSettingsResponse (Response)
     auto set_settings_resp_type =
         std::make_shared<OtaManager::SetAppUpdateSettingsResponsePubSubType>();
-    CreateDdsForTopic(kTopicSetAppUpdateSettingsResponse,
+    CreateDdsForTopic<OtaManager::SetAppUpdateSettingsResponse>(kTopicSetAppUpdateSettingsResponse,
                       set_settings_resp_type);
 
     // Initialize GetAppUpdateState (Request)
     auto get_state_type =
         std::make_shared<OtaManager::GetAppUpdateStatePubSubType>();
     get_app_update_state_listener_ = std::make_shared<GetAppUpdateStateListener>(this);
-    CreateDdsForTopic(kTopicGetAppUpdateState, get_state_type, 
+    CreateDdsForTopic<OtaManager::GetAppUpdateState>(kTopicGetAppUpdateState, get_state_type,
                       get_app_update_state_listener_);
 
     // Initialize GetAppUpdateStateResponse (Response)
     auto get_state_resp_type =
         std::make_shared<OtaManager::GetAppUpdateStateResponsePubSubType>();
-    CreateDdsForTopic(kTopicGetAppUpdateStateResponse,
+    CreateDdsForTopic<OtaManager::GetAppUpdateStateResponse>(kTopicGetAppUpdateStateResponse,
                       get_state_resp_type);
 
     // Initialize SetAppUpdate (Request)
     auto set_update_type =
         std::make_shared<OtaManager::SetAppUpdatePubSubType>();
     set_app_update_listener_ = std::make_shared<SetAppUpdateListener>(this);
-    CreateDdsForTopic(kTopicSetAppUpdate, set_update_type, set_app_update_listener_);
+    CreateDdsForTopic<OtaManager::SetAppUpdate>(kTopicSetAppUpdate, set_update_type, set_app_update_listener_);
 
     // Initialize SetAppUpdateResponse (Response)
     auto set_update_resp_type =
         std::make_shared<OtaManager::SetAppUpdateResponsePubSubType>();
-    CreateDdsForTopic(kTopicSetAppUpdateResponse,
+    CreateDdsForTopic<OtaManager::SetAppUpdateResponse>(kTopicSetAppUpdateResponse,
                       set_update_resp_type);
 
     // Initialize SetServiceModeRequest (Publisher for lifecycle management)
     auto set_service_mode_type =
         std::make_shared<lifecyclemgr::SetServiceModeRequestPubSubType>();
-    CreateDdsForTopic(kTopicSetServiceModeRequest,
+    CreateDdsForTopic<lifecyclemgr::SetServiceModeRequest>(kTopicSetServiceModeRequest,
                       set_service_mode_type);
 
     // Initialize SetServiceModeResponse (Subscriber for lifecycle management)
     auto set_service_mode_resp_type =
         std::make_shared<lifecyclemgr::SetServiceModeResponsePubSubType>();
     set_service_mode_response_listener_ = std::make_shared<SetServiceModeResponseListener>(this);
-    CreateDdsForTopic(kTopicSetServiceModeResponse,
+    CreateDdsForTopic<lifecyclemgr::SetServiceModeResponse>(kTopicSetServiceModeResponse,
                       set_service_mode_resp_type,
                       set_service_mode_response_listener_);
 
@@ -134,17 +134,17 @@ void OtamActorService::Start() {
 
 void OtamActorService::Stop() {
     std::cout << "OtamActorService: Stopping OtamActorService." << std::endl;
+
+    // Destroy all DDS instances
+    for (auto& pair : dds_registry_) {
+        if (pair.second) {
+            std::cout << "OtamActorService: Destroying DDS for topic: " << pair.first << std::endl;
+            pair.second->Destroy();
+        }
+    }
 }
 
-void OtamActorService::CreateDdsForTopic(
-    const std::string& topic_name,
-    std::shared_ptr<void> type_support,
-    std::shared_ptr<void> listener) {
-  auto dds_impl = std::make_unique<OtamDdsImpl>();
-  dds_impl->Create(topic_name, type_support, listener);
-  dds_impl->SetQos(1);  // Use RELIABLE QoS
-  dds_registry_[topic_name] = std::move(dds_impl);
-}
+// CreateDdsForTopic is now a template function defined in the header
 
 // ========== Request Handlers ==========
 
@@ -363,7 +363,7 @@ void OtamActorService::SendSetServiceModeRequest(int32_t request_id) {
   request->service_mode(lifecyclemgr::ServiceMode::OTA_MODE);
 
   // Publish the request
-  it->second->Write(request);
+  it->second->Write(std::static_pointer_cast<void>(request));
 
   std::cout << "OtamActorService: SetServiceModeRequest sent successfully (request_id: "
             << request_id << ")" << std::endl;
@@ -401,8 +401,8 @@ void OtamActorService::OnSetServiceModeResponseReceived(
 
         // Now request vehicle info
         if (otam_vehicle_service_) {
-          otam_vehicle_service_->RequestVehicleInfo(pair.first, "vehicle_state");
-          otam_vehicle_service_->RequestVehicleInfo(pair.first, "vehicle_speed");
+          otam_vehicle_service_->RequestVehicleInfo(pair.first, "Vehicle.LowVoltageSystemState");
+          otam_vehicle_service_->RequestVehicleInfo(pair.first, "Vehicle.Speed");
         } else {
           std::cerr << "OtamActorService: OtamVehicleService not available" << std::endl;
 
@@ -553,12 +553,12 @@ void OtamActorService::ProcessPendingUpdate(const PendingUpdateRequest& request)
   std::string vehicle_state;
   std::string vehicle_speed;
 
-  auto state_it = request.vehicle_info.find("vehicle_state");
+  auto state_it = request.vehicle_info.find("Vehicle.LowVoltageSystemState");
   if (state_it != request.vehicle_info.end()) {
     vehicle_state = state_it->second;
   }
 
-  auto speed_it = request.vehicle_info.find("vehicle_speed");
+  auto speed_it = request.vehicle_info.find("Vehicle.Speed");
   if (speed_it != request.vehicle_info.end()) {
     vehicle_speed = speed_it->second;
   }
@@ -648,7 +648,7 @@ void OtamActorService::PublishAppUpdateSettingsResponse(
   response->app_settings(app_settings);
   response->ret_code(code);
 
-  it->second->Write(response);
+  it->second->Write(std::static_pointer_cast<void>(response));
   std::cout << "OtamActorService: Published "
             << "GetAppUpdateSettingsResponse - id: " << id
             << std::endl;
@@ -670,7 +670,7 @@ void OtamActorService::PublishSetAppUpdateSettingsResponse(
   response->id(id);
   response->ret_code(code);
 
-  it->second->Write(response);
+  it->second->Write(std::static_pointer_cast<void>(response));
   std::cout << "OtamActorService: Published "
             << "SetAppUpdateSettingsResponse - id: " << id
             << std::endl;
@@ -694,7 +694,7 @@ void OtamActorService::PublishAppUpdateStateResponse(
   response->app_state_info(app_state_info);
   response->ret_code(code);
 
-  it->second->Write(response);
+  it->second->Write(std::static_pointer_cast<void>(response));
   std::cout << "OtamActorService: Published "
             << "GetAppUpdateStateResponse - id: " << id
             << std::endl;
@@ -716,7 +716,7 @@ void OtamActorService::PublishSetAppUpdateResponse(
   response->app_name(app_name);
   response->ret_code(code);
 
-  it->second->Write(response);
+  it->second->Write(std::static_pointer_cast<void>(response));
   std::cout << "OtamActorService: Published "
             << "SetAppUpdateResponse - id: " << id << std::endl;
 

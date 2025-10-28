@@ -18,7 +18,7 @@ void OtamDiagnosticService::Initialize() {
   std::cout << "Initializing OtamDiagnosticService..." << std::endl;
 
   // Create DDS implementation for NotifyOtaMgrInfo
-  auto dds_impl = std::make_shared<OtamDdsImpl>();
+  auto dds_impl = std::make_shared<OtamDdsImpl<OtaManager::NotifyOtaMgrInfo>>();
 
   // Create DDS entities
   notify_ota_mgr_info_ = std::make_shared<OtaManager::NotifyOtaMgrInfoPubSubType>();
@@ -37,6 +37,14 @@ void OtamDiagnosticService::Start() {
 
 void OtamDiagnosticService::Stop() {
     std::cout << "OtamDiagnosticService: Stopping OtamDiagnosticService." << std::endl;
+
+    // Destroy all DDS instances
+    for (auto& pair : dds_registry_) {
+        if (pair.second) {
+            std::cout << "OtamDiagnosticService: Destroying DDS for topic: " << pair.first << std::endl;
+            pair.second->Destroy();
+        }
+    }
 }
 
 void OtamDiagnosticService::PublishOtaMgrInfo(int32_t err_code, const std::string& err_msg) {
@@ -62,18 +70,18 @@ void OtamDiagnosticService::PublishOtaMgrInfo(int32_t err_code, const std::strin
             << err_code << ", err_msg: " << err_msg << std::endl;
 
   // Write through DDS
-  dds->Write(msg);
+  dds->Write(std::static_pointer_cast<void>(msg));
 }
 
 void OtamDiagnosticService::RegisterDds(
     const std::string& topic_name,
-    std::shared_ptr<OtamDdsImpl> dds) {
+    std::shared_ptr<OtamDds> dds) {
   dds_registry_[topic_name] = dds;
   std::cout << "Registered DDS for topic: " << topic_name
             << std::endl;
 }
 
-std::shared_ptr<OtamDdsImpl> OtamDiagnosticService::GetDds(
+std::shared_ptr<OtamDds> OtamDiagnosticService::GetDds(
     const std::string& topic_name) {
   auto it = dds_registry_.find(topic_name);
   if (it != dds_registry_.end()) {

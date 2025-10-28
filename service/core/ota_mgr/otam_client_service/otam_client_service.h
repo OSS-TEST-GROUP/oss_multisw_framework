@@ -148,35 +148,35 @@
   private:
       /**
        * @brief DDS instance for receiving client registration messages
-       * 
+       *
        * Subscribes to SetOtaClientRegistration topic to receive
        * registration requests from OTA clients.
        */
-      std::unique_ptr<OtamDdsImpl> registration_dds_;
+      std::unique_ptr<OtamDds> registration_dds_;
 
       /**
        * @brief DDS instance for publishing registration responses
-       * 
+       *
        * Publishes SetOtaClientRegistrationResponse messages to
        * respond to client registration requests.
        */
-      std::unique_ptr<OtamDdsImpl> registration_response_dds_;
+      std::unique_ptr<OtamDds> registration_response_dds_;
 
       /**
        * @brief DDS instance for publishing manager ready notifications
-       * 
+       *
        * Publishes NotifyOtaManagerReady messages to inform clients
        * that the manager is operational.
        */
-      std::unique_ptr<OtamDdsImpl> manager_ready_dds_;
+      std::unique_ptr<OtamDds> manager_ready_dds_;
 
       /**
        * @brief DDS instance for publishing application status updates
-       * 
+       *
        * Publishes NotifyAppUpdateStatus messages to inform clients
        * about application update progress.
        */
-      std::unique_ptr<OtamDdsImpl> app_status_dds_;
+      std::unique_ptr<OtamDds> app_status_dds_;
 
       std::shared_ptr<OtaManager::SetOtaClientRegistrationPubSubType> set_ota_client_reg_;
       std::shared_ptr<OtaManager::SetOtaClientRegistrationResponsePubSubType> set_ota_client_reg_res_;
@@ -264,15 +264,6 @@
 
       /** @brief List of currently registered applications */
       std::map<int32_t, OtaClientInfo> ota_client_info_list_;
-
-      /**
-       * @brief Creates an OTA session
-       * 
-       * Establishes a new OTA session for processing updates.
-       * 
-       * @return true if session creation succeeds, false otherwise
-       */
-      bool CreateOtaSession();
 
       /**
        * @brief Handles client registration logic

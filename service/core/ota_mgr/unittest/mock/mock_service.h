@@ -5,7 +5,7 @@
 #include "otam_main/otam_main.h" // Includes the Service base class definition
 
 // Mock for the generic Service interface.
-class MockService : public Service {
+class MockService : public OtamService {
  public:
   MOCK_METHOD(void, Initialize, (), (override));
   MOCK_METHOD(void, Start, (), (override));
@@ -13,7 +13,7 @@ class MockService : public Service {
 };
 
 // Mock for OtamDiagnosticService to verify error reporting.
-class MockDiagnosticService : public Service {
+class MockDiagnosticService : public OtamService {
  public:
   MOCK_METHOD(void, Initialize, (), (override));
   MOCK_METHOD(void, Start, (), (override));

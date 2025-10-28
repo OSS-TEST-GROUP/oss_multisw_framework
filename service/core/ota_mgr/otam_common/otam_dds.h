@@ -58,6 +58,14 @@ class OtamDds {
    * @cycle Event Driven [cite: 42]
    */
   virtual void Read(std::shared_ptr<void> message) = 0; // Or potentially a callback mechanism for event-driven reads
+
+  /**
+   * @brief Explicitly destroys all DDS entities
+   * This method should be called before the object is destroyed to ensure
+   * proper cleanup of DDS resources in a controlled manner.
+   * @cycle Once (typically called in Stop() method)
+   */
+  virtual void Destroy() = 0;
 };
 
 #endif  // DDS_ABSTRACTION_H_

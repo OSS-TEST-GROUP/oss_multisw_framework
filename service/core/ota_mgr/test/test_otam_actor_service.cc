@@ -15,6 +15,9 @@
 #include <thread>
 #include <chrono>
 #include <atomic>
+#include <limits>
+#include <cstdio>
+#include <cstring>
 
 using namespace OtaManager;
 
@@ -26,47 +29,60 @@ class OtamActorServiceTester {
 
   ~OtamActorServiceTester() {
     running_ = false;
-    dds_registry_.clear();
+    // StopPublisher();
   }
 
   /**
    * @brief Initialize DDS communication
    */
   void Initialize() {
+    std::cout << "[DEBUG] Initialize() started" << std::endl;
     std::cout << "Initializing DDS topics..." << std::endl;
 
     try {
       // Initialize Request Publishers
-      InitializePublisher(kTopicGetAppUpdateSettings,
+      std::cout << "[DEBUG] Initializing GetAppUpdateSettings publisher..." << std::endl;
+      InitializePublisher<GetAppUpdateSettings>(kTopicGetAppUpdateSettings,
                          std::make_shared<GetAppUpdateSettingsPubSubType>());
 
-      InitializePublisher(kTopicSetAppUpdateSettings,
+      std::cout << "[DEBUG] Initializing SetAppUpdateSettings publisher..." << std::endl;
+      InitializePublisher<SetAppUpdateSettings>(kTopicSetAppUpdateSettings,
                          std::make_shared<SetAppUpdateSettingsPubSubType>());
 
-      InitializePublisher(kTopicGetAppUpdateState,
+      std::cout << "[DEBUG] Initializing GetAppUpdateState publisher..." << std::endl;
+      InitializePublisher<GetAppUpdateState>(kTopicGetAppUpdateState,
                          std::make_shared<GetAppUpdateStatePubSubType>());
 
-      InitializePublisher(kTopicSetAppUpdate,
+      std::cout << "[DEBUG] Initializing SetAppUpdate publisher..." << std::endl;
+      InitializePublisher<SetAppUpdate>(kTopicSetAppUpdate,
                          std::make_shared<SetAppUpdatePubSubType>());
 
       // Initialize Response Subscribers
+      std::cout << "[DEBUG] Creating GetAppUpdateSettingsResponse listener..." << std::endl;
       auto get_settings_resp_listener = std::make_shared<GetAppUpdateSettingsResponseListener>(this);
-      InitializeSubscriber(kTopicGetAppUpdateSettingsResponse,
+      std::cout << "[DEBUG] Initializing GetAppUpdateSettingsResponse subscriber..." << std::endl;
+      InitializeSubscriber<GetAppUpdateSettingsResponse>(kTopicGetAppUpdateSettingsResponse,
                           std::make_shared<GetAppUpdateSettingsResponsePubSubType>(),
                           get_settings_resp_listener);
 
+      std::cout << "[DEBUG] Creating SetAppUpdateSettingsResponse listener..." << std::endl;
       auto set_settings_resp_listener = std::make_shared<SetAppUpdateSettingsResponseListener>(this);
-      InitializeSubscriber(kTopicSetAppUpdateSettingsResponse,
+      std::cout << "[DEBUG] Initializing SetAppUpdateSettingsResponse subscriber..." << std::endl;
+      InitializeSubscriber<SetAppUpdateSettingsResponse>(kTopicSetAppUpdateSettingsResponse,
                           std::make_shared<SetAppUpdateSettingsResponsePubSubType>(),
                           set_settings_resp_listener);
 
+      std::cout << "[DEBUG] Creating GetAppUpdateStateResponse listener..." << std::endl;
       auto get_state_resp_listener = std::make_shared<GetAppUpdateStateResponseListener>(this);
-      InitializeSubscriber(kTopicGetAppUpdateStateResponse,
+      std::cout << "[DEBUG] Initializing GetAppUpdateStateResponse subscriber..." << std::endl;
+      InitializeSubscriber<GetAppUpdateStateResponse>(kTopicGetAppUpdateStateResponse,
                           std::make_shared<GetAppUpdateStateResponsePubSubType>(),
                           get_state_resp_listener);
 
+      std::cout << "[DEBUG] Creating SetAppUpdateResponse listener..." << std::endl;
       auto set_update_resp_listener = std::make_shared<SetAppUpdateResponseListener>(this);
-      InitializeSubscriber(kTopicSetAppUpdateResponse,
+      std::cout << "[DEBUG] Initializing SetAppUpdateResponse subscriber..." << std::endl;
+      InitializeSubscriber<SetAppUpdateResponse>(kTopicSetAppUpdateResponse,
                           std::make_shared<SetAppUpdateResponsePubSubType>(),
                           set_update_resp_listener);
 
@@ -76,8 +92,10 @@ class OtamActorServiceTester {
       std::cout << "Waiting for DDS discovery (3 seconds)..." << std::endl;
       std::this_thread::sleep_for(std::chrono::seconds(3));
 
+      std::cout << "[DEBUG] Initialize() completed successfully" << std::endl;
+
     } catch (const std::exception& e) {
-      std::cerr << "Initialization failed: " << e.what() << std::endl;
+      std::cerr << "[ERROR] Initialization failed: " << e.what() << std::endl;
       throw;
     }
   }
@@ -86,18 +104,53 @@ class OtamActorServiceTester {
    * @brief Run the interactive test menu
    */
   void Run() {
+    printf("[DEBUG] Run() started, running_=%d\n", running_.load());
+    fflush(stdout);
+
+    char buffer[256];
+
     while (running_) {
+      printf("[DEBUG] Before DisplayMenu()\n");
+      fflush(stdout);
+
       DisplayMenu();
 
-      int choice;
-      std::cout << "\nEnter your choice (0-4): ";
-      std::cin >> choice;
-      std::cin.ignore();  // Clear newline
+      printf("[DEBUG] After DisplayMenu()\n");
+      fflush(stdout);
+
+      printf("\nEnter your choice (0-4): ");
+      fflush(stdout);
+
+      printf("[DEBUG] Before fgets()\n");
+      fflush(stdout);
+
+      // C 스타일 입력 처리
+      int choice = -1;
+      if (fgets(buffer, sizeof(buffer), stdin) == NULL) {
+          fprintf(stderr, "[ERROR] Failed to read input!\n");
+          clearerr(stdin);
+          continue;
+      }
+
+      printf("[DEBUG] After fgets(), buffer=[%s]\n", buffer);
+      fflush(stdout);
+
+      // buffer에서 개행 문자 제거
+      buffer[strcspn(buffer, "\n")] = 0;
+
+      // string을 int로 변환
+      if (sscanf(buffer, "%d", &choice) != 1) {
+          printf("Invalid input. Please enter a number (0-4).\n");
+          continue;
+      }
+
+      printf("[DEBUG] Converted to int: %d\n", choice);
+      fflush(stdout);
 
       switch (choice) {
         case 0:
           running_ = false;
-          std::cout << "Exiting test application..." << std::endl;
+          printf("Exiting test application...\n");
           break;
         case 1:
           TestGetAppUpdateSettings();
@@ -112,15 +165,22 @@ class OtamActorServiceTester {
           TestSetAppUpdate();
           break;
         default:
-          std::cout << "Invalid choice. Please try again." << std::endl;
+          printf("Invalid choice. Please try again.\n");
           break;
       }
 
       if (running_) {
-        std::cout << "\nPress Enter to continue...";
-        std::cin.get();
+        printf("\nPress Enter to continue...");
+        fflush(stdout);
+        fgets(buffer, sizeof(buffer), stdin);
       }
     }
+
+    printf("[DEBUG] Run() finished\n");
+    fflush(stdout);
+
+    // Stop DDS resources before exiting
+    StopPublisher();
   }
 
  private:
@@ -142,31 +202,51 @@ class OtamActorServiceTester {
   static constexpr const char* kTopicSetAppUpdateResponse =
       "/mmf/otamanager/otaactor_service/SetAppUpdateResponse";
 
-  std::map<std::string, std::unique_ptr<OtamDdsImpl>> dds_registry_;
+  std::map<std::string, std::unique_ptr<OtamDds>> dds_registry_;
   int32_t next_request_id_;
   std::atomic<bool> running_;
 
   /**
    * @brief Initialize a DDS publisher
    */
+  template<typename MessageType>
   void InitializePublisher(const std::string& topic_name,
                           std::shared_ptr<void> type_support) {
-    auto dds_impl = std::make_unique<OtamDdsImpl>();
+    auto dds_impl = std::make_unique<OtamDdsImpl<MessageType>>();
     dds_impl->Create(topic_name, type_support, nullptr);
-    dds_impl->SetQos(1);  // RELIABLE QoS
+    // Note: RELIABLE QoS is now set by default in Create()
     dds_registry_[topic_name] = std::move(dds_impl);
   }
 
   /**
    * @brief Initialize a DDS subscriber
    */
+  template<typename MessageType>
   void InitializeSubscriber(const std::string& topic_name,
                            std::shared_ptr<void> type_support,
                            std::shared_ptr<void> listener) {
-    auto dds_impl = std::make_unique<OtamDdsImpl>();
+    auto dds_impl = std::make_unique<OtamDdsImpl<MessageType>>();
     dds_impl->Create(topic_name, type_support, listener);
-    dds_impl->SetQos(1);  // RELIABLE QoS
+    // Note: RELIABLE QoS is now set by default in Create()
     dds_registry_[topic_name] = std::move(dds_impl);
+  }
+
+  /**
+   * @brief Stop all DDS publishers and subscribers
+   */
+  void StopPublisher() {
+    std::cout << "Stopping DDS publishers and subscribers..." << std::endl;
+
+    // Destroy all DDS instances
+    for (auto& pair : dds_registry_) {
+      if (pair.second) {
+        std::cout << "Destroying DDS for topic: " << pair.first << std::endl;
+        pair.second->Destroy();
+      }
+    }
+
+    dds_registry_.clear();
+    std::cout << "All DDS instances stopped." << std::endl;
   }
 
   /**
@@ -188,15 +268,23 @@ class OtamActorServiceTester {
    * @brief Test GetAppUpdateSettings
    */
   void TestGetAppUpdateSettings() {
-    std::cout << "\n--- Test GetAppUpdateSettings ---" << std::endl;
+    printf("\n--- Test GetAppUpdateSettings ---\n");
 
-    std::string app_name;
-    std::cout << "Enter application name: ";
-    std::getline(std::cin, app_name);
+    char buffer[256];
+    printf("Enter application name: ");
+    fflush(stdout);
+
+    if (fgets(buffer, sizeof(buffer), stdin) == NULL) {
+      fprintf(stderr, "Error: Failed to read input\n");
+      return;
+    }
+    buffer[strcspn(buffer, "\n")] = 0;  // 개행 문자 제거
+
+    std::string app_name(buffer);
 
     auto it = dds_registry_.find(kTopicGetAppUpdateSettings);
     if (it == dds_registry_.end()) {
-      std::cerr << "Error: DDS publisher not found for topic" << std::endl;
+      fprintf(stderr, "Error: DDS publisher not found for topic\n");
       return;
     }
 
@@ -204,31 +292,44 @@ class OtamActorServiceTester {
     request->id(next_request_id_++);
     request->app_name(app_name);
 
-    std::cout << "Sending GetAppUpdateSettings request..." << std::endl;
-    std::cout << "  Request ID: " << request->id() << std::endl;
-    std::cout << "  App Name: " << request->app_name() << std::endl;
+    printf("Sending GetAppUpdateSettings request...\n");
+    printf("  Request ID: %d\n", request->id());
+    printf("  App Name: %s\n", request->app_name().c_str());
 
-    it->second->Write(request);
-    std::cout << "Request sent! Waiting for response..." << std::endl;
+    it->second->Write(std::static_pointer_cast<void>(request));
+    printf("Request sent! Waiting for response...\n");
   }
 
   /**
    * @brief Test SetAppUpdateSettings
    */
   void TestSetAppUpdateSettings() {
-    std::cout << "\n--- Test SetAppUpdateSettings ---" << std::endl;
+    printf("\n--- Test SetAppUpdateSettings ---\n");
 
-    std::string app_name;
-    std::cout << "Enter application name: ";
-    std::getline(std::cin, app_name);
+    char buffer[256];
+    printf("Enter application name: ");
+    fflush(stdout);
 
-    std::string settings;
-    std::cout << "Enter settings (JSON format): ";
-    std::getline(std::cin, settings);
+    if (fgets(buffer, sizeof(buffer), stdin) == NULL) {
+      fprintf(stderr, "Error: Failed to read input\n");
+      return;
+    }
+    buffer[strcspn(buffer, "\n")] = 0;  // 개행 문자 제거
+    std::string app_name(buffer);
+
+    printf("Enter settings (JSON format): ");
+    fflush(stdout);
+
+    if (fgets(buffer, sizeof(buffer), stdin) == NULL) {
+      fprintf(stderr, "Error: Failed to read input\n");
+      return;
+    }
+    buffer[strcspn(buffer, "\n")] = 0;  // 개행 문자 제거
+    std::string settings(buffer);
 
     auto it = dds_registry_.find(kTopicSetAppUpdateSettings);
     if (it == dds_registry_.end()) {
-      std::cerr << "Error: DDS publisher not found for topic" << std::endl;
+      fprintf(stderr, "Error: DDS publisher not found for topic\n");
       return;
     }
 
@@ -237,28 +338,36 @@ class OtamActorServiceTester {
     request->app_name(app_name);
     request->app_settings(settings);
 
-    std::cout << "Sending SetAppUpdateSettings request..." << std::endl;
-    std::cout << "  Request ID: " << request->id() << std::endl;
-    std::cout << "  App Name: " << request->app_name() << std::endl;
-    std::cout << "  Settings: " << request->app_settings() << std::endl;
+    printf("Sending SetAppUpdateSettings request...\n");
+    printf("  Request ID: %d\n", request->id());
+    printf("  App Name: %s\n", request->app_name().c_str());
+    printf("  Settings: %s\n", request->app_settings().c_str());
 
-    it->second->Write(request);
-    std::cout << "Request sent! Waiting for response..." << std::endl;
+    it->second->Write(std::static_pointer_cast<void>(request));
+    printf("Request sent! Waiting for response...\n");
   }
 
   /**
    * @brief Test GetAppUpdateState
    */
   void TestGetAppUpdateState() {
-    std::cout << "\n--- Test GetAppUpdateState ---" << std::endl;
+    printf("\n--- Test GetAppUpdateState ---\n");
 
-    std::string app_name;
-    std::cout << "Enter application name: ";
-    std::getline(std::cin, app_name);
+    char buffer[256];
+    printf("Enter application name: ");
+    fflush(stdout);
+
+    if (fgets(buffer, sizeof(buffer), stdin) == NULL) {
+      fprintf(stderr, "Error: Failed to read input\n");
+      return;
+    }
+    buffer[strcspn(buffer, "\n")] = 0;  // 개행 문자 제거
+
+    std::string app_name(buffer);
 
     auto it = dds_registry_.find(kTopicGetAppUpdateState);
     if (it == dds_registry_.end()) {
-      std::cerr << "Error: DDS publisher not found for topic" << std::endl;
+      fprintf(stderr, "Error: DDS publisher not found for topic\n");
       return;
     }
 
@@ -266,27 +375,35 @@ class OtamActorServiceTester {
     request->id(next_request_id_++);
     request->app_name(app_name);
 
-    std::cout << "Sending GetAppUpdateState request..." << std::endl;
-    std::cout << "  Request ID: " << request->id() << std::endl;
-    std::cout << "  App Name: " << request->app_name() << std::endl;
+    printf("Sending GetAppUpdateState request...\n");
+    printf("  Request ID: %d\n", request->id());
+    printf("  App Name: %s\n", request->app_name().c_str());
 
-    it->second->Write(request);
-    std::cout << "Request sent! Waiting for response..." << std::endl;
+    it->second->Write(std::static_pointer_cast<void>(request));
+    printf("Request sent! Waiting for response...\n");
   }
 
   /**
    * @brief Test SetAppUpdate
    */
   void TestSetAppUpdate() {
-    std::cout << "\n--- Test SetAppUpdate ---" << std::endl;
+    printf("\n--- Test SetAppUpdate ---\n");
 
-    std::string app_name;
-    std::cout << "Enter application name: ";
-    std::getline(std::cin, app_name);
+    char buffer[256];
+    printf("Enter application name: ");
+    fflush(stdout);
+
+    if (fgets(buffer, sizeof(buffer), stdin) == NULL) {
+      fprintf(stderr, "Error: Failed to read input\n");
+      return;
+    }
+    buffer[strcspn(buffer, "\n")] = 0;  // 개행 문자 제거
+
+    std::string app_name(buffer);
 
     auto it = dds_registry_.find(kTopicSetAppUpdate);
     if (it == dds_registry_.end()) {
-      std::cerr << "Error: DDS publisher not found for topic" << std::endl;
+      fprintf(stderr, "Error: DDS publisher not found for topic\n");
       return;
     }
 
@@ -294,13 +411,13 @@ class OtamActorServiceTester {
     request->id(next_request_id_++);
     request->app_name(app_name);
 
-    std::cout << "Sending SetAppUpdate request..." << std::endl;
-    std::cout << "  Request ID: " << request->id() << std::endl;
-    std::cout << "  App Name: " << request->app_name() << std::endl;
+    printf("Sending SetAppUpdate request...\n");
+    printf("  Request ID: %d\n", request->id());
+    printf("  App Name: %s\n", request->app_name().c_str());
 
-    it->second->Write(request);
-    std::cout << "Request sent! Waiting for response..." << std::endl;
-    std::cout << "\nNote: This will trigger lifecycle mode change and vehicle info checks." << std::endl;
+    it->second->Write(std::static_pointer_cast<void>(request));
+    printf("Request sent! Waiting for response...\n");
+    printf("\nNote: This will trigger lifecycle mode change and vehicle info checks.\n");
   }
 
   // ========== Response Listeners ==========
@@ -310,20 +427,28 @@ class OtamActorServiceTester {
    */
   class GetAppUpdateSettingsResponseListener : public eprosima::fastdds::dds::DataReaderListener {
    public:
-    GetAppUpdateSettingsResponseListener(OtamActorServiceTester* tester) : tester_(tester) {}
+    GetAppUpdateSettingsResponseListener(OtamActorServiceTester* tester) : tester_(tester) {
+      std::cout << "[DEBUG] GetAppUpdateSettingsResponseListener created, tester_=" << tester_ << std::endl;
+    }
 
     void on_data_available(eprosima::fastdds::dds::DataReader* reader) override {
-      GetAppUpdateSettingsResponse message;
-      eprosima::fastdds::dds::SampleInfo info;
+      try {
+        std::cout << "[DEBUG] GetAppUpdateSettingsResponseListener::on_data_available called" << std::endl;
 
-      if (reader->take_next_sample(&message, &info) == eprosima::fastdds::dds::RETCODE_OK) {
-        if (info.valid_data) {
-          std::cout << "\n[RESPONSE] GetAppUpdateSettingsResponse received:" << std::endl;
-          std::cout << "  Request ID: " << message.id() << std::endl;
-          std::cout << "  App Name: " << message.app_name() << std::endl;
-          std::cout << "  Settings: " << message.app_settings() << std::endl;
-          std::cout << "  Return Code: " << static_cast<int>(message.ret_code().code()) << std::endl;
+        GetAppUpdateSettingsResponse message;
+        eprosima::fastdds::dds::SampleInfo info;
+
+        if (reader->take_next_sample(&message, &info) == eprosima::fastdds::dds::RETCODE_OK) {
+          if (info.valid_data) {
+            std::cout << "\n[RESPONSE] GetAppUpdateSettingsResponse received:" << std::endl;
+            std::cout << "  Request ID: " << message.id() << std::endl;
+            std::cout << "  App Name: " << message.app_name() << std::endl;
+            std::cout << "  Settings: " << message.app_settings() << std::endl;
+            std::cout << "  Return Code: " << static_cast<int>(message.ret_code()) << std::endl;
+          }
         }
+      } catch (const std::exception& e) {
+        std::cerr << "[ERROR] Exception in GetAppUpdateSettingsResponseListener: " << e.what() << std::endl;
       }
     }
 
@@ -346,7 +471,7 @@ class OtamActorServiceTester {
         if (info.valid_data) {
           std::cout << "\n[RESPONSE] SetAppUpdateSettingsResponse received:" << std::endl;
           std::cout << "  Request ID: " << message.id() << std::endl;
-          std::cout << "  Return Code: " << static_cast<int>(message.ret_code().code()) << std::endl;
+          std::cout << "  Return Code: " << static_cast<int>(message.ret_code()) << std::endl;
         }
       }
     }
@@ -372,7 +497,7 @@ class OtamActorServiceTester {
           std::cout << "  Request ID: " << message.id() << std::endl;
           std::cout << "  App Name: " << message.app_name() << std::endl;
           std::cout << "  State Info: " << message.app_state_info() << std::endl;
-          std::cout << "  Return Code: " << static_cast<int>(message.ret_code().code()) << std::endl;
+          std::cout << "  Return Code: " << static_cast<int>(message.ret_code()) << std::endl;
         }
       }
     }
@@ -397,7 +522,7 @@ class OtamActorServiceTester {
           std::cout << "\n[RESPONSE] SetAppUpdateResponse received:" << std::endl;
           std::cout << "  Request ID: " << message.id() << std::endl;
           std::cout << "  App Name: " << message.app_name() << std::endl;
-          std::cout << "  Return Code: " << static_cast<int>(message.ret_code().code()) << std::endl;
+          std::cout << "  Return Code: " << static_cast<int>(message.ret_code()) << std::endl;
         }
       }
     }

@@ -15,6 +15,8 @@ set(GENERATED_DDS_FILES ${GENERATED_OTA_MGR_DIR}/OtamClientServiceMsgPubSubTypes
                         ${GENERATED_LIFECYCLE_MGR_DIR}/SetServiceModeRequestTypeObjectSupport.cxx                        
                         ${GENERATED_LIFECYCLE_MGR_DIR}/LifecycleCommonPubSubTypes.cxx  
                         ${GENERATED_LIFECYCLE_MGR_DIR}/LifecycleCommonTypeObjectSupport.cxx                        
+                        ${GENERATED_VEHICLE_INFO_MGR_DIR}/VissRequestPubSubTypes.cxx  
+                        ${GENERATED_VEHICLE_INFO_MGR_DIR}/VissRequestTypeObjectSupport.cxx                        
                         ${GENERATED_DIR}/common/ReturnValueTypeObjectSupport.cxx
                         ${GENERATED_DIR}/common/ReturnValuePubSubTypes.cxx
 )
@@ -22,8 +24,9 @@ set(GENERATED_DDS_FILES ${GENERATED_OTA_MGR_DIR}/OtamClientServiceMsgPubSubTypes
 message(STATUS GENERATED_OTA_MGR_DIR=${GENERATED_OTA_MGR_DIR})
 
 # --- OtamDdsImpl Library ---
+# Note: otam_dds_impl.cc removed because OtamDdsImpl is now a template class
+# Template implementations are in otam_dds_impl.h
 set(OTAM_CLIENT_DDS_IMPL_SRCS
-    otam_dds_impl.cc
     ${GENERATED_DDS_FILES}
 )
 message(STATUS "Configuring OtamDdsImpl static library.")

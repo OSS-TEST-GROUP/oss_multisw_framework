@@ -29,7 +29,7 @@ class OtamDiagnosticService : public OtamService {
 
  private:
   // Registry of DDS abstractions keyed by topic name
-  std::map<std::string, std::shared_ptr<OtamDdsImpl>>
+  std::map<std::string, std::shared_ptr<OtamDds>>
       dds_registry_;
 
   // Flag indicating if service is initialized
@@ -42,10 +42,10 @@ class OtamDiagnosticService : public OtamService {
 
   // Register a DDS abstraction
   void RegisterDds(const std::string& topic_name,
-                   std::shared_ptr<OtamDdsImpl> dds);
+                   std::shared_ptr<OtamDds> dds);
 
   // Get DDS abstraction by topic name
-  std::shared_ptr<OtamDdsImpl> GetDds(
+  std::shared_ptr<OtamDds> GetDds(
       const std::string& topic_name);
 };
 

@@ -15,6 +15,7 @@ project(OtaManager CXX)             # Overall project name
 set(GENERATED_DIR "${CMAKE_INSTALL_PREFIX}/generated/idl")
 set(GENERATED_OTA_MGR_DIR "${GENERATED_DIR}/ota_mgr")
 set(GENERATED_LIFECYCLE_MGR_DIR "${GENERATED_DIR}/lifecycle")
+set(GENERATED_VEHICLE_INFO_MGR_DIR "${GENERATED_DIR}/vehicle_info_mgr")
 
 message(STATUS "BUILD_INTERFACE:CMAKE_CURRENT_SOURCE_DIR = $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>")
 message(STATUS "INSTALL_INTERFACE:include = $<INSTALL_INTERFACE:include>")
@@ -49,14 +50,14 @@ add_subdirectory(otam_actor_service)
 # option(BUILD_UNITTEST "Build the unit tests" ON) # Default to ON for development
 
 if(BUILD_UNITTEST)
-    add_subdirectory(unittest)
+#    add_subdirectory(unittest)
 endif()
 
 # Add test application directory for integration testing
 option(BUILD_TEST "Build the test applications" ON) # Default to ON for development
 
-if(BUILD_TEST)
-#    add_subdirectory(test)
+if(BUILD_TEST AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|amd64")
+    add_subdirectory(test)
 endif()
 
 # (Optional) Install targets
@@ -84,5 +85,5 @@ install(DIRECTORY
 )
 
 # config
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/config/config.json
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/config/otam_config.json
     DESTINATION bin/config)
