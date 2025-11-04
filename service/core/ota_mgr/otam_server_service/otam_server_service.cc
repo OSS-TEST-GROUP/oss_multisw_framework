@@ -2,6 +2,7 @@
 #include "otam_server_api_client_impl.h"
 #include "otam_app_settings.h"
 
+#include <curl/curl.h>
 #include <nlohmann/json.hpp>
 #include <fstream>
 #include <iostream>
@@ -15,6 +16,9 @@ void OtamServerService::Initialize() {
         std::cout << "[OtamServerService] Already initialized.\n";
         return;
     }
+
+    // Initialize CURL globally
+    curl_global_init(CURL_GLOBAL_DEFAULT);
 
     if (const char* env_p = std::getenv("OTAM_CONFIG")) {
         config_path_ = env_p;
@@ -55,6 +59,10 @@ void OtamServerService::Start() {
 
 void OtamServerService::Stop() {
     state_ = ServiceState::STOPPED;
+
+    // Cleanup CURL globally
+    curl_global_cleanup();
+
     std::cout << "OtamServerService Stopped." << std::endl;
 }
 
