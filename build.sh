@@ -23,7 +23,7 @@ export CROSSCOMPILING=false
 export BUILD_UNITTEST="FALSE"
 export EXTENSION_PLATFORM="ROS2"
 export SDK_DIR=${HOME}/obigo-sdk
-export TARGET_MF_NAME="aadp"
+#export TARGET_MF_NAME="aadp"
 
 show_help() {
 	cat << EOF
@@ -167,12 +167,12 @@ do_parse_option()
 				TARGET_PLATFORM="linux/arm64"
 				CROSSCOMPILING=true
 				;;
-			--agl)
-				TARGET_PLATFORM="linux/aarch64"
-				TARGET_MF_NAME="agl"
-				EXTENSION_PLATFORM="AGL"
-				CROSSCOMPILING=true
-				;;
+			#--agl)
+			#	TARGET_PLATFORM="linux/arm64"
+			#	#TARGET_MF_NAME="agl"
+			#	EXTENSION_PLATFORM="AGL"
+			#	CROSSCOMPILING=true
+			#	;;
 			*)
 				echo "Unknown option. ${arg}"
 				echo "Use --help to see available options."
@@ -220,7 +220,7 @@ do_set_private_registry() {
 
 do_install_agl_build_environment() {
 	if [[ ${CROSSCOMPILING} != true ]]; then return; fi
-	if [[ "${TARGET_MF_NAME}" != "agl" ]]; then return; fi
+	#if [[ "${TARGET_MF_NAME}" != "agl" ]]; then return; fi
 
 	if ! dpkg -s curl &>/dev/null; then
 		sudo apt-get update
@@ -241,7 +241,7 @@ do_install_agl_build_environment() {
 
 do_install_ros_build_environment() {
 	if [[ ${CROSSCOMPILING} != true ]]; then return; fi
-	if [[ "${TARGET_MF_NAME}" != "aadp" ]]; then return; fi
+	#if [[ "${TARGET_MF_NAME}" != "aadp" ]]; then return; fi
 
 	if ! dpkg -s debootstrap >/dev/null 2>&1; then
 		sudo apt-get update
@@ -288,6 +288,8 @@ EOF
 				libgrpc-dev \
 				libgrpc++-dev \
 				libssl-dev \
+				libcurl4-openssl-dev \
+				nlohmann-json3-dev \
 			&& rm -rf /var/lib/apt/lists/*
 		'
 		do_error_check

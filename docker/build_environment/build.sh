@@ -34,6 +34,7 @@ Available options:
 Examples:
   ./build.sh --release
   ./build.sh --build-unittest --set-extension-platform=ROS2
+  ./build.sh --build-unittest --set-extension-platform=AGL
 EOF
 }
 
@@ -64,16 +65,16 @@ do_parse_option()
 				EXTENSION_PLATFORM="${arg#*=}"
 				;;
 			--aarch64)
-				EXTENSION_PLATFORM="ROS2"
+				#EXTENSION_PLATFORM="ROS2"
 				CROSSCOMPILING="TRUE"
 				TARGET_ARCH="aarch64"
 				;;
-			--agl)
-				EXTENSION_PLATFORM="AGL"
-				TARGET_MF_NAME="agl"
-				CROSSCOMPILING="TRUE"
-				TARGET_ARCH="aarch64"
-				;;
+			#--agl)
+			#	EXTENSION_PLATFORM="AGL"
+			#	TARGET_MF_NAME="agl"
+			#	CROSSCOMPILING="TRUE"
+			#	TARGET_ARCH="aarch64"
+			#	;;
 			*)
 				echo "Unknown option. ${arg}"
 				echo "Use --help to see available options."
@@ -86,24 +87,27 @@ do_parse_option()
 do_prepare_build_environment()
 {
 	if [[ ${CROSSCOMPILING} = TRUE ]]; then
-		if [[ ${TARGET_MF_NAME} = "agl" ]]; then
-			if [[ ! -d ${SDK_DIR}/agl-adt ]]; then
-				curl -v -u "builder:obigo@se" \
-					-o /tmp/oss-agl-ivi-flutter-aarch64-toolchain-18.94.0.sh \
-					http://172.16.10.72:8081/repository/yocto-adt/agl/oss-agl-ivi-flutter-aarch64-toolchain-18.94.0.sh
-				do_error_check
-
-				chmod a+x /tmp/oss-agl-ivi-flutter-aarch64-toolchain-18.94.0.sh
-				/tmp/oss-agl-ivi-flutter-aarch64-toolchain-18.94.0.sh -y -d ${SDK_DIR}/agl-adt
-				do_error_check
-			fi
-			source ${SDK_DIR}/agl-adt/environment-setup-aarch64-agl-linux
-			CMAKE_TOOLCHAIN_FILE="${OECORE_NATIVE_SYSROOT}/usr/share/cmake/OEToolchainConfig.cmake"
-		else
-			CMAKE_TOOLCHAIN_FILE="${SDK_DIR}/cmake/toolchain-ubuntu-aarch64.cmake"
-			#export PKG_CONFIG_PATH="${SDK_DIR}/sysroot-aarch64/usr/lib/aarch64-linux-gnu/pkgconfig"
-			#export PKG_CONFIG_SYSROOT_DIR="${SDK_DIR}/sysroot-aarch64"
+		if [ "${EXTENSION_PLATFORM}" == "AGL" ]; then
+			TARGET_MF_NAME="agl"
 		fi
+		#if [[ ${TARGET_MF_NAME} = "agl" ]]; then
+		#	if [[ ! -d ${SDK_DIR}/agl-adt ]]; then
+		#		curl -v -u "builder:obigo@se" \
+		#			-o /tmp/oss-agl-ivi-flutter-aarch64-toolchain-18.94.0.sh \
+		#			http://172.16.10.72:8081/repository/yocto-adt/agl/oss-agl-ivi-flutter-aarch64-toolchain-18.94.0.sh
+		#		do_error_check
+
+		#		chmod a+x /tmp/oss-agl-ivi-flutter-aarch64-toolchain-18.94.0.sh
+		#		/tmp/oss-agl-ivi-flutter-aarch64-toolchain-18.94.0.sh -y -d ${SDK_DIR}/agl-adt
+		#		do_error_check
+		#	fi
+		#	source ${SDK_DIR}/agl-adt/environment-setup-aarch64-agl-linux
+		#	CMAKE_TOOLCHAIN_FILE="${OECORE_NATIVE_SYSROOT}/usr/share/cmake/OEToolchainConfig.cmake"
+		#else
+		CMAKE_TOOLCHAIN_FILE="${SDK_DIR}/cmake/toolchain-ubuntu-aarch64.cmake"
+		#export PKG_CONFIG_PATH="${SDK_DIR}/sysroot-aarch64/usr/lib/aarch64-linux-gnu/pkgconfig"
+		#export PKG_CONFIG_SYSROOT_DIR="${SDK_DIR}/sysroot-aarch64"
+		#fi
 	fi
 	do_build_fastdds
 	#do_build_fastdds_gen
@@ -126,11 +130,12 @@ do_build_fastdds() {
 			--cmake-args -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
 			--cmake-args -DCMAKE_VERBOSE_MAKEFILE=ON
 		)
-		if [[ ${TARGET_MF_NAME} = "ros2" ]]; then
-			build_args+=(
-				--cmake-args -DOPENSSL_INCLUDE_DIR=${SDK_DIR}/sysroot-aarch64/usr/include/aarch64-linux-gnu
-			)
-		fi
+		# include AGL
+		#if [[ ${TARGET_MF_NAME} = "ros2" ]]; then
+		build_args+=(
+			--cmake-args -DOPENSSL_INCLUDE_DIR=${SDK_DIR}/sysroot-aarch64/usr/include/aarch64-linux-gnu
+		)
+		#fi
 	fi
 	colcon build "${build_args[@]}"
 	do_error_check
@@ -181,7 +186,9 @@ do_build_cmd() {
 			-DCMAKE_CROSSCOMPILING=${CROSSCOMPILING}
 			-DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
 		)
-		if [[ ${TARGET_MF_NAME} = "ros2" && ${1} = "core" ]]; then
+		# include AGL
+		#if [[ ${TARGET_MF_NAME} = "ros2" && ${1} = "core" ]]; then
+		if [[ ${1} = "core" ]]; then
 			libs_dir="${SDK_DIR}/sysroot-aarch64/usr/lib/aarch64-linux-gnu"
 			cmake_args+=(
 				-DOPENSSL_INCLUDE_DIR=${SDK_DIR}/sysroot-aarch64/usr/include/aarch64-linux-gnu

@@ -1,0 +1,126 @@
+
+###################################################################################
+# Runtime
+###################################################################################
+FROM ubuntu:22.04 AS runtime
+
+LABEL maintainer="Brian.doh <brian.doh@obigo.com>"
+LABEL description="Runtime Image"
+LABEL version="0.0.1"
+
+# Set base environment variables
+ENV DEBIAN_FRONTEND=noninteractive
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
+
+ENV TZ=Asia/Seoul
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+RUN sed -i 's|http://archive.ubuntu.com|http://mirror.kakao.com|g' /etc/apt/sources.list \
+    && apt-get update && apt-get upgrade -y
+
+RUN apt-get install -y --no-install-recommends \
+    libtinyxml2-9 \
+    libssl3 \
+    libp11-3 \
+    softhsm2 \
+    libengine-pkcs11-openssl \
+    libyaml-cpp0.7 \
+    libgrpc++1 \
+    libprotobuf23 \
+    libprotobuf-c1 \
+    grpc-proto \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd -r -g 1000 ossuser \
+    && useradd -r -u 1000 -g ossuser -d /oss -s /bin/bash ossuser \
+    && mkdir -p /oss \
+    && mkdir -p /oss/lib \
+    && chown -R ossuser:ossuser /oss
+
+COPY docker/build_environment/fastdds-profile.xml /oss/fastdds-profile.xml
+ENV FASTDDS_DEFAULT_PROFILES_FILE=/oss/fastdds-profile.xml
+ENV FASTDDS_LOG_LEVEL=Error
+
+###################################################################################
+# Aarch64
+###################################################################################
+# Core
+###################################################################################
+FROM runtime AS runtime-mmf-core
+
+ARG BUILD_TYPE=Release
+
+COPY --chown=ossuser:ossuser output/aarch64/${BUILD_TYPE}/core/bin /oss/bin
+COPY --chown=ossuser:ossuser output/aarch64/lib /oss/lib
+COPY --chown=ossuser:ossuser output/aarch64/${BUILD_TYPE}/core/lib /tmp/lib
+
+# Generate unique machin_id
+RUN if [ ! -s /etc/machine-id ]; then \
+    echo "$(cat /proc/sys/kernel/random/uuid | tr -d '-')" > /etc/machine-id; \
+    fi
+
+WORKDIR /oss
+USER ossuser
+
+RUN cp -rpa /tmp/lib/*.so* /oss/lib/ \
+    && rm -rf /tmp/lib
+
+RUN sed -e "s#./#/oss/bin/#g" -i /oss/bin/config/config_middleware.yaml
+
+ENV LD_LIBRARY_PATH=/oss/lib
+ENV MMF_CONFIG_PATH=/oss/bin/config
+ENV DIAG_CONFIG_PATH=/oss/bin/config
+ENV VEHICLE_CONFIG_PATH=/oss/bin/config
+
+ENTRYPOINT ["/oss/bin/lifecycle_mgr"]
+
+###################################################################################
+# Extension - ROS2
+###################################################################################
+FROM runtime AS runtime-mmf-ext-ros2
+
+ARG BUILD_TYPE=Release
+
+COPY --chown=ossuser:ossuser docker/build_environment/ros2_entrypoint.sh /oss/entrypoint.sh
+COPY --chown=ossuser:ossuser output/aarch64/${BUILD_TYPE}/extension/ros2/bin /oss/bin
+COPY --chown=ossuser:ossuser output/aarch64/lib /oss/lib
+
+# Generate unique machin_id
+RUN if [ ! -s /etc/machine-id ]; then \
+    echo "$(cat /proc/sys/kernel/random/uuid | tr -d '-')" > /etc/machine-id; \
+    fi
+
+RUN chmod +x /oss/entrypoint.sh
+
+WORKDIR /oss
+USER ossuser
+
+ENV LD_LIBRARY_PATH=/oss/lib
+ENV SAVED_REGISTRY_BACKUP=/oss/bin/config
+
+ENTRYPOINT ["/oss/entrypoint.sh"]
+
+###################################################################################
+# Extension - AGL
+###################################################################################
+FROM runtime AS runtime-mmf-ext-agl
+
+ARG BUILD_TYPE=Release
+
+COPY --chown=ossuser:ossuser docker/build_environment/agl_entrypoint.sh /oss/entrypoint.sh
+COPY --chown=ossuser:ossuser output/aarch64/${BUILD_TYPE}/extension/agl/bin /oss/bin
+COPY --chown=ossuser:ossuser output/aarch64/lib /oss/lib
+
+# Generate unique machin_id
+RUN if [ ! -s /etc/machine-id ]; then \
+    echo "$(cat /proc/sys/kernel/random/uuid | tr -d '-')" > /etc/machine-id; \
+    fi
+
+RUN chmod +x /oss/entrypoint.sh
+
+WORKDIR /oss
+USER ossuser
+
+ENV LD_LIBRARY_PATH=/oss/lib
+
+ENTRYPOINT ["/oss/entrypoint.sh"]
