@@ -1,28 +1,89 @@
-cmake_minimum_required(VERSION 3.5)
+# Top-level CMakeLists.txt for the OTA Manager project
 
-project ( "ota_mgr" )
+cmake_minimum_required(VERSION 3.5) # Minimum CMake version
+project(OtaManager CXX)             # Overall project name
 
-## Sub Directory
+# Find FastDDS package
+# if(NOT fastcdr_FOUND)
+#     find_package(fastcdr 2 REQUIRED)
+# endif()
 
+# if(NOT fastdds_FOUND)
+#     find_package(fastdds 3 REQUIRED)
+# endif()
 
-## Source
-set ( MAIN_SRC main.cc )
+set(GENERATED_DIR "${CMAKE_INSTALL_PREFIX}/generated/idl")
+set(GENERATED_OTA_MGR_DIR "${GENERATED_DIR}/ota_mgr")
+set(GENERATED_LIFECYCLE_MGR_DIR "${GENERATED_DIR}/lifecycle")
+set(GENERATED_VEHICLE_INFO_MGR_DIR "${GENERATED_DIR}/vehicle_info_mgr")
 
-## Library
-#link_libraries ( pthread )
-#link_directories ( ${CMAKE_INSTALL_PREFIX} )
+message(STATUS "BUILD_INTERFACE:CMAKE_CURRENT_SOURCE_DIR = $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>")
+message(STATUS "INSTALL_INTERFACE:include = $<INSTALL_INTERFACE:include>")
+message(STATUS "CMAKE_INSTALL_PREFIX = ${CMAKE_INSTALL_PREFIX}")
 
-## Target binary
-#add_library ( abc_static STATIC or SHARED or OBJECT $<TARGET_OBJECTS:abcd_obj> )
-#set_target_properties ( abc_static PROPERTIES OUTPUT_NAME abc )
-#target_link_libraries ( abc_static ${} )
+include_directories (
+    ${GENERATED_DIR}  # For generated/idl
+    ${GENERATED_OTA_MGR_DIR}  # For generated/idl/ota_mgr
+    ${CMAKE_INSTALL_PREFIX}
+    ${CMAKE_INSTALL_PREFIX}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    # $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}> # For otam_client_service.h
+    # $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/..> # For header files in otam_common
+)
 
-#add_executable ( ${PROJECT_NAME} ${MAIN_SRC} $<TARGET_OBJECTS:abc_obj> )
-add_executable ( ${PROJECT_NAME} ${MAIN_SRC} )
+link_libraries ( 
+    pthread fastcdr fastdds
+)
 
-## Install
+# Add source directory
+add_subdirectory(otam_common)
+add_subdirectory(otam_main)
+add_subdirectory(otam_client_service)
+add_subdirectory(otam_server_service)
+add_subdirectory(otam_diagnostic_service)
+add_subdirectory(otam_vehicle_service)
+add_subdirectory(otam_actor_service)
+
+# Add test directory
+# Ensure that tests are only built when explicitly requested (e.g., by CI or developers)
+# This is a common practice to avoid unnecessary test compilation in production builds.
+# option(BUILD_UNITTEST "Build the unit tests" ON) # Default to ON for development
+
+if(BUILD_UNITTEST)
+#    add_subdirectory(unittest)
+endif()
+
+# Add test application directory for integration testing
+option(BUILD_TEST "Build the test applications" ON) # Default to ON for development
+
+if(BUILD_TEST AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|amd64")
+    add_subdirectory(test)
+endif()
+
+# (Optional) Install targets
+# install(TARGETS OtamMain DESTINATION lib) # Example for library installation
+add_executable ( ${PROJECT_NAME} main.cc )
+target_link_libraries(${PROJECT_NAME} PRIVATE 
+    OtamMain
+    OtamClientService
+    OtamServerService
+    OtamDiagnosticService
+    OtamVehicleService
+    OtamActorService
+)
+
 install ( TARGETS ${PROJECT_NAME}
     RUNTIME DESTINATION bin
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
     )
+
+# idl
+install(DIRECTORY
+    ${CMAKE_SOURCE_DIR}/idl/dds/ota_mgr
+    DESTINATION bin/idl
+)
+
+# config
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/config/otam_config.json
+    DESTINATION bin/config)

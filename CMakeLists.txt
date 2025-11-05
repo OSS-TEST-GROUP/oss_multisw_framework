@@ -40,6 +40,7 @@ if(NOT fastdds_FOUND)
 endif()
 
 find_package(yaml-cpp REQUIRED)
+find_package(CURL REQUIRED)
 
 if (BUILD_UNITTEST)
     include(FetchContent)

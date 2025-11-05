@@ -1,0 +1,38 @@
+# Lifecycle Manager Mock Configuration
+# This file controls the behavior of the mock lifecycle manager service
+
+# Service Mode Response Configuration
+service_mode_response:
+  # Return code for SetServiceModeRequest
+  # Valid values: SUCCESS, FAILED
+  return_code: SUCCESS
+
+  # Optional delay in milliseconds before sending response
+  # Set to 0 for immediate response
+  response_delay_ms: 0
+
+  # Automatic mode: Always return SUCCESS
+  # Manual mode: Use return_code specified above
+  mode: automatic
+
+# Service Mode Scenarios
+# You can define different scenarios for testing
+scenarios:
+  # Default scenario: Success case
+  success:
+    return_code: SUCCESS
+    response_delay_ms: 0
+
+  # Failure scenario: Service mode change failed
+  failure:
+    return_code: FAILED
+    response_delay_ms: 0
+
+  # Slow response scenario: Delayed success
+  slow_success:
+    return_code: SUCCESS
+    response_delay_ms: 2000
+
+# Active scenario (change this to test different scenarios)
+# Options: success, failure, slow_success
+active_scenario: success
