@@ -1,4 +1,5 @@
 #include "NetworkProvider.h"
+#include "Logger.h"
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/writer.h"
 #include <iostream>
@@ -15,15 +16,18 @@ NetworkProvider::~NetworkProvider() {
 void NetworkProvider::start() {
     active = true;
     provider_thread = std::thread(&NetworkProvider::runLoop, this);
-    std::cout << "NetworkProvider started." << std::endl;
+    LOG_INFO << "NetworkProvider started.";
 }
 
 void NetworkProvider::stop() {
-    active = false;
+    if (!active.exchange(false)) {
+        return; // Already stopped
+    }
+    LOG_INFO << "NetworkProvider::stop() called.";
     if (provider_thread.joinable()) {
         provider_thread.join();
     }
-    std::cout << "NetworkProvider stopped." << std::endl;
+    LOG_INFO << "NetworkProvider::stop() completed.";
 }
 
 std::string NetworkProvider::getName() const {
@@ -35,7 +39,7 @@ void NetworkProvider::setDataChannel(const std::shared_ptr<ThreadSafeQueue<Vehic
 }
 
 void NetworkProvider::setValue(const std::string& path, const std::any& value) {
-    std::cout << "NetworkProvider: setValue called for path " << path << std::endl;
+    LOG_INFO << "NetworkProvider: setValue called for path " << path;
 }
 
 void NetworkProvider::setVssTree(std::shared_ptr<viss::VSSTree> vss_tree) {
@@ -65,6 +69,16 @@ void NetworkProvider::runLoop() {
             data_channel->push(VehicleData{"Vehicle.Body.Mirrors.DriverSide.IsFolded", (rand() % 5 == 0) ? "true" : "false", now_ms});
             data_channel->push(VehicleData{"Vehicle.Body.Mirrors.DriverSide.IsHeatingOn", (rand() % 10 == 0) ? "true" : "false", now_ms});
             data_channel->push(VehicleData{"Vehicle.Body.Mirrors.DriverSide.IsLocked", (rand() % 2 == 0) ? "true" : "false", now_ms});
+
+            // Add tire pressure data
+            data_channel->push(VehicleData{"Vehicle.Chassis.Axle.Row1.Wheel.Left.Tire.Pressure", std::to_string(32 + (rand() % 5 - 2)), now_ms});
+            data_channel->push(VehicleData{"Vehicle.Chassis.Axle.Row1.Wheel.Left.Tire.IsPressureLow", (rand() % 20 == 0) ? "true" : "false", now_ms});
+            data_channel->push(VehicleData{"Vehicle.Chassis.Axle.Row1.Wheel.Right.Tire.Pressure", std::to_string(32 + (rand() % 5 - 2)), now_ms});
+            data_channel->push(VehicleData{"Vehicle.Chassis.Axle.Row1.Wheel.Right.Tire.IsPressureLow", (rand() % 20 == 0) ? "true" : "false", now_ms});
+            data_channel->push(VehicleData{"Vehicle.Chassis.Axle.Row2.Wheel.Left.Tire.Pressure", std::to_string(34 + (rand() % 5 - 2)), now_ms});
+            data_channel->push(VehicleData{"Vehicle.Chassis.Axle.Row2.Wheel.Left.Tire.IsPressureLow", (rand() % 20 == 0) ? "true" : "false", now_ms});
+            data_channel->push(VehicleData{"Vehicle.Chassis.Axle.Row2.Wheel.Right.Tire.Pressure", std::to_string(34 + (rand() % 5 - 2)), now_ms});
+            data_channel->push(VehicleData{"Vehicle.Chassis.Axle.Row2.Wheel.Right.Tire.IsPressureLow", (rand() % 20 == 0) ? "true" : "false", now_ms});
         }
         std::this_thread::sleep_for(std::chrono::seconds(5)); // Slower updates
     }

@@ -113,8 +113,11 @@ public:
     int searchNodes(const std::string& searchPath, Node_t* rootNode, std::vector<SearchData_t>& searchData, bool anyDepth, bool leafNodesOnly);
     std::vector<std::string> getPaths(const std::string& path, const rapidjson::Document* filter);
     rapidjson::Document getDataTypeTemplate(const std::string& path);
+    rapidjson::Document getMetadata(const std::string& path, int depth = 0);
 
 private:
+private:
+    rapidjson::Value getMetadataRecursive(Node_t* node, int max_depth, int current_depth, rapidjson::Document::AllocatorType& allocator);
     rapidjson::Value createTemplateRecursive(Node_t* node, rapidjson::Document::AllocatorType& allocator);
     // For binary parsing
     template<typename T>

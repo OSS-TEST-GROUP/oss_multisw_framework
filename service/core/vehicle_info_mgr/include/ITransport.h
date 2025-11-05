@@ -14,6 +14,7 @@
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/writer.h"
 #include "rapidjson/document.h"
+#include "Logger.h"
 
 // A rapidjson Document wrapper with a reset method for object pooling
 struct PooledResponseMap : public rapidjson::Document {
@@ -36,18 +37,18 @@ struct RequestData {
     RequestData() : request_doc(std::make_unique<rapidjson::Document>()) {}
 
     void print() const {
-        std::cout << "RequestData {" << std::endl;
-        std::cout << "  requestId: " << requestId << std::endl;
+        LOG_INFO << "RequestData {";
+        LOG_INFO << "  requestId: " << requestId;
         
         if (request_doc) {
             rapidjson::StringBuffer buffer;
             rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
             request_doc->Accept(writer);
-            std::cout << "  request_doc: " << buffer.GetString() << std::endl;
+            LOG_INFO << "  request_doc: " << buffer.GetString();
         } else {
-            std::cout << "  request_doc: (null)" << std::endl;
+            LOG_INFO << "  request_doc: (null)";
         }
-        std::cout << "}" << std::endl;
+        LOG_INFO << "}";
     }
 
     void reset() {

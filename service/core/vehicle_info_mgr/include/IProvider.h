@@ -28,6 +28,12 @@ public:
 
     // VSS 트리를 설정합니다.
     virtual void setVssTree(std::shared_ptr<viss::VSSTree> vss_tree) = 0;
+
+    // 경로에 대한 구독이 시작되었음을 알립니다.
+    virtual void subscribe(const std::string& path) {};
+
+    // 경로에 대한 구독이 해지되었음을 알립니다.
+    virtual void unsubscribe(const std::string& path) {};
 };
 
 #endif // IPROVIDER_H

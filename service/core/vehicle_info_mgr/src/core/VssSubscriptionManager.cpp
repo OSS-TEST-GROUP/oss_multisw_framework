@@ -1,5 +1,6 @@
 #include "VssSubscriptionManager.h"
 #include "Utils.h"
+#include "Logger.h"
 #include <iostream>
 #include <algorithm>
 #include <stdexcept>
@@ -84,26 +85,35 @@ std::vector<std::shared_ptr<viss::IFilter>> VssSubscriptionManager::parseFilters
     }
 
     for (const auto& exp : expressions->GetArray()) {
-        if (!exp.IsObject() || !exp.HasMember("variant") || !exp["variant"].IsString()) continue;
+        if (!exp.IsObject() || !exp.HasMember("variant") || !exp["variant"].IsString()) {
+            LOG_WARN << "Skipping invalid filter expression object.";
+            continue;
+        }
 
         std::string variant = exp["variant"].GetString();
+        LOG_INFO << "Parsing filter variant: " << variant;
+
         if (variant == "timebased" && exp.HasMember("parameter") && exp["parameter"].IsObject()) {
             const auto& param = exp["parameter"];
             if (param.HasMember("period") && param["period"].IsString()) {
                 try {
                     int period_ms = std::stoi(param["period"].GetString());
                     filters.push_back(std::make_shared<TimeBasedFilter>(period_ms));
+                    LOG_INFO << "  - Created TimeBasedFilter with period: " << period_ms << "ms";
                 } catch (const std::invalid_argument& ia) {
-                    std::cerr << "Invalid period for timebased filter." << std::endl;
+                    LOG_ERROR << "Invalid period for timebased filter: " << param["period"].GetString();
                 }
             }
         } else if (variant == "change") {
-            // For now, any "change" filter is a simple "value changed" filter.
             filters.push_back(std::make_shared<ChangeFilter>());
+            LOG_INFO << "  - Created ChangeFilter.";
         } else if (variant == "history" && exp.HasMember("parameter") && exp["parameter"].IsString()) {
-            filters.push_back(std::make_shared<HistoryFilter>(exp["parameter"].GetString()));
+            std::string timePeriod = exp["parameter"].GetString();
+            filters.push_back(std::make_shared<HistoryFilter>(timePeriod));
+            LOG_INFO << "  - Created HistoryFilter with time period: " << timePeriod;
+        } else {
+            LOG_WARN << "Unsupported or malformed filter variant: " << variant;
         }
-        // Other filter types (range, etc.) can be added here.
     }
 
     return filters;
@@ -126,7 +136,14 @@ std::string VssSubscriptionManager::addSubscription(std::shared_ptr<RequestData>
         // No valid paths found for this subscription.
         return ""; 
     }
+
+    LOG_DEBUG << "Subscription " << subscriptionId << " watching " << sub->watchedPaths.size() << " path(s):";
+    for(const auto& p : sub->watchedPaths) {
+        LOG_DEBUG << "  - " << p;
+    }
     // VISS rule: The first path is the trigger path.
+    // When a request addresses multiple signals, the triggering condition SHALL be evaluated for only one signal, 
+    // specifically the first signal in the paths parameter array.
     sub->triggerSignalPath = sub->watchedPaths[0];
 
     // Parse filters from the request document
@@ -261,14 +278,16 @@ void VssSubscriptionManager::run() {
                     }
                 }
             }
-            std::this_thread::sleep_for(std::chrono::seconds(1));
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
         }
     });
 }
 
 void VssSubscriptionManager::stop() {
+    LOG_INFO << "VssSubscriptionManager::stop() called.";
     active_ = false;
     if (publisher_thread_.joinable()) {
         publisher_thread_.join();
     }
+    LOG_INFO << "VssSubscriptionManager::stop() completed.";
 }

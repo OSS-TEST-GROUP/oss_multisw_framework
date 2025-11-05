@@ -6,7 +6,7 @@
 #include <iostream>
 #include <algorithm>
 #include <typeinfo>
-
+#include "Logger.h"
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/writer.h"
 
@@ -46,7 +46,10 @@ void ServiceManager::run() {
     while(active.load()) {
         std::shared_ptr<RequestData> request;
         requestQueue->wait_and_pop(request);
-        if (!active.load() || !request) break;
+        if (!active.load() || !request) {
+            LOG_INFO << "Request processing loop is shutting down.";
+            break;
+        }
         
         std::cout << "--- Processing Request ---" << std::endl;
         request->print();
@@ -57,6 +60,7 @@ void ServiceManager::run() {
 
 void ServiceManager::stop() {
     if (active.load()) {
+        LOG_INFO << "ServiceManager::stop() called.";
         active = false;
         subscription_manager->stop();
         for (auto& provider : providers) {
@@ -69,6 +73,7 @@ void ServiceManager::stop() {
             data_channel_thread.join();
         }
         requestQueue->push(nullptr); // Push a null pointer to signal shutdown
+        LOG_INFO << "ServiceManager::stop() completed.";
     }
 }
 
@@ -76,7 +81,10 @@ void ServiceManager::dataChannelLoop() {
     while (active.load()) {
         VehicleData data;
         dataChannel->wait_and_pop(data);
-        if (!active.load() || data.path == "shutdown") break;
+        if (!active.load() || data.path == "shutdown") {
+            LOG_INFO << "Data channel loop is shutting down.";
+            break;
+        }
         // This will now trigger the onDataChanged callback in VssSubscriptionManager
         storage->setValue(data);
     }
@@ -158,7 +166,7 @@ void ServiceManager::processRequest(std::shared_ptr<RequestData> request) {
     } else if (action == "subscribe") {
         std::string path = req_doc["path"].GetString();
         if (vss_tree_->getPaths(path, request->request_doc.get()).empty()) {
-            response_doc->AddMember("error", StatusCodes::NOT_FOUND("The path is not available in the VSS tree.").Move(), allocator);
+            response_doc->AddMember("error", StatusCodes::NOT_FOUND("The path is not available in the VSS tree. " + path).Move(), allocator);
         } else {
             std::string subscriptionId = subscription_manager->addSubscription(request);
             response_doc->AddMember("subscriptionId", rapidjson::Value(subscriptionId.c_str(), allocator), allocator);

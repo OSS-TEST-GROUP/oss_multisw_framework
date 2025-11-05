@@ -1,11 +1,11 @@
 #include <iostream>
 #include <string>
+#include <sstream>
 #include <thread>
 #include <chrono>
 #include <atomic>
 #include <condition_variable>
 #include <mutex>
-#include "nlohmann/3.11.2/json.hpp"
 
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp>
 #include <fastdds/dds/domain/DomainParticipant.hpp>
@@ -29,7 +29,7 @@ const std::string RESPONSE_TOPIC_PREFIX("VISS/response/");
 std::mutex mtx;
 std::condition_variable cv;
 std::atomic<bool> response_received(false);
-nlohmann::json g_response_json;
+std::string g_response_json_str;
 
 class ResponseListener : public eprosima::fastdds::dds::DataReaderListener {
 public:
@@ -50,14 +50,10 @@ public:
         if (reader->take_next_sample(&sample, &info) == eprosima::fastdds::dds::RETCODE_OK) {
             if (info.valid_data) {
                 std::cout << "Response received on topic: " << reader->get_topicdescription()->get_name() << std::endl;
-                try {
-                    g_response_json = nlohmann::json::parse(sample.payload());
-                    std::cout << "Response payload:\n" << g_response_json.dump(4) << std::endl;
-                } catch (const nlohmann::json::parse_error& e) {
-                    std::cerr << "Could not parse response JSON: " << e.what() << std::endl;
-                }
+                g_response_json_str = sample.payload();
+                std::cout << "Response payload:\n" << g_response_json_str << std::endl;
                 response_received = true;
-                //cv.notify_one();
+                cv.notify_one();
             }
         }
     }
@@ -94,25 +90,18 @@ public:
     }
 };
 
-void print_usage(const char* prog_name) {
-    std::cout << "Usage: " << prog_name << " [options]\n\n"
-              << "Options:\n"
-              << "  --help                         Show this help message.\n"
-              << "  --topic <topic_name>           Set the response topic name. (Default: test/sub/topic)\n"
-              << "  --action <action_type>         Set the action type (e.g., get, set). (Default: get)\n"
-              << "  --signal <signal_path>         Set the VSS signal path. (Default: Vehicle.CurrentLocation.Altitude)\n"
-              << "  --json <json_string>           Send the provided JSON string as the request payload, ignoring --action and --signal.\n\n"
-              << "Available signals from NetworkProvider:\n"
-              << "  - Vehicle.FuelLevel\n"
-              << "  - Vehicle.CurrentLocation.Altitude\n"
-              << "  - Vehicle.CurrentLocation.Heading\n"
-              << "  - Vehicle.CurrentLocation.Latitude\n"
-              << "  - Vehicle.CurrentLocation.Longitude\n"
-              << "  - Vehicle.Body.BodyType\n"
-              << "  - Vehicle.Body.Mirrors.DriverSide.IsFolded\n"
-              << "  - Vehicle.Body.Mirrors.DriverSide.IsHeatingOn\n"
-              << "  - Vehicle.Body.Mirrors.DriverSide.IsLocked\n"
-              << std::endl;
+void print_interactive_usage() {
+    std::cout << "\n--- Interactive DDS Client ---\n"
+              << "Commands:\n"
+              << "  get <signal_path>                - Send a 'get' request. (e.g., get Vehicle.Speed)\n"
+              << "  set <signal_path> <value>        - Send a 'set' request. (e.g., set Vehicle.Chassis.SteeringWheel.Angle 90)\n"
+              << "  subscribe <signal_path>          - Send a 'subscribe' request. (e.g., subscribe Vehicle.Speed)\n"
+              << "  unsubscribe <subscription_id>    - Send an 'unsubscribe' request.\n"
+              << "  json <raw_json_string>           - Send a raw JSON request.\n"
+              << "  topic <response_topic_name>      - Set a custom response topic for the next request.\n"
+              << "  help                             - Show this help message.\n"
+              << "  exit                             - Exit the client.\n"
+              << "---------------------------------\n" << std::endl;
 }
 
 // Helper to generate a unique request ID
@@ -121,31 +110,27 @@ std::string generate_uuid() {
     return "dds-test-" + std::to_string(id_counter++);
 }
 
-int main(int argc, char* argv[]) {
-    std::string response_topic_arg = "test/sub/topic";
-    std::string action = "get";
-    std::string signal = "Vehicle.CurrentLocation.Altitude";
-    std::string json_request_str;
-
-    for (int i = 1; i < argc; ++i) {
-        std::string arg = argv[i];
-        if (arg == "--help") {
-            print_usage(argv[0]);
-            return 0;
-        } else if (arg == "--topic" && i + 1 < argc) {
-            response_topic_arg = argv[++i];
-        } else if (arg == "--action" && i + 1 < argc) {
-            action = argv[++i];
-        } else if (arg == "--signal" && i + 1 < argc) {
-            signal = argv[++i];
-        } else if (arg == "--json" && i + 1 < argc) {
-            json_request_str = argv[++i];
-        }
+// Helper to parse subscriptionId from response JSON
+std::string parse_subscription_id(const std::string& json_str) {
+    const std::string key = "\"subscriptionId\":\"";
+    size_t start_pos = json_str.find(key);
+    if (start_pos == std::string::npos) {
+        return "";
     }
+    start_pos += key.length();
+    size_t end_pos = json_str.find("\"", start_pos);
+    if (end_pos == std::string::npos) {
+        return "";
+    }
+    return json_str.substr(start_pos, end_pos - start_pos);
+}
 
+int main(int argc, char* argv[]) {
     // --- DDS Setup ---
+    eprosima::fastdds::dds::DomainParticipantQos pqos;
+    pqos.name("dds_client_test");
     eprosima::fastdds::dds::DomainParticipant* participant =
-        eprosima::fastdds::dds::DomainParticipantFactory::get_instance()->create_participant_with_default_profile(nullptr, eprosima::fastdds::dds::StatusMask::none());
+        eprosima::fastdds::dds::DomainParticipantFactory::get_instance()->create_participant(7, pqos, nullptr, eprosima::fastdds::dds::StatusMask::none());
     if (participant == nullptr) {
         std::cerr << "Failed to create DDS participant" << std::endl;
         return 1;
@@ -165,62 +150,205 @@ int main(int argc, char* argv[]) {
 
     ResponseListener listener;
     
-    // --- Send Request ---
-    std::string request_id = generate_uuid();
-    std::string response_topic_name = response_topic_arg.empty() ? (RESPONSE_TOPIC_PREFIX + request_id) : response_topic_arg;
-    
-    eprosima::fastdds::dds::Topic* response_topic = participant->create_topic(response_topic_name, request_type.get_type_name(), eprosima::fastdds::dds::TOPIC_QOS_DEFAULT);
-    eprosima::fastdds::dds::DataReaderQos reader_qos = eprosima::fastdds::dds::DATAREADER_QOS_DEFAULT;
-    reader_qos.reliability().kind = eprosima::fastdds::dds::RELIABLE_RELIABILITY_QOS;
-    eprosima::fastdds::dds::DataReader* reader = subscriber->create_datareader(response_topic, reader_qos, &listener);
-
-    std::string request_inner_str;
-    if (!json_request_str.empty()) {
-        std::cout << "\n--- Sending raw JSON request ---" << std::endl;
-        request_inner_str = json_request_str;
-    } else {
-        std::cout << "\n--- Sending " << action << " request for " << signal << " ---" << std::endl;
-        nlohmann::json request_inner = {
-            {"action", action},
-            {"path", signal},
-            {"requestId", request_id}
-        };
-        request_inner_str = request_inner.dump();
-    }
-
-    nlohmann::json request_outer = {
-        {"topic", response_topic_name},
-        {"request", request_inner_str}
-    };
-
+    // Wait for publisher to match a subscriber
     {
         std::unique_lock<std::mutex> lock(writer_listener.mtx_);
-        if (!writer_listener.cv_.wait_for(lock, std::chrono::seconds(2), [&writer_listener]{ return writer_listener.matched_ > 0; })) {
-            std::cerr << "!!! ERROR: Publisher could not match any subscriber on topic " << REQUEST_TOPIC_NAME << std::endl;
+        if (!writer_listener.cv_.wait_for(lock, std::chrono::seconds(5), [&writer_listener]{ return writer_listener.matched_ > 0; })) {
+            std::cerr << "!!! ERROR: Publisher could not match any subscriber on topic " << REQUEST_TOPIC_NAME << ". Exiting." << std::endl;
+            // Cleanup and exit if no match
+            publisher->delete_datawriter(writer);
+            participant->delete_publisher(publisher);
+            participant->delete_subscriber(subscriber);
+            participant->delete_topic(request_topic_obj);
+            eprosima::fastdds::dds::DomainParticipantFactory::get_instance()->delete_participant(participant);
+            return 1;
         }
     }
-    
-    if (writer_listener.matched_ > 0) {
+
+    print_interactive_usage();
+    std::string response_topic_name_override;
+    std::map<std::string, std::pair<eprosima::fastdds::dds::Topic*, eprosima::fastdds::dds::DataReader*>> active_subscriptions;
+
+    while (true) {
+        std::cout << "> ";
+        std::string line;
+        if (!std::getline(std::cin, line)) {
+            break; // End of input
+        }
+
+        std::stringstream ss(line);
+        std::string command;
+        ss >> command;
+
+        if (command == "exit") {
+            break;
+        } else if (command == "help") {
+            print_interactive_usage();
+            continue;
+        } else if (command == "topic") {
+            ss >> response_topic_name_override;
+            std::cout << "Response topic for next request set to: " << response_topic_name_override << std::endl;
+            continue;
+        }
+
+        std::string request_id = generate_uuid();
+        std::string response_topic_name = response_topic_name_override.empty() 
+                                           ? (RESPONSE_TOPIC_PREFIX + request_id) 
+                                           : response_topic_name_override;
+
+        eprosima::fastdds::dds::Topic* response_topic = participant->create_topic(response_topic_name, request_type.get_type_name(), eprosima::fastdds::dds::TOPIC_QOS_DEFAULT);
+        eprosima::fastdds::dds::DataReaderQos reader_qos = eprosima::fastdds::dds::DATAREADER_QOS_DEFAULT;
+        reader_qos.reliability().kind = eprosima::fastdds::dds::RELIABLE_RELIABILITY_QOS;
+        eprosima::fastdds::dds::DataReader* reader = subscriber->create_datareader(response_topic, reader_qos, &listener);
+
+        std::string request_inner_str;
+
+        if (command == "get") {
+            std::string path;
+            ss >> path;
+            std::stringstream r_ss;
+            r_ss << R"({"action":"get","path":")" << path << R"(","requestId":")" << request_id << R"("})";
+            request_inner_str = r_ss.str();
+        } else if (command == "set") {
+            std::string path, value;
+            ss >> path >> value;
+            std::stringstream r_ss;
+            // Naive check if value is numeric or boolean, otherwise treat as string
+            bool is_numeric = true;
+            try {
+                std::stod(value);
+            } catch (const std::exception&) {
+                is_numeric = false;
+            }
+            if (value == "true" || value == "false" || is_numeric) {
+                r_ss << R"({"action":"set","path":")" << path << R"(","value":)" << value << R"(,"requestId":")" << request_id << R"("})";
+            } else {
+                r_ss << R"({"action":"set","path":")" << path << R"(","value":")" << value << R"(","requestId":")" << request_id << R"("})";
+            }
+            request_inner_str = r_ss.str();
+        } else if (command == "subscribe") {
+            std::string path;
+            ss >> path;
+            std::stringstream r_ss;
+            r_ss << R"({"action":"subscribe","path":")" << path << R"(","requestId":")" << request_id << R"("})";
+            request_inner_str = r_ss.str();
+        } else if (command == "unsubscribe") {
+            std::string sub_id;
+            ss >> sub_id;
+
+            auto it = active_subscriptions.find(sub_id);
+            if (it == active_subscriptions.end()) {
+                std::cerr << "Subscription ID not found: " << sub_id << std::endl;
+                continue;
+            }
+
+            // Send unsubscribe request
+            std::stringstream r_ss;
+            r_ss << R"({"action":"unsubscribe","subscriptionId":")" << sub_id << R"(","requestId":")" << request_id << R"("})";
+            request_inner_str = r_ss.str();
+
+            // Use the topic associated with the subscription for the response
+            response_topic_name = it->second.first->get_name();
+            
+            // Create a temporary reader for the unsubscribe response
+            eprosima::fastdds::dds::DataReader* temp_reader = subscriber->create_datareader(it->second.first, reader_qos, &listener);
+
+            std::stringstream outer_ss;
+            outer_ss << R"({"topic":")" << response_topic_name << R"(","request":")" << request_inner_str << R"("})";
+
+            response_received = false;
+            VissRequestTopic sample;
+            sample.payload(outer_ss.str());
+            writer->write(&sample);
+            std::cout << "Published unsubscribe request. Waiting for confirmation..." << std::endl;
+
+            {
+                std::unique_lock<std::mutex> lock(mtx);
+                if (cv.wait_for(lock, std::chrono::seconds(10), []{ return response_received.load(); })) {
+                    std::cout << "--- Unsubscribe confirmed for " << sub_id << " ---\n" << std::endl;
+                    // Clean up the persistent subscription resources
+                    subscriber->delete_datareader(it->second.second);
+                    participant->delete_topic(it->second.first);
+                    active_subscriptions.erase(it);
+                } else {
+                    std::cerr << "!!! FAILED: Timeout waiting for unsubscribe confirmation.\n" << std::endl;
+                }
+            }
+            subscriber->delete_datareader(temp_reader); // clean up temp reader
+            continue; // Move to next command
+
+        } else if (command == "json") {
+            std::string raw_json;
+            std::getline(ss, raw_json);
+            // remove leading space
+            if (!raw_json.empty() && raw_json[0] == ' ') {
+                raw_json = raw_json.substr(1);
+            }
+            request_inner_str = raw_json;
+        } else {
+            std::cerr << "Unknown command: " << command << std::endl;
+            subscriber->delete_datareader(reader);
+            participant->delete_topic(response_topic);
+            continue;
+        }
+
+        // Escape the inner JSON string for the outer JSON payload
+        std::string escaped_inner_str;
+        for (char c : request_inner_str) {
+            if (c == '"' || c == '\\') {
+                escaped_inner_str += '\\';
+            }
+            escaped_inner_str += c;
+        }
+
+        std::stringstream outer_ss;
+        outer_ss << R"({"topic":")" << response_topic_name << R"(","request":")" << escaped_inner_str << R"("})";
+
+
+        response_received = false; // Reset for this request
         VissRequestTopic sample;
-        sample.payload(request_outer.dump());
+        sample.payload(outer_ss.str());
+
+        std::cout << "Sending payload: " << outer_ss.str() << std::endl; // Log the payload
         writer->write(&sample);
+
         std::cout << "Published request to " << REQUEST_TOPIC_NAME << std::endl;
-        std::cout << "Waiting for response on " << response_topic_name << std::endl;
+        std::cout << "Waiting for response on " << response_topic_name << "..." << std::endl;
 
         {
             std::unique_lock<std::mutex> lock(mtx);
             if (cv.wait_for(lock, std::chrono::seconds(10), []{ return response_received.load(); })) {
-                std::cout << "--- Test PASSED ---" << std::endl;
+                if (command == "subscribe") {
+                    std::string sub_id = parse_subscription_id(g_response_json_str);
+                    if (!sub_id.empty()) {
+                        active_subscriptions[sub_id] = {response_topic, reader};
+                        std::cout << "--- Subscribed successfully. Subscription ID: " << sub_id << " ---" << std::endl;
+                        std::cout << "--- Listening for events on topic: " << response_topic->get_name() << " ---\n" << std::endl;
+                        // For subscribe, we DON'T clean up, so we skip to the next loop.
+                        continue;
+                    } else {
+                        std::cerr << "!!! FAILED to get subscriptionId from response.\n" << std::endl;
+                    }
+                } else {
+                     std::cout << "--- Response received successfully ---\n" << std::endl;
+                }
             } else {
-                std::cerr << "!!! Test FAILED: Timeout waiting for response." << std::endl;
+                std::cerr << "!!! FAILED: Timeout waiting for response.\n" << std::endl;
             }
         }
+        
+        // Clean up per-request resources for non-subscription requests
+        subscriber->delete_datareader(reader);
+        participant->delete_topic(response_topic);
+        response_topic_name_override.clear(); // Reset custom topic
     }
 
-    subscriber->delete_datareader(reader);
-    participant->delete_topic(response_topic);
-
-    // --- Cleanup ---
+    // --- Final Cleanup ---
+    std::cout << "Exiting client. Cleaning up " << active_subscriptions.size() << " active subscriptions..." << std::endl;
+    for (auto const& [key, val] : active_subscriptions) {
+        subscriber->delete_datareader(val.second);
+        participant->delete_topic(val.first);
+    }
     publisher->delete_datawriter(writer);
     participant->delete_publisher(publisher);
     participant->delete_subscriber(subscriber);

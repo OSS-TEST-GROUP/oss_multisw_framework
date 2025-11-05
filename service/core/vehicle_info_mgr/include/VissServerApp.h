@@ -14,17 +14,21 @@
 // Main application class
 class VissServerApp {
 public:
-    VissServerApp(const std::string& himPath);
+    VissServerApp(const std::string& himPath, const std::string& grpc_provider_addr);
     ~VissServerApp();
     void run();
+    void stop();
 
 private:
+    std::atomic<bool> m_running{false};
+    ThreadSafeQueue<int> m_shutdown_queue;
+    std::string m_grpc_provider_addr;
     std::shared_ptr<viss::VSSTree> vss_tree;
     std::shared_ptr<ServiceManager> service_manager;
     std::shared_ptr<ObjectPool<RequestData>> request_pool_;
     std::shared_ptr<ThreadSafeQueue<std::shared_ptr<RequestData>>> requestQueue;
     std::vector<std::unique_ptr<ITransport>> transports;
-    std::thread service_manager_thread;
+    std::thread m_service_manager_thread;
 };
 
 #endif // VISSV2SERVER_H

@@ -2,10 +2,19 @@
 #define GRPC_TRANSPORT_H
 
 #include <memory>
+#include <thread>
 #include <grpcpp/grpcpp.h>
 #include "ITransport.h"
 #include "VISSv3.0.grpc.pb.h"
 #include "ObjectPool.h"
+#include <atomic>
+
+// To switch between sync and async server, define/undefine this macro
+//#define USE_ASYNC_GRPC_SERVER
+
+#ifdef USE_ASYNC_GRPC_SERVER
+#include "VISSAsyncServiceImpl.h"
+#endif
 
 // Forward declarations
 class VssSubscriptionManager;
@@ -41,9 +50,18 @@ public:
     void stop() override;
 
 private:
+#ifdef USE_ASYNC_GRPC_SERVER
+    std::string server_address;
+    std::unique_ptr<VISSAsyncServiceImpl> async_service_;
+    std::thread server_thread_;
+#else
     std::string server_address;
     std::unique_ptr<VISSServiceImpl> service;
     std::unique_ptr<grpc::Server> server;
+    std::thread server_thread_;
+    std::atomic<bool> m_stopped;
+    //std::unique_ptr<grpc::ServerCompletionQueue> cq;
+#endif
 };
 
 #endif // GRPC_TRANSPORT_H

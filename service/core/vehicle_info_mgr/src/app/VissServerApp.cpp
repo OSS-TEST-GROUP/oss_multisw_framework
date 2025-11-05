@@ -9,26 +9,41 @@
 #include <algorithm>
 #include <typeinfo>
 #include <filesystem>
-#include <optional>
+#include <csignal>
 
 #include "VissServerApp.h"
+#include "Logger.h"
 #include "grpc_transport.h"
+#ifndef BUILD_FOR_ANDROID
 #include "mqtt_transport.h"
 #include "dds_transport.h"
 #include "DDSProvider.h"
+#endif
 #include "CANProvider.h"
 #include "NetworkProvider.h"
+#include "GrpcProvider.h"
 #include "VssTree.h"
 #include "Utils.h"
 #include "JsonSchemaValidator.h"
 
+// ################### Signal Handling ###################
+static VissServerApp* g_app_ptr = nullptr;
+
+void signal_handler(int signum) {
+    LOG_INFO << "Interrupt signal (" << signum << ") received. Shutting down...";
+    if (g_app_ptr) {
+        g_app_ptr->stop();
+    }
+}
+
 // ################### Class Implementations ###################
 
 // VissServerApp
-VissServerApp::VissServerApp(const std::string& himPath) {
+VissServerApp::VissServerApp(const std::string& himPath, const std::string& grpc_provider_addr) 
+    : m_grpc_provider_addr(grpc_provider_addr) {
     vss_tree = std::make_shared<viss::VSSTree>(himPath);
     if (!vss_tree->isValid()) {
-        std::cerr << "Error: Failed to load or parse HIM file from " << himPath << std::endl;
+        LOG_ERROR << "Error: Failed to load or parse HIM file from " << himPath;
         exit(1);
     }
 
@@ -37,46 +52,85 @@ VissServerApp::VissServerApp(const std::string& himPath) {
     service_manager = std::make_shared<ServiceManager>(requestQueue, vss_tree);
 
     // Add Providers
+#ifndef BUILD_FOR_ANDROID
     service_manager->addProvider(std::make_unique<DDSProvider>());
     service_manager->addProvider(std::make_unique<CANProvider>());
-    service_manager->addProvider(std::make_unique<NetworkProvider>());
+#endif
+    //service_manager->addProvider(std::make_unique<NetworkProvider>());
+    service_manager->addProvider(std::make_unique<GrpcProvider>(m_grpc_provider_addr));
 
     // Add Transports
     transports.push_back(std::make_unique<GrpcTransport>(request_pool_, requestQueue));
+#ifndef BUILD_FOR_ANDROID
     transports.push_back(std::make_unique<MqttTransport>(request_pool_, requestQueue));
     transports.push_back(std::make_unique<DDSTransport>(request_pool_, requestQueue));
+#endif
 }
 
 VissServerApp::~VissServerApp() {
-    service_manager->stop();
-    if (service_manager_thread.joinable()) {
-        service_manager_thread.join();
-    }
-    for (auto& transport : transports) {
-        transport->stop();
-    }
+    stop(); // Ensure stop is always called.
+    LOG_INFO << "~VissServerApp() destructor finished.";
 }
 
 void VissServerApp::run() {
-    if (!vss_tree->isValid()) {
-        std::cerr << "Failed to initialize VSS tree." << std::endl;
+    bool already_running = false;
+    // Atomically check if m_running is false, and if so, set it to true.
+    if (!m_running.compare_exchange_strong(already_running, true)) {
+        LOG_WARN << "VissServerApp::run() called while already running.";
         return;
     }
-    std::cout << "VSS tree initialized." << std::endl;
 
-    service_manager_thread = std::thread(&ServiceManager::run, service_manager);
+    if (!vss_tree->isValid()) {
+        LOG_ERROR << "Failed to initialize VSS tree.";
+        m_running = false;
+        return;
+    }
+    LOG_INFO << "VSS tree initialized.";
 
-    std::vector<std::thread> transport_threads;
+    m_service_manager_thread = std::thread(&ServiceManager::run, service_manager);
+
+    // Start all transports.
     for (auto& transport : transports) {
-        transport_threads.emplace_back(&ITransport::start, transport.get());
+        transport->start();
     }
-    std::cout << "Server components initialized." << std::endl;
+    LOG_INFO << "Server components initialized. Waiting for shutdown signal...";
     
-    for (auto& th : transport_threads) {
-        if (th.joinable()) {
-            th.join();
-        }
+    // Block here until stop() is called.
+    int dummy;
+    m_shutdown_queue.wait_and_pop(dummy);
+
+    LOG_INFO << "VissServerApp::run() main loop finished.";
+}
+
+void VissServerApp::stop() {
+    // Atomically check if m_running is true, and if so, set it to false.
+    bool was_running = true;
+    if (!m_running.compare_exchange_strong(was_running, false)) {
+        // If it was already false, we are not running, so nothing to do.
+        return;
     }
+
+    LOG_INFO << "VissServerApp::stop() called.";
+
+    // Stop all transports to unblock their threads. These are blocking calls.
+    for (auto& transport : transports) {
+        transport->stop();
+    }
+
+    // Stop the service manager to unblock its thread. This is a blocking call.
+    if (service_manager) {
+        service_manager->stop();
+    }
+
+    // Now that all components signaled by stop() are finished, join the main service thread.
+    if (m_service_manager_thread.joinable()) {
+        m_service_manager_thread.join();
+    }
+
+    // Unblock the run() method's main loop
+    m_shutdown_queue.push(0);
+    
+    LOG_INFO << "VissServerApp::stop() completed.";
 }
 
 // ################### Main Entry Point ###################
@@ -92,6 +146,7 @@ int main(int argc, char** argv) {
     std::string schemaPath = configPath.append("/vissv3.0-schema.json");
     //std::string himPath = "config/viss.him"; 
     //std::string schemaPath = "config/vissv3.0-schema.json";
+    std::string grpcProviderAddr = "127.0.0.1:50052";
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -99,13 +154,23 @@ int main(int argc, char** argv) {
             himPath = argv[++i];
         } else if (arg == "--schema" && i + 1 < argc) {
             schemaPath = argv[++i];
+        } else if (arg == "--grpc-provider-addr" && i + 1 < argc) {
+            grpcProviderAddr = argv[++i];
         }
     }
 
     // Initialize the schema validator before creating the app instance
     JsonSchemaValidator::init(schemaPath);
 
-    VissServerApp app(himPath);
+    VissServerApp app(himPath, grpcProviderAddr);
+    g_app_ptr = &app;
+    std::signal(SIGINT, signal_handler);
+    std::signal(SIGTERM, signal_handler);
+
+    LOG_INFO << "Starting VISS Server. Press Ctrl+C to exit.";
     app.run();
+    
+    LOG_INFO << "VISS Server has shut down gracefully.";
+    g_app_ptr = nullptr;
     return 0;
 }

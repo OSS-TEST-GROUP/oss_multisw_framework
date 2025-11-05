@@ -22,9 +22,19 @@ void VssDataStore::setValue(const VehicleData& data) {
 
 std::vector<viss::DataPoint> VssDataStore::getValues(const std::string& path, const std::string& timePeriod) {
     std::lock_guard<std::mutex> lock(mtx);
+
+    // If the path has never been seen in either store, return "not available".
+    if (m_latest_store.find(path) == m_latest_store.end() && m_history_store.find(path) == m_history_store.end()) {
+        return {
+            viss::DataPoint{
+                "viss-inline:Data-not-available",
+                std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count()
+            }
+        };
+    }
     
     if (timePeriod.empty()) {
-        // No time period, return only the latest value
+        // No time period, return only the latest value if it exists.
         if (m_latest_store.count(path)) {
             return {m_latest_store.at(path)};
         }
