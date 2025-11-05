@@ -27,17 +27,18 @@ or
 
 For testing or debugging Core and Extension for ROS2 : x86-64
 ```
-docker run --privileged --gpus all --rm -it -u 1000:1000 \
-           -w /home/ossuser/workspace \
-           -v output/x86_64:/home/ossuser/workspace/output \
-           -v /tmp/.X11-unix:/tmp/.X11-unix \
-           -v /run/user/1000:/run/user/1000 \
-           ${HOME}/.ssh:/root/.ssh \
-           -e DISPLAY=unix:1 \
-           -e LD_LIBRARY_PATH=/home/ossuser/workspace/output/lib \
-           --network=host --cap-add=NET_RAW --cap-add=NET_ADMIN \
-           172.16.10.216:80/oss/oss-mmf-core:latest \
-           /bin/bash
+docker run --privileged --gpus all
+    --rm -it -u 1000:1000 \
+    -w /home/ossuser/workspace \
+    -v output:/home/ossuser/workspace/output \
+    -v /tmp/.X11-unix:/tmp/.X11-unix \
+    -v /run/user/1000:/run/user/1000 \
+    -v ${HOME}/.ssh:/root/.ssh \
+    -e DISPLAY=unix:1 \
+    -e LD_LIBRARY_PATH=/home/ossuser/workspace/output/lib \
+    --network=host --cap-add=NET_RAW --cap-add=NET_ADMIN \
+    172.16.10.216:80/oss/oss-mmf-builder:latest
+    /bin/bash
 ```
 
 For MMF Core and Extention for ROS2 on AADP using docker compose: aarch64
