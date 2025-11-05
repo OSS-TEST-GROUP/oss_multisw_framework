@@ -30,7 +30,7 @@ For testing or debugging Core and Extension for ROS2 : x86-64
 docker run --privileged --gpus all
     --rm -it -u 1000:1000 \
     -w /home/ossuser/workspace \
-    -v output:/home/ossuser/workspace/output \
+    -v ${PWD}/output/x86_64:/home/ossuser/workspace/output \
     -v /tmp/.X11-unix:/tmp/.X11-unix \
     -v /run/user/1000:/run/user/1000 \
     -v ${HOME}/.ssh:/root/.ssh \
