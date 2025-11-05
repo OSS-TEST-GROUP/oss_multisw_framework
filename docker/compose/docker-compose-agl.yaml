@@ -1,0 +1,31 @@
+services:
+  hmi:
+    container_name: oss-hmi-agl-aarch64
+    image: 172.16.10.216:80/oss/oss-hmi-agl-aarch64:latest
+    privileged: true
+    network_mode: "host"
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+    devices:
+      - /dev/dri:/dev/dri
+    volumes:
+      - /run/user/1001:/run/user/1001
+    tty: true
+    stdin_open: true
+    restart: unless-stopped
+
+  mmf:
+    container_name: oss-mmf-ext-agl
+    image: 172.16.10.216:80/oss/oss-mmf-ext-agl:latest
+    privileged: true
+    network_mode: "host"
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+    volumes:
+      - /dev/shm:/dev/shm
+      - /run/user/1001:/run/user/1000
+    tty: true
+    stdin_open: true
+    restart: unless-stopped
