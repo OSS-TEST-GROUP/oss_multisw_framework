@@ -8,7 +8,7 @@ pipeline {
         AGENT_LABEL="OSS-Agent"
 
         // Docker Registry
-        IMAGE_REGISTRY = "172.16.10.216:80"
+        IMAGE_REGISTRY = "registry.obigo.com:80"
         IMAGE_NAMESPACE = "oss"
         APP_NAME = "oss-mmf"
         REGISTRY_ID = "builder"

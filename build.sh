@@ -9,7 +9,7 @@ export BUILDER_CONTAINER_NAME="oss-mmf-builder"
 export BUILDER_CONTAINER_TAG="latest"
 export CONTAINER_IMAGE_NAME="oss-mmwf-ros2-x86_64"
 export CONTAINER_IMAGE_TAG=""
-export REGISTRY_ADDRESS="172.16.10.216:80"
+export REGISTRY_ADDRESS="registry.obigo.com:80"
 export REGISTRY_ID="builder"
 export REGISTRY_PWD="Obigoam1@se"
 export DOCKER_TARGET="build-stage"
@@ -210,6 +210,7 @@ do_set_private_registry() {
 			sudo cp /etc/docker/daemon.json /etc/docker/daemon.json.bak
 			sudo cp /tmp/daemon.json /etc/docker/daemon.json
 		fi
+		sudo sed -i "s/172.16.10.216:80/${REGISTRY_ADDRESS}/" /etc/docker/daemon.json
 		sudo sed -i "s/\[\]/[\"${REGISTRY_ADDRESS}\"]/" /etc/docker/daemon.json
 		sudo systemctl restart docker
 	
