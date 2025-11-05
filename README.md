@@ -4,32 +4,23 @@
 ## Fetch the repository
 
 ```
-git clone git@lotte-autops.com:oss_group1/oss_multisw_framework.git
-```
-
-## Setup the build environment
-
-Build the docker image for the development environment.
-```
-docker build -t oss-mw-dev-test:0.1 -f docker/build_environment/Dockerfile .
-
-# For arm64 archtecture.
-docker run --privileged --rm tonistiigi/binfmt --install arm64
-docker buildx build --platform linux/arm64 -t oss-mw-dev-test:0.1 -f docker/build_environment/Dockerfile .
-```
-
-Run the docker with the built image.
-```
-docker run -it --gpus all -v /${HOME}/workspace:/root/workspace -v /run/user/1000:/run/user/1000 -v /tmp/.X11-unix:/tmp/.X11-unix -v ${HOME}/.ssh:/root/.ssh -e DISPLAY=unix:1 oss-mw-dev-test:0.1 bash
+git clone git@github.com:obigo-gov/oss_multisw_framework.git
 ```
 
 ## How to build the OSS MW Framework
 
+For x86-64(unittest, static analysis, debugging)
 ```
-source docker/build_environment/setup_environment.sh
 .build.sh
 or
 .build.sh --build-unittest
+```
+
+For Aarch64(AGL, AADP, etc)
+```
+.build.sh --aarch64 --set-extension-platform=ROS2
+or
+.build.sh --aarch64 --set-extension-platform=AGL
 ```
 
 ## How to use dds idl files
