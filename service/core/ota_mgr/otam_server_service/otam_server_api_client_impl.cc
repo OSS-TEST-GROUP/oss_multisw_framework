@@ -75,8 +75,6 @@ std::string OtamServerApiClientImpl::SendRequest(
             if (err_str) {
                 oss << " (" << err_str << ")";
             }
-            curl_slist_free_all(headers);
-            curl_easy_cleanup(curl);
             throw std::runtime_error(oss.str());
         }
 
@@ -86,83 +84,48 @@ std::string OtamServerApiClientImpl::SendRequest(
             std::cerr << "[OtamServerApiClientImpl] HTTP "
                       << http_code << " from " << url << std::endl;
         }
-
-        curl_slist_free_all(headers);
-        curl_easy_cleanup(curl);
-        return response;
-
     } catch (const std::exception& e) {
-        std::cerr << "[OtamServerApiClientImpl] SendRequest failed: "
+        std::cout << "[OtamServerApiClientImpl] SendRequest failed: "
                   << e.what() << std::endl;
-        if (headers)
-            curl_slist_free_all(headers);
-        if (curl)
-            curl_easy_cleanup(curl);
-        throw;
     }
+    if (headers)
+        curl_slist_free_all(headers);
+    if (curl)
+        curl_easy_cleanup(curl);
+    return response;
 }
 
 std::string OtamServerApiClientImpl::Get(
     const std::string& ep,
     const std::string& body) {
-    try {
-        std::string method = "GET";
-        return SendRequest(method, ep, body);
-    } catch (const std::exception& e) {
-        std::cerr << "[OtamServerApiClientImpl] GET failed: "
-                  << e.what() << std::endl;
-        throw;
-    }
+    std::string method = "GET";
+    return SendRequest(method, ep, body);
 }
 
 std::string OtamServerApiClientImpl::Post(
     const std::string& ep,
     const std::string& body) {
-    try {
-        std::string method = "POST";
-        return SendRequest(method, ep, body);
-    } catch (const std::exception& e) {
-        std::cerr << "[OtamServerApiClientImpl] POST failed: "
-                  << e.what() << std::endl;
-        throw;
-    }
+    std::string method = "POST";
+    return SendRequest(method, ep, body);
 }
 
 std::string OtamServerApiClientImpl::Put(
     const std::string& ep,
     const std::string& body) {
-    try {
-        std::string method = "PUT";
-        return SendRequest(method, ep, body);
-    } catch (const std::exception& e) {
-        std::cerr << "[OtamServerApiClientImpl] PUT failed: "
-                  << e.what() << std::endl;
-        throw;
-    }
+    std::string method = "PUT";
+    return SendRequest(method, ep, body);
 }
 
 std::string OtamServerApiClientImpl::Delete(
     const std::string& ep,
     const std::string& body) {
-    try {
-        std::string method = "DELETE";
-        return SendRequest(method, ep, body);
-    } catch (const std::exception& e) {
-        std::cerr << "[OtamServerApiClientImpl] DELETE failed: "
-                  << e.what() << std::endl;
-        throw;
-    }
+    std::string method = "DELETE";
+    return SendRequest(method, ep, body);
 }
 
 std::string OtamServerApiClientImpl::Patch(
     const std::string& ep,
     const std::string& body) {
-    try {
-        std::string method = "PATCH";
-        return SendRequest(method, ep, body);
-    } catch (const std::exception& e) {
-        std::cerr << "[OtamServerApiClientImpl] PATCH failed: "
-                  << e.what() << std::endl;
-        throw;
-    }
+    std::string method = "PATCH";
+    return SendRequest(method, ep, body);
 }
