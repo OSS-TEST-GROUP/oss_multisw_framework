@@ -129,7 +129,7 @@ pipeline {
                         if ! curl -u "${REGISTRY_ID}:${REGISTRY_PWD}" -s https://${IMAGE_REGISTRY}/v2/_catalog 2>/dev/null \
                             | grep -q "${APP_NAME}-builder"; then
                             docker build -t ${BUILDER_IMAGE} \
-                                -f ${PWD}/docker/build_environment/Dockerfile .
+                                -f ${PWD}/docker/Dockerfile .
                             docker push ${BUILDER_IMAGE}
                         else
                             if [ -z $(docker images -q "${BUILDER_IMAGE}") ]; then
@@ -171,6 +171,7 @@ pipeline {
                             -not -path "*/unittest/*" \
                             -not -path "*/rapidjson/*" \
                             -not -path "*/nlohmann/*" \
+                            -not -path "*/valijson/*" \
                             \\( -name "*.cpp" -o -name "*.hpp" -o -name "*.h" -o -name "*.cc" \\) \
                             -exec cp --parents {} /tmp/multisw-framework/ \\; 2>/dev/null || true
 
@@ -202,6 +203,7 @@ pipeline {
                                 -not -path "*/unittest/*" \
                                 -not -path "*/rapidjson/*" \
                                 -not -path "*/nlohmann/*" \
+                                -not -path "*/valijson/*" \
                                 \\( -name "*.cpp" -o -name "*.hpp" -o -name "*.h" -o -name "*.cc" \\) \
                                 > ${WORKSPACE}/output/reports/files_to_analysis.txt || true
                         fi
@@ -241,6 +243,7 @@ pipeline {
                                 -not -path "*/unittest/*" \
                                 -not -path "*/rapidjson/*" \
                                 -not -path "*/nlohmann/*" \
+                                -not -path "*/valijson/*" \
                                 \\( -name "*.cpp" -o -name "*.hpp" -o -name "*.h" -o -name "*.cc" \\) \
                                 > ${WORKSPACE}/output/reports/files_to_analysis.txt
                         fi
@@ -310,6 +313,7 @@ pipeline {
                                             -not -path "*/unittest/*" \
                                             -not -path "*/rapidjson/*" \
                                             -not -path "*/nlohmann/*" \
+                                            -not -path "*/valijson/*" \
                                             \\( -name "*.cpp" -o -name "*.hpp" -o -name "*.h" -o -name "*.cc" \\)) \
                                         > ${workdir}/output/reports/clang-tidy/clang-tidy-${t}.txt 2>&1 || true
                                 fi
