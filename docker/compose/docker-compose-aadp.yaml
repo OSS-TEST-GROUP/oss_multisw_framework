@@ -1,7 +1,7 @@
 services:
   mmf-core:
     container_name: oss-mmf-core
-    image: 172.16.10.216:80/oss/oss-mmf-core:latest
+    image: registry.obigo.com:80/oss/oss-mmf-core:latest
     privileged: true
     network_mode: "host"
     deploy:
@@ -21,7 +21,7 @@ services:
 
   mmf-ext-ros2:
     container_name: oss-mmf-ext-ros2
-    image: 172.16.10.216:80/oss/oss-mmf-ext-ros2:latest
+    image: registry.obigo.com:80/oss/oss-mmf-ext-ros2:latest
     privileged: true
     network_mode: "host"
     deploy:

@@ -1,7 +1,7 @@
 services:
   hmi:
     container_name: oss-hmi-agl-aarch64
-    image: 172.16.10.216:80/oss/oss-hmi-agl-aarch64:latest
+    image: registry.obigo.com:80/oss/oss-hmi-agl-aarch64:latest
     privileged: true
     network_mode: "host"
     cap_add:
@@ -17,7 +17,7 @@ services:
 
   mmf:
     container_name: oss-mmf-ext-agl
-    image: 172.16.10.216:80/oss/oss-mmf-ext-agl:latest
+    image: registry.obigo.com:80/oss/oss-mmf-ext-agl:latest
     privileged: true
     network_mode: "host"
     cap_add:
