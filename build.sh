@@ -9,7 +9,8 @@ export BUILDER_CONTAINER_NAME="oss-mmf-builder"
 export BUILDER_CONTAINER_TAG="latest"
 export CONTAINER_IMAGE_NAME="oss-mmwf-ros2-x86_64"
 export CONTAINER_IMAGE_TAG=""
-export REGISTRY_ADDRESS="registry.obigo.com:80"
+export REGISTRY_ADDRESS="registry.obigo.com"
+export REPO_ADDRESS="repo.obigo.com"
 export REGISTRY_ID="builder"
 export REGISTRY_PWD="Obigoam1@se"
 export DOCKER_TARGET="build-stage"
@@ -200,23 +201,34 @@ do_setup_docker_buildx()
 }
 
 do_set_private_registry() {
-	if ! docker info --format '{{json .RegistryConfig}}' 2>/dev/null \
-		| grep -q "${REGISTRY_ADDRESS}"; then
-		if [[ ! -f /etc/docker/daemon.json ]]; then
-			sudo mkdir -p /etc/docker
-			echo '{"insecure-registries": []}' | sudo tee /etc/docker/daemon.json > /dev/null
-		else
-			jq 'if has("insecure-registries") then . else . + {"insecure-registries": []} end' /etc/docker/daemon.json > /tmp/daemon.json
-			sudo cp /etc/docker/daemon.json /etc/docker/daemon.json.bak
-			sudo cp /tmp/daemon.json /etc/docker/daemon.json
-		fi
-		sudo sed -i "s/172.16.10.216:80/${REGISTRY_ADDRESS}/" /etc/docker/daemon.json
-		sudo sed -i "s/\[\]/[\"${REGISTRY_ADDRESS}\"]/" /etc/docker/daemon.json
-		sudo systemctl restart docker
-	
+	if cat ~/.docker/config.json 2>/dev/null \
+		| grep "${REGISTRY_ADDRESS}:80"; then
+		docker logout "${REGISTRY_ADDRESS}:80"
+	fi
+
+	if ! cat ~/.docker/config.json 2>/dev/null \
+		| grep "${REGISTRY_ADDRESS}"; then
 		echo "${REGISTRY_PWD}" | docker login ${REGISTRY_ADDRESS} -u ${REGISTRY_ID} --password-stdin
 		do_error_check
 	fi
+	## we can access https://registry.obigo.com now. so we don't need below login process anymore.
+	#if ! docker info --format '{{json .RegistryConfig}}' 2>/dev/null \
+	#	| grep -q "${REGISTRY_ADDRESS}"; then
+	#	if [[ ! -f /etc/docker/daemon.json ]]; then
+	#		sudo mkdir -p /etc/docker
+	#		echo '{"insecure-registries": []}' | sudo tee /etc/docker/daemon.json > /dev/null
+	#	else
+	#		jq 'if has("insecure-registries") then . else . + {"insecure-registries": []} end' /etc/docker/daemon.json > /tmp/daemon.json
+	#		sudo cp /etc/docker/daemon.json /etc/docker/daemon.json.bak
+	#		sudo cp /tmp/daemon.json /etc/docker/daemon.json
+	#	fi
+	#	sudo sed -i "s/172.16.10.216:80/${REGISTRY_ADDRESS}/" /etc/docker/daemon.json
+	#	sudo sed -i "s/\[\]/[\"${REGISTRY_ADDRESS}\"]/" /etc/docker/daemon.json
+	#	sudo systemctl restart docker
+	#
+	#	echo "${REGISTRY_PWD}" | docker login ${REGISTRY_ADDRESS} -u ${REGISTRY_ID} --password-stdin
+	#	do_error_check
+	#fi
 }
 
 do_install_agl_build_environment() {
@@ -231,7 +243,7 @@ do_install_agl_build_environment() {
 	if [[ ! -d ${SDK_DIR}/agl-adt ]]; then
 		curl -v -u "builder:obigo@se" \
 			-o /tmp/oss-agl-ivi-flutter-aarch64-toolchain-18.94.0.sh \
-			http://${REGISTRY_ADDRESS//:80/:8081}/repository/yocto-adt/agl/oss-agl-ivi-flutter-aarch64-toolchain-18.94.0.sh
+			https://${REPO_ADDRESS}/repository/yocto-adt/agl/oss-agl-ivi-flutter-aarch64-toolchain-18.94.0.sh
 		do_error_check
 
 		chmod a+x /tmp/oss-agl-ivi-flutter-aarch64-toolchain-18.94.0.sh
@@ -372,7 +384,7 @@ do_import_dep_libraries() {
 do_pull_builder_image()
 {
 	img_name="${REGISTRY_ADDRESS}/oss/${BUILDER_CONTAINER_NAME}:${BUILDER_CONTAINER_TAG}"
-	if ! curl -u "${REGISTRY_ID}:${REGISTRY_PWD}" -s http://${REGISTRY_ADDRESS}/v2/_catalog 2>/dev/null \
+	if ! curl -u "${REGISTRY_ID}:${REGISTRY_PWD}" -s https://${REGISTRY_ADDRESS}/v2/_catalog 2>/dev/null \
 		| grep -q "${BUILDER_CONTAINER_NAME}"; then
 		docker build -t ${REGISTRY_ADDRESS}/oss/${BUILDER_CONTAINER_NAME}:${BUILDER_CONTAINER_TAG} \
 			-f ${PWD}/docker/build_environment/Dockerfile .

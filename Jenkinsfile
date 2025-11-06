@@ -8,7 +8,7 @@ pipeline {
         AGENT_LABEL="OSS-Agent"
 
         // Docker Registry
-        IMAGE_REGISTRY = "172.16.10.216:80"
+        IMAGE_REGISTRY = "registry.obigo.com"
         IMAGE_NAMESPACE = "oss"
         APP_NAME = "oss-mmf"
         REGISTRY_ID = "builder"
@@ -57,25 +57,15 @@ pipeline {
     }
 
     stages {
-        stage('Setup Environment') {
+        stage('Registry Login') {
             steps {
                 script {
                     echo "Login Docker Private Registry. If registry didn't saved"
                     sh '''
-                        if ! docker info --format '{{json .RegistryConfig}}' 2>/dev/null \
-                            | grep -q "${IMAGE_REGISTRY}"; then
-                            if [ ! -f /etc/docker/daemon.json ]; then
-                                sudo mkdir -p /etc/docker
-                                echo '{"insecure-registries": []}' | sudo tee /etc/docker/daemon.json > /dev/null
-                            else
-                                jq 'if has("insecure-registries") then . else . + {"insecure-registries": []} end' \
-                                    /etc/docker/daemon.json > /tmp/daemon.json
-                                sudo cp /etc/docker/daemon.json /etc/docker/daemon.json.bak
-                                sudo cp /tmp/daemon.json /etc/docker/daemon.json
-                            fi
-                            sudo sed -i "s/\\[\\]/[\"${IMAGE_REGISTRY}\"]/" /etc/docker/daemon.json
-                            sudo systemctl restart docker
-                        
+                        if cat ${HOME}/.docker/config.json | grep "${IMAGE_REGISTRY}:80"; then
+                            docker logout "${IMAGE_REGISTRY}:80"
+                        fi
+                        if ! cat ${HOME}/.docker/config.json | grep "${IMAGE_REGISTRY}"; then
                             echo "${REGISTRY_PWD}" | docker login ${IMAGE_REGISTRY} -u ${REGISTRY_ID} --password-stdin
                         fi
                     '''
@@ -136,7 +126,7 @@ pipeline {
                     sh '''
                         #!/bin/bash
                         set -e
-                        if ! curl -u "${REGISTRY_ID}:${REGISTRY_PWD}" -s http://${IMAGE_REGISTRY}/v2/_catalog 2>/dev/null \
+                        if ! curl -u "${REGISTRY_ID}:${REGISTRY_PWD}" -s https://${IMAGE_REGISTRY}/v2/_catalog 2>/dev/null \
                             | grep -q "${APP_NAME}-builder"; then
                             docker build -t ${BUILDER_IMAGE} \
                                 -f ${PWD}/docker/build_environment/Dockerfile .

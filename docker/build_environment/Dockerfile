@@ -35,6 +35,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 	libasio-dev \
 	libtinyxml2-dev \
 	libssl-dev \
+	libcurl4-openssl-dev \
+	nlohmann-json3-dev \
 	libp11-dev \
 	libyaml-cpp-dev \
 	protobuf-compiler \
