@@ -94,7 +94,7 @@ do_prepare_build_environment()
 		#	if [[ ! -d ${SDK_DIR}/agl-adt ]]; then
 		#		curl -v -u "builder:obigo@se" \
 		#			-o /tmp/oss-agl-ivi-flutter-aarch64-toolchain-18.94.0.sh \
-		#			http://172.16.10.72:8081/repository/yocto-adt/agl/oss-agl-ivi-flutter-aarch64-toolchain-18.94.0.sh
+		#			https://repo.obigo.com/repository/yocto-adt/agl/oss-agl-ivi-flutter-aarch64-toolchain-18.94.0.sh
 		#		do_error_check
 
 		#		chmod a+x /tmp/oss-agl-ivi-flutter-aarch64-toolchain-18.94.0.sh
