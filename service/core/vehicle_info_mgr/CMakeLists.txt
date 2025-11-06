@@ -20,51 +20,89 @@ set(PROJECT_IDL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/idl)
 
 # Using target_include_directories instead
 # include_directories(${PROJECT_INCLUDE_DIR})
+    # --- gRPC and Protobuf Integration ---
+    # Try to find system-installed gRPC and Protobuf first.
+    # If not found, fall back to FetchContent.
+    #find_package(Protobuf)
+    #find_package(gRPC)
+if (NOT BUILD_FOR_ANDROID)
+    # --- Using System-installed gRPC and Protobuf ---
+    find_package(Protobuf REQUIRED)
 
-# Find Dependencies using PkgConfig and CMake's find_package
-find_package(PkgConfig REQUIRED)
-if (PkgConfig_FOUND)
-    message(STATUS "PkgConfig module found successfully.")
-    message(STATUS "  PkgConfig executable: ${PKG_CONFIG_EXECUTABLE}")
-    message(STATUS "  PkgConfig version: ${PKG_CONFIG_VERSION_STRING}")
+    message(STATUS "Protobuf_FOUND: ${Protobuf_FOUND}")
+    message(STATUS "Protobuf_VERSION: ${Protobuf_VERSION}")
+    message(STATUS "Protobuf_INCLUDE_DIRS: ${Protobuf_INCLUDE_DIRS}")
+    message(STATUS "Protobuf_LIBRARIES: ${Protobuf_LIBRARIES}")
+    message(STATUS "Protobuf_PROTOC_EXECUTABLE: ${Protobuf_PROTOC_EXECUTABLE}")
+
+    find_package(PkgConfig REQUIRED)
+    if (PkgConfig_FOUND)
+        message(STATUS "PkgConfig module found successfully.")
+        message(STATUS "  PkgConfig executable: ${PKG_CONFIG_EXECUTABLE}")
+        message(STATUS "  PkgConfig version: ${PKG_CONFIG_VERSION_STRING}")
+    else()
+        message(WARNING "PkgConfig module not found.")
+        message(WARNING "  Please ensure pkg-config is installed and in your system's PATH.")
+    endif()
+
+    pkg_check_modules(GRPC REQUIRED grpc++)
+    if (GRPC_FOUND)
+    message(STATUS "Found gRPC via pkg-config.")
+    message(STATUS "  Includes: ${GRPC_INCLUDE_DIRS}")
+    message(STATUS "  Libraries: ${GRPC_LIBRARIES}")
+    else()
+    message(FATAL_ERROR "Could not find gRPC via pkg-config.")
+    endif()
+
+
+    message(STATUS "Found and using system-installed gRPC ${gRPC_VERSION}")
+    message(STATUS "Found and using system-installed Protobuf ${Protobuf_VERSION}")
+
+    set(HOST_PROTOC_EXECUTABLE ${Protobuf_PROTOC_EXECUTABLE})
+    find_program(GRPC_CPP_PLUGIN_EXECUTABLE grpc_cpp_plugin)
+    if(NOT GRPC_CPP_PLUGIN_EXECUTABLE)
+        message(FATAL_ERROR "grpc_cpp_plugin not found. Please ensure it is in your PATH.")
+    endif()
+
+    # Set variables for linking using modern CMake targets
+    set(GRPC_LIBRARY ${GRPC_LIBRARIES})
+    set(PROTOBUF_LIBRARY ${Protobuf_LIBRARIES})
+    include_directories(${Protobuf_INCLUDE_DIRS})
+
 else()
-    message(WARNING "PkgConfig module not found.")
-    message(WARNING "  Please ensure pkg-config is installed and in your system's PATH.")
-endif()
+    # --- Using FetchContent to build gRPC and Protobuf ---
+    message(STATUS "System gRPC not found. Falling back to FetchContent.")
+    include(FetchContent)
+    FetchContent_Declare(
+        grpc
+        GIT_REPOSITORY https://github.com/grpc/grpc.git
+        GIT_TAG        v1.30.2 # Compatible with Protobuf 3.12.4
+        GIT_SHALLOW    ON
+        GIT_SUBMODULES_RECURSE ON
+    )
 
+    # Set gRPC and its dependencies' build options. This must be done BEFORE FetchContent_MakeAvailable.
+    set(gRPC_INSTALL OFF CACHE BOOL "Disable gRPC installation" FORCE)
+    set(protobuf_INSTALL OFF CACHE BOOL "Disable Protobuf installation" FORCE)
+    set(gRPC_BUILD_TESTS OFF CACHE BOOL "Build gRPC tests" FORCE)
+    set(gRPC_BUILD_CSHARP_EXT OFF CACHE BOOL "Build C# extension" FORCE)
+    set(gRPC_BUILD_CODEGEN OFF CACHE BOOL "Build codegen" FORCE)
+    
+    set(gRPC_BUILD_GRPC_CSHARP_PLUGIN OFF CACHE BOOL "" FORCE)
+    set(gRPC_BUILD_GRPC_NODE_PLUGIN OFF CACHE BOOL "" FORCE)
+    set(gRPC_BUILD_GRPC_OBJECTIVE_C_PLUGIN OFF CACHE BOOL "" FORCE)
+    set(gRPC_BUILD_GRPC_PHP_PLUGIN OFF CACHE BOOL "" FORCE)
+    set(gRPC_BUILD_GRPC_PYTHON_PLUGIN OFF CACHE BOOL "" FORCE)
+    set(gRPC_BUILD_GRPC_RUBY_PLUGIN OFF CACHE BOOL "" FORCE)
 
+    FetchContent_MakeAvailable(grpc)
 
-find_package(Protobuf REQUIRED)
-message(STATUS "Protobuf_FOUND: ${Protobuf_FOUND}")
-message(STATUS "Protobuf_VERSION: ${Protobuf_VERSION}")
-message(STATUS "Protobuf_INCLUDE_DIRS: ${Protobuf_INCLUDE_DIRS}")
-message(STATUS "Protobuf_LIBRARIES: ${Protobuf_LIBRARIES}")
-message(STATUS "Protobuf_PROTOC_EXECUTABLE: ${Protobuf_PROTOC_EXECUTABLE}")
+    find_program(HOST_PROTOC_EXECUTABLE protoc)
+    find_program(GRPC_CPP_PLUGIN_EXECUTABLE grpc_cpp_plugin)
 
-
-pkg_check_modules(GRPC REQUIRED grpc++)
-if (GRPC_FOUND)
-   message(STATUS "Found gRPC via pkg-config.")
-   message(STATUS "  Includes: ${GRPC_INCLUDE_DIRS}")
-   message(STATUS "  Libraries: ${GRPC_LIBRARIES}")
-else()
-   message(FATAL_ERROR "Could not find gRPC via pkg-config.")
-endif()
-
-
-if(NOT fastcdr_FOUND)
-    find_package(fastcdr 2 REQUIRED)
-endif()
-
-if(NOT fastdds_FOUND)
-    find_package(fastdds 3 REQUIRED)
-endif()
-
-
-# Find fastddsgen executable
-find_program(FASTDDSGEN_EXECUTABLE NAMES fastddsgen)
-if(NOT FASTDDSGEN_EXECUTABLE)
-    message(FATAL_ERROR "fastddsgen not found. Please ensure it is in your PATH.")
+    # Set variables for linking using legacy FetchContent names
+    set(GRPC_LIBRARY grpc++)
+    set(PROTOBUF_LIBRARY protobuf::libprotobuf)
 endif()
 
 
@@ -79,12 +117,12 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR}) # For generated headers from pr
 #set(PROTO_FILE ${PROJECT_PROTO_DIR}/VISSv3.0.proto)
 
 # Find the gRPC C++ plugin
-find_program(GRPC_CPP_PLUGIN_EXECUTABLE NAMES grpc_cpp_plugin
-	PATHS /usr/local/bin /usr/bin
-	NO_CMAKE_FIND_ROOT_PATH)
-if(NOT GRPC_CPP_PLUGIN_EXECUTABLE)
-    message(FATAL_ERROR "grpc_cpp_plugin not found.")
-endif()
+#find_program(GRPC_CPP_PLUGIN_EXECUTABLE NAMES grpc_cpp_plugin
+#	PATHS /usr/local/bin /usr/bin
+#	NO_CMAKE_FIND_ROOT_PATH)
+#if(NOT GRPC_CPP_PLUGIN_EXECUTABLE)
+#    message(FATAL_ERROR "grpc_cpp_plugin not found.")
+#endif()
 
 
 
@@ -111,7 +149,7 @@ foreach(PROTO ${PROTO_FILES})
                "${CMAKE_CURRENT_BINARY_DIR}/${BASE_NAME_WITHOUT_PROTO}.pb.h"
                "${CMAKE_CURRENT_BINARY_DIR}/${BASE_NAME_WITHOUT_PROTO}.grpc.pb.cc"
                "${CMAKE_CURRENT_BINARY_DIR}/${BASE_NAME_WITHOUT_PROTO}.grpc.pb.h"
-        COMMAND ${Protobuf_PROTOC_EXECUTABLE}
+            COMMAND ${HOST_PROTOC_EXECUTABLE}
                 --proto_path=${CMAKE_CURRENT_SOURCE_DIR}/proto           # .proto 파일 검색 경로
                 --cpp_out=${CMAKE_CURRENT_BINARY_DIR}                    # C++ 코드 출력 디렉토리
                 --grpc_out=${CMAKE_CURRENT_BINARY_DIR}                   # gRPC 코드 출력 디렉토리
@@ -123,6 +161,42 @@ foreach(PROTO ${PROTO_FILES})
         VERBATIM
     )
 endforeach()
+
+    # Create a library target from the generated protobuf files.
+    add_library(proto_gen_files INTERFACE)
+    target_sources(proto_gen_files INTERFACE
+        ${GENERATED_PROTO_SRCS}
+        ${GENERATED_GRPC_SRCS}
+    )
+
+    # If using FetchContent, add dependency on the generated tools
+    if(NOT gRPC_FOUND)
+        add_dependencies(proto_gen_files protobuf::protoc grpc_cpp_plugin)
+    endif()
+
+if(NOT BUILD_FOR_ANDROID)
+
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --coverage")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} --coverage")
+        link_libraries(gcov)
+    endif()
+
+    if(NOT fastcdr_FOUND)
+        find_package(fastcdr 2 REQUIRED)
+    endif()
+
+    if(NOT fastdds_FOUND)
+        find_package(fastdds 3 REQUIRED)
+    endif()
+
+
+    # Find fastddsgen executable
+    find_program(FASTDDSGEN_EXECUTABLE NAMES fastddsgen)
+    if(NOT FASTDDSGEN_EXECUTABLE)
+        message(FATAL_ERROR "fastddsgen not found. Please ensure it is in your PATH.")
+    endif()
+
 
 # --- Fast DDS IDL Code Generation ---
 set(GENERATED_IDL_DIR ${CMAKE_CURRENT_BINARY_DIR}/idl)
@@ -225,57 +299,97 @@ endif()
 
 FetchContent_MakeAvailable(paho-mqtt-cpp)
 
+option(BUILD_FOR_ANDROID "Build for Android platform" OFF)
 
+else()
+    # --- Android Build Configuration ---
+    # Protobuf sources are generated by the protobuf-gradle-plugin.
+    # gRPC sources require additional setup.
+endif()
 # Add the main executable with all sources
-add_executable(vehicle_info_manager_app
+set(VISS_APP_SOURCES
     src/app/VissServerApp.cpp
     src/core/VssTreeParser.cpp
     src/core/ServiceManager.cpp
     src/core/VssSubscriptionManager.cpp
     src/core/VssDataStore.cpp
     src/core/JsonSchemaValidator.cpp
-    src/transport/mqtt_transport.cpp
     src/transport/grpc_transport.cpp
-    src/transport/dds_transport.cpp
-    # src/transport/ws_server.cpp
-    src/providers/DDSProvider.cpp
+    src/transport/VISSAsyncServiceImpl.cpp
     src/providers/CANProvider.cpp
     src/providers/NetworkProvider.cpp
+    src/providers/GrpcProvider.cpp
     src/common/StatusCodes.cpp
     src/common/Utils.cpp
-    ${GENERATED_PROTO_SRCS}
-    ${GENERATED_GRPC_SRCS}
 )
+
+if(BUILD_FOR_ANDROID)
+    list(APPEND VISS_APP_SOURCES src/app/jni_export.cpp)
+    add_definitions(-DBUILD_FOR_ANDROID)
+    # Protobuf/gRPC sources are added by the gradle plugin or need to be handled separately
+else()
+    list(APPEND VISS_APP_SOURCES
+        src/transport/mqtt_transport.cpp
+        src/transport/dds_transport.cpp
+        src/providers/DDSProvider.cpp
+    )
+endif()
+
+if(BUILD_FOR_ANDROID)
+    add_library(vehicle_info_manager_app SHARED ${VISS_APP_SOURCES})
+    target_link_libraries(vehicle_info_manager_app PRIVATE proto_gen_files)
+    #set_target_properties(vehicle_info_manager_app PROPERTIES
+    #    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib/${ANDROID_ABI}")
+else()
+    add_executable(vehicle_info_manager_app ${VISS_APP_SOURCES})
+    target_link_libraries(vehicle_info_manager_app PRIVATE proto_gen_files)
+endif()
 
 # Add include directories for dependencies
 target_include_directories(vehicle_info_manager_app
     PRIVATE
     ${PROJECT_INCLUDE_DIR}
     ${CMAKE_CURRENT_BINARY_DIR}
-    ${GENERATED_IDL_DIR}
-    ${Protobuf_INCLUDE_DIRS}
-    ${GRPC_INCLUDE_DIRS}
-    ${fastdds_INCLUDE_DIR}
-    ${paho-mqtt-cpp_SOURCE_DIR}/include
 )
 
+if(NOT BUILD_FOR_ANDROID)
+    target_include_directories(vehicle_info_manager_app
+        PRIVATE
+        ${GENERATED_IDL_DIR}
+        ${fastdds_INCLUDE_DIR}
+        ${paho-mqtt-cpp_SOURCE_DIR}/include
+    )
+endif()
+
 # Link libraries
-target_link_libraries(vehicle_info_manager_app
-    PRIVATE
-    idl_types
-    ${GRPC_LIBRARIES}
-    ${Protobuf_LIBRARIES}
-    paho-mqttpp3-static         # Paho C++ static library target
-    paho-mqtt3as-static         # Paho C static library target (async, with SSL)
-    fastdds fastcdr
-    pthread
-    ${OPENSSL_LIBRARIES}
-)
+# Link libraries
+# gRPC::grpc++ and protobuf::libprotobuf are the targets provided by FetchContent
+if(BUILD_FOR_ANDROID)
+    find_library(log-lib log)
+    target_link_libraries(vehicle_info_manager_app PRIVATE
+        ${GRPC_LIBRARY}
+        ${PROTOBUF_LIBRARY}
+        ${log-lib}
+    )
+else()
+    target_link_libraries(vehicle_info_manager_app PRIVATE
+        ${GRPC_LIBRARY}
+        ${PROTOBUF_LIBRARY}
+        pthread
+        idl_types
+        paho-mqttpp3-static
+        paho-mqtt3as-static
+        fastdds
+        fastcdr
+        ${OPENSSL_LIBRARIES}
+    )
+endif()
 
 # Configure output directories
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "out/bin")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "out/lib")
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "out/lib")
+if(NOT BUILD_FOR_ANDROID)
 
 # Add test client executable
 add_executable(grpc_client_test
@@ -286,8 +400,21 @@ add_executable(grpc_client_test
 
 # Link libraries for the test client
 target_link_libraries(grpc_client_test
-    ${GRPC_LIBRARIES}
-    ${Protobuf_LIBRARIES}
+    ${GRPC_LIBRARY}
+    ${PROTOBUF_LIBRARY}
+    pthread
+)
+
+# Add gRPC test server executable
+add_executable(grpc_test_server
+    tests/grpc_test_server.cpp
+    ${GENERATED_PROTO_SRCS}
+    ${GENERATED_GRPC_SRCS}
+)
+
+target_link_libraries(grpc_test_server
+    ${GRPC_LIBRARY}
+    ${PROTOBUF_LIBRARY}
     pthread
 )
 
@@ -376,6 +503,8 @@ if (BUILD_UNITTEST)
 	target_link_libraries(VehicleInfoMgrTest
 	    PRIVATE
 	    gtest_main
+            ${PROTOBUF_LIBRARY}
+            ${GRPC_LIBRARY}
 	)
 	
 	include(GoogleTest)
@@ -386,4 +515,5 @@ if (BUILD_UNITTEST)
 		LIBRARY DESTINATION lib
 		ARCHIVE DESTINATION lib
 	)
+endif()
 endif()

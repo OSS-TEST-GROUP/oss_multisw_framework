@@ -5,8 +5,10 @@
 #include <filesystem>
 #include <algorithm>
 #include <stdexcept>
+#include <sstream>
 #include "rapidjson/istreamwrapper.h"
 #include "rapidjson/error/en.h"
+#include "Logger.h"
 
 
 namespace viss {
@@ -103,7 +105,7 @@ std::shared_ptr<Node_t> VSSTree::traverse_and_read(std::ifstream& ifs, Node_t* p
         // Check for EOF, which is not an error but the end of recursion
         if (ifs.eof()) return nullptr; 
         // Otherwise, it's a parse error
-        std::cerr << "Failed to populate node." << std::endl;
+        LOG_ERROR << "Failed to populate node.";
         return nullptr;
     }
     this_node->Parent = parent;
@@ -114,7 +116,7 @@ std::shared_ptr<Node_t> VSSTree::traverse_and_read(std::ifstream& ifs, Node_t* p
             this_node->Child[child_node->Name] = child_node;
         } else {
             // This could indicate a corrupted file or an issue with the parsing logic
-            std::cerr << "Failed to read a child node for " << this_node->Name << std::endl;
+            LOG_ERROR << "Failed to read a child node for " << this_node->Name;
             // Depending on strictness, we could return nullptr here to abort all parsing
         }
     }
@@ -195,7 +197,7 @@ std::shared_ptr<Node_t> VSSTree::VSSReadTree(const std::string& filename) {
     if (file_path.extension() == ".json") {
         std::ifstream file(filename);
         if (!file.is_open()) {
-            std::cerr << "Error opening JSON file: " << filename << std::endl;
+            LOG_ERROR << "Error opening JSON file: " << filename;
             return nullptr;
         }
         rapidjson::IStreamWrapper isw(file);
@@ -203,14 +205,14 @@ std::shared_ptr<Node_t> VSSTree::VSSReadTree(const std::string& filename) {
         d.ParseStream(isw);
 
         if (d.HasParseError()) {
-            std::cerr << "Error parsing JSON file: " << filename << " - " 
+            LOG_ERROR << "Error parsing JSON file: " << filename << " - " 
                       << rapidjson::GetParseError_En(d.GetParseError()) 
-                      << " at offset " << d.GetErrorOffset() << std::endl;
+                      << " at offset " << d.GetErrorOffset();
             return nullptr;
         }
 
         if (!d.IsObject() || d.MemberCount() != 1) {
-            std::cerr << "Error: JSON root is not a single object in " << filename << std::endl;
+            LOG_ERROR << "Error: JSON root is not a single object in " << filename;
             return nullptr;
         }
 
@@ -241,8 +243,8 @@ VSSTree::VSSTree(const std::string& him_file_path) : him_path_(him_file_path), i
     std::filesystem::path him_fs_path(him_file_path);
     std::ifstream file(him_fs_path);
     if (!file.is_open()) {
-        std::cerr << "Error reading " << him_path_ 
-                  << " (resolved to: " << std::filesystem::absolute(him_fs_path) << ")" << std::endl;
+        LOG_ERROR << "Error reading " << him_path_ 
+                  << " (resolved to: " << std::filesystem::absolute(him_fs_path) << ")";
         return;
     }
 
@@ -273,7 +275,7 @@ VSSTree::VSSTree(const std::string& him_file_path) : him_path_(him_file_path), i
                     current_tree->FileName = fullPath.string();
                     current_tree->Handle = this->VSSReadTree(fullPath.string());
                     if (current_tree->Handle == nullptr) {
-                        std::cerr << "Error parsing " << fullPath.string() << std::endl;
+                        LOG_ERROR << "Error parsing " << fullPath.string();
                         return; // Abort initialization
                     }
                 } else if (key == "type") {
@@ -349,6 +351,7 @@ viss::Node_t* VSSTree::findRootNode(const std::string& path, std::string& out_fo
         return it->second.Handle.get();
     }
 
+    LOG_ERROR << "Failed to find root node for key: " << root_key;
     return nullptr;
 }
 
@@ -423,7 +426,7 @@ rapidjson::Value VSSTree::createTemplateRecursive(Node_t* node, rapidjson::Docum
     rapidjson::Value result;
     if (datatype.rfind("Types.", 0) == 0) {
         if (node->Child.empty()) {
-            std::cerr << "Error: Node " << node->Name << " with datatype " << node->Datatype << " has no children." << std::endl;
+            LOG_ERROR << "Error: Node " << node->Name << " with datatype " << node->Datatype << " has no children.";
             result.SetNull();
         } else {
             result.SetObject();

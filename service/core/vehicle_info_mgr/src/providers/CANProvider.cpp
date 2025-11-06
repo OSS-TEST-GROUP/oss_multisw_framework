@@ -1,4 +1,5 @@
 #include "CANProvider.h"
+#include "Logger.h"
 #include <iostream>
 #include <thread>
 #include <chrono>
@@ -12,15 +13,18 @@ CANProvider::~CANProvider() {
 void CANProvider::start() {
     active = true;
     provider_thread = std::thread(&CANProvider::runLoop, this);
-    std::cout << "CANProvider started." << std::endl;
+    LOG_INFO << "CANProvider started.";
 }
 
 void CANProvider::stop() {
-    active = false;
+    if (!active.exchange(false)) {
+        return; // Already stopped
+    }
+    LOG_INFO << "CANProvider::stop() called.";
     if (provider_thread.joinable()) {
         provider_thread.join();
     }
-    std::cout << "CANProvider stopped." << std::endl;
+    LOG_INFO << "CANProvider::stop() completed.";
 }
 
 std::string CANProvider::getName() const {
@@ -32,7 +36,7 @@ void CANProvider::setDataChannel(const std::shared_ptr<ThreadSafeQueue<VehicleDa
 }
 
 void CANProvider::setValue(const std::string& path, const std::any& value) {
-    std::cout << "CANProvider: setValue called for path " << path << std::endl;
+    LOG_INFO << "CANProvider: setValue called for path " << path;
 }
 
 void CANProvider::setVssTree(std::shared_ptr<viss::VSSTree> vss_tree) {

@@ -26,6 +26,7 @@
 #include <fastdds/dds/subscriber/SampleInfo.hpp>
 
 #include "VissRequestPubSubTypes.hpp"
+#include "Logger.h"
 
 using namespace eprosima::fastdds::dds;
 
@@ -87,12 +88,12 @@ struct DDSTransportImpl {
                     rapidjson::StringBuffer buffer;
                     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
                     response_doc->Accept(writer);
-                    std::cout << "DDS Transport Received Response JSON: " << buffer.GetString() << std::endl;
+                    LOG_INFO << "DDS Transport Received Response JSON: " << buffer.GetString();
                 }
 
                 if (stop_flag_.load() || !response_doc) break;
 
-                std::cout << "Received response from ServiceManager." << std::endl;
+                LOG_INFO << "Received response from ServiceManager.";
 
                 std::string action;
                 std::string requestId;
@@ -101,7 +102,7 @@ struct DDSTransportImpl {
                 if (response_doc->HasMember("action") && (*response_doc)["action"].IsString()) {
                     action = (*response_doc)["action"].GetString();
                 } else {
-                    std::cerr << "Error processing response: 'action' is missing or not a string." << std::endl;
+                    LOG_ERROR << "Error processing response: 'action' is missing or not a string.";
                     continue;
                 }
 
@@ -112,8 +113,8 @@ struct DDSTransportImpl {
                     if (it != request_topic_map_.end()) {
                         topic = it->second;
                         request_topic_map_.erase(it);
-                        std::cout << "RequestId " << requestId << " removed from map. "
-                                  << request_topic_map_.size() << " requests remaining." << std::endl;
+                        LOG_INFO << "RequestId " << requestId << " removed from map. "
+                                  << request_topic_map_.size() << " requests remaining.";
                     }
                 }
                 
@@ -123,11 +124,11 @@ struct DDSTransportImpl {
                         std::lock_guard<std::mutex> lock(subscription_map_mutex_);
                         if (action == "subscribe") {
                             subscription_topic_map_[subscriptionId] = topic;
-                            std::cout << "Subscription successful for ID: " << subscriptionId 
-                                      << " on topic: " << topic << std::endl;
+                            LOG_INFO << "Subscription successful for ID: " << subscriptionId 
+                                      << " on topic: " << topic;
                         } else if (action == "unsubscribe") {
                             if(subscription_topic_map_.erase(subscriptionId)) {
-                                std::cout << "Unsubscribed successful for ID: " << subscriptionId << std::endl;
+                                LOG_INFO << "Unsubscribed successful for ID: " << subscriptionId;
                             }
                             response_doc->EraseMember("subscriptionId");
                         } else if (action == "subscription") {
@@ -135,18 +136,18 @@ struct DDSTransportImpl {
                             if (it != subscription_topic_map_.end()) {
                                 topic = it->second;
                             } else {
-                                std::cerr << "Error: Response topic not found for subscriptionId: " << subscriptionId << std::endl;
+                                LOG_ERROR << "Error: Response topic not found for subscriptionId: " << subscriptionId;
                             }
                         }
                     } else {
                          // Error handling for subscription remains tricky as error is a JSON object.
                          // For now, just log that a subscription/unsubscription failed.
-                         std::cerr << "Subscription/Unsubscription failed for ID: " << subscriptionId << std::endl;
+                         LOG_ERROR << "Subscription/Unsubscription failed for ID: " << subscriptionId;
                     }
                 }
 
                 if (topic.empty()) {
-                    std::cerr << "Error: Response topic could not be determined for requestId: " << requestId << std::endl;
+                    LOG_ERROR << "Error: Response topic could not be determined for requestId: " << requestId;
                     continue;
                 }
                 
@@ -156,7 +157,7 @@ struct DDSTransportImpl {
 
                 publish(topic, buffer.GetString());
             }
-            std::cout << "DDS response thread shutting down." << std::endl;
+            LOG_INFO << "DDS response thread shutting down.";
         });
 
         cleanup_thread_ = std::thread(&DDSTransportImpl::cleanup_writers, this);
@@ -185,7 +186,7 @@ struct DDSTransportImpl {
                 }
             }
         }
-        std::cout << "DDS writer cleanup thread shutting down." << std::endl;
+        LOG_INFO << "DDS writer cleanup thread shutting down.";
     }
 
     void publish(const std::string& topic_name, const std::string& payload) {
@@ -196,14 +197,14 @@ struct DDSTransportImpl {
         if (it == writer_map.end()) {
             Topic* topic = participant->create_topic(topic_name, request_type.get_type_name(), TOPIC_QOS_DEFAULT);
             if (topic == nullptr) {
-                std::cerr << "Failed to create topic for publishing: " << topic_name << std::endl;
+                LOG_ERROR << "Failed to create topic for publishing: " << topic_name;
                 return;
             }
             DataWriterQos writer_qos = DATAWRITER_QOS_DEFAULT;
             writer_qos.reliability().kind = RELIABLE_RELIABILITY_QOS;
             writer = publisher->create_datawriter(topic, writer_qos, nullptr);
             if (writer == nullptr) {
-                std::cerr << "Failed to create datawriter for topic: " << topic_name << std::endl;
+                LOG_ERROR << "Failed to create datawriter for topic: " << topic_name;
                 participant->delete_topic(topic);
                 return;
             }
@@ -269,9 +270,12 @@ DDSTransport::~DDSTransport() {
 }
 
 void DDSTransport::start() {
-    p_impl->participant = DomainParticipantFactory::get_instance()->create_participant_with_default_profile(nullptr, StatusMask::none());
+    DomainParticipantQos pqos;
+    pqos.name("viss_dds_transport");
+    //pqos.name("");
+    p_impl->participant = DomainParticipantFactory::get_instance()->create_participant(7, pqos, nullptr, StatusMask::none());
     if (p_impl->participant == nullptr) {
-        std::cerr << "Failed to create DDS participant" << std::endl;
+        LOG_ERROR << "Failed to create DDS participant";
         return;
     }
 
@@ -285,11 +289,11 @@ void DDSTransport::start() {
     reader_qos.reliability().kind = RELIABLE_RELIABILITY_QOS;
     p_impl->request_reader = p_impl->subscriber->create_datareader(p_impl->request_topic, reader_qos, p_impl->request_listener.get());
 
-    std::cout << "DDS Transport started and subscribed to " << VISS_DDS_REQUEST_TOPIC << std::endl;
+    LOG_INFO << "DDS Transport started and subscribed to " << VISS_DDS_REQUEST_TOPIC;
 }
 
 void DDSTransport::stop() {
-    std::cout << "DDS Transport stopped." << std::endl;
+    LOG_INFO << "DDS Transport stopped.";
 }
 
 
@@ -311,7 +315,7 @@ void RequestListener::on_data_available(eprosima::fastdds::dds::DataReader* read
             payload_doc.Parse(received_sample.payload().c_str());
 
             if (payload_doc.HasParseError() || !payload_doc.IsObject() || !payload_doc.HasMember("topic") || !payload_doc["topic"].IsString() || !payload_doc.HasMember("request") || !payload_doc["request"].IsString()) {
-                std::cerr << "DDS message payload is not a valid JSON or has missing fields." << std::endl;
+                LOG_ERROR << "DDS message payload is not a valid JSON or has missing fields.";
                 return;
             }
 
@@ -327,7 +331,7 @@ void RequestListener::on_data_available(eprosima::fastdds::dds::DataReader* read
             auto requestData = p_impl->pool->acquire();
 
             if (!request_doc_ptr->HasMember("requestId") || !(*request_doc_ptr)["requestId"].IsString()) {
-                std::cerr << "Bad Request: 'requestId' is missing or not a string in DDS message." << std::endl;
+                LOG_ERROR << "Bad Request: 'requestId' is missing or not a string in DDS message.";
                 return;
             }
             requestData->requestId = (*request_doc_ptr)["requestId"].GetString();

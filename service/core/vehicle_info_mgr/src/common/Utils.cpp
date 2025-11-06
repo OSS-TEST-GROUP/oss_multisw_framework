@@ -1,4 +1,5 @@
 #include "Utils.h"
+#include "Logger.h"
 #include <algorithm>
 #include <typeinfo>
 #include "rapidjson/stringbuffer.h"
@@ -141,6 +142,7 @@ std::string getCurrentTimestamp() {
 
 rapidjson::Value any_to_json_value(const std::any& val, rapidjson::Document::AllocatorType& allocator) {
     rapidjson::Value v;
+
     if (!val.has_value()) {
         v.SetNull();
         return v;
