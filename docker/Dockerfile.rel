@@ -29,6 +29,8 @@ RUN apt-get install -y --no-install-recommends \
     libprotobuf23 \
     libprotobuf-c1 \
     grpc-proto \
+    libcurl4 \
+    nlohmann-json3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd -r -g 1000 ossuser \
@@ -81,7 +83,7 @@ FROM runtime AS runtime-mmf-ext-ros2
 
 ARG BUILD_TYPE=Release
 
-COPY --chown=ossuser:ossuser docker/build_environment/ros2_entrypoint.sh /oss/entrypoint.sh
+COPY --chown=ossuser:ossuser docker/entrypoint/ros2_entrypoint.sh /oss/entrypoint.sh
 COPY --chown=ossuser:ossuser output/aarch64/${BUILD_TYPE}/extension/ros2/bin /oss/bin
 COPY --chown=ossuser:ossuser output/aarch64/lib /oss/lib
 
@@ -107,7 +109,7 @@ FROM runtime AS runtime-mmf-ext-agl
 
 ARG BUILD_TYPE=Release
 
-COPY --chown=ossuser:ossuser docker/build_environment/agl_entrypoint.sh /oss/entrypoint.sh
+COPY --chown=ossuser:ossuser docker/entrypoint/agl_entrypoint.sh /oss/entrypoint.sh
 COPY --chown=ossuser:ossuser output/aarch64/${BUILD_TYPE}/extension/agl/bin /oss/bin
 COPY --chown=ossuser:ossuser output/aarch64/lib /oss/lib
 
