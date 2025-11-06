@@ -387,7 +387,7 @@ do_pull_builder_image()
 	if ! curl -u "${REGISTRY_ID}:${REGISTRY_PWD}" -s https://${REGISTRY_ADDRESS}/v2/_catalog 2>/dev/null \
 		| grep -q "${BUILDER_CONTAINER_NAME}"; then
 		docker build -t ${REGISTRY_ADDRESS}/oss/${BUILDER_CONTAINER_NAME}:${BUILDER_CONTAINER_TAG} \
-			-f ${PWD}/docker/build_environment/Dockerfile .
+			-f ${PWD}/docker/Dockerfile .
 		do_error_check
 		docker push ${REGISTRY_ADDRESS}/oss/${BUILDER_CONTAINER_NAME}:${BUILDER_CONTAINER_TAG}
 		do_error_check
@@ -463,7 +463,7 @@ do_start_build_mmf()
 		-u 1000:1000 \
 		-w /home/ossuser/workspace \
 		-v ${SDK_DIR}:/opt \
-		-v ${PWD}/docker/build_environment/build.sh:/home/ossuser/workspace/build.sh \
+		-v ${PWD}/docker/scripts/build.sh:/home/ossuser/workspace/build.sh \
 		-v ${PWD}/CMakeLists.txt:/home/ossuser/workspace/CMakeLists.txt \
 		-v ${PWD}/idl:/home/ossuser/workspace/idl \
 		-v ${PWD}/service:/home/ossuser/workspace/service \
