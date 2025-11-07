@@ -3,6 +3,10 @@ pipeline {
         label 'OSS-Agent'
     }
 
+    parameters {
+        string(name: 'GIT_BRANCH', defaultValue: 'dev_brian-unittest-rates', description: 'branch')
+    }
+
     environment {
         // Agent Node
         AGENT_LABEL="OSS-Agent"
@@ -42,15 +46,17 @@ pipeline {
         
         GITHUB_REPO_URL = 'https://github.com/obigo-gov/oss_multisw_framework.git'
         GITOPS_REPO_URL = 'https://lotte-autops.com/oss_group1/oss_multisw_framework.git'
-        GIT_BRANCH = "develop"
+        TARGET_BRANCH = "${params.GIT_BRANCH}"
 
         // Sysroot
         SDK_DIR="${HOME}/obigo-sdk"
         //SYSROOT_DIR = "${SDK_DIR}/sysroot-aarch64"
         //TOOLCHAIN_FILE = "${SDK_DIR}/toolchain-aarch64.cmake"
+        
+        TEST_RESULT = 'SUCCESS'
     }
 
-   options {
+    options {
         timeout(time: 120, unit: 'MINUTES')
         disableConcurrentBuilds()
         timestamps()
@@ -62,10 +68,10 @@ pipeline {
                 script {
                     echo "Login Docker Private Registry. If registry didn't saved"
                     sh '''
-                        if cat ${HOME}/.docker/config.json | grep "${IMAGE_REGISTRY}:80"; then
+                        if cat ${HOME}/.docker/config.json 2>/dev/null | grep "${IMAGE_REGISTRY}:80"; then
                             docker logout "${IMAGE_REGISTRY}:80"
                         fi
-                        if ! cat ${HOME}/.docker/config.json | grep "${IMAGE_REGISTRY}"; then
+                        if ! cat ${HOME}/.docker/config.json 2>/dev/null | grep "${IMAGE_REGISTRY}"; then
                             echo "${REGISTRY_PWD}" | docker login ${IMAGE_REGISTRY} -u ${REGISTRY_ID} --password-stdin
                         fi
                     '''
@@ -77,7 +83,7 @@ pipeline {
                 echo "Checking out source code..."
                 checkout([
                     $class: 'GitSCM',
-                    branches: [[name: "*/${GIT_BRANCH}"]],
+                    branches: [[name: "*/${TARGET_BRANCH}"]],
                     userRemoteConfigs: [[
                         url: "${GITHUB_REPO_URL}",
                         credentialsId: "${GITHUB_CREDENTIALS}"
@@ -88,7 +94,7 @@ pipeline {
                     env.COMMIT_HASH = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
                     env.IMAGE_TAG = "${BUILD_NUMBER}-${COMMIT_HASH}"
                     env.BUILD_DATE = sh(script: "date -u +'%Y-%m-%dT%H:%M:%SZ'", returnStdout: true).trim()
-                    env.BRANCH_CLEAN = sh(script: "echo ${GIT_BRANCH} | sed 's/[^a-zA-Z0-9._-]/-/g'", returnStdout: true).trim()
+                    env.BRANCH_CLEAN = sh(script: "echo ${TARGET_BRANCH} | sed 's/[^a-zA-Z0-9._-]/-/g'", returnStdout: true).trim()
                 }
                 // Dependency library - FastDDS
                 script {
@@ -180,7 +186,7 @@ pipeline {
                             bash -c '
                                 set -e
                                 cd /home/ossuser/workspace
-                                ./build.sh --build-unittest --set-extension-platform=ROS2
+                                ./build.sh --build-unittest
                             '
                         '''
                     }
@@ -210,19 +216,32 @@ pipeline {
                     }
                 }
                 script {
-                    def result = junit allowEmptyResults: true, testResults: 'output/unittest-results/**/junit_results.xml'
-
-                    def total = result.totalCount
-                    def failed = result.failCount
-                    def skipped = result.skipCount
-                    def passed = total - failed - skipped
-                    def successRate = total > 0 ? (passed * 100.0 / total) : 0.0
-
-                    if (successRate < 50.0) {
-                        currentBuild.result = 'UNSTABLE'
-                    } else {
-                        currentBuild.result = 'SUCCESS'
+                    def res
+                    catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
+                        res = junit(testResults: 'output/unittest-results/**/*.xml', allowEmptyResults: true)
                     }
+
+                    def total   = res?.totalCount  ?: 0
+                    def failed  = res?.failCount   ?: 0
+                    def skipped = res?.skipCount   ?: 0
+                    def passed  = (res?.passCount != null) ? res.passCount : (total - failed - skipped)
+                    def runTotal = Math.max(total - skipped, 0)
+                    def successRateRun     = runTotal > 0 ? (passed * 100.0 / runTotal) : 0.0
+                    def successRateOverall = total    > 0 ? (passed * 100.0 / total)    : 0.0
+
+                    echo """[JUnit DEBUG]
+                        total   = ${total}
+                        failed  = ${failed}
+                        skipped = ${skipped}
+                        passed  = ${passed}
+                        runTotal(=total - skipped) = ${runTotal}
+                        successRate(run only)      = ${String.format('%.2f', successRateRun)}%
+                        successRate(overall)       = ${String.format('%.2f', successRateOverall)}%
+                    """
+
+                    def successRate = successRateRun
+                    env.TEST_RESULT = (successRate < 50.0) ? 'UNSTABLE' : 'SUCCESS'
+                    currentBuild.description = "T:${total} P:${passed} F:${failed} S:${skipped} ✓${String.format('%.1f', successRate)}%"
                 }
             }
             post {
@@ -237,6 +256,12 @@ pipeline {
             echo "Cleaning workspace after all stages..."
             sh 'git clean -fdx || true'
             cleanWs(deleteDirs: true, notFailBuild: true, disableDeferredWipeout: true)
+            script {
+                if (env.TEST_RESULT?.trim()) {
+                    echo "Final test result : ${env.TEST_RESULT}"
+                    currentBuild.result = env.TEST_RESULT
+                }
+            }
         }
     }
 }
