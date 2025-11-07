@@ -27,7 +27,7 @@ or
 
 For testing or debugging Core and Extension for ROS2 : x86-64
 ```
-docker run --privileged --gpus all
+docker run --privileged --gpus all \
     --rm -it -u 1000:1000 \
     -w /home/ossuser/workspace \
     -v ${PWD}/output/x86_64:/home/ossuser/workspace/output \
@@ -39,6 +39,12 @@ docker run --privileged --gpus all
     --network=host --cap-add=NET_RAW --cap-add=NET_ADMIN \
     registry.obigo.com:80/oss/oss-mmf-builder:latest
     /bin/bash
+```
+Binary path
+```
+/home/ossuser/workspace/output/Debug/core/bin # core
+/home/ossuser/workspace/output/Debug/extension/ros2/bin # extension - ros2
+/home/ossuser/workspace/output/Debug/extension/agl/bin # extensioin - agl
 ```
 
 For MMF Core and Extention for ROS2 on AADP using docker compose: aarch64
