@@ -16,12 +16,18 @@ MessageTransmitter::~MessageTransmitter() {}
 bool MessageTransmitter::Initialize() {
     // Create protocols
     protocols_[MessageProtocolType::DDS] = std::make_shared<DDSProtocol>();
+    protocols_[MessageProtocolType::DDS_ROS] = std::make_shared<DDSProtocol>();
 
     for (auto& iter : protocols_) {
         iter.second->SetForwardCallback(std::bind(&MessageTransmitter::ForwardDeliveredMessage, this, std::placeholders::_1));
         iter.second->Initialize();
 
-        subscription_list_[iter.second->GetProtocolType()].clear();
+        // Initialize subscription lists for each protocol type manually
+        if (iter.first == MessageProtocolType::DDS) {
+            subscription_list_[MessageProtocolType::DDS].clear();
+        } else if (iter.first == MessageProtocolType::DDS_ROS) {
+            subscription_list_[MessageProtocolType::DDS_ROS].clear();
+        }
     }
 
     return true;
@@ -112,13 +118,13 @@ bool MessageTransmitter::SubscribeMessage(uint64_t subscriber_id, const std::str
             if (allow_ros){
                 LOG_INFO("Subscriber " << subscriber_id << " requested to subscribe message " << name << " with ROS forwarding allowed.");
                 
-                // Add ROS message subscription with "rt/" prefix using DDS protocol
+                // Add ROS message subscription with "rt/" prefix using separate DDS_ROS protocol
                 std::string ros_name = "rt/" + name;
-                if (!HasAnySubscriptionID(ros_name, MessageProtocolType::DDS)) {
-                    protocols_[MessageProtocolType::DDS]->SubscribeMessage(ros_name);
+                if (!HasAnySubscriptionID(ros_name, MessageProtocolType::DDS_ROS)) {
+                    protocols_[MessageProtocolType::DDS_ROS]->SubscribeMessage(ros_name);
                 }
-                AddSubscriptionID(ros_name, subscriber_id, MessageProtocolType::DDS);
-                LOG_INFO("Added ROS subscription for message: " << ros_name << " using DDS protocol");
+                AddSubscriptionID(ros_name, subscriber_id, MessageProtocolType::DDS_ROS);
+                LOG_INFO("Added ROS subscription for message: " << ros_name << " using DDS_ROS protocol");
             }
         }
     }
@@ -161,12 +167,12 @@ bool MessageTransmitter::UnsubscribeMessage(uint64_t subscriber_id, const std::s
             
             // Also handle ROS unsubscription if it exists
             std::string ros_name = "rt/" + name;
-            if (HasSubscriptionID(ros_name, subscriber_id, MessageProtocolType::DDS)) {
-                RemoveSubscriptionID(ros_name, subscriber_id, MessageProtocolType::DDS);
+            if (HasSubscriptionID(ros_name, subscriber_id, MessageProtocolType::DDS_ROS)) {
+                RemoveSubscriptionID(ros_name, subscriber_id, MessageProtocolType::DDS_ROS);
                 
-                if (!HasAnySubscriptionID(ros_name, MessageProtocolType::DDS)) {
-                    protocols_[MessageProtocolType::DDS]->UnsubscribeMessage(ros_name);
-                    LOG_INFO("Removed ROS subscription for message: " << ros_name << " from DDS protocol");
+                if (!HasAnySubscriptionID(ros_name, MessageProtocolType::DDS_ROS)) {
+                    protocols_[MessageProtocolType::DDS_ROS]->UnsubscribeMessage(ros_name);
+                    LOG_INFO("Removed ROS subscription for message: " << ros_name << " from DDS_ROS protocol");
                 }
             }
         }
@@ -211,23 +217,42 @@ uint64_t MessageTransmitter::GetSubscribeMessageNum() {
 }
 
 void MessageTransmitter::ForwardDeliveredMessage(std::shared_ptr<Message> msg) {
-    std::set<int64_t> subscriber_list;
+    std::set<int64_t> subscriber_ids;
 
-    LOG_INFO("Forwarding message: " << msg->GetName());
+    LOG_INFO("Forwarding message: " << msg->GetName() << " with protocol type: " << (uint32_t)msg->GetProtocolType());
 
     {
         std::lock_guard<std::mutex> subscription_lock(subscription_handling_mutex_);
-        subscriber_list = GetSubscriptionIDList(msg->GetName(), msg->GetProtocolType());
+        subscriber_ids = GetSubscriptionIDList(msg->GetName(), msg->GetProtocolType());
+        
+        // For ROS messages (DDS_ROS protocol), also check if there are subscribers for the corresponding DDS message
+        if (msg->GetProtocolType() == MessageProtocolType::DDS_ROS || msg->GetName().find("rt/") == 0) {
+            // Extract the original message name by removing "rt/" prefix
+            std::string original_name = msg->GetName().substr(3); // Remove "rt/" prefix
+            LOG_DEBUG("Checking for DDS subscribers for original message: " << original_name);
+            
+            auto dds_subscribers = GetSubscriptionIDList(original_name, MessageProtocolType::DDS);
+            subscriber_ids.insert(dds_subscribers.begin(), dds_subscribers.end());
+            LOG_DEBUG("Added " << dds_subscribers.size() << " DDS subscribers for message: " << original_name);
+        }
     }
+
+    LOG_DEBUG("Found " << subscriber_ids.size() << " subscribers for message: " << msg->GetName());
 
     {
         std::lock_guard<std::mutex> subscriber_lock(subscriber_handling_mutex_);
-        for (auto& iter : subscriber_list) {
-            SubscriberInfo& subscriber = subscriber_list_[iter];
-            auto request_task = subscriber.message_creator();
-            request_task->SetMessage(msg);
+        for (auto& iter : subscriber_ids) {
+            auto subscriber_iter = subscriber_list_.find(iter);
+            if (subscriber_iter != subscriber_list_.end()) {
+                SubscriberInfo& subscriber = subscriber_iter->second;
+                auto request_task = subscriber.message_creator();
+                request_task->SetMessage(msg);
 
-            service_executor_->RequestTask(request_task);
+                LOG_DEBUG("Forwarding message " << msg->GetName() << " to subscriber " << iter << " (" << subscriber.name << ")");
+                service_executor_->RequestTask(request_task);
+            } else {
+                LOG_ERROR("Subscriber " << iter << " not found in subscriber_list_");
+            }
         }
     }
 }
