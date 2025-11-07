@@ -37,7 +37,7 @@ docker run --privileged --gpus all \
     -e DISPLAY=unix:1 \
     -e LD_LIBRARY_PATH=/home/ossuser/workspace/output/lib \
     --network=host --cap-add=NET_RAW --cap-add=NET_ADMIN \
-    registry.obigo.com:80/oss/oss-mmf-builder:latest
+    registry.obigo.com/oss/oss-mmf-builder:latest
     /bin/bash
 ```
 Binary path
