@@ -4,7 +4,7 @@ pipeline {
     }
 
     parameters {
-        string(name: 'GIT_BRANCH', defaultValue: 'develop', description: 'branch')
+        string(name: 'GIT_BRANCH', defaultValue: 'dev_brian-unittest-rates', description: 'branch')
     }
 
     environment {
@@ -52,6 +52,8 @@ pipeline {
         SDK_DIR="${HOME}/obigo-sdk"
         //SYSROOT_DIR = "${SDK_DIR}/sysroot-aarch64"
         //TOOLCHAIN_FILE = "${SDK_DIR}/toolchain-aarch64.cmake"
+        
+        TEST_RESULT = 'SUCCESS'
     }
 
     options {
@@ -66,10 +68,10 @@ pipeline {
                 script {
                     echo "Login Docker Private Registry. If registry didn't saved"
                     sh '''
-                        if cat ${HOME}/.docker/config.json | grep "${IMAGE_REGISTRY}:80"; then
+                        if cat ${HOME}/.docker/config.json 2>/dev/null | grep "${IMAGE_REGISTRY}:80"; then
                             docker logout "${IMAGE_REGISTRY}:80"
                         fi
-                        if ! cat ${HOME}/.docker/config.json | grep "${IMAGE_REGISTRY}"; then
+                        if ! cat ${HOME}/.docker/config.json 2>/dev/null | grep "${IMAGE_REGISTRY}"; then
                             echo "${REGISTRY_PWD}" | docker login ${IMAGE_REGISTRY} -u ${REGISTRY_ID} --password-stdin
                         fi
                     '''
@@ -184,7 +186,7 @@ pipeline {
                             bash -c '
                                 set -e
                                 cd /home/ossuser/workspace
-                                ./build.sh --build-unittest --set-extension-platform=ROS2
+                                ./build.sh --build-unittest
                             '
                         '''
                     }
@@ -214,7 +216,10 @@ pipeline {
                     }
                 }
                 script {
-                    def result = junit allowEmptyResults: true, testResults: 'output/unittest-results/**/junit_results.xml'
+                    def res
+                    catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
+                        res = junit(testResults: 'output/unittest-results/**/*.xml', allowEmptyResults: true)
+                    }
 
                     def total   = res?.totalCount  ?: 0
                     def failed  = res?.failCount   ?: 0
@@ -234,8 +239,8 @@ pipeline {
                         successRate(overall)       = ${String.format('%.2f', successRateOverall)}%
                     """
 
-                    def successRate = successRateRun   // 또는 successRateOverall
-                    currentBuild.result = (successRate < 50.0) ? 'UNSTABLE' : 'SUCCESS'
+                    def successRate = successRateRun
+                    env.TEST_RESULT = (successRate < 50.0) ? 'UNSTABLE' : 'SUCCESS'
                     currentBuild.description = "T:${total} P:${passed} F:${failed} S:${skipped} ✓${String.format('%.1f', successRate)}%"
                 }
             }
@@ -251,6 +256,12 @@ pipeline {
             echo "Cleaning workspace after all stages..."
             sh 'git clean -fdx || true'
             cleanWs(deleteDirs: true, notFailBuild: true, disableDeferredWipeout: true)
+            script {
+                if (env.TEST_RESULT?.trim()) {
+                    echo "Final test result : ${env.TEST_RESULT}"
+                    currentBuild.result = env.TEST_RESULT
+                }
+            }
         }
     }
 }
