@@ -7,7 +7,8 @@ namespace diagnostic_manager {
 
 enum class MessageProtocolType {
     NOT_DEFINED,
-    DDS
+    DDS,
+    DDS_ROS
 };
 
 } // namespace diagnostic_manager

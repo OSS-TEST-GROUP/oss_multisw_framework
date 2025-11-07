@@ -82,16 +82,19 @@ void DiagnosticPublisher::HandleRequestGetDiagInfo(std::shared_ptr<VariantData> 
         msg_data->SetValue("ret_code", (int32_t)2L);
     }
 
-    // Determine response message name based on request message type
+    // Determine response message name and protocol type based on request message type
     std::string response_message_name = "mmf/diagnosticmgr/DiagnosticInfoResponse";
+    MessageProtocolType response_protocol_type = MessageProtocolType::DDS;
+    
     if (request_message_name.find("rt/") == 0) {
         response_message_name = "rt/" + response_message_name;
+        response_protocol_type = MessageProtocolType::DDS_ROS;
         LOG_INFO("Sending ROS response for DiagnosticInfoResponse");
     }
 
     std::shared_ptr<Message> msg = std::make_shared<Message>(
         response_message_name,
-        MessageProtocolType::DDS,
+        response_protocol_type,
         msg_data->GetName(),
         msg_data
     );
@@ -110,16 +113,19 @@ void DiagnosticPublisher::HandleRequestGetDiagInfoList(std::shared_ptr<VariantDa
 
     msg_data->SetValue("ret_code", (int32_t)1L);
 
-    // Determine response message name based on request message type
+    // Determine response message name and protocol type based on request message type
     std::string response_message_name = "mmf/diagnosticmgr/DiagnosticInfoListResponse";
+    MessageProtocolType response_protocol_type = MessageProtocolType::DDS;
+    
     if (request_message_name.find("rt/") == 0) {
         response_message_name = "rt/" + response_message_name;
+        response_protocol_type = MessageProtocolType::DDS_ROS;
         LOG_INFO("Sending ROS response for DiagnosticInfoListResponse");
     }
 
     std::shared_ptr<Message> msg = std::make_shared<Message>(
         response_message_name,
-        MessageProtocolType::DDS,
+        response_protocol_type,
         msg_data->GetName(),
         msg_data
     );

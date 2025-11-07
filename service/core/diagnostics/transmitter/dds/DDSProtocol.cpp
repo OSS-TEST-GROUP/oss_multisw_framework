@@ -344,7 +344,9 @@ void DDSProtocol::load_dds_dynamic_idl(const std::string& path) {
     auto type_support_list = dds_dynamic_idl_parser_->ParseAll();
 
     for (auto& iter : type_support_list) {
-        parsed_dynamic_type_supports_[iter->type_support->get_type_name()] = iter;
+        std::string type_name = iter->type_support->get_type_name();
+        parsed_dynamic_type_supports_[type_name] = iter;
+        LOG_VERBOSE("Loaded dynamic type: " << type_name);
     }
 
     LOG_INFO("loaded " << type_support_list.size() << " dynamic types.");
@@ -485,27 +487,76 @@ bool DDSProtocol::register_type_object_from_discovery(std::shared_ptr<TopicInfor
     }
 
     topic_information->type_support = std::make_shared<TypeSupport>(new DynamicPubSubType(topic_information->remote_type, topic_information->remote_type_information));
-    if (RETCODE_OK != topic_information->type_support->register_type(participant_, topic_information->topic_type))
+    ReturnCode_t result = topic_information->type_support->register_type(participant_, topic_information->topic_type);
+    if (result != RETCODE_OK && result != RETCODE_PRECONDITION_NOT_MET)
     {
+        LOG_ERROR("Type registration failed for discovered type " << topic_information->topic_type << " (topic: " << topic_information->topic_name << "), return code: " << (int)result);
         return false;
     }
-
+    
+    if (result == RETCODE_PRECONDITION_NOT_MET) {
+        LOG_DEBUG("Discovered type already registered: " << topic_information->topic_type << " for topic: " << topic_information->topic_name);
+    } else {
+        LOG_DEBUG("Successfully registered discovered type: " << topic_information->topic_type << " for topic: " << topic_information->topic_name);
+    }
+ 
     return true;
 }
 
 bool DDSProtocol::register_type_object_from_dynamic_idl(std::shared_ptr<TopicInformation> topic_information) {
+    LOG_VERBOSE("Looking for type: " << topic_information->topic_type << " for topic: " << topic_information->topic_name);
+    
+    // Try to find the type directly first
     auto iter = parsed_dynamic_type_supports_.find(topic_information->topic_type);
+    
+    // If not found, try to map ROS2 DDS type names to simple names
     if (iter == parsed_dynamic_type_supports_.end()) {
+        std::string mapped_type_name = topic_information->topic_type;
+        
+        // Map ROS2 DDS type names to simple type names
+        if (topic_information->topic_type == "diagnosticmgr::msg::dds_::DiagnosticInfoRequest_") {
+            mapped_type_name = "DiagnosticInfoRequest";
+        } else if (topic_information->topic_type == "diagnosticmgr::msg::dds_::DiagnosticInfoListRequest_") {
+            mapped_type_name = "DiagnosticInfoListRequest";
+        } else if (topic_information->topic_type == "diagnosticmgr::msg::dds_::DiagnosticInfoResponse_") {
+            mapped_type_name = "DiagnosticInfoResponse";
+        } else if (topic_information->topic_type == "diagnosticmgr::msg::dds_::DiagnosticInfoListResponse_") {
+            mapped_type_name = "DiagnosticInfoListResponse";
+        } else if (topic_information->topic_type == "diagnosticmgr::msg::dds_::DiagnosticNotification_") {
+            mapped_type_name = "DiagnosticNotification";
+        }
+        
+        LOG_VERBOSE("Mapped ROS2 type '" << topic_information->topic_type << "' to '" << mapped_type_name << "'");
+        iter = parsed_dynamic_type_supports_.find(mapped_type_name);
+    }
+    
+    if (iter == parsed_dynamic_type_supports_.end()) {
+        LOG_VERBOSE("Type not found in dynamic IDL: " << topic_information->topic_type << " for topic: " << topic_information->topic_name);
+        LOG_VERBOSE("Available types:");
+        for (const auto& pair : parsed_dynamic_type_supports_) {
+            LOG_VERBOSE("  - " << pair.first);
+        }
         return false;
     }
 
     topic_information->remote_type = iter->second->dyn_type;
     topic_information->type_support = iter->second->type_support;
 
-    if (topic_information->type_support->register_type(participant_) != RETCODE_OK) {
-        LOG_ERROR("Type registration failed for " << topic_information->topic_type);
+    // Check if type is already registered to avoid duplicate registration
+    // Use the original type name (ROS2 format) for registration
+    LOG_INFO("Attempting to register type: " << topic_information->topic_type << " for topic: " << topic_information->topic_name);
+    ReturnCode_t result = topic_information->type_support->register_type(participant_, topic_information->topic_type);
+    if (result != RETCODE_OK && result != RETCODE_PRECONDITION_NOT_MET) {
+        LOG_ERROR("Type registration failed for " << topic_information->topic_type << " (topic: " << topic_information->topic_name << "), return code: " << (int)result);
         return false;
     }
+    
+    if (result == RETCODE_PRECONDITION_NOT_MET) {
+        LOG_DEBUG("Type already registered: " << topic_information->topic_type << " for topic: " << topic_information->topic_name);
+    } else {
+        LOG_DEBUG("Successfully registered type: " << topic_information->topic_type << " for topic: " << topic_information->topic_name);
+    }
+    
     return true;
 }
 
@@ -514,9 +565,12 @@ bool DDSProtocol::create_datareader(std::shared_ptr<TopicInformation> topic_info
     if (topic_information->topic == nullptr) {
         TopicQos topic_qos = TOPIC_QOS_DEFAULT;
         participant_->get_default_topic_qos(topic_qos);
+        
+        LOG_INFO("Creating topic: name=" << topic_information->topic_name << ", type=" << topic_information->topic_type);
         topic_information->topic = participant_->create_topic(topic_information->topic_name, topic_information->topic_type, topic_qos);
         if (topic_information->topic == nullptr)
         {
+            LOG_ERROR("Failed to create topic: name=" << topic_information->topic_name << ", type=" << topic_information->topic_type);
             return false;
         }
     }
