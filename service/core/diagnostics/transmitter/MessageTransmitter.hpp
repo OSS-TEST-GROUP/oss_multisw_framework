@@ -41,7 +41,7 @@ class MessageTransmitter {
 
     bool PublishMessage(std::shared_ptr<Message> msg);
 
-    bool SubscribeMessage(uint64_t subscriber_id, const std::string& name, MessageProtocolType type);
+    bool SubscribeMessage(uint64_t subscriber_id, const std::string& name, MessageProtocolType type, bool allow_ros = false);
     bool UnsubscribeMessage(uint64_t subscriber_id, const std::string& name, MessageProtocolType type);
 
     bool IsSubscribed(const std::string& name, MessageProtocolType type);

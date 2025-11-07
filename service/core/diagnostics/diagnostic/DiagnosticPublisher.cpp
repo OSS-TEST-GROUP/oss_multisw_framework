@@ -23,8 +23,8 @@ bool DiagnosticPublisher::Initialize() {
         LOG_ERROR("Failed to register to the MessageTransmitter.");
         return false;
     }
-    message_transmitter_->SubscribeMessage(subscriber_id_, "mmf/diagnosticmgr/DiagnosticInfoRequest", MessageProtocolType::DDS);
-    message_transmitter_->SubscribeMessage(subscriber_id_, "mmf/diagnosticmgr/DiagnosticInfoListRequest", MessageProtocolType::DDS);
+    message_transmitter_->SubscribeMessage(subscriber_id_, "mmf/diagnosticmgr/DiagnosticInfoRequest", MessageProtocolType::DDS, true); // need to ros forward
+    message_transmitter_->SubscribeMessage(subscriber_id_, "mmf/diagnosticmgr/DiagnosticInfoListRequest", MessageProtocolType::DDS, true); // need to ros forward
 
     publisher_task_id_ = service_executor_->AddTaskInterval("DiagnosticAnalyzerRequest", std::bind(&DiagnosticPublisher::HandlePublicationProcess, this, _1), TaskInterval(1000));
     if (publisher_task_id_ < 0) {
@@ -37,25 +37,31 @@ bool DiagnosticPublisher::Initialize() {
 void DiagnosticPublisher::PublishUpdatedInfo() {}
 
 void DiagnosticPublisher::HandleDiagInfoMessage(std::shared_ptr<RequestBase> request_msg) {
-    static std::map<std::string, std::function<void(std::shared_ptr<VariantData>)>> handler_map = {
-        {"mmf/diagnosticmgr/DiagnosticInfoRequest", std::bind(&DiagnosticPublisher::HandleRequestGetDiagInfo, this, _1)},
-        {"mmf/diagnosticmgr/DiagnosticInfoListRequest", std::bind(&DiagnosticPublisher::HandleRequestGetDiagInfoList, this, _1)},
+    static std::map<std::string, std::function<void(std::shared_ptr<VariantData>, const std::string&)>> handler_map = {
+        {"mmf/diagnosticmgr/DiagnosticInfoRequest", std::bind(&DiagnosticPublisher::HandleRequestGetDiagInfo, this, _1, _2)},
+        {"mmf/diagnosticmgr/DiagnosticInfoListRequest", std::bind(&DiagnosticPublisher::HandleRequestGetDiagInfoList, this, _1, _2)},
+        // ROS message handlers with "rt/" prefix
+        {"rt/mmf/diagnosticmgr/DiagnosticInfoRequest", std::bind(&DiagnosticPublisher::HandleRequestGetDiagInfo, this, _1, _2)},
+        {"rt/mmf/diagnosticmgr/DiagnosticInfoListRequest", std::bind(&DiagnosticPublisher::HandleRequestGetDiagInfoList, this, _1, _2)},
     };
 
     std::shared_ptr<GetDiagInfoMessage> diag_req = std::dynamic_pointer_cast<GetDiagInfoMessage>(request_msg);
     std::shared_ptr<Message> diag_req_msg = diag_req->GetMessage();
     std::shared_ptr<VariantData> diag_req_data = diag_req_msg->GetData();
 
-    auto func = handler_map.find(diag_req_msg->GetName());
+    std::string message_name = diag_req_msg->GetName();
+    
+    auto func = handler_map.find(message_name);
     if (func == handler_map.end()) {
-        LOG_ERROR("Not supported request. " << diag_req_msg->GetName());
+        LOG_ERROR("Not supported request. " << message_name);
         return;
     }
 
-    func->second(diag_req_data);
+    LOG_INFO("Handling message: " << message_name);
+    func->second(diag_req_data, message_name);
 }
 
-void DiagnosticPublisher::HandleRequestGetDiagInfo(std::shared_ptr<VariantData> data) {
+void DiagnosticPublisher::HandleRequestGetDiagInfo(std::shared_ptr<VariantData> data, const std::string& request_message_name) {
     std::shared_ptr<DiagInfo> diag_info;
 
     diag_info = diag_info_registry_->GetDiagInfo(data->GetValue<int32_t>("diag_code"));
@@ -76,8 +82,15 @@ void DiagnosticPublisher::HandleRequestGetDiagInfo(std::shared_ptr<VariantData> 
         msg_data->SetValue("ret_code", (int32_t)2L);
     }
 
+    // Determine response message name based on request message type
+    std::string response_message_name = "mmf/diagnosticmgr/DiagnosticInfoResponse";
+    if (request_message_name.find("rt/") == 0) {
+        response_message_name = "rt/" + response_message_name;
+        LOG_INFO("Sending ROS response for DiagnosticInfoResponse");
+    }
+
     std::shared_ptr<Message> msg = std::make_shared<Message>(
-        "mmf/diagnosticmgr/DiagnosticInfoResponse",
+        response_message_name,
         MessageProtocolType::DDS,
         msg_data->GetName(),
         msg_data
@@ -86,7 +99,7 @@ void DiagnosticPublisher::HandleRequestGetDiagInfo(std::shared_ptr<VariantData> 
     message_transmitter_->PublishMessage(msg);
 }
 
-void DiagnosticPublisher::HandleRequestGetDiagInfoList(std::shared_ptr<VariantData> data) {
+void DiagnosticPublisher::HandleRequestGetDiagInfoList(std::shared_ptr<VariantData> data, const std::string& request_message_name) {
     auto diag_codes = diag_info_registry_->GetDiagInfoCodeList();
     auto diag_names = diag_info_registry_->GetDiagInfoNameList();
 
@@ -97,8 +110,15 @@ void DiagnosticPublisher::HandleRequestGetDiagInfoList(std::shared_ptr<VariantDa
 
     msg_data->SetValue("ret_code", (int32_t)1L);
 
+    // Determine response message name based on request message type
+    std::string response_message_name = "mmf/diagnosticmgr/DiagnosticInfoListResponse";
+    if (request_message_name.find("rt/") == 0) {
+        response_message_name = "rt/" + response_message_name;
+        LOG_INFO("Sending ROS response for DiagnosticInfoListResponse");
+    }
+
     std::shared_ptr<Message> msg = std::make_shared<Message>(
-        "mmf/diagnosticmgr/DiagnosticInfoListResponse",
+        response_message_name,
         MessageProtocolType::DDS,
         msg_data->GetName(),
         msg_data

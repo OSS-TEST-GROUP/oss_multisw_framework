@@ -86,7 +86,7 @@ bool MessageTransmitter::PublishMessage(std::shared_ptr<Message> msg) {
     return protocol->second->PublishMessage(msg);
 }
 
-bool MessageTransmitter::SubscribeMessage(uint64_t subscriber_id, const std::string& name, MessageProtocolType type) {
+bool MessageTransmitter::SubscribeMessage(uint64_t subscriber_id, const std::string& name, MessageProtocolType type, bool allow_ros ) {
     if (protocols_.count(type) == 0) {
         LOG_ERROR("Not supported protocol. protocol=" << (uint32_t)type);
         return false;
@@ -108,6 +108,18 @@ bool MessageTransmitter::SubscribeMessage(uint64_t subscriber_id, const std::str
             }
 
             AddSubscriptionID(name, subscriber_id, type);
+
+            if (allow_ros){
+                LOG_INFO("Subscriber " << subscriber_id << " requested to subscribe message " << name << " with ROS forwarding allowed.");
+                
+                // Add ROS message subscription with "rt/" prefix using DDS protocol
+                std::string ros_name = "rt/" + name;
+                if (!HasAnySubscriptionID(ros_name, MessageProtocolType::DDS)) {
+                    protocols_[MessageProtocolType::DDS]->SubscribeMessage(ros_name);
+                }
+                AddSubscriptionID(ros_name, subscriber_id, MessageProtocolType::DDS);
+                LOG_INFO("Added ROS subscription for message: " << ros_name << " using DDS protocol");
+            }
         }
     }
 
@@ -145,6 +157,17 @@ bool MessageTransmitter::UnsubscribeMessage(uint64_t subscriber_id, const std::s
 
             if (!HasAnySubscriptionID(name, type)) {
                 need_unsubscribe = true;
+            }
+            
+            // Also handle ROS unsubscription if it exists
+            std::string ros_name = "rt/" + name;
+            if (HasSubscriptionID(ros_name, subscriber_id, MessageProtocolType::DDS)) {
+                RemoveSubscriptionID(ros_name, subscriber_id, MessageProtocolType::DDS);
+                
+                if (!HasAnySubscriptionID(ros_name, MessageProtocolType::DDS)) {
+                    protocols_[MessageProtocolType::DDS]->UnsubscribeMessage(ros_name);
+                    LOG_INFO("Removed ROS subscription for message: " << ros_name << " from DDS protocol");
+                }
             }
         }
     }
