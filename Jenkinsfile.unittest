@@ -212,17 +212,27 @@ pipeline {
                 script {
                     def result = junit allowEmptyResults: true, testResults: 'output/unittest-results/**/junit_results.xml'
 
-                    def total = result.totalCount
-                    def failed = result.failCount
-                    def skipped = result.skipCount
-                    def passed = total - failed - skipped
-                    def successRate = total > 0 ? (passed * 100.0 / total) : 0.0
+                    def total   = res?.totalCount  ?: 0
+                    def failed  = res?.failCount   ?: 0
+                    def skipped = res?.skipCount   ?: 0
+                    def passed  = (res?.passCount != null) ? res.passCount : (total - failed - skipped)
+                    def runTotal = Math.max(total - skipped, 0)
+                    def successRateRun     = runTotal > 0 ? (passed * 100.0 / runTotal) : 0.0
+                    def successRateOverall = total    > 0 ? (passed * 100.0 / total)    : 0.0
 
-                    if (successRate < 50.0) {
-                        currentBuild.result = 'UNSTABLE'
-                    } else {
-                        currentBuild.result = 'SUCCESS'
-                    }
+                    echo """[JUnit DEBUG]
+                        total   = ${total}
+                        failed  = ${failed}
+                        skipped = ${skipped}
+                        passed  = ${passed}
+                        runTotal(=total - skipped) = ${runTotal}
+                        successRate(run only)      = ${String.format('%.2f', successRateRun)}%
+                        successRate(overall)       = ${String.format('%.2f', successRateOverall)}%
+                    """
+
+                    def successRate = successRateRun   // 또는 successRateOverall
+                    currentBuild.result = (successRate < 50.0) ? 'UNSTABLE' : 'SUCCESS'
+                    currentBuild.description = "T:${total} P:${passed} F:${failed} S:${skipped} ✓${String.format('%.1f', successRate)}%"
                 }
             }
             post {
