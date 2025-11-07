@@ -78,6 +78,7 @@ class DDSProtocol : public MessageProtocol, DomainParticipantListener {
     bool delete_datawriter(std::shared_ptr<TopicInformation> topic_information);
 
     std::shared_ptr<TopicInformation> create_topic_information_from_dynamic_idl(const std::string& name, const std::string& type);
+    std::shared_ptr<TopicInformation> create_topic_information_from_dynamic_idl(const std::string& name, const std::string& converted_type, const std::string& original_type);
 
     bool read_values_from_dynamic_data(DynamicData::_ref_type dds_data, DynamicTypeMember::_ref_type member, TypeKind elem_type,
                                        std::shared_ptr<VariantData> variant_data);

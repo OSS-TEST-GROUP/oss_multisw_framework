@@ -94,7 +94,7 @@ void DiagnosticPublisher::HandleRequestGetDiagInfo(std::shared_ptr<VariantData> 
 
     std::shared_ptr<Message> msg = std::make_shared<Message>(
         response_message_name,
-        response_protocol_type,
+        MessageProtocolType::DDS,
         msg_data->GetName(),
         msg_data
     );
@@ -125,7 +125,7 @@ void DiagnosticPublisher::HandleRequestGetDiagInfoList(std::shared_ptr<VariantDa
 
     std::shared_ptr<Message> msg = std::make_shared<Message>(
         response_message_name,
-        response_protocol_type,
+        MessageProtocolType::DDS,
         msg_data->GetName(),
         msg_data
     );
