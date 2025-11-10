@@ -194,9 +194,6 @@ pipeline {
             }
         }
         stage('Run Unittest') {
-            when {
-                expression { currentBuild.result == 'SUCCESS' }
-            }
             steps {
                 script {
                     def dockerArgs = [
