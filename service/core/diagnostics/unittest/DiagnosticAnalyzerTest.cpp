@@ -91,7 +91,7 @@ TEST_F(DiagnosticAnalyzerTest, Finalize_TC001) {
 TEST_F(DiagnosticAnalyzerTest, AnalyzeAll_TC001) {
     EXPECT_CALL(*Mock_ServiceExecutorMock, AddTask(_, _, _)).WillOnce(Return(1234));
     EXPECT_CALL(*Mock_MessageTransmitterMock, AddSubscriber("DiagnosticAnalyzer", _, _)).WillRepeatedly(Return(1));
-    EXPECT_CALL(*Mock_MessageTransmitterMock, SubscribeMessage(_, _, MessageProtocolType::DDS)).WillRepeatedly(Return(true));
+    EXPECT_CALL(*Mock_MessageTransmitterMock, SubscribeMessage(_, _, MessageProtocolType::DDS, false)).WillRepeatedly(Return(true));
 
     ins->Initialize();
 
@@ -129,7 +129,7 @@ TEST_F(DiagnosticAnalyzerTest, AnalyzeAll_TC001) {
 TEST_F(DiagnosticAnalyzerTest, Analyze_TC001_ConditionAnd) {
     EXPECT_CALL(*Mock_ServiceExecutorMock, AddTask(_, _, _)).WillOnce(Return(1234));
     EXPECT_CALL(*Mock_MessageTransmitterMock, AddSubscriber("DiagnosticAnalyzer", _, _)).WillRepeatedly(Return(1));
-    EXPECT_CALL(*Mock_MessageTransmitterMock, SubscribeMessage(_, _, MessageProtocolType::DDS)).WillRepeatedly(Return(true));
+    EXPECT_CALL(*Mock_MessageTransmitterMock, SubscribeMessage(_, _, MessageProtocolType::DDS, false)).WillRepeatedly(Return(true));
 
     ins->Initialize();
 
@@ -155,7 +155,7 @@ TEST_F(DiagnosticAnalyzerTest, Analyze_TC001_ConditionAnd) {
 TEST_F(DiagnosticAnalyzerTest, Analyze_TC001_ConditionAnd_NotSatisfied) {
     EXPECT_CALL(*Mock_ServiceExecutorMock, AddTask(_, _, _)).WillOnce(Return(1234));
     EXPECT_CALL(*Mock_MessageTransmitterMock, AddSubscriber("DiagnosticAnalyzer", _, _)).WillRepeatedly(Return(1));
-    EXPECT_CALL(*Mock_MessageTransmitterMock, SubscribeMessage(_, _, MessageProtocolType::DDS)).WillRepeatedly(Return(true));
+    EXPECT_CALL(*Mock_MessageTransmitterMock, SubscribeMessage(_, _, MessageProtocolType::DDS, false)).WillRepeatedly(Return(true));
 
     ins->Initialize();
 
@@ -177,7 +177,7 @@ TEST_F(DiagnosticAnalyzerTest, Analyze_TC001_ConditionAnd_NotSatisfied) {
 TEST_F(DiagnosticAnalyzerTest, Analyze_TC001_ConditionOr) {
     EXPECT_CALL(*Mock_ServiceExecutorMock, AddTask(_, _, _)).WillOnce(Return(1234));
     EXPECT_CALL(*Mock_MessageTransmitterMock, AddSubscriber("DiagnosticAnalyzer", _, _)).WillRepeatedly(Return(1));
-    EXPECT_CALL(*Mock_MessageTransmitterMock, SubscribeMessage(_, _, MessageProtocolType::DDS)).WillRepeatedly(Return(true));
+    EXPECT_CALL(*Mock_MessageTransmitterMock, SubscribeMessage(_, _, MessageProtocolType::DDS, false)).WillRepeatedly(Return(true));
 
     ins->Initialize();
 
@@ -203,7 +203,7 @@ TEST_F(DiagnosticAnalyzerTest, Analyze_TC001_ConditionOr) {
 TEST_F(DiagnosticAnalyzerTest, Analyze_TC001_ConditionOr_NotSatisfied) {
     EXPECT_CALL(*Mock_ServiceExecutorMock, AddTask(_, _, _)).WillOnce(Return(1234));
     EXPECT_CALL(*Mock_MessageTransmitterMock, AddSubscriber("DiagnosticAnalyzer", _, _)).WillRepeatedly(Return(1));
-    EXPECT_CALL(*Mock_MessageTransmitterMock, SubscribeMessage(_, _, MessageProtocolType::DDS)).WillRepeatedly(Return(true));
+    EXPECT_CALL(*Mock_MessageTransmitterMock, SubscribeMessage(_, _, MessageProtocolType::DDS, false)).WillRepeatedly(Return(true));
 
     ins->Initialize();
 
@@ -234,8 +234,8 @@ TEST_F(DiagnosticAnalyzerTest, EvaluatePolicyRuleCondition_TC001) {
 TEST_F(DiagnosticAnalyzerTest, SubscribeReferenceMessages_TC001) {
     EXPECT_CALL(*Mock_ServiceExecutorMock, AddTask(_, _, _)).WillOnce(Return(1234));
     EXPECT_CALL(*Mock_MessageTransmitterMock, AddSubscriber("DiagnosticAnalyzer", _, _)).WillRepeatedly(Return(1));
-    EXPECT_CALL(*Mock_MessageTransmitterMock, SubscribeMessage(_, "mmf/lifecyclemgr/LifecycleDiagReport", MessageProtocolType::DDS)).WillRepeatedly(Return(true));
-    EXPECT_CALL(*Mock_MessageTransmitterMock, SubscribeMessage(_, "mmf/lifecyclemgr/ADSWManagerDiagReport", MessageProtocolType::DDS)).WillRepeatedly(Return(true));
+    EXPECT_CALL(*Mock_MessageTransmitterMock, SubscribeMessage(_, "mmf/lifecyclemgr/LifecycleDiagReport", MessageProtocolType::DDS, false)).WillRepeatedly(Return(true));
+    EXPECT_CALL(*Mock_MessageTransmitterMock, SubscribeMessage(_, "mmf/lifecyclemgr/ADSWManagerDiagReport", MessageProtocolType::DDS, false)).WillRepeatedly(Return(true));
 
     ins->Initialize();
 }
@@ -243,8 +243,8 @@ TEST_F(DiagnosticAnalyzerTest, SubscribeReferenceMessages_TC001) {
 TEST_F(DiagnosticAnalyzerTest, GetDiagPoliciesToAnalyze_TC001) {
     EXPECT_CALL(*Mock_ServiceExecutorMock, AddTask(_, _, _)).WillOnce(Return(1234));
     EXPECT_CALL(*Mock_MessageTransmitterMock, AddSubscriber("DiagnosticAnalyzer", _, _)).WillRepeatedly(Return(1));
-    EXPECT_CALL(*Mock_MessageTransmitterMock, SubscribeMessage(_, "mmf/lifecyclemgr/LifecycleDiagReport", MessageProtocolType::DDS)).WillRepeatedly(Return(true));
-    EXPECT_CALL(*Mock_MessageTransmitterMock, SubscribeMessage(_, "mmf/lifecyclemgr/ADSWManagerDiagReport", MessageProtocolType::DDS)).WillRepeatedly(Return(true));
+    EXPECT_CALL(*Mock_MessageTransmitterMock, SubscribeMessage(_, "mmf/lifecyclemgr/LifecycleDiagReport", MessageProtocolType::DDS, false)).WillRepeatedly(Return(true));
+    EXPECT_CALL(*Mock_MessageTransmitterMock, SubscribeMessage(_, "mmf/lifecyclemgr/ADSWManagerDiagReport", MessageProtocolType::DDS, false)).WillRepeatedly(Return(true));
 
     ins->Initialize();
 
