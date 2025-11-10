@@ -7,7 +7,7 @@
 git clone git@github.com:obigo-gov/oss_multisw_framework.git
 ```
 
-## How to build the OSS MW Framework
+## How to build the OSS Multi-Middleware Framework
 
 For x86-64(unittest, static analysis, debugging)
 ```
@@ -45,6 +45,43 @@ Binary path
 /home/ossuser/workspace/output/Debug/core/bin # core
 /home/ossuser/workspace/output/Debug/extension/ros2/bin # extension - ros2
 /home/ossuser/workspace/output/Debug/extension/agl/bin # extensioin - agl
+```
+## How to build the container images to release
+
+You can build the container images after build MMF to release
+```
+./build --release --aarch64
+
+docker buildx create --name mmf-buildx --driver docker-container --use || true
+
+docker buildx build \
+    --no-cache --platform="linux/arm64" \
+    --build-arg BUILD_TYPE=Release \
+    -f docker/Dockerfile.rel \
+    --target runtime-mmf-core \
+    --load \
+    -t registry.obigo.com/oss/oss-mmf-core:latest \
+    .
+
+docker buildx build \
+    --no-cache --platform="linux/arm64" \
+    --build-arg BUILD_TYPE=Release \
+    -f docker/Dockerfile.rel \
+    --target runtime-mmf-ext-ros2 \
+    --load \
+    -t registry.obigo.com/oss/oss-mmf-ext-ros2:latest \
+    .
+
+./build --release --aarch64 --set-extension-platform=AGL
+
+docker buildx build \
+    --no-cache --platform="linux/arm64" \
+    --build-arg BUILD_TYPE=Release \
+    -f docker/Dockerfile.rel \
+    --target runtime-mmf-ext-agl \
+    --load \
+    -t registry.obigo.com/oss/oss-mmf-ext-agl:latest \
+    .
 ```
 
 For MMF Core and Extention for ROS2 on AADP using docker compose: aarch64
