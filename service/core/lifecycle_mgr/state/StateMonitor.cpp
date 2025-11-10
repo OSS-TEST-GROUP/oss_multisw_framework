@@ -171,12 +171,11 @@ void StateMonitor::RunThread()
 
         loop_count_++;
 
-        if (loop_count_ > 20){
+        if (loop_count_ > 2){
             NotifyLifecycleDiagnosticInfo(true);
             // Test for stop request
             std::shared_ptr<LifecycleManager> manager  = LifecycleFactory::GetInstance()->GetManager();
 
-            manager->SetState(ManagerState::MANAGER_TERMINATE);
             loop_count_ = 0;
             manager->SetState(ManagerState::MANAGER_RUNNING);
         }
