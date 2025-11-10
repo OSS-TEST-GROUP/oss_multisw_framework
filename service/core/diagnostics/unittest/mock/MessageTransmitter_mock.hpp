@@ -6,6 +6,7 @@
 
 namespace diagnostic_manager {
 
+
 class MessageTransmitterMock {
 public:
     MOCK_METHOD0(Initialize, bool());
@@ -13,7 +14,7 @@ public:
     MOCK_METHOD3(AddSubscriber, int64_t(const std::string& name, ExecutorFunctionType func, ReceiveMessageCreator creator));
     MOCK_METHOD1(RemoveSubscriber, void(uint64_t subscriber_id));
     MOCK_METHOD1(PublishMessage, bool(std::shared_ptr<Message> msg));
-    MOCK_METHOD3(SubscribeMessage, bool(uint64_t subscriber_id, const std::string& name, MessageProtocolType type));
+    MOCK_METHOD4(SubscribeMessage, bool(uint64_t subscriber_id, const std::string& name, MessageProtocolType type, bool allow_ros));
     MOCK_METHOD3(UnsubscribeMessage, bool(uint64_t subscriber_id, const std::string& name, MessageProtocolType type));
     MOCK_METHOD2(IsSubscribed, bool(const std::string& name, MessageProtocolType type));
     MOCK_METHOD0(GetSubscribedMessageList, std::vector<std::string>());
@@ -49,8 +50,8 @@ bool MessageTransmitter::PublishMessage(std::shared_ptr<Message> msg) {
     return Mock_MessageTransmitterMock->PublishMessage(msg);
 }
 
-bool MessageTransmitter::SubscribeMessage(uint64_t subscriber_id, const std::string& name, MessageProtocolType type) {
-    return Mock_MessageTransmitterMock->SubscribeMessage(subscriber_id, name, type);
+bool MessageTransmitter::SubscribeMessage(uint64_t subscriber_id, const std::string& name, MessageProtocolType type, bool allow_ros) {
+    return Mock_MessageTransmitterMock->SubscribeMessage(subscriber_id, name, type, allow_ros);
 }
 
 bool MessageTransmitter::UnsubscribeMessage(uint64_t subscriber_id, const std::string& name, MessageProtocolType type) {
