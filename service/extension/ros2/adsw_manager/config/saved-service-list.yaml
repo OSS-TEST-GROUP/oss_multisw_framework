@@ -9,58 +9,48 @@ specs:
             name: "sensing"
             launchfile: "sensing.launch.xml"
             type: "NORMAL"
-            recovery: "ALWAYS"
+            recovery: "MANUAL"
             enabled: "true"
             max: "0"
           - package: "<YOUR_VEHICLE_INTERFACE_LAUNCH_PKG>"
             name: "vehicle_interface"
             launchfile: "vehicle_interface.launch.xml"
             type: "NORMAL"
-            recovery: "ALWAYS"
+            recovery: "MANUAL"
             enabled: "true"
             max: "0"
           - package: "autoware_launch"
             name: "map_launch"
             launchfile: "map.launch.xml"
             type: "NORMAL"
-            recovery: "ALWAYS"
+            recovery: "MANUAL"
             enabled: "true"
             max: "0"
-      - name : sample_ros2_app
-        image: "ros2-sample:latest"  # Your own sample_app image
-        deploy-filepath: "ros2-sample-speclist.yaml"  # container apply
+      - name : oss-mmf-ext-ros2
+        image: "oss-mmf-ext-ros2:latest"  # Your own sample_app image
+        deploy-filepath: "oss-mmf-ext-ros2-speclist.yaml"  # container apply
         services:
-          - package: "sample_ros2_app"
-            name: "sample_listener"
-            launchfile: "sample_listener.launch.py"
+          - package: "ota_client"
+            name: "ota_client"
+            launchfile: ""
             type: "NORMAL"
             recovery: "ALWAYS"
             enabled: "true"
             max: "0"
-          - package: "sample_ros2_app"
-            name: "sample_talker"
-            launchfile: "sample_talker.launch.py"
+          - package: "security_client"
+            name: "security_client"
+            launchfile: ""
             type: "NORMAL"
             recovery: "ALWAYS"
             enabled: "true"
             max: "0"
-      - name : managed_scan
-        image: "managed_scan:latest"  # Your own managed_scan image
-        deploy-filepath: "ros2-sample-speclist.yaml"  # container apply
-        services:
-          - package: "managed_scan"
-            name: "managed_scan"
-            launchfile: "start_scan_publisher.launch.py"
+          - package: "extension_communication"
+            name: "extension_communication"
+            launchfile: ""
             type: "NORMAL"
             recovery: "ALWAYS"
             enabled: "true"
             max: "0"
-          - package: "managed_scan"
-            name: "managed_lifecycle"
-            launchfile: "start_lifecycle_manager.launch.py"
-            type: "NORMAL"
-            recovery: "ALWAYS"
-            enabled: "true"
-            max: "0"
+
 
 

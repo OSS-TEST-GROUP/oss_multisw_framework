@@ -280,8 +280,6 @@ bool ServiceRegistry::ProcessGetServiceStateRequest(
 
         ServiceState state = service_ptr->GetServiceState();
 
-state = ServiceState::RUNNING; // just notify runnig        
-
         get_service_response_.service_list().push_back(service);
         get_service_response_.service_state_list().push_back(
             TypeConvert::ToServiceState(state));

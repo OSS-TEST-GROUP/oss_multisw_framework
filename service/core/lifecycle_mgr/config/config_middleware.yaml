@@ -27,7 +27,7 @@ config_middleware:
     active : true
   - code : 12
     name : ota_mgr
-    exepath : "./ota_mgr"
+    exepath : "./OtaManager"
     args :
       - arg_name : "arg1"
         description : ""
