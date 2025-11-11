@@ -81,7 +81,7 @@ std::string OtamServerApiClientImpl::SendRequest(
         long http_code = 0;
         curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
         if (http_code < 200 || http_code >= 300) {
-            std::cerr << "[OtamServerApiClientImpl] HTTP "
+            std::cout << "[OtamServerApiClientImpl] HTTP failed: "
                       << http_code << " from " << url << std::endl;
         }
     } catch (const std::exception& e) {
