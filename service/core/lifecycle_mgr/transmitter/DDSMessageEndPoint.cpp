@@ -145,11 +145,11 @@ void DDSMessageEndPoint::on_subscription_matched(
 {
     if (info.current_count_change == 1)
     {
-        LOG_DEBUG("Subscriber matched. [" << GetTopic() << "]" << matched_);
+        LOG_DEBUG("Subscriber matched. [" << GetTopic() << "]" << static_cast<int16_t>(info.current_count));
     }
     else if (info.current_count_change == -1)
     {
-        LOG_DEBUG("Subscriber unmatched. [" << GetTopic() << "]" << matched_);
+        LOG_DEBUG("Subscriber unmatched. [" << GetTopic() << "]" << static_cast<int16_t>(info.current_count));
     }
     else
     {

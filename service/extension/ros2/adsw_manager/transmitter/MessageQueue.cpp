@@ -39,7 +39,7 @@ void MessageQueue::SendMessage(MsgType& message){
     {
         std::lock_guard<std::mutex> lock(outgoing_mutex_);
         outgoing_msg_queue_.push(message);
-        LOG_DEBUG("SendMessage enqueue !! " << static_cast<int32_t>(message.first)  );
+        LOG_DEBUG("SendMessage enqueue !! " << static_cast<int32_t>(message.first) << " , " << static_cast<int32_t>(outgoing_msg_queue_.size()) );
     }
     outgoing_cv_.notify_one();
 

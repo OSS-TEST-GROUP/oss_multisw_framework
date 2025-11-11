@@ -4,6 +4,7 @@
 namespace ros2 {
 namespace adsw_manager {
 
+const std::string ADSW_ROS2_CONTAINER_NAME = "oss-mmf-ext-ros2";
 
 ContainerController::ContainerController() {
     // Constructor for ContainerController
@@ -167,6 +168,11 @@ bool ContainerController::AddContainer(std::shared_ptr<Container> container){
 
 std::string ContainerController::BaseCommand(const std::string& container_name) {
 
+    if (container_name == ADSW_ROS2_CONTAINER_NAME){
+        LOG_DEBUG("Container is ADSW ROS2 : " << container_name);
+        return ""; // this shall be controlled as ros2 base command
+    }
+
     std::shared_ptr<Container> container = GetContainer(container_name);
 
     if (container != nullptr){
@@ -178,6 +184,11 @@ std::string ContainerController::BaseCommand(const std::string& container_name) 
 }
 
 std::string ContainerController::BaseRos2Command(const std::string& container_name) {
+
+    if (container_name == ADSW_ROS2_CONTAINER_NAME){
+        LOG_DEBUG("Container is ADSW ROS2 : " << container_name);        
+        return ""; // this shall be controlled as ros2 base command
+    }
 
     std::shared_ptr<Container> container = GetContainer(container_name);
 

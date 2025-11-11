@@ -22,7 +22,24 @@ diagnosic_policies:
           - "LifecycleDiagReport.is_started = true"
           - "LifecycleDiagReport.running_service_num = LifecycleDiagReport.total_services_num"
     active : true
+  - code : 11
+    name : otamanager
+    rules :
+      - status : "WARNING"
+        message : "OTA manager service error detected."
+        condition_operator : "AND"
+        condition :
+          - "NotifyOtaMgrInfo.err_code != 1"
+      - status : "PASS"
+        message : "OTA manager service success."
+        condition_operator : "AND"
+        condition :
+          - "NotifyOtaMgrInfo.err_code = 1"
+    active : true
 refer_messages:
   - name : LifecycleDiagReport
     message : mmf/lifecyclemgr/LifecycleDiagReport
+    protocol : dds
+  - name : NotifyOtaMgrInfo
+    message : /mmf/otamanager/diagnostic_service/NotifyOtaMgrInfo
     protocol : dds

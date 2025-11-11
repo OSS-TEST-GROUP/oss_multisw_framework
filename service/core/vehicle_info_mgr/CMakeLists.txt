@@ -254,18 +254,37 @@ target_include_directories(idl_types
     ${fastcdr_INCLUDE_DIR}
 )
 
-# --- Googletest Integration using FetchContent ---
-include(FetchContent)
-
-FetchContent_Declare(
-  googletest
-  GIT_REPOSITORY https://github.com/google/googletest.git
-  GIT_TAG        v1.17.0
-)
-
-# For Windows: Prevent overriding the parent project's compiler/linker settings
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(googletest)
+# --- Googletest Integration using system package ---
+find_package(GTest REQUIRED)
+if(NOT GTest_FOUND)
+    # Fallback to manual configuration for Ubuntu libgtest-dev package
+    find_path(GTEST_INCLUDE_DIR gtest/gtest.h
+        PATHS /usr/include /usr/local/include)
+    find_library(GTEST_LIBRARY gtest
+        PATHS /usr/lib /usr/local/lib /usr/lib/x86_64-linux-gnu)
+    find_library(GTEST_MAIN_LIBRARY gtest_main
+        PATHS /usr/lib /usr/local/lib /usr/lib/x86_64-linux-gnu)
+    
+    if(GTEST_INCLUDE_DIR AND GTEST_LIBRARY)
+        add_library(gtest STATIC IMPORTED)
+        set_target_properties(gtest PROPERTIES IMPORTED_LOCATION ${GTEST_LIBRARY})
+        target_include_directories(gtest INTERFACE ${GTEST_INCLUDE_DIR})
+        
+        if(GTEST_MAIN_LIBRARY)
+            add_library(gtest_main STATIC IMPORTED)
+            set_target_properties(gtest_main PROPERTIES IMPORTED_LOCATION ${GTEST_MAIN_LIBRARY})
+            target_link_libraries(gtest_main INTERFACE gtest)
+        endif()
+        
+        # Create aliases for compatibility
+        add_library(GTest::gtest ALIAS gtest)
+        if(TARGET gtest_main)
+            add_library(GTest::gtest_main ALIAS gtest_main)
+        endif()
+    else()
+        message(FATAL_ERROR "GoogleTest not found. Please install libgtest-dev package.")
+    endif()
+endif()
 
 # --- MQTT Paho Library Integration using FetchContent ---
 include(FetchContent)

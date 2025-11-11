@@ -48,6 +48,22 @@ class ROSServiceController  : public ServiceController {
 
     lifecyclemgr::StartServiceResponse start_service_response_;
     lifecyclemgr::StopServiceResponse stop_service_response_;
+    
+    // Environment detection results (detected once during initialization)
+    bool is_container_env_;
+    bool is_ros2_env_;
+    bool is_x86_env_;
+    bool use_native_execution_;  // Calculated based on environment priority
+    std::string execution_path_;  // For logging: "Container", "ROS2", or "x86"
+    
+    // Environment detection methods (used only during initialization)
+    bool DetectX86();
+    bool DetectROS2();
+    bool DetectContainer();
+    
+    // Helper methods for process management
+    bool KillProcessAndChildren(uint64_t pid);
+    std::string FindExecutablePath(const std::string& packageName);
 };
 
 } // namespace adsw_manager

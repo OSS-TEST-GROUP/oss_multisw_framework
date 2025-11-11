@@ -20,7 +20,7 @@ ServiceControlAction PolicyManual::Evaluate(std::shared_ptr<Service> service){
     /* manual policy run via operator command or ?? */
     switch(state){
         case ServiceState::NOT_RUNNING :{
-            action  = ServiceControlAction::START;
+            action  = ServiceControlAction::NONE;
         }break;
 
         case ServiceState::INITIALIZING :{
@@ -35,11 +35,11 @@ ServiceControlAction PolicyManual::Evaluate(std::shared_ptr<Service> service){
 
         case ServiceState::RUNNING_NO_RESPONSE :{
             // stop app and try run after terminated
-            action = ServiceControlAction::STOP; 
+            action = ServiceControlAction::NONE; 
         }break;
 
         case ServiceState::TERMINATING :{
-            action  = ServiceControlAction::START;
+            action  = ServiceControlAction::NONE;
         }break;
     }
     

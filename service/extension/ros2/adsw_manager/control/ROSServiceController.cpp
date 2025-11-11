@@ -7,6 +7,13 @@
 #include "logger/Log.hpp"
 #include "HelperUtils.hpp"
 #include "service/TypeConvert.hpp"
+#include <sys/utsname.h>
+#include <unistd.h>
+#include <algorithm>
+#include <cctype>
+#include <cstdlib>
+#include <functional>
+#include <fstream>
 
 namespace ros2 {
 namespace adsw_manager {
@@ -14,6 +21,13 @@ namespace adsw_manager {
 
 ROSServiceController::ROSServiceController(){
     LOG_DEBUG("ROSServiceController create ");
+    
+    // Initialize environment detection variables
+    is_container_env_ = false;
+    is_ros2_env_ = false;
+    is_x86_env_ = false;
+    use_native_execution_ = false;
+    execution_path_ = "Unknown";
 }
 ROSServiceController::~ROSServiceController(){
 
@@ -22,6 +36,35 @@ ROSServiceController::~ROSServiceController(){
 bool ROSServiceController::Initialize(){
 
     LOG_DEBUG("ROSServiceController::Initialize start ");    
+    
+    // Detect environment once during initialization
+    is_container_env_ = DetectContainer();
+    is_ros2_env_ = DetectROS2();
+    is_x86_env_ = DetectX86();
+    
+    // Determine execution method based on priority: container → ROS2 → x86
+    use_native_execution_ = false;  // Default to container/ROS2 orchestration
+    
+    if (is_container_env_) {
+        execution_path_ = "Container";
+        use_native_execution_ = false;
+    } else if (is_ros2_env_) {
+        execution_path_ = "ROS2";
+        use_native_execution_ = false;
+    } else if (is_x86_env_) {
+        execution_path_ = "x86";
+        use_native_execution_ = true;
+    } else {
+        execution_path_ = "Unknown";
+        LOG_ERROR("No supported environment detected during initialization");
+    }
+    
+    LOG_DEBUG("Environment detection results:");
+    LOG_DEBUG("  Container=" << (is_container_env_ ? "Yes" : "No"));
+    LOG_DEBUG("  ROS2=" << (is_ros2_env_ ? "Yes" : "No"));
+    LOG_DEBUG("  X86=" << (is_x86_env_ ? "Yes" : "No"));
+    LOG_DEBUG("  Selected execution path: " << execution_path_);
+    LOG_DEBUG("  Use native execution: " << (use_native_execution_ ? "Yes" : "No"));
     
     ros2node_controller_ = std::make_shared<ROS2NodeController>();
 
@@ -42,7 +85,6 @@ void ROSServiceController::Finalize(){
 
 bool ROSServiceController::StartGroup(const std::string& group){
     if (!group.empty()){
-        return GetContainer()->StartContainer(group);
         if (GetContainer()->ContainerSupported() == true){
             return GetContainer()->StartContainer(group);
         }
@@ -90,40 +132,144 @@ bool ROSServiceController::StartService(std::shared_ptr<Service> service){
         return false;
     }
 
-    std::string basecommand = GetContainer()->BaseRos2Command("");
     std::string command;
-
-    // Assuming launchByFile, GetLauchFile, and GetPackageName are member functions or variables.
-    // If not, you need to implement or correct them.
     std::string launchFile = service->GetLaunchFile();
-    if (launchFile.empty()){
-        command = basecommand + "bash -c \" ros2 run " + service->GetPackage() + " " + service->GetPackage() + " 2>&1 & \"";
-    }else{
-        command = basecommand + "bash -c \" ros2 launch " + service->GetPackage() + " " + service->GetLaunchFile() + " 2>&1 & \"";
+
+    // Use pre-detected environment from initialization
+    LOG_DEBUG("Environment (pre-detected): Container=" << (is_container_env_ ? "Yes" : "No")
+              << ", ROS2=" << (is_ros2_env_ ? "Yes" : "No")
+              << ", X86=" << (is_x86_env_ ? "Yes" : "No"));
+    LOG_DEBUG("Execution path: " << execution_path_ << ", Native=" << (use_native_execution_ ? "Yes" : "No"));
+
+    if (use_native_execution_) {
+        // x86 native execution - use direct process spawning
+        if (launchFile.empty()){
+            // For direct execution, use FindExecutablePath to get full path
+            std::string fullExePath = FindExecutablePath(service->GetPackage());
+            // Simplified command that should reliably return PID
+            command = "bash -c \"" + fullExePath + " >/dev/null 2>&1 & echo $!\"";
+            LOG_DEBUG("Using executable path: " << fullExePath);
+        }else{
+            // For launch files, use ROS2 commands directly
+            command = "bash -c \"source /opt/ros/humble/setup.bash 2>/dev/null || true && ros2 launch " + service->GetPackage() + " " + service->GetLaunchFile() + " >/dev/null 2>&1 & echo $!\"";
+        }
+    } else {
+        // Use container/ROS2 orchestration - same code path for both
+        LOG_DEBUG("Using container/ROS2 orchestration execution");
+        std::string basecommand = GetContainer()->BaseRos2Command("");
+        if (launchFile.empty()){
+            command = basecommand + "bash -c \" ros2 run " + service->GetPackage() + " " + service->GetPackage() + " 2>&1 & \"";
+        }else{
+            command = basecommand + "bash -c \" ros2 launch " + service->GetPackage() + " " + service->GetLaunchFile() + " 2>&1 & \"";
+        }
     }
 
     //int32_t result = system(command.c_str());
 
-    std::regex re(R"(process started with pid \[(\d+)\])");
-    std::string exeresult = HelperUtils::ExecCommand(command, re);
-    std::vector<std::string> lines = HelperUtils::SplitLines(exeresult);
-    /* parse exe command result 
-     * process started with pid [pid]
-     */
-    if (lines.size() > 0){
+    // Update regex to handle both PID formats (direct $! and container output)
+    std::regex re_pid(R"(\b(\d+)\b)");  // For native x86: match any digits (PID)
+    std::regex re_container(R"(process started with pid \[(\d+)\])");  // For container output
+    
+    std::string exeresult = HelperUtils::ExecCommand(command, "");
+    LOG_DEBUG("Command executed: " << command);
+    LOG_DEBUG("Command output: '" << exeresult << "' (length: " << exeresult.length() << ")");
+    
+    // Process raw output directly - trim whitespace and check if it's a valid PID
+    std::string trimmedResult = exeresult;
+    // Remove leading/trailing whitespace including newlines
+    trimmedResult.erase(trimmedResult.begin(), std::find_if(trimmedResult.begin(), trimmedResult.end(), [](unsigned char ch) {
+        return !std::isspace(ch);
+    }));
+    trimmedResult.erase(std::find_if(trimmedResult.rbegin(), trimmedResult.rend(), [](unsigned char ch) {
+        return !std::isspace(ch);
+    }).base(), trimmedResult.end());
+    
+    LOG_DEBUG("Trimmed output: '" << trimmedResult << "' (length: " << trimmedResult.length() << ")");
+    
+    /* parse exe command result - handle both PID formats */
+    if (!trimmedResult.empty()){
         std::smatch match;
 
-        for (const auto& line : lines) {
-            if (std::regex_search(line, match, re)) {
-                // match[1] contains the PID as a string
+        // For native x86: try to parse as direct PID first
+        if (use_native_execution_) {
+            // For native execution, we expect just a PID number
+            try {
+                uint64_t pid = std::stoull(trimmedResult);
+                if (pid > 0) {
+                    service->SetServiceState(ServiceState::RUNNING);
+                    service->SetPID(pid);
+                    LOG_DEBUG("StartService for :: " << service->GetPackage() << ", pid = " << pid << " (native direct)");
+                    return true;
+                }
+            } catch (const std::exception& e) {
+                LOG_DEBUG("Failed to parse PID directly: " << e.what() << ", trying regex...");
+            }
+        }
+
+        // Fallback: try regex patterns for both native and container formats
+        if (std::regex_match(trimmedResult, match, re_pid)) {
+            uint64_t pid = std::stoi(match[1].str());
+            service->SetServiceState(ServiceState::RUNNING);
+            service->SetPID(pid);
+            LOG_DEBUG("StartService for :: " << service->GetPackage() << ", pid = " << pid << " (regex direct)");
+            return true;
+        }
+        // Then try container format
+        else if (std::regex_search(trimmedResult, match, re_container)) {
+            uint64_t pid = std::stoi(match[1].str());
+            service->SetServiceState(ServiceState::RUNNING);
+            service->SetPID(pid);
+            LOG_DEBUG("StartService for :: " << service->GetPackage() << ", pid = " << pid << " (container)");
+            return true;
+        }
+        
+        // Also try to split by lines and check each line (fallback for multi-line output)
+        std::vector<std::string> lines = HelperUtils::SplitLines(exeresult);
+        LOG_DEBUG("Number of output lines after SplitLines: " << lines.size());
+        for (size_t i = 0; i < lines.size(); i++) {
+            LOG_DEBUG("Line " << i << ": '" << lines[i] << "'");
+            
+            if (std::regex_match(lines[i], match, re_pid)) {
                 uint64_t pid = std::stoi(match[1].str());
                 service->SetServiceState(ServiceState::RUNNING);
                 service->SetPID(pid);
-                LOG_DEBUG("StartService for  :: " << service->GetPackage() << ", pid = " << pid);
+                LOG_DEBUG("StartService for :: " << service->GetPackage() << ", pid = " << pid << " (direct from line)");
+                return true;
+            }
+            else if (std::regex_search(lines[i], match, re_container)) {
+                uint64_t pid = std::stoi(match[1].str());
+                service->SetServiceState(ServiceState::RUNNING);
+                service->SetPID(pid);
+                LOG_DEBUG("StartService for :: " << service->GetPackage() << ", pid = " << pid << " (container from line)");
                 return true;
             }
         }
-    }else{
+    } else {
+        // Empty output - this shouldn't happen for native execution
+        LOG_ERROR("Empty command output for: " << command);
+        
+        // For native execution, try to find the process by name as fallback
+        if (use_native_execution_) {
+            LOG_DEBUG("Attempting to find process by name as fallback...");
+            std::string findPidCmd = "pgrep -f " + service->GetPackage() + " | tail -1";
+            std::string pidResult = HelperUtils::ExecCommand(findPidCmd, "");
+            
+            if (!pidResult.empty()) {
+                pidResult.erase(std::remove_if(pidResult.begin(), pidResult.end(), ::isspace), pidResult.end());
+                try {
+                    uint64_t pid = std::stoull(pidResult);
+                    if (pid > 0) {
+                        service->SetServiceState(ServiceState::RUNNING);
+                        service->SetPID(pid);
+                        LOG_DEBUG("StartService for :: " << service->GetPackage() << ", pid = " << pid << " (found by name)");
+                        return true;
+                    }
+                } catch (const std::exception& e) {
+                    LOG_ERROR("Failed to parse fallback PID: " << e.what());
+                }
+            }
+        }
+        
         service->SetServiceState(ServiceState::NOT_RUNNING);
         LOG_ERROR("StartService failed :: " << command);
         return false;
@@ -143,20 +289,33 @@ bool ROSServiceController::StopService(std::shared_ptr<Service> service){
         LOG_ERROR("Service " << service->GetName() << " is not running.");
         return false; // Service is not running
     }
-    // Stop Child Service --> Means to stop a specific container in the pod
-    LOG_DEBUG("ROSServiceController::StopChildService start " << pid);
+    
+    LOG_DEBUG("ROSServiceController::StopService start, pid = " << pid);
 
-    // Here we can use kubectl command to stop the container
-    // For example, using system command to run kubectl
-    std::string basecommand = GetContainer()->BaseCommand("");
+    // Use pre-detected environment from initialization
+    LOG_DEBUG("StopService environment: " << execution_path_ << ", Native=" << (use_native_execution_ ? "Yes" : "No"));
+    
+    std::string command;
+    int32_t result;
 
-    std::string command = basecommand + " kill " + std::to_string(pid);
-
-    int32_t result = system(command.c_str());
+    if (use_native_execution_) {
+        // x86 with ROS2 - use native process killing
+        LOG_DEBUG("StopService using native x86 execution");
+        bool killed = KillProcessAndChildren(pid);
+        result = killed ? 0 : 1;
+        command = "kill process tree for PID " + std::to_string(pid);
+    } else {
+        // Use container/ROS2 orchestration - same code path for both
+        LOG_DEBUG("StopService using container/ROS2 orchestration execution");
+        std::string basecommand = GetContainer()->BaseCommand("");
+        command = basecommand + " kill " + std::to_string(pid);
+        result = system(command.c_str());        
+    } 
 
     if (result == 0){
         LOG_DEBUG("StopService success :: " << command);
         service->SetServiceState(ServiceState::NOT_RUNNING);
+        service->SetPID(0); // Clear the PID
         return true;
     }else{
         LOG_ERROR("StopService error : " << command);
@@ -261,24 +420,33 @@ bool ROSServiceController::ProcessServiceStartRequest(lifecyclemgr::StartService
         bool is_group = message->is_group();
         bool result = false;
 
-        if (GetContainer()->ContainerSupported() == false){
-            is_group = false;
-        }
+        // Check if running on x86_64 (native) - groups only supported in container environments
+        is_group = false;
 
         if (service_list.empty()) {
             LOG_ERROR("No services provided to start.");
             result = false;
         }
         else{
+            int32_t count = 0;
             LOG_DEBUG("Starting services: " << (is_group ? "Group" : "Individual") << " - " << service_list.size() << " services.");
             if (is_group) {
                 for (const auto& service : service_list) {
-                    result = StartGroup(service);
+                    if (StartGroup(service) == true) {
+                        count++;
+                    }
                 }
             } else {
                 for (const auto& service : service_list) {
-                    result = StartService(service);
+                    if (StartService(service) == true){
+                        count++;
+                    }
                 }
+            }
+            if (count > 0){
+                result = true;
+            }else{
+                result = false; 
             }
         }
 
@@ -311,9 +479,8 @@ bool ROSServiceController::ProcessServiceStopRequest(lifecyclemgr::StopServiceRe
         bool is_group = message->is_group();
         bool result = false;
 
-        if (GetContainer()->ContainerSupported() == false){
-            is_group = false;
-        }
+        // Check if running on x86_64 (native) - groups only supported in container environments
+        is_group = false;
 
         if (service_list.empty()) {
             LOG_ERROR("No services provided to stop.");
@@ -322,14 +489,24 @@ bool ROSServiceController::ProcessServiceStopRequest(lifecyclemgr::StopServiceRe
         else{
             LOG_DEBUG("Stopping services: " << (is_group ? "Group" : "Individual") << " - " << service_list.size() << " services.");
 
+            int32_t count = 0;
             if (is_group) {
                 for (const auto& service : service_list) {
-                    result = StopGroup(service);
+                    if (StopGroup(service) == true) {
+                        count++;
+                    }
                 }
             } else {
                 for (const auto& service : service_list) {
-                    result = StopService(service);
+                    if (StopService(service) == true) {
+                        count++;
+                    }
                 }
+            }
+            if (count > 0) {
+                result = true;
+            } else {
+                result = false;
             }
         }
 
@@ -350,6 +527,137 @@ bool ROSServiceController::ProcessServiceStopRequest(lifecyclemgr::StopServiceRe
     return true;
 }
 
+// Environment detection methods (used only during initialization)
+bool ROSServiceController::DetectX86() {
+    struct utsname unameData;
+    if (uname(&unameData) != 0) {
+        return false;
+    }
     
+    std::string machine = unameData.machine;
+    bool isX86 = (machine == "x86_64" || machine == "i386" || machine == "i686");
+    LOG_DEBUG("Architecture check: " << machine << " -> " << (isX86 ? "x86" : "not x86"));
+    return isX86;
+}
+
+bool ROSServiceController::DetectROS2() {
+    // Check if ROS2 is available
+    bool hasROS2 = (access("/opt/ros/humble/setup.bash", F_OK) == 0);
+    const char* rosDistro = getenv("ROS_DISTRO");
+    
+    LOG_DEBUG("ROS2 check: setup.bash=" << (hasROS2 ? "found" : "not found") 
+              << ", ROS_DISTRO=" << (rosDistro ? rosDistro : "not set"));
+    
+    return hasROS2 || (rosDistro != nullptr);
+}
+
+bool ROSServiceController::DetectContainer() {
+    // Check for container environment
+    bool dockerEnv = (access("/.dockerenv", F_OK) == 0);
+    bool k8sEnv = (access("/var/run/secrets/kubernetes.io", F_OK) == 0);
+    
+    // Check cgroup for container indicators
+    bool cgroupContainer = false;
+    std::ifstream cgroupFile("/proc/1/cgroup");
+    if (cgroupFile.is_open()) {
+        std::string line;
+        while (std::getline(cgroupFile, line)) {
+            // Traditional container patterns
+            if (line.find("docker") != std::string::npos || 
+                line.find("containerd") != std::string::npos ||
+                line.find("kubepods") != std::string::npos ||
+                line.find("/system.slice/docker") != std::string::npos) {
+                cgroupContainer = true;
+                break;
+            }
+            // Modern Docker cgroup v2 pattern: "0::/" or variations indicate container
+            if (line.find("0::/") != std::string::npos) {
+                cgroupContainer = true;
+                break;
+            }
+        }
+        cgroupFile.close();
+    }
+    
+    bool inContainer = dockerEnv && k8sEnv ; // || cgroupContainer; ==> not reliable 
+    LOG_DEBUG("Container check: docker=" << (dockerEnv ? "yes" : "no") 
+              << ", k8s=" << (k8sEnv ? "yes" : "no") 
+              << ", cgroup=" << (cgroupContainer ? "yes" : "no") 
+              << " -> " << (inContainer ? "in container" : "not in container"));
+    
+    return inContainer;
+}
+
+bool ROSServiceController::KillProcessAndChildren(uint64_t pid) {
+    if (pid == 0) return false;
+    
+    // First, try to kill child processes
+    std::string kill_children_cmd = "pkill -TERM -P " + std::to_string(pid) + " 2>/dev/null || true";
+    system(kill_children_cmd.c_str());
+    
+    // Then kill the main process
+    std::string kill_main_cmd = "kill -TERM " + std::to_string(pid) + " 2>/dev/null";
+    int result = system(kill_main_cmd.c_str());
+    
+    if (result != 0) {
+        // If TERM failed, wait a bit and try KILL
+        usleep(500000); // 0.5 seconds
+        
+        kill_children_cmd = "pkill -KILL -P " + std::to_string(pid) + " 2>/dev/null || true";
+        system(kill_children_cmd.c_str());
+        
+        kill_main_cmd = "kill -KILL " + std::to_string(pid) + " 2>/dev/null";
+        result = system(kill_main_cmd.c_str());
+    }
+    
+    return (result == 0);
+}
+
+std::string ROSServiceController::FindExecutablePath(const std::string& packageName) {
+    // Try to find the full path using 'which' command first
+    std::string whichCmd = "which " + packageName + " 2>/dev/null";
+    std::string whichResult = HelperUtils::ExecCommand(whichCmd, "");
+    
+    if (!whichResult.empty() && whichResult.find("not found") == std::string::npos) {
+        // Remove trailing newline/whitespace
+        whichResult.erase(std::remove_if(whichResult.begin(), whichResult.end(), ::isspace), whichResult.end());
+        if (!whichResult.empty()) {
+            LOG_DEBUG("Found executable using 'which': " << whichResult);
+            return whichResult;
+        }
+    }
+    
+    // Fallback: check common installation paths
+    std::vector<std::string> searchPaths = {
+        "./" + packageName,  // Current running directory first
+        "/opt/ros/humble/bin/" + packageName,
+        "/usr/local/bin/" + packageName,
+        "/usr/bin/" + packageName,
+    };
+    
+    // Add user-specific ROS2 workspace paths
+    const char* user = getenv("USER");
+    if (user) {
+        searchPaths.push_back("/home/" + std::string(user) + "/ros2_ws/install/" + packageName + "/bin/" + packageName);
+        searchPaths.push_back("/home/" + std::string(user) + "/colcon_ws/install/" + packageName + "/bin/" + packageName);
+    }
+    
+    // Add current directory build paths
+    searchPaths.push_back("./build/install/" + packageName + "/bin/" + packageName);
+    searchPaths.push_back("./install/" + packageName + "/bin/" + packageName);
+    
+    // Check each path for file existence
+    for (const auto& path : searchPaths) {
+        if (access(path.c_str(), F_OK) == 0) {  // File exists
+            LOG_DEBUG("Found executable at: " << path);
+            return path;
+        }
+    }
+    
+    // If still not found, log warning and return original package name
+    LOG_ERROR("Could not find full path for executable '" << packageName << "', using package name directly (assuming it's in PATH)");
+    return packageName;
+}
+
 } // namespace adsw_manager
 } // namespace ros2
