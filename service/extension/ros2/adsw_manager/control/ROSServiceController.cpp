@@ -25,7 +25,7 @@ ROSServiceController::ROSServiceController(){
     // Initialize environment detection variables
     is_container_env_ = false;
     is_ros2_env_ = false;
-    is_x86_env_ = false;
+    is_native_arch_ = false;
     use_native_execution_ = false;
     execution_path_ = "Unknown";
 }
@@ -40,9 +40,9 @@ bool ROSServiceController::Initialize(){
     // Detect environment once during initialization
     is_container_env_ = DetectContainer();
     is_ros2_env_ = DetectROS2();
-    is_x86_env_ = DetectX86();
+    is_native_arch_ = DetectNativeArchitecture();  // Detects x86_64, i386, i686, aarch64, arm64
     
-    // Determine execution method based on priority: container → ROS2 → x86
+    // Determine execution method based on priority: container → ROS2 → native
     use_native_execution_ = false;  // Default to container/ROS2 orchestration
     
     if (is_container_env_) {
@@ -51,8 +51,8 @@ bool ROSServiceController::Initialize(){
     } else if (is_ros2_env_) {
         execution_path_ = "ROS2";
         use_native_execution_ = false;
-    } else if (is_x86_env_) {
-        execution_path_ = "x86";
+    } else if (is_native_arch_) {
+        execution_path_ = "Native";
         use_native_execution_ = true;
     } else {
         execution_path_ = "Unknown";
@@ -62,7 +62,7 @@ bool ROSServiceController::Initialize(){
     LOG_DEBUG("Environment detection results:");
     LOG_DEBUG("  Container=" << (is_container_env_ ? "Yes" : "No"));
     LOG_DEBUG("  ROS2=" << (is_ros2_env_ ? "Yes" : "No"));
-    LOG_DEBUG("  X86=" << (is_x86_env_ ? "Yes" : "No"));
+    LOG_DEBUG("  Native=" << (is_native_arch_ ? "Yes" : "No"));
     LOG_DEBUG("  Selected execution path: " << execution_path_);
     LOG_DEBUG("  Use native execution: " << (use_native_execution_ ? "Yes" : "No"));
     
@@ -138,11 +138,11 @@ bool ROSServiceController::StartService(std::shared_ptr<Service> service){
     // Use pre-detected environment from initialization
     LOG_DEBUG("Environment (pre-detected): Container=" << (is_container_env_ ? "Yes" : "No")
               << ", ROS2=" << (is_ros2_env_ ? "Yes" : "No")
-              << ", X86=" << (is_x86_env_ ? "Yes" : "No"));
+              << ", Native=" << (is_native_arch_ ? "Yes" : "No"));
     LOG_DEBUG("Execution path: " << execution_path_ << ", Native=" << (use_native_execution_ ? "Yes" : "No"));
 
     if (use_native_execution_) {
-        // x86 native execution - use direct process spawning
+        // Native execution (x86_64, aarch64) - use direct process spawning
         if (launchFile.empty()){
             // For direct execution, use FindExecutablePath to get full path
             std::string fullExePath = FindExecutablePath(service->GetPackage());
@@ -299,8 +299,8 @@ bool ROSServiceController::StopService(std::shared_ptr<Service> service){
     int32_t result;
 
     if (use_native_execution_) {
-        // x86 with ROS2 - use native process killing
-        LOG_DEBUG("StopService using native x86 execution");
+        // Native architecture (x86_64, aarch64) - use native process killing
+        LOG_DEBUG("StopService using native execution");
         bool killed = KillProcessAndChildren(pid);
         result = killed ? 0 : 1;
         command = "kill process tree for PID " + std::to_string(pid);
@@ -528,16 +528,17 @@ bool ROSServiceController::ProcessServiceStopRequest(lifecyclemgr::StopServiceRe
 }
 
 // Environment detection methods (used only during initialization)
-bool ROSServiceController::DetectX86() {
+bool ROSServiceController::DetectNativeArchitecture() {
     struct utsname unameData;
     if (uname(&unameData) != 0) {
         return false;
     }
     
     std::string machine = unameData.machine;
-    bool isX86 = (machine == "x86_64" || machine == "i386" || machine == "i686");
-    LOG_DEBUG("Architecture check: " << machine << " -> " << (isX86 ? "x86" : "not x86"));
-    return isX86;
+    bool isNativeArch = (machine == "x86_64" || machine == "i386" || machine == "i686" || 
+                         machine == "aarch64" || machine == "arm64");
+    LOG_DEBUG("Architecture check: " << machine << " -> " << (isNativeArch ? "native (x86/ARM64)" : "not native"));
+    return isNativeArch;
 }
 
 bool ROSServiceController::DetectROS2() {
@@ -630,6 +631,7 @@ std::string ROSServiceController::FindExecutablePath(const std::string& packageN
     // Fallback: check common installation paths
     std::vector<std::string> searchPaths = {
         "./" + packageName,  // Current running directory first
+        "/oss/bin/" + packageName,
         "/opt/ros/humble/bin/" + packageName,
         "/usr/local/bin/" + packageName,
         "/usr/bin/" + packageName,
