@@ -52,12 +52,12 @@ class ROSServiceController  : public ServiceController {
     // Environment detection results (detected once during initialization)
     bool is_container_env_;
     bool is_ros2_env_;
-    bool is_x86_env_;
+    bool is_native_arch_;  // x86_64, i386, i686, aarch64, arm64
     bool use_native_execution_;  // Calculated based on environment priority
-    std::string execution_path_;  // For logging: "Container", "ROS2", or "x86"
+    std::string execution_path_;  // For logging: "Container", "ROS2", or "Native"
     
     // Environment detection methods (used only during initialization)
-    bool DetectX86();
+    bool DetectNativeArchitecture();  // Detects x86 and ARM64 architectures
     bool DetectROS2();
     bool DetectContainer();
     
