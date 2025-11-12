@@ -1,5 +1,7 @@
 #include "DDSProtocol.hpp"
 
+#include <optional>
+
 #include <fastdds/dds/xtypes/dynamic_types/DynamicTypeBuilderFactory.hpp>
 #include <fastdds/dds/subscriber/Subscriber.hpp>
 #include <fastdds/dds/subscriber/DataReader.hpp>
@@ -9,6 +11,12 @@
 #include "logger/Log.hpp"
 
 namespace diagnostic_manager {
+
+std::optional<std::string> getEnvPath(const std::string& key) {
+	const char* val = std::getenv(key.c_str());
+    LOG_DEBUG("getEnvPath: key=" << key << ", value=" << (val ? val : "null"));
+	return val ? std::optional<std::string>(val) : std::nullopt;
+}
 
 DDSProtocol::DDSProtocol() : participant_(nullptr), subscriber_(nullptr) {
     dds_dynamic_idl_parser_ = std::make_unique<DDSDynamicIDLParser>();
@@ -27,7 +35,11 @@ bool DDSProtocol::Initialize() {
 
     participant_ = factory->create_participant_with_default_profile(this, participant_mask);
 
-    load_dds_dynamic_idl("idl");
+    std::optional<std::string> diag_idl_path = getEnvPath("DIAG_IDL_PATH");
+
+    LOG_DEBUG("getEnvPath: key=DIAG_IDL_PATH, value=" << diag_idl_path.value_or("idl"));
+
+    load_dds_dynamic_idl(diag_idl_path.value_or("idl"));
 
     // Create the subscriber and the publisher
     SubscriberQos sub_qos = SUBSCRIBER_QOS_DEFAULT;
@@ -405,7 +417,7 @@ bool DDSProtocol::DeserializeMessage(DynamicData::_ref_type dds_data, std::share
 }
 
 void DDSProtocol::load_dds_dynamic_idl(const std::string& path) {
-    if (!dds_dynamic_idl_parser_->Initialize("idl")) {
+    if (!dds_dynamic_idl_parser_->Initialize(path)) {
         return;
     }
     auto type_support_list = dds_dynamic_idl_parser_->ParseAll();

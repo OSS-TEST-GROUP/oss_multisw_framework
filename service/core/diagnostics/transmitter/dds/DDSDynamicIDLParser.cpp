@@ -17,6 +17,8 @@ namespace fs = std::filesystem;
 
 bool DDSDynamicIDLParser::Initialize(const std::string& idl_directory)
 {
+    LOG_DEBUG("IDL directory path: " << idl_directory);
+
     if (!fs::exists(idl_directory) || !fs::is_directory(idl_directory))
     {
         LOG_ERROR("IDL directory not found or is not a directory: " << idl_directory);
