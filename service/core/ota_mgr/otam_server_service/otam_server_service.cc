@@ -16,6 +16,7 @@ void OtamServerService::Initialize() {
         std::cout << "[OtamServerService] Already initialized.\n";
         return;
     }
+    name_ = "OtamServerService";
 
     // Initialize CURL globally
     curl_global_init(CURL_GLOBAL_DEFAULT);
@@ -58,11 +59,10 @@ void OtamServerService::Start() {
 }
 
 void OtamServerService::Stop() {
-    state_ = ServiceState::STOPPED;
-
     // Cleanup CURL globally
     curl_global_cleanup();
 
+    state_ = ServiceState::UNINITIALIZED;
     std::cout << "OtamServerService Stopped." << std::endl;
 }
 

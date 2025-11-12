@@ -6,6 +6,7 @@
 #include <string>
 
 #include "otam_common/otam_service.h"
+#include "otam_diagnostic_service/otam_diagnostic_service.h"
 
 class OtamMain {
  public:
@@ -26,6 +27,8 @@ class OtamMain {
  private:
   // Vector to hold pointers to the main classes of other units.
   std::vector<std::shared_ptr<OtamService>> units_;
+  std::shared_ptr<OtamDiagnosticService> diagnostic_service_;
+
 };
 
 #endif  // OTAM_MAIN_H_

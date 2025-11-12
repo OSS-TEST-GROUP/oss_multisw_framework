@@ -43,7 +43,6 @@ private:
     OtamServerConfig LoadConfigFromFile(const std::string& path);
     
 private:
-    ServiceState                         state_{ServiceState::UNINITIALIZED};
     std::string                          session_id_;
     std::shared_ptr<OtamAppSettings>     app_settings_;
     std::unique_ptr<OtamServerApiClient>           api_client_;

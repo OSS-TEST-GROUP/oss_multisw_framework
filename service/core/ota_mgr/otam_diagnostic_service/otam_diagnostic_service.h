@@ -32,9 +32,6 @@ class OtamDiagnosticService : public OtamService {
   std::map<std::string, std::shared_ptr<OtamDds>>
       dds_registry_;
 
-  // Flag indicating if service is initialized
-  bool is_initialized_;
-
   // Topic name constant
   static constexpr const char* kOtaMgrInfoTopic = "/mmf/otamanager/diagnostic_service/NotifyOtaMgrInfo";
 
