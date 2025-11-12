@@ -8,6 +8,7 @@
 #include "StartServiceEndPoint.hpp"
 #include "StopServiceEndPoint.hpp"
 #include "UpdateServiceListEndPoint.hpp"
+#include "AdswServiceStatusEndPoint.hpp"
 
 namespace ros2 {
 namespace adsw_manager {
@@ -28,6 +29,7 @@ bool EndPointFactory::Initialize(){
     topic_lists_[MessageType::STOP_SERVICE_RESPONSE] = "mmf/lifecyclemgr/StopServiceResponse";
     topic_lists_[MessageType::UPDATE_SERVICE_LIST_REQUEST] = "mmf/lifecyclemgr/UpdateServiceListRequest";
     topic_lists_[MessageType::UPDATE_SERVICE_LIST_RESPONSE] = "mmf/lifecyclemgr/UpdateServiceListResponse";
+    topic_lists_[MessageType::ADSW_SERVICE_STATUS] = "mmf/adswmgr/AdswServiceStatus";
 
     return true;
 }
@@ -122,6 +124,14 @@ int32_t EndPointFactory::CreateEndPoints(std::shared_ptr<DDSTransmitter> transmi
                 std::shared_ptr<UpdateServiceListEndPoint> update_service_list = std::make_shared<UpdateServiceListEndPoint>(key, val);
                 msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndpoint>(update_service_list);
                 pubsub = PubSubType::SUBSCRIBE_ONLY;
+            }
+            break;
+
+            case MessageType::ADSW_SERVICE_STATUS :{
+                std::shared_ptr<ADSWServiceStatusEndPoint> adsw_service_status = std::make_shared<ADSWServiceStatusEndPoint>(key, val);
+
+                msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndpoint>(adsw_service_status);
+                pubsub = PubSubType::PUBLISH_ONLY;
             }
             break;
 

@@ -36,10 +36,27 @@ diagnosic_policies:
         condition :
           - "NotifyOtaMgrInfo.err_code = 1"
     active : true
+  - code : 12
+    name : adswmanager
+    rules :
+      - status : "WARNING"
+        message : "ADSW manager service error detected."
+        condition_operator : "AND"
+        condition :
+          - "AdswServiceStatus.status_code != 1"
+      - status : "PASS"
+        message : "OTA manager service success."
+        condition_operator : "AND"
+        condition :
+          - "AdswServiceStatus.status_code = 1"
+    active : true
 refer_messages:
   - name : LifecycleDiagReport
     message : mmf/lifecyclemgr/LifecycleDiagReport
     protocol : dds
   - name : NotifyOtaMgrInfo
     message : /mmf/otamanager/diagnostic_service/NotifyOtaMgrInfo
+    protocol : dds
+  - name : AdswServiceStatus
+    message : mmf/adswmgr/AdswServiceStatus
     protocol : dds

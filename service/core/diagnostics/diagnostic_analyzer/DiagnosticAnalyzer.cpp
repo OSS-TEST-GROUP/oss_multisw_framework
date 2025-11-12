@@ -91,6 +91,8 @@ std::vector<std::shared_ptr<DiagInfo>> DiagnosticAnalyzer::AnalyzeAll() {
 std::vector<std::shared_ptr<DiagInfo>> DiagnosticAnalyzer::Analyze(std::shared_ptr<DiagPolicy> diag_policy) {
     std::vector<std::shared_ptr<DiagInfo>> diag_info;
 
+    LOG_DEBUG("Analyze diag :: " << diag_policy->GetDiagCode() << ", " << diag_policy->GetDiagName());
+
     for (auto& policy_rule : diag_policy->GetRules()) {
         bool evaluation_result = EvaluatePolicyRuleConditions(policy_rule.conditions, policy_rule.condition_operator);
         if (evaluation_result) {
@@ -107,6 +109,8 @@ void DiagnosticAnalyzer::HandleReceiveDiagMessage(std::shared_ptr<RequestBase> r
     if (!diag_msg) return;
     auto diag_data = diag_msg->GetMessage()->GetData();
     if (!diag_data) return;
+
+    LOG_DEBUG("HandleReceiveDiagMessage :: " << diag_msg->GetMessage()->GetName());
 
     data_manager_->UpdateData(diag_data);
 
@@ -145,6 +149,7 @@ void DiagnosticAnalyzer::SubscribeReferenceMessages() {
     auto ref_msgs = policy_manager_->GetAllReferenceMessage();
 
     for (auto& msg : ref_msgs) {
+        LOG_DEBUG("SubscribeReferenceMessages :: " << msg->GetMessage());
         msg_transmitter_->SubscribeMessage(subscriber_id_, msg->GetMessage(), msg->GetProtocol());
     }
 }

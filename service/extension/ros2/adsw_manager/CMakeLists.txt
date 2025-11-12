@@ -23,6 +23,7 @@ set ( TRANSMIT_SRC
     endpoint/StartServiceEndPoint.cpp
     endpoint/StopServiceEndPoint.cpp
     endpoint/UpdateServiceListEndPoint.cpp
+    endpoint/AdswServiceStatusEndPoint.cpp
 )
 
 set ( SERVICE_SRC
@@ -56,17 +57,19 @@ set(GENERATED_DDS_ROS2_FILES
                         ${GENERATED_ROS2_DIR}/ros2/NodeEntitiesInfoPubSubTypes.cxx
                         ${GENERATED_ROS2_DIR}/ros2/NodeEntitiesInfoTypeObjectSupport.cxx
                         ${GENERATED_ROS2_DIR}/ros2/ParticipantEntitiesInfoPubSubTypes.cxx
-                        ${GENERATED_ROS2_DIR}/ros2/ParticipantEntitiesInfoTypeObjectSupport.cxx                                      
+                        ${GENERATED_ROS2_DIR}/ros2/ParticipantEntitiesInfoTypeObjectSupport.cxx          
+                        ${GENERATED_ROS2_DIR}/ros2/AdswServiceStatusPubSubTypes.cxx
+                        ${GENERATED_ROS2_DIR}/ros2/AdswServiceStatusTypeObjectSupport.cxx                                                    
 )
 set(GENERATED_DDS_LIFECYCLE_FILES
                         ${GENERATED_LIFECYCLE_DIR}/lifecycle/StartServiceRequestPubSubTypes.cxx
                         ${GENERATED_LIFECYCLE_DIR}/lifecycle/StartServiceRequestTypeObjectSupport.cxx
                         ${GENERATED_LIFECYCLE_DIR}/lifecycle/StopServiceRequestPubSubTypes.cxx
                         ${GENERATED_LIFECYCLE_DIR}/lifecycle/StopServiceRequestTypeObjectSupport.cxx
+                        ${GENERATED_LIFECYCLE_DIR}/lifecycle/NotifyServiceStatePubSubTypes.cxx
+                        ${GENERATED_LIFECYCLE_DIR}/lifecycle/NotifyServiceStateTypeObjectSupport.cxx                         
                         ${GENERATED_LIFECYCLE_DIR}/lifecycle/GetServiceStateRequestPubSubTypes.cxx
                         ${GENERATED_LIFECYCLE_DIR}/lifecycle/GetServiceStateRequestTypeObjectSupport.cxx
-                        ${GENERATED_LIFECYCLE_DIR}/lifecycle/NotifyServiceStatePubSubTypes.cxx
-                        ${GENERATED_LIFECYCLE_DIR}/lifecycle/NotifyServiceStateTypeObjectSupport.cxx  
                         ${GENERATED_LIFECYCLE_DIR}/lifecycle/UpdateServiceListRequestPubSubTypes.cxx
                         ${GENERATED_LIFECYCLE_DIR}/lifecycle/UpdateServiceListRequestTypeObjectSupport.cxx
                         ${GENERATED_LIFECYCLE_DIR}/lifecycle/LifecycleCommonPubSubTypes.cxx

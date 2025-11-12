@@ -10,7 +10,7 @@ namespace ros2 {
 namespace adsw_manager {
 
 ROSServiceDiscovery::ROSServiceDiscovery(ServiceMonitor* service_monitor) 
-    : service_monitor_(service_monitor){
+    : service_monitor_(service_monitor), ros_service_discovery_initialized_(false) {
 
 }
 
@@ -49,6 +49,12 @@ void ROSServiceDiscovery::ParseROSDiscoveryInfo(rmw_dds_common::msg::Participant
     } else {
         // participant != null && node_endty > 0
         LOG_DEBUG("ParseROSDiscoveryInfo - update node list " << participant_gid_hex << ", " << node_entities_info.size());
+    }
+
+    if (ros_service_discovery_initialized_ == false){
+        ros_service_discovery_initialized_ = true;
+        LOG_DEBUG("ROSServiceDiscovery::ParseROSDiscoveryInfo - Initial Discovery Completed ");
+        service_monitor_->NotifyAdswStatus(1, "ADSW is ready running");
     }
 
     if (participant != nullptr){

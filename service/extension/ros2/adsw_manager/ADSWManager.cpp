@@ -70,6 +70,9 @@ void ADSWManager::Process(){
         if (service_registry_->ProcessUpdateServiceListRequest() == true){
     	    SetState(AdswState::ADSW_RUNNING);
         }
+        if (service_monitor_ != nullptr){
+            service_monitor_->NotifyAdswStatus(1, "ADSW start completed");
+        }
 	}
 }
 

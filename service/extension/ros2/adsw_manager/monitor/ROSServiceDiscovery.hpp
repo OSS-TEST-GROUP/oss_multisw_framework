@@ -35,6 +35,7 @@ class ROSServiceDiscovery {
     std::map<std::string, std::shared_ptr<ROS2Participant>> ros_participants_;
 
     std::map<std::string, std::string> ros_group_participants_;
+    bool ros_service_discovery_initialized_;
 };
 
 } // namespace adsw_manager

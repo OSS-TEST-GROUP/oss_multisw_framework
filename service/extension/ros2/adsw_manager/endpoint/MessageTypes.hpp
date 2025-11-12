@@ -19,7 +19,9 @@ namespace adsw_manager {
         START_SERVICE_RESPONSE,
 
         STOP_SERVICE_REQUEST,
-        STOP_SERVICE_RESPONSE
+        STOP_SERVICE_RESPONSE,
+
+        ADSW_SERVICE_STATUS
     };
 
     
