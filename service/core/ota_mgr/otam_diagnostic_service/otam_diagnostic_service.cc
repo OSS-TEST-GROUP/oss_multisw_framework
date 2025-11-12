@@ -5,15 +5,15 @@
 
 constexpr const char* OtamDiagnosticService::kOtaMgrInfoTopic;
 
-OtamDiagnosticService::OtamDiagnosticService()
-    : is_initialized_(false) {}
+OtamDiagnosticService::OtamDiagnosticService() {}
 
 void OtamDiagnosticService::Initialize() {
-  if (is_initialized_) {
+  if (state_ != ServiceState::UNINITIALIZED) {
     std::cout << "OtamDiagnosticService already initialized"
               << std::endl;
     return;
   }
+  name_ = "OtamDiagnosticService";
 
   std::cout << "Initializing OtamDiagnosticService..." << std::endl;
 
@@ -26,13 +26,14 @@ void OtamDiagnosticService::Initialize() {
 
   RegisterDds(kOtaMgrInfoTopic, dds_impl);
 
-  is_initialized_ = true;
+  state_ = ServiceState::INITIALIZED;
   std::cout << "OtamDiagnosticService initialized successfully"
             << std::endl;
 }
 
 void OtamDiagnosticService::Start() {
-    std::cout << "OtamDiagnosticService: Starting OtamDiagnosticService." << std::endl;
+  state_ = ServiceState::STARTED;
+  std::cout << "OtamDiagnosticService: Starting OtamDiagnosticService." << std::endl;
 }
 
 void OtamDiagnosticService::Stop() {
@@ -45,18 +46,19 @@ void OtamDiagnosticService::Stop() {
             pair.second->Destroy();
         }
     }
+    state_ = ServiceState::UNINITIALIZED;
 }
 
 void OtamDiagnosticService::PublishOtaMgrInfo(int32_t err_code, const std::string& err_msg) {
-  if (!is_initialized_) {
-    std::cerr << "Service not initialized. Call Initialize() first"
+  if (state_ != ServiceState::STARTED) {
+    std::cout << "Service not initialized. Call Initialize() first"
               << std::endl;
     return;
   }
 
   auto dds = GetDds(kOtaMgrInfoTopic);
   if (!dds) {
-    std::cerr << "DDS not found for topic: " << kOtaMgrInfoTopic
+    std::cout << "DDS not found for topic: " << kOtaMgrInfoTopic
               << std::endl;
     return;
   }

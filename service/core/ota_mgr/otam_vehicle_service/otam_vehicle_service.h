@@ -55,9 +55,6 @@ class OtamVehicleService : public OtamService {
   std::map<std::string, std::shared_ptr<OtamDdsImpl<VissRequestTopic>>>
       dds_registry_;
 
-  // Flag indicating if service is initialized
-  bool is_initialized_;
-
   // Topic name constants
   static constexpr const char* kVissRequestTopic = "/VIN/Vehicle";
   static constexpr const char* kVehicleInfoResponseTopic =

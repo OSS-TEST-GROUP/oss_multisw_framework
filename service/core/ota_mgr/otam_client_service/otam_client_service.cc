@@ -21,7 +21,15 @@
   }
 
   void OtamClientService::Initialize() {
-      std::cout << "OtamClientService: Initializing with DDS setup." << std::endl;
+
+  if (state_ != ServiceState::UNINITIALIZED) {
+    std::cout << "OtamClientService already initialized"
+              << std::endl;
+    return;
+  }
+  name_ = "OtamClientService";
+
+    std::cout << "OtamClientService: Initializing with DDS setup." << std::endl;
 
       try {
           // Initialize DDS infrastructure in proper order
@@ -35,11 +43,13 @@
           std::cerr << "OtamClientService: Failed to initialize DDS: " << e.what() << std::endl;
           throw;
       }
+      state_ = ServiceState::INITIALIZED;
   }
 
   void OtamClientService::Start() {
       std::cout << "OtamClientService: Starting OtamClientService." << std::endl;
       NotifyManagerReady();
+      state_ = ServiceState::STARTED;
   }
 
   void OtamClientService::Stop() {
@@ -62,6 +72,7 @@
           std::cout << "OtamClientService: Destroying app_status_dds_" << std::endl;
           app_status_dds_->Destroy();
       }
+      state_ = ServiceState::UNINITIALIZED;
   }
 
   void OtamClientService::InitializeDDS() {

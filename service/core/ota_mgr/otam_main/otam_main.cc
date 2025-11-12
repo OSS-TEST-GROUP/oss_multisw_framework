@@ -18,11 +18,18 @@ class OtamActorServiceAdapter : public OtamService {
   }
 
   void Start() override {
-    std::cout << "OtamActorService Started." << std::endl;
+    actor_service_->Start();
   }
 
   void Stop() override {
-    std::cout << "OtamActorService Stopped." << std::endl;
+    actor_service_->Stop();
+  }
+
+  ServiceState State() override { 
+    return actor_service_->State(); 
+  }
+  std::string Name() override { 
+    return actor_service_->Name(); 
   }
 
   std::shared_ptr<OtamActorService> GetActorService() {
@@ -36,19 +43,18 @@ class OtamActorServiceAdapter : public OtamService {
 OtamMain::OtamMain() {
   // Constructor: Initializes the shared pointers for each service.
   // In a real application, you might use a factory or dependency injection.
-  auto diagnostic_service = std::make_shared<OtamDiagnosticService>();
+  diagnostic_service_ = std::make_shared<OtamDiagnosticService>();
   auto server_service = std::make_shared<OtamServerService>();
   auto client_service = std::make_shared<OtamClientService>();
   auto vehicle_service = std::make_shared<OtamVehicleService>();
   auto actor_service_adapter = std::make_shared<OtamActorServiceAdapter>();
 
   // Connect OtamActorService with all required services
-  actor_service_adapter->GetActorService()->SetOtamDiagnosticService(diagnostic_service.get());
+  actor_service_adapter->GetActorService()->SetOtamDiagnosticService(diagnostic_service_.get());
   actor_service_adapter->GetActorService()->SetOtamServerService(server_service.get());
   actor_service_adapter->GetActorService()->SetOtamClientService(client_service.get());
   actor_service_adapter->GetActorService()->SetOtamVehicleService(vehicle_service.get());
 
-  units_.push_back(diagnostic_service);
   units_.push_back(server_service);
   units_.push_back(client_service);
   units_.push_back(vehicle_service);
@@ -61,9 +67,15 @@ OtamMain::~OtamMain() {
 
 void OtamMain::Initialize() {
   std::cout << "OtamMain: Initializing all units." << std::endl;
+
+  diagnostic_service_->Initialize();
+  diagnostic_service_->Start();
+
   for (const auto& unit : units_) {
     try {
       unit->Initialize(); // Creates and initializes all units.
+      std::string err_msg = unit->Name() + " " + ServiceStateToString(unit->State());
+      diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::SUCCEEDED), err_msg);
     } catch (const std::exception& e) {
       std::cerr << "Error during initialize of a unit: " << e.what() << std::endl;
     }
@@ -75,6 +87,8 @@ void OtamMain::Start() {
   for (const auto& unit : units_) {
     try {
       unit->Start(); // Starts functionality of all units.
+      std::string err_msg = unit->Name() + " " + ServiceStateToString(unit->State());
+      diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::SUCCEEDED), err_msg);
     } catch (const std::exception& e) {
       std::cerr << "Error during start of a unit: " << e.what() << std::endl;
     }
@@ -86,9 +100,12 @@ void OtamMain::Stop() {
   for (const auto& unit : units_) {
     try {
       unit->Stop(); // Terminates all units and returns resources.
+      std::string err_msg = unit->Name() + " " + ServiceStateToString(unit->State());
+      diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::SUCCEEDED), err_msg);
     } catch (const std::exception& e) {
       // For Stop, just report the error and continue stopping other units.
       std::cerr << "Error during stop of a unit: " << e.what() << std::endl;
     }
   }
+  diagnostic_service_->Stop();
 }

@@ -9,15 +9,15 @@ constexpr const char*
 constexpr const char*
     OtamVehicleService::kVehicleInfoResponseTopic;
 
-OtamVehicleService::OtamVehicleService()
-    : is_initialized_(false) {}
+OtamVehicleService::OtamVehicleService() {}
 
 void OtamVehicleService::Initialize() {
-  if (is_initialized_) {
+  if (state_ != ServiceState::UNINITIALIZED) {
     std::cout << "OtamVehicleService already initialized"
               << std::endl;
     return;
   }
+  name_ = "OtamVehicleService";
 
   std::cout << "Initializing OtamVehicleService..." << std::endl;
 
@@ -41,13 +41,14 @@ void OtamVehicleService::Initialize() {
 
   RegisterDds(kVehicleInfoResponseTopic, response_dds);
 
-  is_initialized_ = true;
+  state_ = ServiceState::INITIALIZED;
   std::cout << "OtamVehicleService initialized successfully"
             << std::endl;
 }
 
 void OtamVehicleService::Start() {
-    std::cout << "OtamVehicleService: Starting OtamVehicleService." << std::endl;
+  state_ = ServiceState::STARTED;
+  std::cout << "OtamVehicleService: Starting OtamVehicleService." << std::endl;
 }
 
 void OtamVehicleService::Stop() {
@@ -60,12 +61,13 @@ void OtamVehicleService::Stop() {
             pair.second->Destroy();
         }
     }
+    state_ = ServiceState::UNINITIALIZED;
 }
 
 void OtamVehicleService::RequestVehicleInfo(
     int32_t request_id,
     const std::string& name) {
-  if (!is_initialized_) {
+  if (state_ != ServiceState::STARTED) {
     std::cerr << "Service not initialized. Call Initialize() first"
               << std::endl;
     return;

@@ -49,10 +49,14 @@ void OtamActorService::SetOtamDiagnosticService(OtamDiagnosticService* diagnosti
 }
 
 void OtamActorService::Initialize() {
-  std::cout << "OtamActorService: Initializing DDS topics"
-            << std::endl;
+    if (state_ != ServiceState::UNINITIALIZED) {
+      std::cout << "OtamActorService already initialized"
+                << std::endl;
+      return;
+    }
+    name_ = "OtamActorService";
 
-  try {
+    try {
 
     // Initialize GetAppUpdateSettings (Request)
     auto get_settings_type =
@@ -126,10 +130,12 @@ void OtamActorService::Initialize() {
               << e.what() << std::endl;
     throw;
   }
+  state_ = ServiceState::INITIALIZED;
 }
 
 void OtamActorService::Start() {
-    std::cout << "OtamActorService: Starting OtamActorService." << std::endl;
+  state_ = ServiceState::STARTED;
+  std::cout << "OtamActorService: Starting OtamActorService." << std::endl;
 }
 
 void OtamActorService::Stop() {
@@ -142,6 +148,7 @@ void OtamActorService::Stop() {
             pair.second->Destroy();
         }
     }
+    state_ = ServiceState::UNINITIALIZED;
 }
 
 // CreateDdsForTopic is now a template function defined in the header
@@ -165,7 +172,7 @@ void OtamActorService::OnAppUpdateSettingsRequested(
 
     // Publish diagnostic info
     if (otam_diagnostic_service_) {
-      otam_diagnostic_service_->PublishOtaMgrInfo(2, "Failed: OtamServerService not available");
+      otam_diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), "Failed: OtamServerService not available");
     }
     return;
   }
@@ -225,7 +232,7 @@ void OtamActorService::OnSetAppUpdateSettingsReceived(
 
     // Publish diagnostic info
     if (otam_diagnostic_service_) {
-      otam_diagnostic_service_->PublishOtaMgrInfo(2, "Failed: OtamServerService not available");
+      otam_diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), "Failed: OtamServerService not available");
     }
     return;
   }
@@ -283,7 +290,7 @@ void OtamActorService::OnAppUpdateStateRequested(
 
     // Publish diagnostic info
     if (otam_diagnostic_service_) {
-      otam_diagnostic_service_->PublishOtaMgrInfo(2, "Failed: OtamServerService not available");
+      otam_diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), "Failed: OtamServerService not available");
     }
     return;
   }
@@ -370,7 +377,7 @@ void OtamActorService::SendSetServiceModeRequest(int32_t request_id) {
 
   // Publish diagnostic info
   if (otam_diagnostic_service_) {
-    otam_diagnostic_service_->PublishOtaMgrInfo(1, "Success: SetServiceModeRequest sent to switch to OTA_MODE");
+    otam_diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::SUCCEEDED), "Success: SetServiceModeRequest sent to switch to OTA_MODE");
   }
 }
 
@@ -396,7 +403,7 @@ void OtamActorService::OnSetServiceModeResponseReceived(
 
         // Publish diagnostic info
         if (otam_diagnostic_service_) {
-          otam_diagnostic_service_->PublishOtaMgrInfo(1, "Success: Service mode changed to OTA_MODE");
+          otam_diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::SUCCEEDED), "Success: Service mode changed to OTA_MODE");
         }
 
         // Now request vehicle info
@@ -408,7 +415,7 @@ void OtamActorService::OnSetServiceModeResponseReceived(
 
           // Publish diagnostic info
           if (otam_diagnostic_service_) {
-            otam_diagnostic_service_->PublishOtaMgrInfo(2, "Failed: OtamVehicleService not available");
+            otam_diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), "Failed: OtamVehicleService not available");
           }
 
           // Send failure response
@@ -427,7 +434,7 @@ void OtamActorService::OnSetServiceModeResponseReceived(
 
         // Publish diagnostic info
         if (otam_diagnostic_service_) {
-          otam_diagnostic_service_->PublishOtaMgrInfo(2, "Failed: Service mode change to OTA_MODE failed");
+          otam_diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), "Failed: Service mode change to OTA_MODE failed");
         }
 
         // Send failure response
@@ -458,7 +465,7 @@ void OtamActorService::OnAppUpdateRequested(
 
     // Publish diagnostic info
     if (otam_diagnostic_service_) {
-      otam_diagnostic_service_->PublishOtaMgrInfo(2, "Failed: OtamServerService not available");
+      otam_diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), "Failed: OtamServerService not available");
     }
 
     PublishSetAppUpdateResponse(
@@ -474,7 +481,7 @@ void OtamActorService::OnAppUpdateRequested(
 
     // Publish diagnostic info
     if (otam_diagnostic_service_) {
-      otam_diagnostic_service_->PublishOtaMgrInfo(2, "Failed: OtamVehicleService not available");
+      otam_diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), "Failed: OtamVehicleService not available");
     }
 
     PublishSetAppUpdateResponse(
@@ -580,7 +587,7 @@ void OtamActorService::ProcessPendingUpdate(const PendingUpdateRequest& request)
     if (otam_diagnostic_service_) {
       std::string err_msg = "Failed: Vehicle condition not met for OTA update (state: "
                             + vehicle_state + ", speed: " + vehicle_speed + ")";
-      otam_diagnostic_service_->PublishOtaMgrInfo(2, err_msg);
+      otam_diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), err_msg);
     }
 
     PublishSetAppUpdateResponse(
