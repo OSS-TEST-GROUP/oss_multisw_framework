@@ -115,11 +115,11 @@ void StateManager::ProcessServiceHandling(std::set<std::shared_ptr<Service>> ser
 
     if (transmitter != nullptr){
         if (start_request_.service_list().size() > 0){
-            start_request_.is_group() = true;
+            start_request_.is_group() = false;
             transmitter->SendMessage(MessageType::START_SERVICE_REQUEST, reinterpret_cast<void*>(&start_request_));
         }
         if (stop_request_.service_list().size() > 0){
-            stop_request_.is_group() = true;
+            stop_request_.is_group() = false;
             transmitter->SendMessage(MessageType::STOP_SERVICE_REQUEST, reinterpret_cast<void*>(&stop_request_));
         }
     }
@@ -144,7 +144,7 @@ void StateManager::RequestStopAll(){
                 for( auto svc = list.begin(); svc != list.end(); ++svc ){
                     stop_request_.service_list().push_back(*svc);
                 }
-                stop_request_.is_group() = true;
+                stop_request_.is_group() = false;
             
                 transmitter->SendMessage(MessageType::STOP_SERVICE_REQUEST, reinterpret_cast<void*>(&stop_request_));
             }

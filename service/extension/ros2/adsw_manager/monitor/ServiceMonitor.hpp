@@ -22,6 +22,7 @@ class ServiceMonitor {
     void UpdateServiceState(UpdateServiceInfo info);
 
     void NotifyServiceState();
+    void NotifyAdswStatus(int32_t status_code, std::string status_msg);
 
     std::shared_ptr<ROSServiceDiscovery> GetServiceDiscovery();
 

@@ -1,0 +1,9 @@
+module adswmgr {
+
+    /* TopicName - mmf/adswmgr/AdswServiceStatus */
+    struct AdswServiceStatus {
+        long status_code;
+        string status_msg;
+    };
+
+};

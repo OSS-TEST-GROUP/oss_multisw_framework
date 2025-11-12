@@ -7,6 +7,7 @@
 #include "transmitter/DDSMessageEndpoint.hpp"
 #include "service/ServiceRegistry.hpp"
 #include "lifecycle/NotifyServiceState.hpp"
+#include "ros2/AdswServiceStatus.hpp"
 #include "service/TypeConvert.hpp"
 
 #include "logger/Log.hpp"
@@ -87,6 +88,27 @@ void ServiceMonitor::NotifyServiceState() {
     }
 }
 
+void ServiceMonitor::NotifyAdswStatus(int32_t status_code, std::string status_msg) {
+
+    std::shared_ptr<DDSTransmitter> transmitter = ADSWManager::Get()->GetTransmitter();
+    std::shared_ptr<ServiceRegistry> registry = ADSWManager::Get()->GetServiceRegistry();
+
+    if ((transmitter != nullptr) && (registry != nullptr))
+    {
+        const char* topic = ADSWManager::Get()->GetTopic(MessageType::ADSW_SERVICE_STATUS);
+
+        std::shared_ptr<DDSMessageEndpoint> endpoint = transmitter->GetMessageEndpoint(topic);
+
+        if (endpoint != nullptr){
+            adswmgr::AdswServiceStatus notify;
+
+            notify.status_code() = status_code;
+            notify.status_msg() = status_msg;
+
+            endpoint->Write(reinterpret_cast<void*>(&notify));
+        }
+    }
+}
 
 std::shared_ptr<ROSServiceDiscovery> ServiceMonitor::GetServiceDiscovery(){
     return ros_service_discovery_;
