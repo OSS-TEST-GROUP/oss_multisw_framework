@@ -1,6 +1,7 @@
 #include "DDSProtocol.hpp"
 
 #include <optional>
+#include <unordered_map>
 
 #include <fastdds/dds/xtypes/dynamic_types/DynamicTypeBuilderFactory.hpp>
 #include <fastdds/dds/subscriber/Subscriber.hpp>
@@ -16,6 +17,44 @@ std::optional<std::string> getEnvPath(const std::string& key) {
 	const char* val = std::getenv(key.c_str());
     LOG_DEBUG("getEnvPath: key=" << key << ", value=" << (val ? val : "null"));
 	return val ? std::optional<std::string>(val) : std::nullopt;
+}
+
+// Helper function to convert between ROS2 DDS and simple type names (bidirectional)
+std::string convertTypeName(const std::string& input_type, bool to_simple = true) {
+    static const std::unordered_map<std::string, std::string> ros2_dds_to_simple_map = {
+        {"diagnosticmgr::msg::dds_::DiagnosticInfoRequest_", "DiagnosticInfoRequest"},
+        {"diagnosticmgr::msg::dds_::DiagnosticInfoListRequest_", "DiagnosticInfoListRequest"},
+        {"diagnosticmgr::msg::dds_::DiagnosticInfoResponse_", "DiagnosticInfoResponse"},
+        {"diagnosticmgr::msg::dds_::DiagnosticInfoListResponse_", "DiagnosticInfoListResponse"},
+        {"diagnosticmgr::msg::dds_::DiagnosticNotification_", "DiagnosticNotification"}
+    };
+    
+    if (to_simple) {
+        // Convert ROS2 DDS type to simple type (for receiving)
+        auto it = ros2_dds_to_simple_map.find(input_type);
+        if (it != ros2_dds_to_simple_map.end()) {
+            return it->second;
+        }
+    } else {
+        // Convert simple type to ROS2 DDS type (for sending)
+        for (const auto& pair : ros2_dds_to_simple_map) {
+            if (pair.second == input_type) {
+                return pair.first;
+            }
+        }
+    }
+    
+    // If no mapping found, return original type
+    return input_type;
+}
+
+// Convenience functions for clarity
+std::string toSimpleType(const std::string& ros2_dds_type) {
+    return convertTypeName(ros2_dds_type, true);
+}
+
+std::string toRos2DdsType(const std::string& simple_type) {
+    return convertTypeName(simple_type, false);
 }
 
 DDSProtocol::DDSProtocol() : participant_(nullptr), subscriber_(nullptr) {
@@ -77,6 +116,7 @@ MessageProtocolType DDSProtocol::GetProtocolType() {
 
 bool DDSProtocol::PublishMessage(std::shared_ptr<Message> message) {
     LOG_INFO("PublishMessage called: topic=" << message->GetName() << ", type=" << message->GetTypeName());
+    LOG_INFO("Message details: has_data=" << (message->GetData() != nullptr ? "yes" : "no"));
     
     std::shared_ptr<TopicInformation> topic_info;
     {
@@ -87,45 +127,12 @@ bool DDSProtocol::PublishMessage(std::shared_ptr<Message> message) {
             LOG_INFO("Topic not found in cache, creating new topic info for: " << message->GetName());
             std::string type_name = message->GetTypeName();
             
-            // For ROS messages (rt/ prefixed topics), convert ROS2 DDS type names to simple type names
+            // For ROS messages (rt/ prefixed topics), handle type conversion
             if (message->GetName().substr(0, 3) == "rt/") {
-                std::string converted_type_name = type_name;
-                std::string original_type_name = type_name;
-                
-                // Handle both directions of conversion:
-                // 1. If we get ROS2 DDS type names, convert to simple names for IDL lookup
-                if (type_name == "diagnosticmgr::msg::dds_::DiagnosticInfoRequest_") {
-                    converted_type_name = "DiagnosticInfoRequest";
-                } else if (type_name == "diagnosticmgr::msg::dds_::DiagnosticInfoListRequest_") {
-                    converted_type_name = "DiagnosticInfoListRequest";
-                } else if (type_name == "diagnosticmgr::msg::dds_::DiagnosticInfoResponse_") {
-                    converted_type_name = "DiagnosticInfoResponse";
-                } else if (type_name == "diagnosticmgr::msg::dds_::DiagnosticInfoListResponse_") {
-                    converted_type_name = "DiagnosticInfoListResponse";
-                } else if (type_name == "diagnosticmgr::msg::dds_::DiagnosticNotification_") {
-                    converted_type_name = "DiagnosticNotification";
-                }
-                // 2. If we get simple type names, convert to ROS2 DDS type names for registration
-                else if (type_name == "DiagnosticInfoRequest") {
-                    original_type_name = "diagnosticmgr::msg::dds_::DiagnosticInfoRequest_";
-                    converted_type_name = "DiagnosticInfoRequest";
-                } else if (type_name == "DiagnosticInfoListRequest") {
-                    original_type_name = "diagnosticmgr::msg::dds_::DiagnosticInfoListRequest_";
-                    converted_type_name = "DiagnosticInfoListRequest";
-                } else if (type_name == "DiagnosticInfoResponse") {
-                    original_type_name = "diagnosticmgr::msg::dds_::DiagnosticInfoResponse_";
-                    converted_type_name = "DiagnosticInfoResponse";
-                } else if (type_name == "DiagnosticInfoListResponse") {
-                    original_type_name = "diagnosticmgr::msg::dds_::DiagnosticInfoListResponse_";
-                    converted_type_name = "DiagnosticInfoListResponse";
-                } else if (type_name == "DiagnosticNotification") {
-                    original_type_name = "diagnosticmgr::msg::dds_::DiagnosticNotification_";
-                    converted_type_name = "DiagnosticNotification";
-                }
-                
-                LOG_INFO("Publishing ROS message: type='" << type_name << "' -> converted='" << converted_type_name << "', original='" << original_type_name << "' for topic: " << message->GetName());
-                
-                topic_info = create_topic_information_from_dynamic_idl(message->GetName(), converted_type_name, original_type_name);
+                std::string ros2_dds_type = toRos2DdsType(type_name);  // Convert simple type to ROS2 DDS type for registration
+                std::string simple_type = type_name;  // Keep simple type for IDL lookup
+                LOG_INFO("Publishing ROS message: simple_type='" << type_name << "' -> ros2_dds_type='" << ros2_dds_type << "' for topic: " << message->GetName());
+                topic_info = create_topic_information_from_dynamic_idl(message->GetName(), simple_type, ros2_dds_type);
             } else {
                 LOG_INFO("Publishing DDS message with type: " << type_name << " for topic: " << message->GetName());
                 topic_info = create_topic_information_from_dynamic_idl(message->GetName(), type_name);
@@ -133,12 +140,44 @@ bool DDSProtocol::PublishMessage(std::shared_ptr<Message> message) {
             if (topic_info) {
                 discovered_topic_[message->GetName()] = topic_info;
                 LOG_INFO("Successfully created and cached topic info for: " << message->GetName());
+                LOG_INFO("Topic info state: remote_type=" << (topic_info->remote_type != nullptr ? "valid" : "null") 
+                         << ", type_support=" << (topic_info->type_support != nullptr ? "valid" : "null"));
             } else {
                 LOG_ERROR("Failed to create topic info for: " << message->GetName());
             }
         } else {
             topic_info = iter->second;
             LOG_VERBOSE("Using cached topic info for: " << message->GetName());
+            
+            // Check if cached topic info has valid type_support for publishing
+            if (topic_info->type_support == nullptr) {
+                LOG_INFO("Cached topic info has null type_support, recreating for publishing: " << message->GetName());
+                
+                // Recreate topic info with proper type_support using dynamic IDL
+                std::string type_name = message->GetTypeName();
+                
+                if (message->GetName().substr(0, 3) == "rt/") {
+                    // ROS message handling - convert simple type to ROS2 DDS type
+                    std::string ros2_dds_type = toRos2DdsType(type_name);  // Convert simple type to ROS2 DDS type
+                    std::string simple_type = type_name;  // Keep simple type for IDL lookup
+                    auto idl_iter = parsed_dynamic_type_supports_.find(simple_type);
+                    if (idl_iter != parsed_dynamic_type_supports_.end()) {
+                        topic_info->remote_type = idl_iter->second->dyn_type;
+                        topic_info->type_support = idl_iter->second->type_support;
+                        LOG_INFO("Fixed cached topic info with type_support for ROS topic: " << message->GetName());
+                    }
+                } else {
+                    // Regular DDS message handling
+                    auto idl_iter = parsed_dynamic_type_supports_.find(type_name);
+                    if (idl_iter != parsed_dynamic_type_supports_.end()) {
+                        topic_info->remote_type = idl_iter->second->dyn_type;
+                        topic_info->type_support = idl_iter->second->type_support;
+                        LOG_INFO("Fixed cached topic info with type_support for DDS topic: " << message->GetName());
+                    } else {
+                        LOG_ERROR("Failed to find type in dynamic IDL for cached topic: " << type_name);
+                    }
+                }
+            }
             
             // For ROS messages, show the type mapping info even when using cache
             if (message->GetName().substr(0, 3) == "rt/") {
@@ -166,6 +205,14 @@ bool DDSProtocol::PublishMessage(std::shared_ptr<Message> message) {
 
     if (topic_info->remote_type == nullptr) {
         LOG_ERROR("Failed to create dynamic data type for topic: " << message->GetName());
+        LOG_ERROR("Topic type: " << topic_info->topic_type);
+        LOG_ERROR("Available types in parsed_dynamic_type_supports_:");
+        for (const auto& pair : parsed_dynamic_type_supports_) {
+            LOG_ERROR("  - " << pair.first);
+        }
+        LOG_ERROR("Topic info details: writer=" << (topic_info->writer != nullptr ? "valid" : "null") 
+                 << ", topic=" << (topic_info->topic != nullptr ? "valid" : "null")
+                 << ", type_support=" << (topic_info->type_support != nullptr ? "valid" : "null"));
         return false;
     }
     
@@ -424,8 +471,15 @@ void DDSProtocol::load_dds_dynamic_idl(const std::string& path) {
 
     for (auto& iter : type_support_list) {
         std::string type_name = iter->type_support->get_type_name();
+        
+        // Register the type with the DomainParticipant
+        if (participant_->register_type(*iter->type_support) != eprosima::fastdds::dds::RETCODE_OK) {
+            LOG_ERROR("Failed to register dynamic type: " << type_name);
+            continue;
+        }
+        
         parsed_dynamic_type_supports_[type_name] = iter;
-        LOG_VERBOSE("Loaded dynamic type: " << type_name);
+        LOG_VERBOSE("Loaded and registered dynamic type: " << type_name);
     }
 
     LOG_INFO("loaded " << type_support_list.size() << " dynamic types.");
@@ -593,17 +647,7 @@ bool DDSProtocol::register_type_object_from_dynamic_idl(std::shared_ptr<TopicInf
         std::string mapped_type_name = topic_information->topic_type;
         
         // Map ROS2 DDS type names to simple type names
-        if (topic_information->topic_type == "diagnosticmgr::msg::dds_::DiagnosticInfoRequest_") {
-            mapped_type_name = "DiagnosticInfoRequest";
-        } else if (topic_information->topic_type == "diagnosticmgr::msg::dds_::DiagnosticInfoListRequest_") {
-            mapped_type_name = "DiagnosticInfoListRequest";
-        } else if (topic_information->topic_type == "diagnosticmgr::msg::dds_::DiagnosticInfoResponse_") {
-            mapped_type_name = "DiagnosticInfoResponse";
-        } else if (topic_information->topic_type == "diagnosticmgr::msg::dds_::DiagnosticInfoListResponse_") {
-            mapped_type_name = "DiagnosticInfoListResponse";
-        } else if (topic_information->topic_type == "diagnosticmgr::msg::dds_::DiagnosticNotification_") {
-            mapped_type_name = "DiagnosticNotification";
-        }
+        mapped_type_name = toSimpleType(topic_information->topic_type);  // Convert to simple type for IDL lookup
         
         LOG_VERBOSE("Mapped ROS2 type '" << topic_information->topic_type << "' to '" << mapped_type_name << "'");
         iter = parsed_dynamic_type_supports_.find(mapped_type_name);
@@ -611,15 +655,16 @@ bool DDSProtocol::register_type_object_from_dynamic_idl(std::shared_ptr<TopicInf
     
     if (iter == parsed_dynamic_type_supports_.end()) {
         LOG_VERBOSE("Type not found in dynamic IDL: " << topic_information->topic_type << " for topic: " << topic_information->topic_name);
-        LOG_VERBOSE("Available types:");
-        for (const auto& pair : parsed_dynamic_type_supports_) {
-            LOG_VERBOSE("  - " << pair.first);
-        }
+        LOG_VERBOSE("Will try discovery fallback for type: " << topic_information->topic_type);
         return false;
     }
 
+    LOG_INFO("Found type in dynamic IDL: " << topic_information->topic_type << " for topic: " << topic_information->topic_name);
     topic_information->remote_type = iter->second->dyn_type;
     topic_information->type_support = iter->second->type_support;
+    
+    LOG_INFO("Set remote_type and type_support: remote_type=" << (topic_information->remote_type != nullptr ? "valid" : "null") 
+             << ", type_support=" << (topic_information->type_support != nullptr ? "valid" : "null"));
 
     // Check if type is already registered to avoid duplicate registration
     // Use the original type name (ROS2 format) for registration
@@ -740,14 +785,16 @@ bool DDSProtocol::delete_datawriter(std::shared_ptr<TopicInformation> topic_info
 }
 
 std::shared_ptr<TopicInformation> DDSProtocol::create_topic_information_from_dynamic_idl(const std::string& name, const std::string& type) {
+    LOG_INFO("Creating topic information from dynamic IDL: topic=" << name << ", type=" << type);
     std::shared_ptr<TopicInformation> topic_information = std::make_shared<TopicInformation>();
     topic_information->topic_name = name;
     topic_information->topic_type = type;
 
     if (!register_type_object_from_dynamic_idl(topic_information)) {
-        LOG_ERROR("Failed to create topic_information from dynamic idl. type=" << type);
+        LOG_VERBOSE("Failed to create topic_information from dynamic idl, will use discovery fallback. type=" << type);
         return nullptr;
     }
+    LOG_INFO("Successfully created topic information from dynamic IDL: topic=" << name << ", type=" << type);
     return topic_information;
 }
 
@@ -763,11 +810,7 @@ std::shared_ptr<TopicInformation> DDSProtocol::create_topic_information_from_dyn
     LOG_VERBOSE("Looking up converted type in dynamic IDL: " << converted_type);
     auto iter = parsed_dynamic_type_supports_.find(converted_type);
     if (iter == parsed_dynamic_type_supports_.end()) {
-        LOG_ERROR("Failed to find converted type in dynamic IDL: " << converted_type);
-        LOG_VERBOSE("Available types:");
-        for (const auto& pair : parsed_dynamic_type_supports_) {
-            LOG_VERBOSE("  - " << pair.first);
-        }
+        LOG_VERBOSE("Failed to find converted type in dynamic IDL, will use discovery fallback: " << converted_type);
         return nullptr;
     }
 
