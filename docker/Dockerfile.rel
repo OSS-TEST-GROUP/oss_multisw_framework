@@ -31,11 +31,8 @@ RUN apt-get install -y --no-install-recommends \
     grpc-proto \
     libcurl4 \
     nlohmann-json3-dev \
+    cpp \
     && rm -rf /var/lib/apt/lists/*
-
-RUN apt-get update && apt-get install -y \
-    python3 \
-    python3-pip
 
 RUN groupadd -r -g 1000 ossuser \
     && useradd -r -u 1000 -g ossuser -d /oss -s /bin/bash ossuser \
