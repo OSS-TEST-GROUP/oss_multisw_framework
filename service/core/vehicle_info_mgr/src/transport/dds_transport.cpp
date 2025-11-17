@@ -132,6 +132,16 @@ struct DDSTransportImpl {
                             }
                             response_doc->EraseMember("subscriptionId");
                         } else if (action == "subscription") {
+                            // The termination signal is for transports that hold a waiting loop.
+                            // For DDS, cleanup is handled by the "unsubscribe" action response.
+                            // We just log that we received it and do not publish it.
+                            if (response_doc->HasMember("status")) {
+                                if (std::string((*response_doc)["status"].GetString()) == "terminated") {
+                                    LOG_INFO << "DDS transport: Received termination signal for subscription " << subscriptionId << ". No action needed.";
+                                    continue;
+                                }
+                            }
+
                             auto it = subscription_topic_map_.find(subscriptionId);
                             if (it != subscription_topic_map_.end()) {
                                 topic = it->second;
@@ -326,6 +336,14 @@ void RequestListener::on_data_available(eprosima::fastdds::dds::DataReader* read
             if (!request_doc_ptr) {
                 // validate() already prints detailed errors
                 return;
+            }
+
+            // Ensure the filter is always an array for ServiceManager
+            if (request_doc_ptr->HasMember("filter") && (*request_doc_ptr)["filter"].IsObject()) {
+                rapidjson::Value filter_array(rapidjson::kArrayType);
+                filter_array.PushBack((*request_doc_ptr)["filter"], request_doc_ptr->GetAllocator());
+                (*request_doc_ptr).RemoveMember("filter");
+                (*request_doc_ptr).AddMember("filter", filter_array, request_doc_ptr->GetAllocator());
             }
             
             auto requestData = p_impl->pool->acquire();

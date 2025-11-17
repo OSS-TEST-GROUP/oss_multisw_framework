@@ -31,7 +31,8 @@ Java_com_zeus_myapplication_VissService_startVissServer(
         JNIEnv* env,
         jobject /* this */,
         jstring himPath,
-        jstring schemaPath) {
+        jstring schemaPath,
+        jstring grpcProviderAddr) {
 
     if (g_viss_app) {
         LOGI("VISS Server is already running.");
@@ -40,17 +41,18 @@ Java_com_zeus_myapplication_VissService_startVissServer(
 
     std::string him_path_str = jstring_to_string(env, himPath);
     std::string schema_path_str = jstring_to_string(env, schemaPath);
+    std::string grpc_provider_addr_str = jstring_to_string(env, grpcProviderAddr);
 
-    if (him_path_str.empty() || schema_path_str.empty()) {
-        LOGE("Path to config files is empty.");
+    if (him_path_str.empty() || schema_path_str.empty() || grpc_provider_addr_str.empty()) {
+        LOGE("Path to config files or gRPC provider address is empty.");
         return -1;
     }
 
-    g_viss_thread = std::make_unique<std::thread>([him_path_str, schema_path_str]() {
+    g_viss_thread = std::make_unique<std::thread>([him_path_str, schema_path_str, grpc_provider_addr_str]() {
         try {
-            LOGI("VISS Server thread started with HIM: %s", him_path_str.c_str());
+            LOGI("VISS Server thread started with HIM: %s, Addr: %s", him_path_str.c_str(), grpc_provider_addr_str.c_str());
             JsonSchemaValidator::init(schema_path_str);
-            g_viss_app = std::make_unique<VissServerApp>(him_path_str);
+            g_viss_app = std::make_unique<VissServerApp>(him_path_str, grpc_provider_addr_str);
             g_viss_app->run();
             LOGI("VISS Server thread finished.");
         } catch (const std::exception& e) {

@@ -64,25 +64,149 @@ public:
 };
 
 
-// ################### VssSubscriptionManager Implementation ###################
-VssSubscriptionManager::VssSubscriptionManager(std::shared_ptr<IStorage> ds, std::shared_ptr<ObjectPool<PooledResponseMap>> response_pool, std::shared_ptr<viss::VSSTree> vss_tree)
-    : data_store(ds), response_pool_(response_pool), vss_tree_(vss_tree), active_(false) {}
+// ################### VssSubscriptionManager::Subscription Implementation ###################
 
-VssSubscriptionManager::~VssSubscriptionManager() {
-    stop();
+VssSubscriptionManager::Subscription::Subscription(
+    std::string id,
+    std::shared_ptr<RequestData> request,
+    std::shared_ptr<viss::VSSTree> vss_tree,
+    std::shared_ptr<IStorage> data_store,
+    std::shared_ptr<ObjectPool<PooledResponseMap>> response_pool)
+    : m_subscriptionId(std::move(id)),
+      m_originalRequest(std::move(request)),
+      m_active(true),
+      m_data_store(std::move(data_store)),
+      m_response_pool(std::move(response_pool)) {
+    
+    const auto& req_doc = *m_originalRequest->request_doc;
+    std::string path_str = req_doc.HasMember("path") ? req_doc["path"].GetString() : "";
+    m_watchedPaths = vss_tree->getPaths(path_str, &req_doc);
+
+    if (!m_watchedPaths.empty()) {
+        m_triggerSignalPath = m_watchedPaths[0];
+    }
+
+    if (req_doc.HasMember("filter")) {
+        m_filters = parseFilters(req_doc["filter"]);
+    }
+    LOG_INFO << "Created Subscription ID: " << m_subscriptionId << " for trigger path: " << m_triggerSignalPath;
 }
 
-// Parses the "filter" part of a subscribe request and creates filter objects.
-std::vector<std::shared_ptr<viss::IFilter>> VssSubscriptionManager::parseFilters(const rapidjson::Value& filter_json) {
-    std::vector<std::shared_ptr<viss::IFilter>> filters;
-
-    const rapidjson::Value* expressions = &filter_json;
-    rapidjson::Document doc;
-    if (!filter_json.IsArray()) {
-        doc.SetArray();
-        doc.PushBack(rapidjson::Value(filter_json, doc.GetAllocator()), doc.GetAllocator());
-        expressions = &doc;
+VssSubscriptionManager::Subscription::~Subscription() {
+    if (m_originalRequest && m_originalRequest->responseChan) {
+        LOG_INFO << "Sending termination signal for subscription ID: " << m_subscriptionId;
+        try {
+            auto termination_signal = m_response_pool->acquire();
+            termination_signal->SetObject();
+            rapidjson::Document::AllocatorType& allocator = termination_signal->GetAllocator();
+            termination_signal->AddMember("action", "subscription", allocator);
+            termination_signal->AddMember("subscriptionId", rapidjson::Value(m_subscriptionId.c_str(), allocator), allocator);
+            termination_signal->AddMember("status", "terminated", allocator);
+            m_originalRequest->responseChan->push(termination_signal);
+        } catch (const std::exception& e) {
+            LOG_ERROR << "Exception in Subscription destructor for ID " << m_subscriptionId << ": " << e.what();
+        }
     }
+    LOG_INFO << "Destroyed Subscription ID: " << m_subscriptionId;
+}
+
+void VssSubscriptionManager::Subscription::process() {
+    if (!m_active.load()) {
+        return;
+    }
+
+    auto latest_values = m_data_store->getValues(m_triggerSignalPath);
+    viss::DataPoint current_dp = latest_values.empty() ? viss::DataPoint{std::any(), 0} : latest_values[0];
+    viss::DataPoint previous_dp = m_lastState.count(m_triggerSignalPath) ? m_lastState.at(m_triggerSignalPath) : viss::DataPoint{std::any(), 0};
+
+    bool all_filters_passed = false;
+    if (m_filters.empty()) {
+        all_filters_passed = true;
+    } else {
+        for (const auto& filter : m_filters) {
+            if (filter->shouldTrigger(current_dp, previous_dp)) {
+                all_filters_passed = true;
+                break;
+            }
+        }
+    }
+
+    if (all_filters_passed) {
+        m_lastState[m_triggerSignalPath] = current_dp;
+
+        auto notification = m_response_pool->acquire();
+        notification->SetObject();
+        rapidjson::Document::AllocatorType& allocator = notification->GetAllocator();
+
+        notification->AddMember("action", "subscription", allocator);
+        notification->AddMember("subscriptionId", rapidjson::Value(m_subscriptionId.c_str(), allocator), allocator);
+
+        std::string timePeriod = "";
+        for (const auto& f : m_filters) {
+            if (f->getType() == viss::FilterVariant::HISTORY) {
+                timePeriod = static_cast<HistoryFilter*>(f.get())->getTimePeriod();
+                break;
+            }
+        }
+
+        rapidjson::Value data_array(rapidjson::kArrayType);
+        for (const auto& p : m_watchedPaths) {
+            auto points = m_data_store->getValues(p, timePeriod);
+            if (points.empty()) continue;
+
+            rapidjson::Value dp_list(rapidjson::kArrayType);
+            for (const auto& point : points) {
+                rapidjson::Value dp_obj(rapidjson::kObjectType);
+                dp_obj.AddMember("value", any_to_json_value(point.value, allocator), allocator);
+                dp_obj.AddMember("ts", rapidjson::Value(formatTimestamp(point.timestamp).c_str(), allocator), allocator);
+                dp_list.PushBack(dp_obj, allocator);
+            }
+
+            rapidjson::Value data_obj(rapidjson::kObjectType);
+            data_obj.AddMember("path", rapidjson::Value(p.c_str(), allocator), allocator);
+
+            if (dp_list.Size() == 1) {
+                data_obj.AddMember("dp", dp_list[0], allocator);
+            } else {
+                data_obj.AddMember("dp", dp_list, allocator);
+            }
+            
+            data_array.PushBack(data_obj, allocator);
+        }
+
+        if (data_array.Size() == 1) {
+            notification->AddMember("data", data_array[0], allocator);
+        } else {
+            notification->AddMember("data", data_array, allocator);
+        }
+        
+        notification->AddMember("ts", rapidjson::Value(getCurrentTimestamp().c_str(), allocator), allocator);
+
+        if (m_originalRequest && m_originalRequest->responseChan) {
+            m_originalRequest->responseChan->push(notification);
+        }
+    }
+}
+
+bool VssSubscriptionManager::Subscription::isActive() const {
+    return m_active.load();
+}
+
+void VssSubscriptionManager::Subscription::stop() {
+    m_active = false;
+}
+
+const std::string& VssSubscriptionManager::Subscription::getTriggerPath() const {
+    return m_triggerSignalPath;
+}
+
+const std::string& VssSubscriptionManager::Subscription::getSubscriptionId() const {
+    return m_subscriptionId;
+}
+
+std::vector<std::shared_ptr<viss::IFilter>> VssSubscriptionManager::Subscription::parseFilters(const rapidjson::Value& filter_json) {
+    std::vector<std::shared_ptr<viss::IFilter>> filters;
+    const rapidjson::Value* expressions = &filter_json;
 
     for (const auto& exp : expressions->GetArray()) {
         if (!exp.IsObject() || !exp.HasMember("variant") || !exp["variant"].IsString()) {
@@ -119,40 +243,28 @@ std::vector<std::shared_ptr<viss::IFilter>> VssSubscriptionManager::parseFilters
     return filters;
 }
 
+
+// ################### VssSubscriptionManager Implementation ###################
+VssSubscriptionManager::VssSubscriptionManager(std::shared_ptr<IStorage> ds, std::shared_ptr<ObjectPool<PooledResponseMap>> response_pool, std::shared_ptr<viss::VSSTree> vss_tree)
+    : data_store(ds), response_pool_(response_pool), vss_tree_(vss_tree), active_(false) {}
+
+VssSubscriptionManager::~VssSubscriptionManager() {
+    stop();
+}
+
 std::string VssSubscriptionManager::addSubscription(std::shared_ptr<RequestData> request) {
     std::lock_guard<std::mutex> lock(mtx);
     std::string subscriptionId = std::to_string(nextSubscriptionId++);
     
-    auto sub = std::make_shared<Subscription>();
-    sub->subscriptionId = subscriptionId;
-    sub->originalRequest = request;
-    sub->active = true;
+    auto sub = std::make_shared<Subscription>(subscriptionId, request, vss_tree_, data_store, response_pool_);
 
-    // Determine trigger path and watched paths
-    const auto& req_doc = *request->request_doc;
-    std::string path_str = req_doc.HasMember("path") ? req_doc["path"].GetString() : "";
-    sub->watchedPaths = vss_tree_->getPaths(path_str, request->request_doc.get());
-    if (sub->watchedPaths.empty()) {
-        // No valid paths found for this subscription.
-        return ""; 
+    if (sub->getTriggerPath().empty()) {
+        LOG_WARN << "Could not create subscription. No valid paths found for request: " << request->requestId;
+        return "";
     }
-
-    LOG_DEBUG << "Subscription " << subscriptionId << " watching " << sub->watchedPaths.size() << " path(s):";
-    for(const auto& p : sub->watchedPaths) {
-        LOG_DEBUG << "  - " << p;
-    }
-    // VISS rule: The first path is the trigger path.
-    // When a request addresses multiple signals, the triggering condition SHALL be evaluated for only one signal, 
-    // specifically the first signal in the paths parameter array.
-    sub->triggerSignalPath = sub->watchedPaths[0];
-
-    // Parse filters from the request document
-    if (req_doc.HasMember("filter")) {
-       sub->filters = parseFilters(req_doc["filter"]);
-    }
-
+    
     m_subscriptions[subscriptionId] = sub;
-    m_triggerMap[sub->triggerSignalPath].push_back(sub);
+    m_triggerMap[sub->getTriggerPath()].push_back(sub);
 
     return subscriptionId;
 }
@@ -162,22 +274,26 @@ bool VssSubscriptionManager::removeSubscription(const std::string& subscriptionI
     auto it = m_subscriptions.find(subscriptionId);
     if (it != m_subscriptions.end()) {
         auto sub = it->second;
-        sub->active = false;
-
-        // Remove from trigger map
-        auto& subs_for_trigger = m_triggerMap[sub->triggerSignalPath];
-        subs_for_trigger.erase(
-            std::remove_if(subs_for_trigger.begin(), subs_for_trigger.end(),
-                           [&](const auto& s) { return s->subscriptionId == subscriptionId; }),
-            subs_for_trigger.end());
         
-        if (subs_for_trigger.empty()) {
-            m_triggerMap.erase(sub->triggerSignalPath);
+        std::string trigger_path_copy = sub->getTriggerPath();
+
+        if (m_triggerMap.count(trigger_path_copy)) {
+            auto& subs_for_trigger = m_triggerMap.at(trigger_path_copy);
+            subs_for_trigger.erase(
+                std::remove_if(subs_for_trigger.begin(), subs_for_trigger.end(),
+                               [&](const auto& s) { return s->getSubscriptionId() == subscriptionId; }),
+                subs_for_trigger.end());
+            
+            if (subs_for_trigger.empty()) {
+                m_triggerMap.erase(trigger_path_copy);
+            }
         }
         
-        m_subscriptions.erase(it);
+        m_subscriptions.erase(it); // This will trigger the Subscription's destructor
+        LOG_INFO << "Removed subscription ID: " << subscriptionId;
         return true;
     }
+    LOG_WARN << "Attempted to remove non-existent subscription ID: " << subscriptionId;
     return false;
 }
 
@@ -190,92 +306,15 @@ void VssSubscriptionManager::run() {
     active_ = true;
     publisher_thread_ = std::thread([this]() {
         while (active_.load()) {
-            std::map<std::string, std::shared_ptr<Subscription>> subscriptions;
+            std::map<std::string, std::shared_ptr<Subscription>> subscriptions_copy;
             {
                 std::lock_guard<std::mutex> lock(mtx);
-                subscriptions = m_subscriptions;
+                subscriptions_copy = m_subscriptions;
             }
 
-            for (const auto& pair : subscriptions) {
-                const auto& sub = pair.second;
-                if (!sub->active.load()) continue;
-
-                bool all_filters_passed = false;
-                std::string trigger_path = sub->triggerSignalPath;
-                
-                // The trigger logic is always based on the latest value.
-                auto latest_values = data_store->getValues(trigger_path);
-                viss::DataPoint current_dp = latest_values.empty() ? viss::DataPoint{std::any(), 0} : latest_values[0];
-                viss::DataPoint previous_dp = sub->lastState.count(trigger_path) ? sub->lastState.at(trigger_path) : viss::DataPoint{std::any(), 0};
-
-                if (sub->filters.empty()) {
-                    all_filters_passed = true; // No filters, always trigger
-                } else {
-                    for (const auto& filter : sub->filters) {
-                        if (filter->shouldTrigger(current_dp, previous_dp)) {
-                            all_filters_passed = true;
-                            break; 
-                        }
-                    }
-                }
-                
-                if (all_filters_passed) {
-                    // Update the state for the trigger path
-                    sub->lastState[trigger_path] = current_dp;
-
-                    // Prepare and send notification
-                    auto notification = response_pool_->acquire();
-                    notification->SetObject();
-                    rapidjson::Document::AllocatorType& allocator = notification->GetAllocator();
-
-                    notification->AddMember("action", "subscription", allocator);
-                    notification->AddMember("subscriptionId", rapidjson::Value(sub->subscriptionId.c_str(), allocator), allocator);
-                    
-                    // Find if a history filter exists to get the time period
-                    std::string timePeriod = "";
-                    for (const auto& f : sub->filters) {
-                        if (f->getType() == viss::FilterVariant::HISTORY) {
-                            timePeriod = static_cast<HistoryFilter*>(f.get())->getTimePeriod();
-                            break;
-                        }
-                    }
-
-                    rapidjson::Value data_array(rapidjson::kArrayType);
-                    for (const auto& p : sub->watchedPaths) {
-                        auto points = data_store->getValues(p, timePeriod);
-                        if (points.empty()) continue;
-
-                        rapidjson::Value dp_list(rapidjson::kArrayType);
-                        for (const auto& point : points) {
-                            rapidjson::Value dp_obj(rapidjson::kObjectType);
-                            dp_obj.AddMember("value", any_to_json_value(point.value, allocator), allocator);
-                            dp_obj.AddMember("ts", rapidjson::Value(formatTimestamp(point.timestamp).c_str(), allocator), allocator);
-                            dp_list.PushBack(dp_obj, allocator);
-                        }
-
-                        rapidjson::Value data_obj(rapidjson::kObjectType);
-                        data_obj.AddMember("path", rapidjson::Value(p.c_str(), allocator), allocator);
-
-                        if (dp_list.Size() == 1) {
-                            data_obj.AddMember("dp", dp_list[0], allocator);
-                        } else {
-                            data_obj.AddMember("dp", dp_list, allocator);
-                        }
-                        
-                        data_array.PushBack(data_obj, allocator);
-                    }
-
-                    if (data_array.Size() == 1) {
-                        notification->AddMember("data", data_array[0], allocator);
-                    } else {
-                        notification->AddMember("data", data_array, allocator);
-                    }
-                    
-                    notification->AddMember("ts", rapidjson::Value(getCurrentTimestamp().c_str(), allocator), allocator);
-
-                    if (sub->originalRequest->responseChan) {
-                        sub->originalRequest->responseChan->push(notification);
-                    }
+            for (const auto& pair : subscriptions_copy) {
+                if (pair.second) {
+                    pair.second->process();
                 }
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -289,5 +328,11 @@ void VssSubscriptionManager::stop() {
     if (publisher_thread_.joinable()) {
         publisher_thread_.join();
     }
+    
+    // Clear all subscriptions, which will trigger their destructors
+    std::lock_guard<std::mutex> lock(mtx);
+    m_subscriptions.clear();
+    m_triggerMap.clear();
+
     LOG_INFO << "VssSubscriptionManager::stop() completed.";
 }

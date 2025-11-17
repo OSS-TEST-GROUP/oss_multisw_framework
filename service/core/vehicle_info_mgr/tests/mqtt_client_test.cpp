@@ -6,7 +6,10 @@
 #include <vector>
 #include <atomic>
 #include <condition_variable>
-#include "nlohmann/3.11.2/json.hpp"
+#include "rapidjson/document.h"
+#include "rapidjson/writer.h"
+#include "rapidjson/stringbuffer.h"
+#include "rapidjson/prettywriter.h"
 
 // --- MQTT Configuration ---
 const std::string BROKER_ADDRESS("tcp://localhost:1883");
@@ -18,7 +21,7 @@ const std::string RESPONSE_TOPIC_PREFIX("VISS/response/");
 std::mutex mtx;
 std::condition_variable cv;
 std::atomic<bool> response_received(false);
-nlohmann::json g_response_json;
+rapidjson::Document g_response_json;
 
 
 class TestCallback : public virtual mqtt::callback {
@@ -32,11 +35,14 @@ class TestCallback : public virtual mqtt::callback {
 
     void message_arrived(mqtt::const_message_ptr msg) override {
         std::cout << "Response received on topic: " << msg->get_topic() << std::endl;
-        try {
-            g_response_json = nlohmann::json::parse(msg->to_string());
-            std::cout << "Response payload:\n" << g_response_json.dump(4) << std::endl;
-        } catch (const nlohmann::json::parse_error& e) {
-            std::cerr << "Could not parse response JSON: " << e.what() << std::endl;
+        g_response_json.Parse(msg->get_payload().c_str());
+        if (g_response_json.HasParseError()) {
+            std::cerr << "Could not parse response JSON" << std::endl;
+        } else {
+            rapidjson::StringBuffer buffer;
+            rapidjson::PrettyWriter<rapidjson::StringBuffer> writer(buffer);
+            g_response_json.Accept(writer);
+            std::cout << "Response payload:\n" << buffer.GetString() << std::endl;
         }
         response_received = true;
         cv.notify_one();
@@ -49,17 +55,20 @@ std::string generate_uuid() {
     return "cpp-test-" + std::to_string(id_counter++);
 }
 
-bool run_single_test(mqtt::async_client& client, const nlohmann::json& request_payload) {
+bool run_single_test(mqtt::async_client& client, rapidjson::Document& request_payload) {
     response_received = false;
-    g_response_json.clear();
+    g_response_json.SetObject(); // Clear by re-initializing
 
-    std::string request_id = request_payload.at("requestId");
+    std::string request_id = request_payload["requestId"].GetString();
     std::string response_topic = RESPONSE_TOPIC_PREFIX + request_id;
 
     client.subscribe(response_topic, 1)->wait();
     std::cout << "Subscribed to " << response_topic << std::endl;
 
-    client.publish(REQUEST_TOPIC, request_payload.dump())->wait();
+    rapidjson::StringBuffer buffer;
+    rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+    request_payload.Accept(writer);
+    client.publish(REQUEST_TOPIC, buffer.GetString())->wait();
     std::cout << "Published request to " << REQUEST_TOPIC << std::endl;
 
     std::unique_lock<std::mutex> lock(mtx);
@@ -93,44 +102,48 @@ int main() {
 
     // --- Test 1: GET request ---
     std::cout << "\n--- 1. Testing GET request for Vehicle.OBD.Speed ---" << std::endl;
-    nlohmann::json get_request = {
-        {"action", "get"},
-        {"path", "Vehicle.OBD.Speed"},
-        {"requestId", generate_uuid()}
-    };
+    rapidjson::Document get_request;
+    get_request.SetObject();
+    rapidjson::Document::AllocatorType& allocator1 = get_request.GetAllocator();
+    get_request.AddMember("action", "get", allocator1);
+    get_request.AddMember("path", "Vehicle.OBD.Speed", allocator1);
+    get_request.AddMember("requestId", rapidjson::Value(generate_uuid().c_str(), allocator1), allocator1);
     run_single_test(client, get_request);
     
     std::this_thread::sleep_for(std::chrono::seconds(1));
 
     // --- Test 2: SET request ---
     std::cout << "\n--- 2. Testing SET request for Vehicle.OBD.Speed ---" << std::endl;
-    nlohmann::json set_request = {
-        {"action", "set"},
-        {"path", "Vehicle.OBD.Speed"},
-        {"value", 120},
-        {"requestId", generate_uuid()}
-    };
+    rapidjson::Document set_request;
+    set_request.SetObject();
+    rapidjson::Document::AllocatorType& allocator2 = set_request.GetAllocator();
+    set_request.AddMember("action", "set", allocator2);
+    set_request.AddMember("path", "Vehicle.OBD.Speed", allocator2);
+    set_request.AddMember("value", 120, allocator2);
+    set_request.AddMember("requestId", rapidjson::Value(generate_uuid().c_str(), allocator2), allocator2);
     run_single_test(client, set_request);
 
     std::this_thread::sleep_for(std::chrono::seconds(1));
 
     // --- Test 3: GET after SET ---
     std::cout << "\n--- 3. Testing GET request after SET ---" << std::endl;
-    nlohmann::json get_after_set_request = {
-        {"action", "get"},
-        {"path", "Vehicle.OBD.Speed"},
-        {"requestId", generate_uuid()}
-    };
+    rapidjson::Document get_after_set_request;
+    get_after_set_request.SetObject();
+    rapidjson::Document::AllocatorType& allocator3 = get_after_set_request.GetAllocator();
+    get_after_set_request.AddMember("action", "get", allocator3);
+    get_after_set_request.AddMember("path", "Vehicle.OBD.Speed", allocator3);
+    get_after_set_request.AddMember("requestId", rapidjson::Value(generate_uuid().c_str(), allocator3), allocator3);
+    
     if (run_single_test(client, get_after_set_request)) {
-        try {
-            std::string val = g_response_json.at("data")[0].at("value");
+        if (g_response_json.HasMember("data") && g_response_json["data"].IsArray() && g_response_json["data"].Size() > 0 && g_response_json["data"][0].HasMember("value") && g_response_json["data"][0]["value"].IsString()) {
+            std::string val = g_response_json["data"][0]["value"].GetString();
             if (val == "120") {
                 std::cout << "--- Value verification PASSED ---" << std::endl;
             } else {
                 std::cerr << "!!! Value verification FAILED: Expected 120, got " << val << std::endl;
             }
-        } catch (const std::exception& e) {
-            std::cerr << "!!! Value verification FAILED: Error accessing value in response: " << e.what() << std::endl;
+        } else {
+            std::cerr << "!!! Value verification FAILED: Could not access value in response." << std::endl;
         }
     }
 

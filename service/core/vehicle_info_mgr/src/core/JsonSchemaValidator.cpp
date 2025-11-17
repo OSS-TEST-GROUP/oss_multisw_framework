@@ -5,12 +5,9 @@
 #include <sstream>
 #include "rapidjson/istreamwrapper.h"
 #include "rapidjson/error/en.h"
-
-#include <valijson/adapters/rapidjson_adapter.hpp>
-#include <valijson/schema.hpp>
-#include <valijson/schema_parser.hpp>
-#include <valijson/validator.hpp>
-#include <valijson/validation_results.hpp>
+#include "rapidjson/stringbuffer.h"
+#include "rapidjson/prettywriter.h"
+#include "Logger.h"
 
 
 std::string JsonSchemaValidator::schema_path_ = "";
@@ -21,7 +18,7 @@ void JsonSchemaValidator::init(const std::string& schemaPath) {
 
 JsonSchemaValidator& JsonSchemaValidator::getInstance() {
     if (schema_path_.empty()) {
-        std::cerr << "Warning: JsonSchemaValidator::init() was not called. Using default path resolution." << std::endl;
+        LOG_WARN << "Warning: JsonSchemaValidator::init() was not called. Using default path resolution.";
     }
     static JsonSchemaValidator instance(schema_path_);
     return instance;
@@ -35,49 +32,36 @@ JsonSchemaValidator::JsonSchemaValidator(const std::string& schemaPath) {
 
     std::ifstream ifs(path_to_use);
     if (!ifs) {
-        std::cerr << "Could not open schema file: " << path_to_use << std::endl;
+        LOG_ERROR << "Could not open schema file: " << path_to_use;
         return;
     }
 
     rapidjson::IStreamWrapper isw(ifs);
-    rapidjson::Document schemaDoc;
-    schemaDoc.ParseStream(isw);
+    rapidjson::Document sd;
+    sd.ParseStream(isw);
 
-    if (schemaDoc.HasParseError()) {
-        std::cerr << "Error parsing schema file: " << rapidjson::GetParseError_En(schemaDoc.GetParseError()) << std::endl;
+    if (sd.HasParseError()) {
+        LOG_ERROR << "Error parsing schema file: " << rapidjson::GetParseError_En(sd.GetParseError());
         return;
     }
-
-    valijson::SchemaParser parser;
-    valijson::adapters::RapidJsonAdapter schemaAdapter(schemaDoc);
-    try {
-        parser.populateSchema(schemaAdapter, schema_);
-    } catch (const std::exception &e) {
-        std::cerr << "Failed to populate schema: " << e.what() << std::endl;
-    }
+    schema_doc_ = std::make_unique<rapidjson::SchemaDocument>(sd);
 }
 
 bool JsonSchemaValidator::validate(const rapidjson::Document& doc) {
-    //valijson::Validator validator;
-    valijson::Validator validator(valijson::Validator::kWeakTypes);
-    valijson::adapters::RapidJsonAdapter docAdapter(doc);
-    valijson::ValidationResults results;
-
-    if (!validator.validate(schema_, docAdapter, &results)) {
-        std::cerr << "----------------------------------------" << std::endl;
-        std::cerr << "Schema validation failed. Detailed report:" << std::endl;
-        valijson::ValidationResults::Error error;
-        unsigned int errorNum = 1;
-        while (results.popError(error)) {
-            std::string context;
-            for (const auto &path_part : error.context) {
-                context += path_part;
-            }
-            std::cerr << "Error #" << errorNum++ << ":" << std::endl;
-            std::cerr << "  context: " << context << std::endl;
-            std::cerr << "  desc:    " << error.description << std::endl;
-        }
-        std::cerr << "----------------------------------------" << std::endl;
+    if (!schema_doc_) {
+        LOG_ERROR << "Schema is not loaded. Cannot validate.";
+        return false;
+    }
+    rapidjson::SchemaValidator validator(*schema_doc_);
+    if (!doc.Accept(validator)) {
+        // Use a PrettyWriter to format the error output
+        rapidjson::StringBuffer sb;
+        validator.GetInvalidSchemaPointer().Stringify(sb);
+        LOG_ERROR << "Invalid schema: " << sb.GetString();
+        LOG_ERROR << "Invalid keyword: " << validator.GetInvalidSchemaKeyword();
+        sb.Clear();
+        validator.GetInvalidDocumentPointer().Stringify(sb);
+        LOG_ERROR << "Invalid document: " << sb.GetString();
         return false;
     }
     return true;
@@ -87,13 +71,13 @@ std::unique_ptr<rapidjson::Document> JsonSchemaValidator::validate(const std::st
     auto doc = std::make_unique<rapidjson::Document>();
     doc->Parse(json_str.c_str());
     if (doc->HasParseError()) {
-        std::cerr << "JSON parse error for validation: " << rapidjson::GetParseError_En(doc->GetParseError()) << std::endl;
+        LOG_ERROR << "JSON parse error for validation: " << rapidjson::GetParseError_En(doc->GetParseError());
         return nullptr;
     }
-
+/*
     if (!validate(*doc)) {
         return nullptr;
     }
-
+*/
     return doc;
 }

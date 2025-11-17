@@ -38,10 +38,16 @@ public:
     void setVssTree(std::shared_ptr<viss::VSSTree> vss_tree) override;
 
 private:
+    // Listener for DDS Discovery
+    class DiscoveryListener;
     // Listener for VehicleDataTopic
     class VehicleDataListener;
     // Listener for GnssInsOrientationStamped
     class GnssInsOrientationListener;
+    // Listener for Trajectory
+    class TrajectoryListener;
+    // Listener for VehicleDataWriter
+    class VehicleDataWriterListener;
 
     // Use the fully qualified name for the forward declaration
     friend class autoware_sensing_msgs::msg::GnssInsOrientationStamped;
@@ -64,15 +70,16 @@ private:
     std::unique_ptr<GnssInsOrientationListener> gnss_orientation_listener_;
 
     // Resources for Trajectory
-    class TrajectoryListener;
     eprosima::fastdds::dds::Topic* trajectory_topic_;
     eprosima::fastdds::dds::DataReader* trajectory_reader_;
     eprosima::fastdds::dds::TypeSupport trajectory_type_;
     std::unique_ptr<TrajectoryListener> trajectory_listener_;
+    std::unique_ptr<VehicleDataWriterListener> vehicle_data_writer_listener_;
 
     std::shared_ptr<ThreadSafeQueue<VehicleData>> data_channel_;
     std::shared_ptr<viss::VSSTree> vss_tree_;
     std::atomic<bool> active_;
+    std::unique_ptr<DiscoveryListener> discovery_listener_;
 };
 
 #endif // DDSPROVIDER_H

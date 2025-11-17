@@ -121,18 +121,59 @@ void ServiceManager::processRequest(std::shared_ptr<RequestData> request) {
         } else {
             // Find if a history filter exists to get the time period
             std::string timePeriod = "";
+            bool is_get_metadata = false;
+            int depth = 0;
+
             if (req_doc.HasMember("filter")) {
-                // Simplified parsing for get request; assumes history is the only relevant filter here.
-                const auto& filter = req_doc["filter"];
-                if (filter.IsObject() && filter.HasMember("variant") && filter["variant"].IsString() && strcmp(filter["variant"].GetString(), "history") == 0) {
-                    if (filter.HasMember("parameter") && filter["parameter"].IsString()) {
-                        timePeriod = filter["parameter"].GetString();
+                const auto& filter_val = req_doc["filter"];
+                if (filter_val.IsArray()) {
+                    for (const auto& filter_item : filter_val.GetArray()) {
+                        if (filter_item.IsObject() && filter_item.HasMember("variant") && filter_item["variant"].IsString()) {
+                            auto variant = filter_item["variant"].GetString();
+                            if (strcmp(variant, "metadata") == 0) {
+                                is_get_metadata = true;
+                                if (filter_item.HasMember("parameter") && filter_item["parameter"].IsString()) {
+                                    try {
+                                        depth = std::stoi(filter_item["parameter"].GetString());
+                                    } catch (const std::invalid_argument& ia) {
+                                        LOG_ERROR << "Invalid argument for depth: " << filter_item["parameter"].GetString();
+                                        depth = 0; // Default to 0 on error
+                                    }
+                                }
+                            } else if (strcmp(variant, "history") == 0) {
+                                if (filter_item.HasMember("parameter") && filter_item["parameter"].IsString()) {
+                                    timePeriod = filter_item["parameter"].GetString();
+                                }
+                            }
+                        }
                     }
                 }
             }
+            
+            if (is_get_metadata) {
+                 rapidjson::Value metadata_array(rapidjson::kArrayType);
+                for (const auto& p : paths) {
+                    try {
+                        rapidjson::Document metadata_doc = vss_tree_->getMetadata(p, depth);
+                        if (!metadata_doc.ObjectEmpty()) {
+                            rapidjson::Value metadata_copy(metadata_doc, allocator);
+                            metadata_array.PushBack(metadata_copy, allocator);
+                        }
+                    } catch (const std::exception& e) {
+                        LOG_WARN << "Could not get metadata for path " << p << ": " << e.what();
+                    }
+                }
 
-            rapidjson::Value data_array(rapidjson::kArrayType);
-            for (const auto& p : paths) {
+                if (metadata_array.Size() == 0) {
+                    response_doc->AddMember("error", StatusCodes::NOT_FOUND("Metadata not available for the given path(s).").Move(), allocator);
+                } else if (metadata_array.Size() == 1 && paths.size() == 1) {
+                    response_doc->AddMember("metadata", metadata_array[0], allocator);
+                } else {
+                    response_doc->AddMember("metadata", metadata_array, allocator);
+                }
+            } else {
+                rapidjson::Value data_array(rapidjson::kArrayType);
+                for (const auto& p : paths) {
                 auto values = storage->getValues(p, timePeriod);
                 if (values.empty()) continue;
 
@@ -163,6 +204,7 @@ void ServiceManager::processRequest(std::shared_ptr<RequestData> request) {
                 response_doc->AddMember("data", data_array, allocator);
             }
         }
+    }
     } else if (action == "subscribe") {
         std::string path = req_doc["path"].GetString();
         if (vss_tree_->getPaths(path, request->request_doc.get()).empty()) {
