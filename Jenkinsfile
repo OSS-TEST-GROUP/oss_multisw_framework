@@ -42,7 +42,7 @@ pipeline {
         
         GITHUB_REPO_URL = 'https://github.com/obigo-gov/oss_multisw_framework.git'
         GITOPS_REPO_URL = 'https://lotte-autops.com/oss_group1/oss_multisw_framework.git'
-        GIT_BRANCH = "develop"
+        GIT_BRANCH = "agl-update_test"
 
         // Sysroot
         SDK_DIR="${HOME}/obigo-sdk"
