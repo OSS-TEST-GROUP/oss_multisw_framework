@@ -291,7 +291,7 @@ pipeline {
                         alwaysLinkToLastBuild: true,
                         keepAll: true,
                         reportDir: 'output/coverage/report',
-                        reportFile: 'index.html',
+                        reportFiles: 'index.html',
                         reportName: 'Multi-Middleware Coverage Report'
                     ])
 
