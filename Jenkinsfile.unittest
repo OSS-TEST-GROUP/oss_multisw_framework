@@ -275,7 +275,12 @@ pipeline {
             post {
                 always {
                     recordCoverage(
-                        tools: [coverageAdapter('output/coverage/coverage.xml')],
+                        name: 'Multi-Middleware Coverage',
+                        id: 'oss-coverage',
+                        tools: [[
+                            parser: 'COBERTURA',
+                            pattern: 'output/coverage/coverage.xml'
+                        ]],
                         sourceCodeRetention: 'EVERY_BUILD',
                         failOnError: false
                     )
