@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include "TestPrinter.hpp"
 
 #include "ServiceController.hpp"
 #include "mock/MockAppController.hpp"

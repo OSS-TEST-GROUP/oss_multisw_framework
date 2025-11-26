@@ -1,6 +1,14 @@
 cmake_minimum_required(VERSION 3.5)
 project("agl_adsw_manager_unittest")
 
+add_compile_options(
+    -fno-access-control
+    -ftest-coverage
+)
+
+enable_testing()
+include (GoogleTest)
+
 add_executable(${PROJECT_NAME}
     test_main.cpp
     ADSWManagerTest.cpp
@@ -15,6 +23,8 @@ add_executable(${PROJECT_NAME}
     AppStateHandlerTest.cpp
     DDSManagerTest.cpp
     AppControllerTest.cpp
+    MainTest.cpp
+    UpdateAppListHandlerTest.cpp
     ${GENERATED_LIFECYCLE_FILES}
     ${GENERATED_AGL_FILES}
 )
@@ -34,6 +44,8 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
   MOCK_SYSCTL_DIR="${CMAKE_CURRENT_SOURCE_DIR}/unittest/helpers"
   MOCK_SYSCTL_LOG="${CMAKE_CURRENT_BINARY_DIR}/sysctl.log"
 )
+
+gtest_discover_tests (${PROJECT_NAME})
 
 install ( TARGETS ${PROJECT_NAME}
     RUNTIME DESTINATION bin/unittest/agl/adsw_manager
