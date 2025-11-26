@@ -1,7 +1,7 @@
 #pragma once
 
 #include <ostream>
-#include "../generated/idl/lifecycle/LifecycleCommon.hpp"
+#include "lifecycle/LifecycleCommon.hpp"
 
 namespace lifecyclemgr {
 
