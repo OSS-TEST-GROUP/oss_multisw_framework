@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include "TestPrinter.hpp"
 
 #define protected public
 #define private   public

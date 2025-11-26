@@ -8,6 +8,8 @@
 
 #include <thread>
 
+#include "TestPrinter.hpp"
+
 using namespace adsw_manager::agl;
 using namespace eprosima::fastdds::dds;
 using std::chrono::steady_clock;

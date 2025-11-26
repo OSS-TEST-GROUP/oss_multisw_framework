@@ -20,7 +20,7 @@ namespace adsw_manager::agl {
             UpdateAppListHandler() = default;
             virtual ~UpdateAppListHandler();
 
-            bool Initialize(eprosima::fastdds::dds::DomainParticipant* participant,
+            virtual bool Initialize(eprosima::fastdds::dds::DomainParticipant* participant,
                             eprosima::fastdds::dds::Publisher* publisher,
                             eprosima::fastdds::dds::Subscriber* subscriber,
                             RequestCallback cb);

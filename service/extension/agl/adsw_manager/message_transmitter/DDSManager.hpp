@@ -40,6 +40,18 @@ namespace adsw_manager::agl {
                 void InjectNotifyWriterForTest(std::unique_ptr<NotifyAppStateWriter> w) {
                     notify_app_state_writer_ = std::move(w);
                 }
+                void InjectUpdateAppListHandlerForTest(std::unique_ptr<UpdateAppListHandler> h) {
+                    update_app_list_handler_ = std::move(h);
+                }
+                void InjectAppStateHandlerForTest(std::unique_ptr<AppStateHandler> a) {
+                    app_state_handler_ = std::move(a);
+                }
+                void InjectStartAppHandlerForTest(std::unique_ptr<StartAppHandler> s) {
+                    start_app_handler_ = std::move(s);
+                }
+                void InjectStopAppHandlerForTest(std::unique_ptr<StopAppHandler> t) {
+                    stop_app_handler_ = std::move(t);
+                }
             #endif
 
         private:

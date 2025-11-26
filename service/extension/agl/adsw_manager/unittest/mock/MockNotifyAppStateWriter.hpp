@@ -4,9 +4,13 @@
 #include "lifecycle/NotifyServiceState.hpp"
 #include <gmock/gmock.h>
 
-class MockNotifyAppStateWriter : public adsw_manager::agl::NotifyAppStateWriter {
-    public:
-        MOCK_METHOD(bool, Publish, (const lifecyclemgr::NotifyServiceState&), (override));
+class MockNotifyAppStateWriter : public adsw_manager::agl::NotifyAppStateWriter
+{
+public:
+    MOCK_METHOD(bool, Initialize,
+                (eprosima::fastdds::dds::Publisher *, eprosima::fastdds::dds::DomainParticipant *),
+                (override));
+    MOCK_METHOD(bool, Publish, (const lifecyclemgr::NotifyServiceState &), (override));
 };
 
 #endif

@@ -1,7 +1,10 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include "TestPrinter.hpp"
 
+#define private public
 #include "StopAppHandler.hpp"
+#undef private
 
 #include <fastdds/dds/domain/DomainParticipant.hpp>
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp>
@@ -9,7 +12,6 @@
 #include <fastdds/dds/subscriber/Subscriber.hpp>
 
 #include "lifecycle/StopServiceRequestPubSubTypes.hpp"
-
 #include "../common/AppUtils.hpp"
 
 using namespace adsw_manager::agl;
@@ -22,22 +24,22 @@ protected:
     static Subscriber* subscriber_;
 
     StopAppHandler test_handler;
-    StopAppHandler::RequestCallback cb = [](const lifecyclemgr::StopServiceRequest&){};
+    StopAppHandler::RequestCallback cb = [](const lifecyclemgr::StopServiceRequest&) {};
 
     static void SetUpTestSuite() {
         DomainParticipantQos qos;
         participant_ = DomainParticipantFactory::get_instance()->create_participant(0, qos);
         ASSERT_NE(nullptr, participant_);
 
-        publisher_   = participant_->create_publisher(PUBLISHER_QOS_DEFAULT, nullptr);
+        publisher_  = participant_->create_publisher(PUBLISHER_QOS_DEFAULT, nullptr);
         ASSERT_NE(nullptr, publisher_);
-        subscriber_  = participant_->create_subscriber(SUBSCRIBER_QOS_DEFAULT, nullptr);
+        subscriber_ = participant_->create_subscriber(SUBSCRIBER_QOS_DEFAULT, nullptr);
         ASSERT_NE(nullptr, subscriber_);
     }
 
     static void TearDownTestSuite() {
         if (participant_) {
-            if (publisher_) { participant_->delete_publisher(publisher_); publisher_ = nullptr; }
+            if (publisher_)  { participant_->delete_publisher(publisher_);  publisher_  = nullptr; }
             if (subscriber_) { participant_->delete_subscriber(subscriber_); subscriber_ = nullptr; }
             DomainParticipantFactory::get_instance()->delete_participant(participant_);
             participant_ = nullptr;
@@ -46,21 +48,42 @@ protected:
 };
 
 DomainParticipant* StopAppHandlerTest::participant_ = nullptr;
-Publisher* StopAppHandlerTest::publisher_ = nullptr;
-Subscriber* StopAppHandlerTest::subscriber_ = nullptr;
+Publisher*        StopAppHandlerTest::publisher_   = nullptr;
+Subscriber*       StopAppHandlerTest::subscriber_  = nullptr;
 
-// ----------------------------- Initialize -----------------------------
+// ----------------------------- Initialize: 성공 경로 -----------------------------
 
-TEST_F(StopAppHandlerTest, StopAppHandler_Initialize) {
-
+TEST_F(StopAppHandlerTest, StopAppHandler_Initialize_Succeeds_WithValidArgs) {
     EXPECT_TRUE(test_handler.Initialize(participant_, publisher_, subscriber_, cb));
-
 }
 
-// ----------------------------- PublishResponse -----------------------------
+// ----------------------------- Initialize: 실패 경로들 -----------------------------
 
-TEST_F(StopAppHandlerTest, StopAppHandler_Publish) {
+TEST_F(StopAppHandlerTest, Initialize_Fails_WhenParticipantIsNull) {
+    StopAppHandler handler;
+    EXPECT_FALSE(handler.Initialize(nullptr, publisher_, subscriber_, cb));
+}
 
+TEST_F(StopAppHandlerTest, Initialize_Fails_WhenPublisherIsNull) {
+    StopAppHandler handler;
+    EXPECT_FALSE(handler.Initialize(participant_, nullptr, subscriber_, cb));
+}
+
+TEST_F(StopAppHandlerTest, Initialize_Fails_WhenSubscriberIsNull) {
+    StopAppHandler handler;
+    EXPECT_FALSE(handler.Initialize(participant_, publisher_, nullptr, cb));
+}
+
+TEST_F(StopAppHandlerTest, Initialize_Fails_WhenCallbackIsEmpty) {
+    StopAppHandler handler;
+    StopAppHandler::RequestCallback empty_cb;  // 비어 있는 std::function
+
+    EXPECT_FALSE(handler.Initialize(participant_, publisher_, subscriber_, empty_cb));
+}
+
+// ----------------------------- PublishResponse: 성공 경로 -----------------------------
+
+TEST_F(StopAppHandlerTest, StopAppHandler_PublishResponse_Succeeds_AfterInitialize) {
     ASSERT_TRUE(test_handler.Initialize(participant_, publisher_, subscriber_, cb))
         << "Initialize failed -> writer_가 nullptr일 가능성 큼";
 
@@ -68,5 +91,19 @@ TEST_F(StopAppHandlerTest, StopAppHandler_Publish) {
     res.ret_code(lifecyclemgr::ReturnCode::SUCCESS);
 
     EXPECT_TRUE(test_handler.PublishResponse(res));
+}
 
+// ----------------------------- Destructor: null 포인터 브랜치 -----------------------------
+
+TEST_F(StopAppHandlerTest, Destructor_WhenNoReaderWriterOrTopics_DoesNotCrash) {
+    StopAppHandler handler;
+
+    handler.participant_ = participant_;
+    handler.publisher_   = publisher_;
+    handler.subscriber_  = subscriber_;
+
+    handler.req_topic_ = nullptr;
+    handler.res_topic_ = nullptr;
+    handler.reader_    = nullptr;
+    handler.writer_    = nullptr;
 }

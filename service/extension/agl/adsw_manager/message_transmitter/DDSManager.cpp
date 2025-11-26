@@ -27,7 +27,9 @@ namespace adsw_manager::agl {
         publisher_ = participant_->create_publisher(PUBLISHER_QOS_DEFAULT, nullptr);
         subscriber_ = participant_->create_subscriber(SUBSCRIBER_QOS_DEFAULT, nullptr);
 
-        app_state_handler_ = std::make_unique<AppStateHandler>();
+        if (!app_state_handler_) {
+            app_state_handler_ = std::make_unique<AppStateHandler>();
+        }
         app_state_handler_->Initialize(participant_, publisher_, subscriber_,
             [this](const GetServiceStateRequest& req) {
                 if (on_get_app_state_request_) {
@@ -36,7 +38,9 @@ namespace adsw_manager::agl {
             }
         );
 
-        start_app_handler_ = std::make_unique<StartAppHandler>();
+        if (!start_app_handler_) {
+            start_app_handler_ = std::make_unique<StartAppHandler>();
+        }
         start_app_handler_->Initialize(participant_, publisher_, subscriber_,
             [this](const StartServiceRequest& req) {
                 if (on_start_app_request_) {
@@ -45,7 +49,9 @@ namespace adsw_manager::agl {
             }
         );
 
-        stop_app_handler_ = std::make_unique<StopAppHandler>();
+        if (!stop_app_handler_) {
+            stop_app_handler_ = std::make_unique<StopAppHandler>();
+        }
         stop_app_handler_->Initialize(participant_, publisher_, subscriber_,
             [this](const StopServiceRequest& req) {
                 if (on_stop_app_request_) {
