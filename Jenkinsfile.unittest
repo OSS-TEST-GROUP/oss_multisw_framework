@@ -251,6 +251,57 @@ pipeline {
                 }
             }
         }
+        stage('Coverage') {
+            steps {
+                script {
+                    def dockerArgs = [
+                        '--network=host',
+                        '-u 1000:1000',
+                        '-w /home/ossuser/workspace',
+                        "-v ${WORKSPACE}/.build:/home/ossuser/workspace/.build",
+                        "-v ${WORKSPACE}/service:/home/ossuser/workspace/service",
+                        "-v ${WORKSPACE}/output:/home/ossuser/workspace/output",
+                        "-v ${WORKSPACE}/docker/scripts/coverage.sh:/home/ossuser/workspace/coverage.sh"
+                    ].join(' ')
+                    docker.image("${BUILDER_IMAGE}").inside(dockerArgs) {
+                        sh '''
+                            bash -c '
+                                cd /home/ossuser/workspace
+                                ./coverage.sh
+                            '
+                        '''
+                    }
+                }
+            }
+            post {
+                always {
+                    recordCoverage(
+                        name: 'Multi-Middleware Coverage',
+                        id: 'oss-coverage',
+                        tools: [[
+                            parser: 'COBERTURA',
+                            pattern: 'output/coverage/coverage.xml'
+                        ]],
+                        sourceCodeRetention: 'EVERY_BUILD',
+                        failOnError: false
+                    )
+
+                    publishHTML(target:[
+                        allowMissing: false,
+                        alwaysLinkToLastBuild: true,
+                        keepAll: true,
+                        reportDir: 'output/coverage/report',
+                        reportFiles: 'index.html',
+                        reportName: 'Coverage Report'
+                    ])
+
+                    archiveArtifacts artifacts: '''
+                        output/coverage/filtered.info,
+                        output/coverage/coverage.xml
+                    '''.stripIndent().trim(), fingerprint: true, allowEmptyArchive: true
+                }
+            }
+        }
     }
     post {
         always {

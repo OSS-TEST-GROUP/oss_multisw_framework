@@ -197,6 +197,14 @@ do_build_cmd() {
 			)
 		fi
 	fi
+	if [[ ${BUILD_UNITTEST} = TRUE ]]; then
+		cmake_args+=(
+			-DCMAKE_BUILD_TYPE=Debug
+			-DCMAKE_CXX_FLAGS="--coverage -O0 -g -fprofile-arcs -ftest-coverage"
+			-DCMAKE_EXE_LINKER_FLAGS="--coverage"
+			-DCMAKE_SHARED_LINKER_FLAGS="--coverage"
+		)
+	fi
 	source ${SDK_DIR}/Fast-DDS/output/${TARGET_MF_NAME}_${TARGET_ARCH}/setup.bash
 
 	cmake ${WORKDIR} "${cmake_args[@]}"

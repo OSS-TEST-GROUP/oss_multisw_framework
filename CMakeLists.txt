@@ -50,8 +50,10 @@ if (BUILD_UNITTEST)
     )
     #set(INSTALL_GTEST OFF)
     FetchContent_MakeAvailable(googletest)
+    # Code Coverage
+    add_compile_options(-O0 -g --coverage -fprofile-arcs -ftest-coverage)
+    add_link_options(--coverage)
 endif()
-
 ## Global Definitions
 #add_definitions ( -D_DEFINITTION )
 
