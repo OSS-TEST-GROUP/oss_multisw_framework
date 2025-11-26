@@ -275,7 +275,7 @@ pipeline {
             post {
                 always {
                     recordCoverage(
-                        tools: [cobertura(pattern: 'output/coverage/coverage.xml')],
+                        tools: [coverageAdapter('output/coverage/coverage.xml')],
                         sourceCodeRetention: 'EVERY_BUILD',
                         failOnError: false
                     )
