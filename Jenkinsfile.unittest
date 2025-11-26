@@ -251,6 +251,50 @@ pipeline {
                 }
             }
         }
+        stage('Coverage') {
+            steps {
+                script {
+                    def dockerArgs = [
+                        '--network=host',
+                        '-u 1000:1000',
+                        '-w /home/ossuser/workspace',
+                        "-v ${WORKSPACE}/.build:/home/ossuser/workspace/.build",
+                        "-v ${WORKSPACE}/output:/home/ossuser/workspace/output",
+                        "-v ${WORKSPACE}/docker/scripts/coverage.sh:/home/ossuser/workspace/coverage.sh"
+                    ].join(' ')
+                    docker.image("${BUILDER_IMAGE}").inside(dockerArgs) {
+                        sh '''
+                            bash -c '
+                                cd /home/ossuser/workspace
+                                ./coverage.sh
+                            '
+                        '''
+                    }
+                }
+            }
+            post {
+                always {
+                    publishCoverage adapters: [
+                        coberturaAdapter('output/coverage/coverage.xml')
+                    ],
+                    sourceFileResolver: sourceFiles('STORE_LAST_BUILD'),
+                    failNoReports: false
+
+                    publishHTML(target:[
+                        allowMissing: false,
+                        alwaysLinkToLastBuild: true,
+                        keepAll: true,
+                        reportDir: 'output/coverage',
+                        reportFile: 'index.html',
+                        reportName: 'Coverage Report'
+                    ])
+                    archiveArtifacts artifacts: '''
+                        output/coverage/filtered.info,
+                        output/coverage/coverage.xml
+                    '''.stripIndent().trim(), fingerprint: true, allowEmptyArchive: true
+                }
+            }
+        }
     }
     post {
         always {
