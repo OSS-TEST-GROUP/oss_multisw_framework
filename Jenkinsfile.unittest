@@ -276,8 +276,8 @@ pipeline {
                 always {
                     recordCoverage(
                         tools: [cobertura(pattern: 'output/coverage/coverage.xml')],
-                        sourceCodeRetention: 'STORE_LAST_BUILD',
-                        failNoReports: false
+                        sourceCodeRetention: 'EVERY_BUILD',
+                        failOnError: false
                     )
 
                     publishHTML(target:[
