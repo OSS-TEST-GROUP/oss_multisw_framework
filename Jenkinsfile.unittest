@@ -259,6 +259,7 @@ pipeline {
                         '-u 1000:1000',
                         '-w /home/ossuser/workspace',
                         "-v ${WORKSPACE}/.build:/home/ossuser/workspace/.build",
+                        "-v ${WORKSPACE}/service:/home/ossuser/workspace/service",
                         "-v ${WORKSPACE}/output:/home/ossuser/workspace/output",
                         "-v ${WORKSPACE}/docker/scripts/coverage.sh:/home/ossuser/workspace/coverage.sh"
                     ].join(' ')
@@ -289,10 +290,11 @@ pipeline {
                         allowMissing: false,
                         alwaysLinkToLastBuild: true,
                         keepAll: true,
-                        reportDir: 'output/coverage',
+                        reportDir: 'output/coverage/report',
                         reportFile: 'index.html',
-                        reportName: 'Coverage Report'
+                        reportName: 'Multi-Middleware Coverage Report'
                     ])
+
                     archiveArtifacts artifacts: '''
                         output/coverage/filtered.info,
                         output/coverage/coverage.xml
