@@ -292,7 +292,7 @@ pipeline {
                         keepAll: true,
                         reportDir: 'output/coverage/report',
                         reportFiles: 'index.html',
-                        reportName: 'Multi-Middleware Coverage Report'
+                        reportName: 'Coverage Report'
                     ])
 
                     archiveArtifacts artifacts: '''
