@@ -274,11 +274,11 @@ pipeline {
             }
             post {
                 always {
-                    publishCoverage adapters: [
-                        coberturaAdapter('output/coverage/coverage.xml')
-                    ],
-                    sourceFileResolver: sourceFiles('STORE_LAST_BUILD'),
-                    failNoReports: false
+                    recordCoverage(
+                        tools: [cobertura(pattern: 'output/coverage/coverage.xml')],
+                        sourceCodeRetention: 'STORE_LAST_BUILD',
+                        failNoReports: false
+                    )
 
                     publishHTML(target:[
                         allowMissing: false,
