@@ -52,6 +52,39 @@ public:
         }
     }
 
+    std::string GetMetadata(const std::string& path, const std::string& depth) {
+        GetRequestMessage request;
+        request.set_path(path);
+        request.set_requestid("get-meta-test-1");
+
+        auto* filter = request.mutable_filter();
+        auto* filter_exp = filter->add_filterexp();
+        filter_exp->set_variant(grpcProtobufMessages::FilterExpressions::FilterExpression::METADATA);
+        auto* filter_val = filter_exp->mutable_value();
+        auto* meta_val = filter_val->mutable_valuemetadata();
+        meta_val->set_tree(depth); // Use the 'tree' field for depth, as a string
+
+        GetResponseMessage response;
+        ClientContext context;
+        context.set_deadline(std::chrono::system_clock::now() + std::chrono::seconds(5));
+
+        Status status = stub_->GetRequest(&context, request, &response);
+
+        if (status.ok()) {
+            if (response.status() == grpcProtobufMessages::ResponseStatus::SUCCESS) {
+                if (response.has_successresponse() && response.successresponse().has_metadata()) {
+                    return response.successresponse().metadata();
+                } else {
+                    return "[SUCCESS but no metadata]";
+                }
+            } else {
+                return "ERROR: " + response.errorresponse().reason();
+            }
+        } else {
+            return "RPC failed: " + status.error_message();
+        }
+    }
+
     std::string Set(const std::string& path, const std::string& value) {
         SetRequestMessage request;
         request.set_path(path);
@@ -138,21 +171,23 @@ private:
 };
 
 void print_usage(const char* prog_name) {
-    std::cout << "Usage: " << prog_name << " --action <get|set|subscribe> --path <vss_path> [options]\n\n"
+    std::cout << "Usage: " << prog_name << " --action <get|set|subscribe|getmeta> --path <vss_path> [options]\n\n"
               << "Options:\n"
               << "  --help                         Show this help message.\n"
               << "  --server <address>             Set the server address. (Default: localhost:50051)\n"
-              << "  --action <get|set|subscribe>   The action to perform.\n"
+              << "  --action <get|set|subscribe|getmeta> The action to perform.\n"
               << "  --path <vss_path>              The VSS path for the action.\n"
               << "  --value <value>                The value for the 'set' action.\n"
+              << "  --depth <depth>                The metadata depth for 'getmeta' action. (Default: 0)\n"
               << std::endl;
 }
 
 int main(int argc, char** argv) {
-    std::string target_str = "localhost:50051";
+    std::string target_str = "localhost:5443";
     std::string action;
     std::string path;
     std::string value;
+    std::string depth = "0";
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -167,6 +202,8 @@ int main(int argc, char** argv) {
             path = argv[++i];
         } else if (arg == "--value" && i + 1 < argc) {
             value = argv[++i];
+        } else if (arg == "--depth" && i + 1 < argc) {
+            depth = argv[++i];
         }
     }
 
@@ -189,6 +226,10 @@ int main(int argc, char** argv) {
         std::cout << "--- Performing GET request for path: " << path << " ---" << std::endl;
         std::string response = client.Get(path);
         std::cout << "Server response: " << response << std::endl;
+    } else if (action == "getmeta") {
+        std::cout << "--- Performing GET METADATA request for path: " << path << " with depth: " << depth << " ---" << std::endl;
+        std::string response = client.GetMetadata(path, depth);
+        std::cout << "Server response: " << response << std::endl;
     } else if (action == "set") {
         if (value.empty()) {
             std::cerr << "Error: --value is required for 'set' action." << std::endl;
@@ -208,7 +249,7 @@ int main(int argc, char** argv) {
         // so we don't need to do anything else here. The user can Ctrl+C to exit.
         // A real implementation might handle unsubscription more gracefully.
     } else {
-        std::cerr << "Error: Invalid action '" << action << "'. Must be one of: get, set, subscribe." << std::endl;
+        std::cerr << "Error: Invalid action '" << action << "'. Must be one of: get, set, subscribe, getmeta." << std::endl;
         return 1;
     }
 
