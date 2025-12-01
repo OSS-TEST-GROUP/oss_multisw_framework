@@ -399,8 +399,8 @@ else()
         idl_types
         paho-mqttpp3-static
         paho-mqtt3as-static
+	fastcdr
         fastdds
-        fastcdr
         ${OPENSSL_LIBRARIES}
     )
 endif()
@@ -472,8 +472,8 @@ target_include_directories(dds_client_test
 target_link_libraries(dds_client_test
     PRIVATE
     idl_types
-    fastdds
     fastcdr
+    fastdds
     pthread
 )
 
@@ -540,8 +540,8 @@ if (BUILD_UNITTEST)
 	    gtest_main
             ${PROTOBUF_LIBRARY}
             ${GRPC_LIBRARY}
-            fastdds
             fastcdr
+            fastdds
             idl_types
             proto_gen_files
 	)
