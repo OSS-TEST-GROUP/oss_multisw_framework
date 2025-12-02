@@ -75,5 +75,5 @@ refer_messages:
     message : mmf/adswmgr/AdswServiceStatus
     protocol : dds
   - name : DetectionReport
-    message : mmf/securitymgr/DetectionReport
+    message : security/DetectionReport
     protocol : dds
