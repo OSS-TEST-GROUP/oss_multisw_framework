@@ -21,6 +21,7 @@
 #include <fastdds/dds/subscriber/SampleInfo.hpp>
 #include <thread>
 #include <chrono>
+#include <cstdlib>
 
 using namespace eprosima::fastdds::dds;
 
@@ -48,6 +49,9 @@ public:
 class DdsTransportTest : public ::testing::Test {
 protected:
     void SetUp() override {
+        // Set a specific domain ID for testing to avoid conflicts
+        setenv("VISS_DDS_DOMAIN_ID", "42", 1);
+
         request_queue = std::make_shared<ThreadSafeQueue<std::shared_ptr<RequestData>>>();
         auto request_pool = std::make_shared<ObjectPool<RequestData>>();
         
@@ -57,7 +61,7 @@ protected:
         // --- Mock DDS Participant Setup ---
         eprosima::fastdds::dds::DomainParticipantQos pqos;
         pqos.name("dds_unit_test");
-        participant = DomainParticipantFactory::get_instance()->create_participant(7, pqos, nullptr, eprosima::fastdds::dds::StatusMask::none());
+        participant = DomainParticipantFactory::get_instance()->create_participant(42, pqos, nullptr, eprosima::fastdds::dds::StatusMask::none());
         ASSERT_NE(participant, nullptr);
 
         request_type.register_type(participant);
@@ -82,7 +86,7 @@ protected:
         response_reader = subscriber->create_datareader(response_topic, reader_qos, &response_listener);
         ASSERT_NE(response_reader, nullptr);
         
-        std::this_thread::sleep_for(std::chrono::milliseconds(500)); // Allow discovery
+        std::this_thread::sleep_for(std::chrono::milliseconds(200)); // Allow discovery
     }
 
     void TearDown() override {
@@ -100,6 +104,9 @@ protected:
             DomainParticipantFactory::get_instance()->delete_participant(participant);
         }
         transport->stop();
+        
+        // Unset the environment variable to not affect other tests
+        unsetenv("VISS_DDS_DOMAIN_ID");
     }
 
     std::unique_ptr<ITransport> transport;
@@ -247,6 +254,48 @@ TEST_F(DdsTransportTest, SubscribeRequestIsQueued) {
     const auto& doc = *received_request->request_doc;
     ASSERT_STREQ(doc["action"].GetString(), "subscribe");
     ASSERT_STREQ(doc["path"].GetString(), "Vehicle.Speed");
+}
+
+TEST_F(DdsTransportTest, SubscribeRequestReturnsSubscriptionId) {
+    // 1. Prepare the inner VISS request JSON
+    std::string viss_request = R"({
+        "action": "subscribe",
+        "path": "Vehicle.Speed",
+        "requestId": "dds-test-sub-resp-1"
+    })";
+
+    // 2. Prepare and publish
+    std::string payload_str = CreatePayload(viss_request);
+    VissRequestTopic data;
+    data.payload(payload_str);
+    ASSERT_EQ(request_writer->write(&data), eprosima::fastdds::dds::RETCODE_OK);
+
+    // 3. Wait and verify that the request is queued
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(request_queue->wait_and_pop(received_request));
+    ASSERT_EQ(received_request->requestId, "dds-test-sub-resp-1");
+
+    // 4. Simulate a success response from the ServiceManager with a subscriptionId
+    auto response_doc = std::make_shared<PooledResponseMap>();
+    response_doc->SetObject();
+    rapidjson::Document::AllocatorType& allocator = response_doc->GetAllocator();
+    response_doc->AddMember("requestId", "dds-test-sub-resp-1", allocator);
+    response_doc->AddMember("action", "subscribe", allocator);
+    response_doc->AddMember("subscriptionId", "test-sub-id-123", allocator);
+    response_doc->AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+
+    received_request->responseChan->push(response_doc);
+
+    // 5. Wait for the response to be published back
+    std::unique_lock<std::mutex> lock(response_listener.mtx);
+    ASSERT_TRUE(response_listener.cv.wait_for(lock, std::chrono::seconds(1), [&]{ return response_listener.received.load(); }));
+    
+    // 6. Verify the response payload
+    rapidjson::Document received_payload;
+    received_payload.Parse(response_listener.payload.c_str());
+    ASSERT_FALSE(received_payload.HasParseError());
+    ASSERT_TRUE(received_payload.HasMember("subscriptionId"));
+    ASSERT_STREQ(received_payload["subscriptionId"].GetString(), "test-sub-id-123");
 }
 
 TEST_F(DdsTransportTest, UnsubscribeRequestIsQueued) {
@@ -429,6 +478,77 @@ TEST_F(DdsTransportTest, GetRequestReturnsError) {
     ASSERT_STREQ(error["number"].GetString(), "404");
 }
 
+TEST_F(DdsTransportTest, GetRequestReturnsNoAction) {
+    // 1. Prepare the inner VISS request JSON for a non-existent path
+    std::string viss_request = R"({
+        "action": "get",
+        "path": "Vehicle.NonExistent.Path",
+        "requestId": "dds-test-get-error-req-1"
+    })";
+
+    // 2. Prepare and publish
+    std::string payload_str = CreatePayload(viss_request);
+    VissRequestTopic data;
+    data.payload(payload_str);
+    ASSERT_EQ(request_writer->write(&data), eprosima::fastdds::dds::RETCODE_OK);
+
+    // 3. Wait for the request to be queued
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(request_queue->wait_and_pop(received_request));
+    ASSERT_EQ(received_request->requestId, "dds-test-get-error-req-1");
+    
+    // 4. Simulate sending an error response from the ServiceManager
+    auto response_doc = std::make_shared<PooledResponseMap>();
+    response_doc->SetObject();
+    rapidjson::Document::AllocatorType& allocator = response_doc->GetAllocator();
+    response_doc->AddMember("requestId", "dds-test-get-error-req-1", allocator);
+    //response_doc->AddMember("action", "get", allocator);
+    response_doc->AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    
+    received_request->responseChan->push(response_doc);
+
+    // 5. Wait for the response to be published back
+    std::unique_lock<std::mutex> lock(response_listener.mtx);
+    ASSERT_FALSE(response_listener.cv.wait_for(lock, std::chrono::seconds(1), [&]{ return response_listener.received.load(); }));
+    ASSERT_FALSE(response_listener.received.load());
+}
+
+
+TEST_F(DdsTransportTest, GetRequestReturnsIntTypeAction) {
+    // 1. Prepare the inner VISS request JSON for a non-existent path
+    std::string viss_request = R"({
+        "action": "get",
+        "path": "Vehicle.NonExistent.Path",
+        "requestId": "dds-test-get-error-req-1"
+    })";
+
+    // 2. Prepare and publish
+    std::string payload_str = CreatePayload(viss_request);
+    VissRequestTopic data;
+    data.payload(payload_str);
+    ASSERT_EQ(request_writer->write(&data), eprosima::fastdds::dds::RETCODE_OK);
+
+    // 3. Wait for the request to be queued
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(request_queue->wait_and_pop(received_request));
+    ASSERT_EQ(received_request->requestId, "dds-test-get-error-req-1");
+    
+    // 4. Simulate sending an error response from the ServiceManager
+    auto response_doc = std::make_shared<PooledResponseMap>();
+    response_doc->SetObject();
+    rapidjson::Document::AllocatorType& allocator = response_doc->GetAllocator();
+    response_doc->AddMember("requestId", "dds-test-get-error-req-1", allocator);
+    response_doc->AddMember("action", 100, allocator);
+    response_doc->AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    
+    received_request->responseChan->push(response_doc);
+
+    // 5. Wait for the response to be published back
+    std::unique_lock<std::mutex> lock(response_listener.mtx);
+    ASSERT_FALSE(response_listener.cv.wait_for(lock, std::chrono::seconds(1), [&]{ return response_listener.received.load(); }));
+    ASSERT_FALSE(response_listener.received.load());
+}
+
 TEST_F(DdsTransportTest, SetRequestReturnsError) {
     std::string viss_request = R"({
         "action": "set",
@@ -463,6 +583,39 @@ TEST_F(DdsTransportTest, SetRequestReturnsError) {
     rapidjson::Document received_payload;
     received_payload.Parse(response_listener.payload.c_str());
     ASSERT_TRUE(received_payload.HasMember("error"));
+}
+
+class DdsTransportDomainIdTest : public ::testing::Test {
+protected:
+    void TearDown() override {
+        unsetenv("VISS_DDS_DOMAIN_ID");
+    }
+};
+
+TEST_F(DdsTransportDomainIdTest, HandlesInvalidArgument) {
+    // Set an invalid (non-numeric) value for the environment variable
+    setenv("VISS_DDS_DOMAIN_ID", "not-a-number", 1);
+
+    auto request_queue = std::make_shared<ThreadSafeQueue<std::shared_ptr<RequestData>>>();
+    auto request_pool = std::make_shared<ObjectPool<RequestData>>();
+    auto transport = std::make_unique<DDSTransport>(request_pool, request_queue);
+
+    // start() should catch the std::invalid_argument, log an error, and proceed
+    // with the default domain ID without crashing.
+    ASSERT_NO_THROW(transport->start());
+}
+
+TEST_F(DdsTransportDomainIdTest, HandlesOutOfRange) {
+    // Set a value that is too large for an integer
+    setenv("VISS_DDS_DOMAIN_ID", "99999999999999999999", 1);
+
+    auto request_queue = std::make_shared<ThreadSafeQueue<std::shared_ptr<RequestData>>>();
+    auto request_pool = std::make_shared<ObjectPool<RequestData>>();
+    auto transport = std::make_unique<DDSTransport>(request_pool, request_queue);
+
+    // start() should catch the std::out_of_range, log an error, and proceed
+    // with the default domain ID without crashing.
+    ASSERT_NO_THROW(transport->start());
 }
 
 TEST_F(DdsTransportTest, SubscribeRequestReturnsError) {
@@ -500,6 +653,288 @@ TEST_F(DdsTransportTest, SubscribeRequestReturnsError) {
     ASSERT_TRUE(received_payload.HasMember("error"));
 }
 
+
+TEST_F(DdsTransportTest, SubscribeAndUnsubscribeRequest) {
+    std::string viss_request = R"({
+        "action": "subscribe",
+        "path": "Vehicle.Speed",
+        "requestId": "dds-test-req-1"
+    })";
+
+    std::string payload_str = CreatePayload(viss_request);
+    VissRequestTopic data;
+    data.payload(payload_str);
+    ASSERT_EQ(request_writer->write(&data), eprosima::fastdds::dds::RETCODE_OK);
+
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(request_queue->wait_and_pop(received_request));
+    ASSERT_EQ(received_request->requestId, "dds-test-req-1");
+
+    auto response_doc = std::make_shared<PooledResponseMap>();
+    response_doc->SetObject();
+    rapidjson::Document::AllocatorType& allocator = response_doc->GetAllocator();
+    response_doc->AddMember("requestId", "dds-test-req-1", allocator);
+    response_doc->AddMember("action", "subscribe", allocator);
+    response_doc->AddMember("subscriptionId", "111", allocator);
+    response_doc->AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    received_request->responseChan->push(response_doc);
+
+    std::unique_lock<std::mutex> lock(response_listener.mtx);
+    ASSERT_TRUE(response_listener.cv.wait_for(lock, std::chrono::seconds(2), [&]{ return response_listener.received.load(); }));
+
+    rapidjson::Document received_payload;
+    received_payload.Parse(response_listener.payload.c_str());
+    ASSERT_TRUE(received_payload.HasMember("subscriptionId"));
+    ASSERT_STREQ(received_payload["subscriptionId"].GetString(), "111");
+
+    response_listener.received = false;
+
+
+    std::string unsubscribe_request = R"({
+        "action": "unsubscribe",
+        "subscriptionId": "111",
+        "requestId": "dds-test-req-11"
+    })";
+
+    payload_str = CreatePayload(unsubscribe_request);
+    VissRequestTopic data1;
+    data1.payload(payload_str);
+    ASSERT_EQ(request_writer->write(&data1), eprosima::fastdds::dds::RETCODE_OK);
+
+    std::shared_ptr<RequestData> received_request1;
+    ASSERT_TRUE(request_queue->wait_and_pop(received_request1));
+    ASSERT_EQ(received_request1->requestId, "dds-test-req-11");
+
+
+
+    auto response_doc1 = std::make_shared<PooledResponseMap>();
+    response_doc1->SetObject();
+    rapidjson::Document::AllocatorType& allocator1 = response_doc1->GetAllocator();
+    response_doc1->AddMember("requestId", "dds-test-req-11", allocator1);
+    response_doc1->AddMember("action", "unsubscribe", allocator1);
+    response_doc1->AddMember("subscriptionId", "111", allocator1);
+    response_doc1->AddMember("ts", "2024-01-01T00:00:00Z", allocator1);
+    received_request1->responseChan->push(response_doc1);
+
+    //std::unique_lock<std::mutex> lock(response_listener.mtx);
+    ASSERT_TRUE(response_listener.cv.wait_for(lock, std::chrono::seconds(1), [&]{ return response_listener.received.load(); }));
+
+    rapidjson::Document received_payload1;
+    received_payload1.Parse(response_listener.payload.c_str());
+    ASSERT_FALSE(received_payload1.HasMember("subscriptionId"));
+
+}
+
+TEST_F(DdsTransportTest, SubscribeAndSubscription) {
+    std::string viss_request = R"({
+        "action": "subscribe",
+        "path": "Vehicle.Speed",
+        "requestId": "dds-test-req-1"
+    })";
+
+    std::string payload_str = CreatePayload(viss_request);
+    VissRequestTopic data;
+    data.payload(payload_str);
+    ASSERT_EQ(request_writer->write(&data), eprosima::fastdds::dds::RETCODE_OK);
+
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(request_queue->wait_and_pop(received_request));
+    ASSERT_EQ(received_request->requestId, "dds-test-req-1");
+
+    auto response_doc = std::make_shared<PooledResponseMap>();
+    response_doc->SetObject();
+    rapidjson::Document::AllocatorType& allocator = response_doc->GetAllocator();
+    response_doc->AddMember("requestId", "dds-test-req-1", allocator);
+    response_doc->AddMember("action", "subscribe", allocator);
+    response_doc->AddMember("subscriptionId", "111", allocator);
+    response_doc->AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    received_request->responseChan->push(response_doc);
+
+    std::unique_lock<std::mutex> lock(response_listener.mtx);
+    ASSERT_TRUE(response_listener.cv.wait_for(lock, std::chrono::seconds(2), [&]{ return response_listener.received.load(); }));
+
+    rapidjson::Document received_payload;
+    received_payload.Parse(response_listener.payload.c_str());
+    ASSERT_TRUE(received_payload.HasMember("subscriptionId"));
+    ASSERT_STREQ(received_payload["subscriptionId"].GetString(), "111");
+
+    response_listener.received = false;
+
+    auto response_doc1 = std::make_shared<PooledResponseMap>();
+    response_doc1->SetObject();
+    rapidjson::Document::AllocatorType& allocator1 = response_doc1->GetAllocator();
+    response_doc1->AddMember("requestId", "dds-test-req-11", allocator1);
+    response_doc1->AddMember("action", "subscription", allocator1);
+    response_doc1->AddMember("subscriptionId", "111", allocator1);
+    response_doc1->AddMember("ts", "2024-01-01T00:00:00Z", allocator1);
+    received_request->responseChan->push(response_doc1);
+
+    //std::unique_lock<std::mutex> lock(response_listener.mtx);
+    ASSERT_TRUE(response_listener.cv.wait_for(lock, std::chrono::seconds(1), [&]{ return response_listener.received.load(); }));
+
+    rapidjson::Document received_payload1;
+    received_payload1.Parse(response_listener.payload.c_str());
+    ASSERT_TRUE(received_payload1.HasMember("subscriptionId"));
+    ASSERT_STREQ(received_payload1["subscriptionId"].GetString(), "111");
+
+    response_listener.received = false;
+
+    auto response_doc2 = std::make_shared<PooledResponseMap>();
+    response_doc2->SetObject();
+    rapidjson::Document::AllocatorType& allocator2 = response_doc2->GetAllocator();
+    response_doc2->AddMember("requestId", "dds-test-req-11", allocator2);
+    response_doc2->AddMember("action", "subscription", allocator2);
+    response_doc2->AddMember("subscriptionId", "112", allocator2);
+    response_doc2->AddMember("ts", "2024-01-01T00:00:00Z", allocator2);
+    received_request->responseChan->push(response_doc2);
+
+    //std::unique_lock<std::mutex> lock(response_listener.mtx);
+    ASSERT_FALSE(response_listener.cv.wait_for(lock, std::chrono::seconds(1), [&]{ return response_listener.received.load(); }));
+    ASSERT_FALSE(response_listener.received.load());
+}
+
+TEST_F(DdsTransportTest, SubscribeAndSubscriptionWithStatus) {
+    std::string viss_request = R"({
+        "action": "subscribe",
+        "path": "Vehicle.Speed",
+        "requestId": "dds-test-req-1"
+    })";
+
+    std::string payload_str = CreatePayload(viss_request);
+    VissRequestTopic data;
+    data.payload(payload_str);
+    ASSERT_EQ(request_writer->write(&data), eprosima::fastdds::dds::RETCODE_OK);
+
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(request_queue->wait_and_pop(received_request));
+    ASSERT_EQ(received_request->requestId, "dds-test-req-1");
+
+    auto response_doc = std::make_shared<PooledResponseMap>();
+    response_doc->SetObject();
+    rapidjson::Document::AllocatorType& allocator = response_doc->GetAllocator();
+    response_doc->AddMember("requestId", "dds-test-req-1", allocator);
+    response_doc->AddMember("action", "subscribe", allocator);
+    response_doc->AddMember("subscriptionId", "111", allocator);
+    response_doc->AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    received_request->responseChan->push(response_doc);
+
+    std::unique_lock<std::mutex> lock(response_listener.mtx);
+    ASSERT_TRUE(response_listener.cv.wait_for(lock, std::chrono::seconds(2), [&]{ return response_listener.received.load(); }));
+
+    rapidjson::Document received_payload;
+    received_payload.Parse(response_listener.payload.c_str());
+    ASSERT_TRUE(received_payload.HasMember("subscriptionId"));
+    ASSERT_STREQ(received_payload["subscriptionId"].GetString(), "111");
+
+    response_listener.received = false;
+
+    auto response_doc1 = std::make_shared<PooledResponseMap>();
+    response_doc1->SetObject();
+    rapidjson::Document::AllocatorType& allocator1 = response_doc1->GetAllocator();
+    response_doc1->AddMember("requestId", "dds-test-req-11", allocator1);
+    response_doc1->AddMember("action", "subscription", allocator1);
+    response_doc1->AddMember("subscriptionId", "111", allocator1);
+    response_doc1->AddMember("status", "end", allocator1);
+    response_doc1->AddMember("ts", "2024-01-01T00:00:00Z", allocator1);
+    received_request->responseChan->push(response_doc1);
+
+    //std::unique_lock<std::mutex> lock(response_listener.mtx);
+    ASSERT_TRUE(response_listener.cv.wait_for(lock, std::chrono::seconds(1), [&]{ return response_listener.received.load(); }));
+
+    rapidjson::Document received_payload1;
+    received_payload1.Parse(response_listener.payload.c_str());
+    ASSERT_TRUE(received_payload1.HasMember("subscriptionId"));
+    ASSERT_STREQ(received_payload1["subscriptionId"].GetString(), "111");
+}
+
+
+TEST_F(DdsTransportTest, SubscribeAndSubscriptionWithTerminated) {
+    std::string viss_request = R"({
+        "action": "subscribe",
+        "path": "Vehicle.Speed",
+        "requestId": "dds-test-req-1"
+    })";
+
+    std::string payload_str = CreatePayload(viss_request);
+    VissRequestTopic data;
+    data.payload(payload_str);
+    ASSERT_EQ(request_writer->write(&data), eprosima::fastdds::dds::RETCODE_OK);
+
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(request_queue->wait_and_pop(received_request));
+    ASSERT_EQ(received_request->requestId, "dds-test-req-1");
+
+    auto response_doc = std::make_shared<PooledResponseMap>();
+    response_doc->SetObject();
+    rapidjson::Document::AllocatorType& allocator = response_doc->GetAllocator();
+    response_doc->AddMember("requestId", "dds-test-req-1", allocator);
+    response_doc->AddMember("action", "subscribe", allocator);
+    response_doc->AddMember("subscriptionId", "111", allocator);
+    response_doc->AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    received_request->responseChan->push(response_doc);
+
+    std::unique_lock<std::mutex> lock(response_listener.mtx);
+    ASSERT_TRUE(response_listener.cv.wait_for(lock, std::chrono::seconds(2), [&]{ return response_listener.received.load(); }));
+
+    rapidjson::Document received_payload;
+    received_payload.Parse(response_listener.payload.c_str());
+    ASSERT_TRUE(received_payload.HasMember("subscriptionId"));
+    ASSERT_STREQ(received_payload["subscriptionId"].GetString(), "111");
+
+    response_listener.received = false;
+
+    auto response_doc1 = std::make_shared<PooledResponseMap>();
+    response_doc1->SetObject();
+    rapidjson::Document::AllocatorType& allocator1 = response_doc1->GetAllocator();
+    response_doc1->AddMember("requestId", "dds-test-req-11", allocator1);
+    response_doc1->AddMember("action", "subscription", allocator1);
+    response_doc1->AddMember("subscriptionId", "111", allocator1);
+    response_doc1->AddMember("status", "terminated", allocator1);
+    response_doc1->AddMember("ts", "2024-01-01T00:00:00Z", allocator1);
+    received_request->responseChan->push(response_doc1);
+
+    //std::unique_lock<std::mutex> lock(response_listener.mtx);
+    //ASSERT_TRUE(response_listener.cv.wait_for(lock, std::chrono::seconds(1), [&]{ return response_listener.received.load(); }));
+
+    ASSERT_FALSE(response_listener.cv.wait_for(lock, std::chrono::seconds(1), [&]{ return response_listener.received.load(); }));
+    ASSERT_FALSE(response_listener.received.load());
+
+}
+
+
+TEST_F(DdsTransportTest, UnsubscribeRequestReturnsResponse) {
+    std::string viss_request = R"({
+        "action": "unsubscribe",
+        "subscriptionId": "existent-sub-id",
+        "requestId": "dds-test-unsub-response-req-1"
+    })";
+
+    std::string payload_str = CreatePayload(viss_request);
+    VissRequestTopic data;
+    data.payload(payload_str);
+    ASSERT_EQ(request_writer->write(&data), eprosima::fastdds::dds::RETCODE_OK);
+
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(request_queue->wait_and_pop(received_request));
+    ASSERT_EQ(received_request->requestId, "dds-test-unsub-response-req-1");
+
+    auto response_doc = std::make_shared<PooledResponseMap>();
+    response_doc->SetObject();
+    rapidjson::Document::AllocatorType& allocator = response_doc->GetAllocator();
+    response_doc->AddMember("requestId", "dds-test-unsub-response-req-1", allocator);
+    response_doc->AddMember("action", "unsubscribe", allocator);
+    response_doc->AddMember("subscriptionId", "111", allocator);
+    response_doc->AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    received_request->responseChan->push(response_doc);
+
+    std::unique_lock<std::mutex> lock(response_listener.mtx);
+    ASSERT_TRUE(response_listener.cv.wait_for(lock, std::chrono::seconds(1), [&]{ return response_listener.received.load(); }));
+
+    rapidjson::Document received_payload;
+    received_payload.Parse(response_listener.payload.c_str());
+    ASSERT_FALSE(received_payload.HasMember("subscriptionId"));
+}
+
 TEST_F(DdsTransportTest, UnsubscribeRequestReturnsError) {
     std::string viss_request = R"({
         "action": "unsubscribe",
@@ -534,3 +969,4 @@ TEST_F(DdsTransportTest, UnsubscribeRequestReturnsError) {
     received_payload.Parse(response_listener.payload.c_str());
     ASSERT_TRUE(received_payload.HasMember("error"));
 }
+

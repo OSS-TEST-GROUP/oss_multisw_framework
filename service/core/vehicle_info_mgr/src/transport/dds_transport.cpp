@@ -24,6 +24,9 @@
 #include <fastdds/dds/subscriber/DataReaderListener.hpp>
 #include <fastdds/dds/subscriber/qos/DataReaderQos.hpp>
 #include <fastdds/dds/subscriber/SampleInfo.hpp>
+#include <fastdds/dds/publisher/DataWriterListener.hpp>
+#include <queue>
+#include <cstdlib>
 
 #include "VissRequestPubSubTypes.hpp"
 #include "Logger.h"
@@ -41,6 +44,22 @@ struct WriterInfo {
     eprosima::fastdds::dds::DataWriter* writer;
     eprosima::fastdds::dds::Topic* topic;
     std::chrono::steady_clock::time_point last_used;
+    bool is_matched = false;
+    std::queue<std::string> pending_messages;
+};
+
+class DDSPublicationListener : public eprosima::fastdds::dds::DataWriterListener {
+public:
+    DDSPublicationListener(std::map<std::string, WriterInfo>& writer_map, std::mutex& map_mutex)
+        : writer_map_(writer_map), map_mutex_(map_mutex) {}
+
+    void on_publication_matched(
+        eprosima::fastdds::dds::DataWriter* writer,
+        const eprosima::fastdds::dds::PublicationMatchedStatus& info) override;
+
+private:
+    std::map<std::string, WriterInfo>& writer_map_;
+    std::mutex& map_mutex_;
 };
 
 struct DDSTransportImpl {
@@ -51,6 +70,7 @@ struct DDSTransportImpl {
     eprosima::fastdds::dds::DataReader* request_reader;
     eprosima::fastdds::dds::TypeSupport request_type;
     std::unique_ptr<RequestListener> request_listener;
+    std::unique_ptr<DDSPublicationListener> publication_listener;
     std::shared_ptr<ObjectPool<RequestData>> pool;
     std::shared_ptr<ThreadSafeQueue<std::shared_ptr<RequestData>>> requestQueue;
     std::shared_ptr<ThreadSafeQueue<std::shared_ptr<PooledResponseMap>>> responseChan;
@@ -78,6 +98,7 @@ struct DDSTransportImpl {
         , requestQueue(queue)
         , responseChan(std::make_shared<ThreadSafeQueue<std::shared_ptr<PooledResponseMap>>>())
     {
+        publication_listener = std::make_unique<DDSPublicationListener>(writer_map, writer_map_mutex);
         response_thread_ = std::thread([this]() {
             while (!stop_flag_.load()) {
                 std::shared_ptr<PooledResponseMap> response_doc;
@@ -212,7 +233,7 @@ struct DDSTransportImpl {
             }
             DataWriterQos writer_qos = DATAWRITER_QOS_DEFAULT;
             writer_qos.reliability().kind = RELIABLE_RELIABILITY_QOS;
-            writer = publisher->create_datawriter(topic, writer_qos, nullptr);
+            writer = publisher->create_datawriter(topic, writer_qos, publication_listener.get());
             if (writer == nullptr) {
                 LOG_ERROR << "Failed to create datawriter for topic: " << topic_name;
                 participant->delete_topic(topic);
@@ -282,8 +303,23 @@ DDSTransport::~DDSTransport() {
 void DDSTransport::start() {
     DomainParticipantQos pqos;
     pqos.name("viss_dds_transport");
-    //pqos.name("");
-    p_impl->participant = DomainParticipantFactory::get_instance()->create_participant(7, pqos, nullptr, StatusMask::none());
+
+    int domain_id = 0; // Default domain ID
+    const char* domain_id_env = std::getenv("VISS_DDS_DOMAIN_ID");
+    if (domain_id_env) {
+        try {
+            domain_id = std::stoi(domain_id_env);
+            LOG_INFO << "Using DDS Domain ID from environment variable VISS_DDS_DOMAIN_ID: " << domain_id;
+        } catch (const std::invalid_argument& e) {
+            LOG_ERROR << "Invalid argument for VISS_DDS_DOMAIN_ID: " << e.what() << ". Using default domain ID 0.";
+        } catch (const std::out_of_range& e) {
+            LOG_ERROR << "VISS_DDS_DOMAIN_ID is out of range: " << e.what() << ". Using default domain ID 0.";
+        }
+    } else {
+        LOG_INFO << "VISS_DDS_DOMAIN_ID not set. Using default domain ID 0.";
+    }
+
+    p_impl->participant = DomainParticipantFactory::get_instance()->create_participant(domain_id, pqos, nullptr, StatusMask::none());
     if (p_impl->participant == nullptr) {
         LOG_ERROR << "Failed to create DDS participant";
         return;
@@ -306,6 +342,17 @@ void DDSTransport::stop() {
     LOG_INFO << "DDS Transport stopped.";
 }
 
+void DDSPublicationListener::on_publication_matched(
+    eprosima::fastdds::dds::DataWriter* writer,
+    const eprosima::fastdds::dds::PublicationMatchedStatus& info)
+{
+    LOG_INFO << "Publication matched for topic: " << writer->get_topic()->get_name()
+            << " | Total count: " << info.total_count
+            << " | Total count change: " << info.total_count_change
+            << " | Current count: " << info.current_count
+            << " | Current count change: " << info.current_count_change;
+
+}
 
 
 //“/mmf/otamanager/vehicleinfo_service/GetVehicleInfo” 
