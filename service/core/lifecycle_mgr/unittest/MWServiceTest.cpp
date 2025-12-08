@@ -61,6 +61,85 @@ TEST_F(MWServiceTest, InactiveService) {
     EXPECT_FALSE(service.IsActive());
 }
 
+TEST_F(MWServiceTest, EmptyArguments) {
+    MWService service(3, "svc3", "/bin/svc3", true, {});
+    std::vector<std::string> args = service.GetArgs();
+    EXPECT_TRUE(args.empty());
+}
+
+TEST_F(MWServiceTest, MultipleArguments) {
+    std::vector<ArgumentConfig> args = { 
+        ArgumentConfig("arg1", "first arg", "string", "value1"), 
+        ArgumentConfig("arg2", "second arg", "int", "42"),
+        ArgumentConfig("arg3", "third arg", "bool", "true"),
+        ArgumentConfig("arg4", "fourth arg", "float", "3.14")
+    };
+    MWService service(42, "TestService", "/usr/bin/test", true, args);
+
+    std::vector<std::string> retrieved_args = service.GetArgs();
+    EXPECT_EQ(retrieved_args.size(), 4);
+    EXPECT_EQ(retrieved_args[0], "value1");
+    EXPECT_EQ(retrieved_args[1], "42");
+    EXPECT_EQ(retrieved_args[2], "true");
+    EXPECT_EQ(retrieved_args[3], "3.14");
+}
+
+TEST_F(MWServiceTest, NegativePID) {
+    MWService service(4, "svc4", "/bin/svc4", true, {});
+    EXPECT_EQ(service.GetPID(), -1);
+    
+    service.SetPID(-100);
+    EXPECT_EQ(service.GetPID(), -100);
+}
+
+TEST_F(MWServiceTest, ZeroPID) {
+    MWService service(5, "svc5", "/bin/svc5", true, {});
+    service.SetPID(1000);
+    EXPECT_EQ(service.GetPID(), 1000);
+    
+    service.SetPID(0);
+    EXPECT_EQ(service.GetPID(), 0);
+}
+
+TEST_F(MWServiceTest, LargePID) {
+    MWService service(6, "svc6", "/bin/svc6", true, {});
+    pid_t large_pid = 99999;
+    service.SetPID(large_pid);
+    EXPECT_EQ(service.GetPID(), large_pid);
+}
+
+TEST_F(MWServiceTest, EmptyServiceName) {
+    MWService service(7, "", "/bin/test", true, {});
+    EXPECT_EQ(service.GetName(), "");
+}
+
+TEST_F(MWServiceTest, EmptyPath) {
+    MWService service(8, "empty_path_svc", "", true, {});
+    EXPECT_EQ(service.GetPath(), "");
+}
+
+TEST_F(MWServiceTest, SpecialCharactersInName) {
+    MWService service(9, "service-name_123.test", "/bin/test", true, {});
+    EXPECT_EQ(service.GetName(), "service-name_123.test");
+}
+
+TEST_F(MWServiceTest, LongPath) {
+    std::string long_path = "/very/long/path/to/executable/that/is/nested/deeply/in/filesystem/structure/bin/app";
+    MWService service(10, "long_path_svc", long_path, true, {});
+    EXPECT_EQ(service.GetPath(), long_path);
+}
+
+TEST_F(MWServiceTest, DifferentCodeValues) {
+    MWService service1(0, "svc_zero", "/bin/test", true, {});
+    MWService service2(-1, "svc_negative", "/bin/test", true, {});
+    MWService service3(999999, "svc_large", "/bin/test", true, {});
+    
+    // Just verify construction works with different code values
+    EXPECT_EQ(service1.GetName(), "svc_zero");
+    EXPECT_EQ(service2.GetName(), "svc_negative");
+    EXPECT_EQ(service3.GetName(), "svc_large");
+}
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
