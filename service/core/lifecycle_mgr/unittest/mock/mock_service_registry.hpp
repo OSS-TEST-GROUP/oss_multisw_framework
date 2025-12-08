@@ -29,7 +29,8 @@ public:
     MOCK_METHOD(bool, vectorRemove, (std::vector<std::string>&, std::string), ());
     MOCK_METHOD(bool, vectorHas, (std::vector<std::string>, std::string), ());
     MOCK_METHOD(bool, hasService, (std::string), ());
-    MOCK_METHOD(std::shared_ptr<lifecycle_manager::Service>, getService, (std::string), ());    
+    MOCK_METHOD(std::shared_ptr<lifecycle_manager::Service>, getService, (std::string), ());
+    MOCK_METHOD(std::vector<std::string>, GetGroupList, (), ());
 
 };
 
@@ -104,6 +105,10 @@ bool ServiceRegistry::hasService(std::string name) {
 std::shared_ptr<Service> ServiceRegistry::getService(std::string name) {
     return Mock_ServiceRegistry->getService(name);
 }      
+
+std::vector<std::string> ServiceRegistry::GetGroupList(){
+    return Mock_ServiceRegistry->GetGroupList();
+}
 
 } // namespace lifecycle_manager
 

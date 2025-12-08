@@ -1,4 +1,3 @@
-
 #ifndef MOCK_LIFECYCLE_MW_SERVICE_MANAGER_HPP_
 #define MOCK_LIFECYCLE_MW_SERVICE_MANAGER_HPP_
 
@@ -6,6 +5,7 @@
 #include "service/MWServiceManager.hpp"
 #include "service/MWService.hpp"
 #include "service/ArgumentConfig.hpp"
+#include <sys/types.h>
 
 namespace lifecycle_manager {
 class MockMWServiceManager : public MWServiceManager {
@@ -19,6 +19,9 @@ public:
     MOCK_METHOD(void, StartMWService, (std::shared_ptr<MWService> mw_service), ());
     MOCK_METHOD(void, StopMWService, (std::shared_ptr<MWService> mw_service), ());
     MOCK_METHOD(void, RunMWServiceManagement, (), ());
+    // Provide mocks for private helpers so tests can link if they call them directly
+    MOCK_METHOD(pid_t, run_process, (const std::string exename, const std::string exepath, const std::vector<std::string>& args), ());
+    MOCK_METHOD(bool, kill_process, (pid_t pid), ());
 
 };
 
@@ -55,6 +58,21 @@ void MWServiceManager::StopMWService(std::shared_ptr<MWService> mw_service) {
 
 void MWServiceManager::RunMWServiceManagement() {
     return Mock_MWServiceManager->RunMWServiceManagement();
+}
+
+pid_t MWServiceManager::run_process(const std::string exename, const std::string exepath, const std::vector<std::string>& args) {
+    // Forward to mock if available; otherwise return error
+    if (Mock_MWServiceManager) {
+        return Mock_MWServiceManager->run_process(exename, exepath, args);
+    }
+    return -1;
+}
+
+bool MWServiceManager::kill_process(pid_t pid) {
+    if (Mock_MWServiceManager) {
+        return Mock_MWServiceManager->kill_process(pid);
+    }
+    return false;
 }
 
 } // namespace lifecycle_manager
