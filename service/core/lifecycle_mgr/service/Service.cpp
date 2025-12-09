@@ -6,7 +6,10 @@
 
 namespace lifecycle_manager {
 
-Service::Service() {}
+Service::Service() : name_(""), service_type_(ServiceType::ONESHOT), recovery_policy_(RecoveryPolicy::R_DEFAULT), is_enabled_(false),
+    service_mode_(ServiceMode::NORMAL), service_state_(ServiceState::NOT_RUNNING), 
+    service_state_last_(ServiceState::NOT_RUNNING), recovered_count_(0), os_type_(OsType::ROS2)
+{}
 
 Service::Service(const std::string& name, const ServiceType type, const RecoveryPolicy policy, const bool enabled, const OsType os)
     : name_(name), service_type_(type), recovery_policy_(policy), is_enabled_(enabled),

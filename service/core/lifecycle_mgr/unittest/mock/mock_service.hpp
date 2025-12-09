@@ -7,12 +7,12 @@
 namespace lifecycle_manager {
 class MockService : public Service {
 public:
-
-    MockService() : Service() {}
+    MockService() : Service(), recovered_count_(0) {}
     MockService(const std::string& name, const ServiceType type, const RecoveryPolicy policy, const bool enabled, const OsType os)
-        : Service(name, type, policy, enabled, os) {}       
-    virtual ~MockService() {}
+        : Service(name, type, policy, enabled, os), recovered_count_(0) {}
+    ~MockService() = default;
 
+    // Only mock virtual methods
     MOCK_METHOD(std::string, GetName, (), ());
     MOCK_METHOD(ServiceType, GetServiceType, (), ());
     MOCK_METHOD(RecoveryPolicy, GetRecoveryPolicy, (), ());
@@ -22,14 +22,16 @@ public:
     MOCK_METHOD(ServiceState, GetServiceState, (), ());
     MOCK_METHOD(void, SetServiceState, (ServiceState), ());
     MOCK_METHOD(ServiceState, GetLastServiceState, (), ());
-    MOCK_METHOD(int32_t, GetRecoveredCount, (), ());
-    MOCK_METHOD(void, IncreaseRecoveredCount, (), ());
-    MOCK_METHOD(void, ClearRecoverdCount, (), ());
     MOCK_METHOD(void, Print, (), ());
     MOCK_METHOD(OsType, GetOsType, (), ());
+    MOCK_METHOD(int32_t, GetRecoveredCount, (), ());
+
+private:
+    int32_t recovered_count_;
 };
 
-MockService* Mock_Service;
+inline MockService* Mock_Service = nullptr;
+
 
 Service::Service() {}
 Service::Service(const std::string& name, const ServiceType type, const RecoveryPolicy policy, const bool enabled, const OsType os) {}

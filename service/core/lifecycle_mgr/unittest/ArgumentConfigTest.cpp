@@ -1,34 +1,20 @@
 #include <gtest/gtest.h>
 
 #include "service/ArgumentConfig.hpp"
-#include "mock/mock_argumentconfig.hpp"
-
-using ::testing::Return;
-using ::testing::_;
-using ::testing::A;
-using ::testing::ReturnRef;
-using ::testing::Values;
-using ::testing::SetArgPointee;
-using ::testing::SetArrayArgument;
-using ::testing::SaveArg;
-using ::testing::SaveArgPointee;
-using ::testing::DoAll;
-using ::testing::Args;
-using ::testing::AllOf;
-using ::testing::AtLeast;
-using ::testing::Combine;
 
 using namespace lifecycle_manager;
 
 
 class ArgumentConfigTest : public ::testing::Test {
 protected:
-    void SetUp() override {
-        // No setup required for now
+    virtual void SetUp(){
+        ins = new ArgumentConfig("test_arg", "This is a test argument", "string", "default_value");
     }
-    void TearDown() override {
-        // No teardown required for now
+    virtual void TearDown(){
+        delete ins;
     }
+
+    ArgumentConfig* ins;
 };
 
 TEST_F(ArgumentConfigTest, ConstructorAndGetters) {

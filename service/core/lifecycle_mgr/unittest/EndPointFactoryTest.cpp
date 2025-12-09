@@ -6,6 +6,7 @@
 #include "mock/mock_dds_message_endpoint.hpp"
 #include "mock/mock_dds_transmitter.hpp"
 #include "mock/mock_message_endpoint.hpp"
+#include "mock/mock_lifecycle_factory.hpp"
 
 using ::testing::Return;
 using ::testing::_;
@@ -29,9 +30,12 @@ class EndPointFactoryTest : public ::testing::Test {
 protected:
     void SetUp() override {
         // Setup code if needed
+        Mock_EndPointFactory = new MockEndPointFactory();
     }
     void TearDown() override {
         // Cleanup code if needed
+        delete Mock_EndPointFactory;
+        Mock_EndPointFactory = nullptr;
     }
 };
 

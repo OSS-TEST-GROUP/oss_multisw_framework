@@ -9,19 +9,22 @@ namespace lifecycle_manager {
 class MockStateManager : public StateManager {
 public:
     MockStateManager(LifecycleManager& mgr) : StateManager(mgr) {}
+    ~MockStateManager() = default;
+
+    // Only mock virtual methods
     MOCK_METHOD(bool, Start, (), ());
     MOCK_METHOD(void, Stop, (), ());
-    MOCK_METHOD(bool, StartService, (std::shared_ptr<Service> service), ());    
+    MOCK_METHOD(bool, StartService, (std::shared_ptr<Service> service), ());
     MOCK_METHOD(void, StopService, (std::shared_ptr<Service> service), ());
     MOCK_METHOD(bool, SetServiceMode, (lifecyclemgr::SetServiceModeRequest* message), ());
     MOCK_METHOD(void, ProcessServiceHandling, (std::set<std::shared_ptr<Service>> service_list), ());
     MOCK_METHOD(void, OnStart, (lifecyclemgr::StartServiceResponse* message), ());
-    MOCK_METHOD(void, OnStop, (lifecyclemgr::StopServiceResponse* message), ());    
+    MOCK_METHOD(void, OnStop, (lifecyclemgr::StopServiceResponse* message), ());
     MOCK_METHOD(void, RequestStopAll, (), ());
-    // Add more mocks as needed 
 };
 
-MockStateManager* Mock_StateManager;
+inline MockStateManager* Mock_StateManager = nullptr;
+
 
 // Implementations moved to .cpp file to avoid multiple definition errors.
 StateManager::StateManager(lifecycle_manager::LifecycleManager& mgr) : ManagerBase(mgr) {}
@@ -63,7 +66,6 @@ void StateManager::RequestStopAll() {
     }
     // Default no-op to avoid performing real actions during unit tests
 }
-
 
 } // namespace lifecycle_manager
 

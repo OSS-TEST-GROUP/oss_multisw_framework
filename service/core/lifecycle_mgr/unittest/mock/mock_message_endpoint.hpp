@@ -5,12 +5,12 @@
 #include "transmitter/MessageEndPoint.hpp"
 
 namespace lifecycle_manager {
-
 class MockMessageEndPoint : public MessageEndPoint {
 public:
     MockMessageEndPoint(std::string topic) : MessageEndPoint(topic) {}
-    virtual ~MockMessageEndPoint() {}
+    ~MockMessageEndPoint() = default;
 
+    // Only mock virtual methods
     MOCK_METHOD(std::string, GetTopic, (), ());
     MOCK_METHOD(std::string, GetTypeName, (), ());
     MOCK_METHOD(std::shared_ptr<TypeSupport>, GetTypeSupport, (), ());
@@ -19,7 +19,8 @@ public:
     MOCK_METHOD(void, OnDataAvailable, (), ());
 };
 
-MockMessageEndPoint* Mock_MessageEndPoint;
+inline MockMessageEndPoint* Mock_MessageEndPoint = nullptr;
+
 
 MessageEndPoint::MessageEndPoint(std::string topic) : topic_(topic) {
 }

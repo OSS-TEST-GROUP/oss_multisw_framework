@@ -8,21 +8,18 @@ namespace lifecycle_manager {
 
 class MockManagerBase : public ManagerBase {
 public:
-    MockManagerBase(LifecycleManager& lifecycle) : ManagerBase(lifecycle) {}    
-    virtual ~MockManagerBase() {}
+    MockManagerBase(LifecycleManager& lifecycle) : ManagerBase(lifecycle) {}
+    ~MockManagerBase() = default;
 
-    // Mock methods for ManagerBase
+    // Only mock virtual methods
     MOCK_METHOD(std::shared_ptr<DDSTransmitter>, GetTransmitter, (), ());
     MOCK_METHOD(std::shared_ptr<Service>, GetService, (std::string name), ());
     MOCK_METHOD(std::shared_ptr<ServiceRegistry>, GetRegistry, (), ());
     MOCK_METHOD(std::shared_ptr<PolicyManager>, GetPolicy, (), ());
     MOCK_METHOD(const char*, GetTopic, (MessageType mtype), ());
-
-    // Add more mocks as needed
-
 };
 
-MockManagerBase* Mock_ManagerBase;  
+inline MockManagerBase* Mock_ManagerBase = nullptr;
 
 ManagerBase::ManagerBase(LifecycleManager& lifecycle) : lifecycle_(lifecycle) {}
 ManagerBase::~ManagerBase() {}

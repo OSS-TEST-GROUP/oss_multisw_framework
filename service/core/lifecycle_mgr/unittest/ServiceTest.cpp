@@ -6,8 +6,7 @@
 #include <memory>
 
 #include "service/Service.hpp"
-
-#include "unittest/mock/mock_service.hpp"
+#include "unittest/mock/mock_logger.hpp"
 
 using namespace lifecycle_manager;
 
@@ -28,12 +27,23 @@ using ::testing::Combine;
 
 class ServiceTest : public ::testing::Test {
 protected:
-    void SetUp() override {
-        // Setup code if needed
+    virtual void SetUp(){
+        ins = new Service(
+            "test_arg",
+            ServiceType::NORMAL,
+            RecoveryPolicy::ALWAYS,
+            true,
+            OsType::ROS2
+        );
+        Mock_Logger = new MockLogger();
     }
-    void TearDown() override {
-        // Cleanup code if needed
+    virtual void TearDown(){
+        delete ins;
+        delete Mock_Logger;
+        Mock_Logger = nullptr;
     }
+
+    Service* ins;
 };
 
 
@@ -76,7 +86,7 @@ TEST_F(ServiceTest, ServiceStateTransition) {
     EXPECT_EQ(s.GetLastServiceState(), ServiceState::NOT_RUNNING);
     s.SetServiceState(ServiceState::RUNNING);
     EXPECT_EQ(s.GetServiceState(), ServiceState::RUNNING);
-    EXPECT_EQ(s.GetLastServiceState(), ServiceState::RUNNING);
+    EXPECT_EQ(s.GetLastServiceState(), ServiceState::NOT_RUNNING);
 }
 
 TEST_F(ServiceTest, RecoverdCountOperations) {

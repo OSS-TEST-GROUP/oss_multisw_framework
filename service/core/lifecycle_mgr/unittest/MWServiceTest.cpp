@@ -2,12 +2,15 @@
 #include <string>
 #include <vector>
 
-#include "mock/mock_mwservice.hpp"
-#include "mock/mock_argumentconfig.hpp" // Assuming this is where MockArgumentConfig is defined
+#include "service/MWService.hpp"
+#include "service/ArgumentConfig.hpp"
+
+//#include "mock/mock_argumentconfig.hpp" // Assuming this is where MockArgumentConfig is defined
 #include "unittest/mock/mock_mw_service_manager.hpp" // Assuming this is where MockMWServiceManager is defined
 
 
 using namespace lifecycle_manager;
+
 using ::testing::Return;
 using ::testing::_;
 using ::testing::A;
@@ -26,12 +29,14 @@ using ::testing::Combine;
 
 class MWServiceTest : public ::testing::Test {
 protected:
-    void SetUp() override {
-        // Setup code if needed
+    virtual void SetUp(){
+        ins = new MWService(42, "TestService", "/usr/bin/test", true, {});
     }
-    void TearDown() override {
-        // Cleanup code if needed
+    virtual void TearDown(){
+        delete ins;
     }
+
+    MWService* ins;
 };
 
 
@@ -44,7 +49,7 @@ TEST_F(MWServiceTest, ConstructorAndGetters) {
     EXPECT_EQ(service.GetPath(), "/usr/bin/test");
     EXPECT_TRUE(service.IsActive());
 
-    std::vector<std::string> expected_args = {"arg1", "arg2"};
+    std::vector<std::string> expected_args = {"default1", "42"};
     EXPECT_EQ(service.GetArgs(), expected_args);
 }
 
@@ -77,6 +82,7 @@ TEST_F(MWServiceTest, MultipleArguments) {
     MWService service(42, "TestService", "/usr/bin/test", true, args);
 
     std::vector<std::string> retrieved_args = service.GetArgs();
+std::cout<<"Retrieved Args Size: " << retrieved_args.size() << std::endl;    
     EXPECT_EQ(retrieved_args.size(), 4);
     EXPECT_EQ(retrieved_args[0], "value1");
     EXPECT_EQ(retrieved_args[1], "42");

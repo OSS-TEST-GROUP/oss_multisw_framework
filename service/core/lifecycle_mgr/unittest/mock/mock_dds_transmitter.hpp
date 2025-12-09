@@ -10,20 +10,19 @@ namespace lifecycle_manager {
 class MockDDSTransmitter : public DDSTransmitter {
 public:
     MockDDSTransmitter() : DDSTransmitter() {}
-    virtual ~MockDDSTransmitter() {}
-    
+    ~MockDDSTransmitter() = default;
+
+    // Only mock virtual methods
     MOCK_METHOD(bool, Initialize, (), ());
     MOCK_METHOD(void, Finalize, (), ());
     MOCK_METHOD(bool, AddMessageEndpoint, (std::shared_ptr<DDSMessageEndPoint>), ());
     MOCK_METHOD(std::shared_ptr<DDSMessageEndPoint>, GetMessageEndPoint, (std::string), ());
     MOCK_METHOD(DomainParticipant*, GetDomain, (), ());
     MOCK_METHOD(Publisher*, GetPublisher, (), ());
-    MOCK_METHOD(Subscriber*, GetSubscriber, (), ());    
-    // Add more mocks as needed
+    MOCK_METHOD(Subscriber*, GetSubscriber, (), ());
 };
 
-
-MockDDSTransmitter* Mock_DDSTransmitter;
+inline MockDDSTransmitter* Mock_DDSTransmitter = nullptr;
 
 DDSTransmitter::DDSTransmitter() {}
 DDSTransmitter::~DDSTransmitter() {}
@@ -41,6 +40,10 @@ void DDSTransmitter::Finalize() {
 }
 std::shared_ptr<DDSMessageEndPoint> DDSTransmitter::GetMessageEndPoint(std::string topic) {
     return Mock_DDSTransmitter->GetMessageEndPoint(topic);  
+}
+
+bool DDSTransmitter::SendMessage(MessageType mtype, void* ptr){
+    return Mock_DDSTransmitter->SendMessage(mtype, ptr);
 }
 
 DomainParticipant* DDSTransmitter::GetDomain() {

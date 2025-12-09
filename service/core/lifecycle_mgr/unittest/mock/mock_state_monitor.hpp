@@ -7,9 +7,14 @@
 namespace lifecycle_manager {
 class MockStateMonitor : public StateMonitor {
 public:
-    MockStateMonitor(LifecycleManager& mgr) : StateMonitor(mgr) {}
-    virtual ~MockStateMonitor() {}
-    
+    MockStateMonitor(LifecycleManager& mgr) : StateMonitor(mgr) {
+        std::cout << "MockStateMonitor created" << std::endl;
+    }
+    ~MockStateMonitor() override {
+        std::cout << "MockStateMonitor destroyed" << std::endl;
+    }
+
+    // Only mock virtual methods
     MOCK_METHOD(bool, Start, (), ());
     MOCK_METHOD(void, Stop, (), ());
     MOCK_METHOD(void, UpdateServicesState, (lifecyclemgr::NotifyServiceState*), ());
@@ -20,16 +25,18 @@ public:
     MOCK_METHOD(void, ClearAllUpdatedFlag, (), ());
     MOCK_METHOD(std::set<std::shared_ptr<Service>>, GetUpdateServiceList, (), ());
     MOCK_METHOD(void, NotifyLifecycleDiagnosticInfo, (bool), ());
-    MOCK_METHOD(void, StartThread, (), ());
-    MOCK_METHOD(void, StopThread, (), ());
     MOCK_METHOD(void, RunThread, (), ());
     MOCK_METHOD(void, RequestGetState, (), ());
     MOCK_METHOD(void, updateServices, (std::vector<std::string>*, std::vector<lifecyclemgr::ServiceState>*), ());
     MOCK_METHOD(bool, getServiceState, (std::shared_ptr<Service>, lifecyclemgr::ServiceStatus&), ());
-    
-};  
 
-MockStateMonitor* Mock_StateMonitor;
+    // Prevent thread creation in tests
+    void StartThread() {} // Do not use MOCK_METHOD
+    void StopThread() {}  // Do not use MOCK_METHOD
+};
+
+inline MockStateMonitor* Mock_StateMonitor = nullptr;
+
 
 StateMonitor::StateMonitor(lifecycle_manager::LifecycleManager& mgr) : ManagerBase(mgr) {}
 StateMonitor::~StateMonitor() {}

@@ -7,9 +7,9 @@
 #include "unittest/mock/mock_mw_service_manager.hpp"
 #include "unittest/mock/mock_state_monitor.hpp"
 #include "unittest/mock/mock_service_registry.hpp"
-#include "unittest/mock/mock_lifecycle_manager.hpp"
 #include "unittest/mock/mock_manager_base.hpp"
 #include "unittest/mock/mock_service.hpp"
+#include "unittest/mock/mock_lifecycle_manager.hpp"
 
 
 using namespace lifecycle_manager;
@@ -40,6 +40,13 @@ protected:
         void SetStateMonitor(std::shared_ptr<StateMonitor> sm) { state_monitor_ = sm; }
         void SetServiceRegistry(std::shared_ptr<ServiceRegistry> sr) { service_registry_ = sr; }
     };
+
+    void SetUp() override {
+        // No setup required for now
+    }
+    void TearDown() override {
+        mgr.Stop(); // Ensure any threads are stopped before destruction
+    }
     TestableLifecycleManager mgr;
 };
 

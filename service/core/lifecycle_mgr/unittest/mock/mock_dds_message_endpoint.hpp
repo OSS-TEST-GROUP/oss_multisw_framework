@@ -2,20 +2,18 @@
 #define MOCK_LIFECYCLE_DDS_MESSAGE_ENDPOINT_HPP_
 
 #include <gmock/gmock.h>
-
 #include "transmitter/DDSMessageEndPoint.hpp"
 
 namespace lifecycle_manager {
-
 class MockDDSMessageEndPoint : public DDSMessageEndPoint {
 public:
+    MockDDSMessageEndPoint(std::string topic) : DDSMessageEndPoint(topic) {}
+    ~MockDDSMessageEndPoint() = default;
 
-    MockDDSMessageEndPoint(std::string topic) : DDSMessageEndPoint(topic) {};
-    virtual ~MockDDSMessageEndPoint() {};   
-
-    MOCK_METHOD(void, on_publication_matched, (DataWriter* writer, const PublicationMatchedStatus& status), (override));
-    MOCK_METHOD(void, on_subscription_matched, (DataReader* reader, const SubscriptionMatchedStatus& status), (override));
-    MOCK_METHOD(void, on_data_available, (DataReader* reader), (override));
+    // Only mock virtual methods
+    MOCK_METHOD(void, on_publication_matched, (DataWriter* writer, const PublicationMatchedStatus& status), ());
+    MOCK_METHOD(void, on_subscription_matched, (DataReader* reader, const SubscriptionMatchedStatus& status), ());
+    MOCK_METHOD(void, on_data_available, (DataReader* reader), ());
     MOCK_METHOD(bool, Write, (const void* const data), ());
     MOCK_METHOD(bool, Initialize, (DomainParticipant* participant, Publisher* publisher, Subscriber* subscriber), ());
     MOCK_METHOD(void, Finalize, (), ());
@@ -27,7 +25,9 @@ public:
     MOCK_METHOD(void, OnDataAvailable, (), ());
 };
 
-MockDDSMessageEndPoint* Mock_DDSMessageEndPoint;
+inline MockDDSMessageEndPoint* Mock_DDSMessageEndPoint = nullptr;
+
+
 
 DDSMessageEndPoint::DDSMessageEndPoint(std::string topic) : MessageEndPoint(topic) {
 }
@@ -78,6 +78,5 @@ bool DDSMessageEndPoint::Write(const void* const data) {
 }
 
 } // namespace lifecycle_manager
-
 
 #endif // MOCK_LIFECYCLE_DDS_MESSAGE_ENDPOINT_HPP_

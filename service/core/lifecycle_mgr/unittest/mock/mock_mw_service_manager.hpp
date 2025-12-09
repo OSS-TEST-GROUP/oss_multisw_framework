@@ -10,23 +10,20 @@
 namespace lifecycle_manager {
 class MockMWServiceManager : public MWServiceManager {
 public:
+    // Only mock virtual methods
     MOCK_METHOD(bool, Start, (), ());
     MOCK_METHOD(void, Stop, (), ());
     MOCK_METHOD(bool, Initialize, (), ());
-    // Add more mocks as needed
-
     MOCK_METHOD(bool, LoadMWConfig, (std::string path), ());
     MOCK_METHOD(void, StartMWService, (std::shared_ptr<MWService> mw_service), ());
     MOCK_METHOD(void, StopMWService, (std::shared_ptr<MWService> mw_service), ());
     MOCK_METHOD(void, RunMWServiceManagement, (), ());
-    // Provide mocks for private helpers so tests can link if they call them directly
     MOCK_METHOD(pid_t, run_process, (const std::string exename, const std::string exepath, const std::vector<std::string>& args), ());
     MOCK_METHOD(bool, kill_process, (pid_t pid), ());
-
 };
 
+inline MockMWServiceManager* Mock_MWServiceManager = nullptr;
 
-MockMWServiceManager* Mock_MWServiceManager;
 
 MWServiceManager::MWServiceManager() {}
 MWServiceManager::~MWServiceManager() {}
@@ -74,7 +71,6 @@ bool MWServiceManager::kill_process(pid_t pid) {
     }
     return false;
 }
-
 } // namespace lifecycle_manager
 
 #endif // MOCK_LIFECYCLE_MW_SERVICE_MANAGER_HPP_
