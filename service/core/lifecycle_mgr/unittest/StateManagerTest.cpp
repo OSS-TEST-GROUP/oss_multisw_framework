@@ -145,6 +145,177 @@ TEST_F(StateManagerTest, OnStart_OnStop_ErrorHandling) {
     // No assertions, just ensure no crash
 }
 
+TEST_F(StateManagerTest, OnStart_SuccessCode) {
+    MockLifecycleManager mgr;
+    StateManager state_mgr(mgr);
+
+    StartServiceResponse start_resp;
+    start_resp.ret_code() = lifecyclemgr::ReturnCode::SUCCESS;
+    EXPECT_NO_THROW(state_mgr.OnStart(&start_resp));
+}
+
+TEST_F(StateManagerTest, OnStop_SuccessCode) {
+    MockLifecycleManager mgr;
+    StateManager state_mgr(mgr);
+
+    StopServiceResponse stop_resp;
+    stop_resp.ret_code() = lifecyclemgr::ReturnCode::SUCCESS;
+    EXPECT_NO_THROW(state_mgr.OnStop(&stop_resp));
+}
+
+TEST_F(StateManagerTest, OnStart_NullMessage) {
+    MockLifecycleManager mgr;
+    StateManager state_mgr(mgr);
+
+    EXPECT_NO_THROW(state_mgr.OnStart(nullptr));
+}
+
+TEST_F(StateManagerTest, OnStop_NullMessage) {
+    MockLifecycleManager mgr;
+    StateManager state_mgr(mgr);
+
+    EXPECT_NO_THROW(state_mgr.OnStop(nullptr));
+}
+
+TEST_F(StateManagerTest, StartService_NullTransmitter) {
+    MockLifecycleManager mgr;
+    StateManager state_mgr(mgr);
+
+    auto mock_service = std::make_shared<MockService>();
+    EXPECT_CALL(mgr, GetTransmitter()).WillOnce(Return(nullptr));
+
+    EXPECT_FALSE(state_mgr.StartService(mock_service));
+}
+
+TEST_F(StateManagerTest, StopService_NullTransmitter) {
+    MockLifecycleManager mgr;
+    StateManager state_mgr(mgr);
+
+    auto mock_service = std::make_shared<MockService>();
+    EXPECT_CALL(mgr, GetTransmitter()).WillOnce(Return(nullptr));
+
+    EXPECT_NO_THROW(state_mgr.StopService(mock_service));
+}
+
+TEST_F(StateManagerTest, SetServiceMode_NullService) {
+    MockLifecycleManager mgr;
+    StateManager state_mgr(mgr);
+
+    SetServiceModeRequest req;
+    req.service_list().push_back("non_existent_svc");
+    req.service_mode() = lifecyclemgr::ServiceMode::NORMAL;
+
+    EXPECT_CALL(mgr, GetService("non_existent_svc")).WillOnce(Return(nullptr));
+
+    EXPECT_TRUE(state_mgr.SetServiceMode(&req));
+}
+
+TEST_F(StateManagerTest, SetServiceMode_MultipleServices) {
+    MockLifecycleManager mgr;
+    StateManager state_mgr(mgr);
+
+    SetServiceModeRequest req;
+    req.service_list().push_back("svc1");
+    req.service_list().push_back("svc2");
+    req.service_list().push_back("svc3");
+    req.service_mode() = lifecyclemgr::ServiceMode::OTA_MODE;
+
+    auto mock_service1 = std::make_shared<MockService>();
+    auto mock_service2 = std::make_shared<MockService>();
+    auto mock_service3 = std::make_shared<MockService>();
+
+    EXPECT_CALL(mgr, GetService("svc1")).WillOnce(Return(mock_service1));
+    EXPECT_CALL(mgr, GetService("svc2")).WillOnce(Return(mock_service2));
+    EXPECT_CALL(mgr, GetService("svc3")).WillOnce(Return(mock_service3));
+
+    EXPECT_CALL(*mock_service1, SetServiceMode(lifecycle_manager::ServiceMode::OTA_MODE)).Times(1);
+    EXPECT_CALL(*mock_service2, SetServiceMode(lifecycle_manager::ServiceMode::OTA_MODE)).Times(1);
+    EXPECT_CALL(*mock_service3, SetServiceMode(lifecycle_manager::ServiceMode::OTA_MODE)).Times(1);
+
+    EXPECT_TRUE(state_mgr.SetServiceMode(&req));
+}
+
+TEST_F(StateManagerTest, ProcessServiceHandling_NoAction) {
+    MockLifecycleManager mgr;
+    MockStateManager state_mgr(mgr);
+
+    auto mock_policy = std::make_shared<MockPolicyManager>();
+    auto mock_service = std::make_shared<lifecycle_manager::Service>();
+
+    std::set<std::shared_ptr<lifecycle_manager::Service>> services = {mock_service};
+
+    EXPECT_CALL(mgr, GetPolicy()).WillRepeatedly(Return(mock_policy));
+    EXPECT_CALL(*mock_policy, Evaluate(mock_service)).WillOnce(Return(lifecycle_manager::ServiceControlAction::NONE));
+
+    state_mgr.ProcessServiceHandling(services);
+}
+
+TEST_F(StateManagerTest, ProcessServiceHandling_EmptyServiceList) {
+    MockLifecycleManager mgr;
+    MockStateManager state_mgr(mgr);
+
+    std::set<std::shared_ptr<lifecycle_manager::Service>> services;
+
+    EXPECT_NO_THROW(state_mgr.ProcessServiceHandling(services));
+}
+
+TEST_F(StateManagerTest, ProcessServiceHandling_NullTransmitter) {
+    MockLifecycleManager mgr;
+    StateManager state_mgr(mgr);
+
+    auto mock_policy = std::make_shared<MockPolicyManager>();
+    auto mock_service = std::make_shared<lifecycle_manager::Service>();
+
+    std::set<std::shared_ptr<lifecycle_manager::Service>> services = {mock_service};
+
+    EXPECT_CALL(mgr, GetPolicy()).WillRepeatedly(Return(mock_policy));
+    EXPECT_CALL(*mock_policy, Evaluate(mock_service)).WillOnce(Return(lifecycle_manager::ServiceControlAction::START));
+    EXPECT_CALL(mgr, GetTransmitter()).WillOnce(Return(nullptr));
+
+    EXPECT_NO_THROW(state_mgr.ProcessServiceHandling(services));
+}
+
+TEST_F(StateManagerTest, RequestStopAll_WithServices) {
+    MockLifecycleManager mgr;
+    StateManager state_mgr(mgr);
+
+    auto mock_transmitter = std::make_shared<MockDDSTransmitter>();
+    auto mock_registry = std::make_shared<MockServiceRegistry>();
+
+    std::vector<std::string> groups = {"group1", "group2"};
+    std::vector<std::string> group1_services = {"svc1", "svc2"};
+    std::vector<std::string> group2_services = {"svc3"};
+
+    EXPECT_CALL(mgr, GetTransmitter()).WillRepeatedly(Return(mock_transmitter));
+    EXPECT_CALL(mgr, GetRegistry()).WillOnce(Return(mock_registry));
+    EXPECT_CALL(*mock_registry, GetGroupList()).WillOnce(Return(groups));
+    EXPECT_CALL(*mock_registry, GetServicesNameByGroup("group1")).WillOnce(Return(group1_services));
+    EXPECT_CALL(*mock_registry, GetServicesNameByGroup("group2")).WillOnce(Return(group2_services));
+
+    EXPECT_NO_THROW(state_mgr.RequestStopAll());
+}
+
+TEST_F(StateManagerTest, RequestStopAll_NullTransmitter) {
+    MockLifecycleManager mgr;
+    StateManager state_mgr(mgr);
+
+    EXPECT_CALL(mgr, GetTransmitter()).WillOnce(Return(nullptr));
+
+    EXPECT_NO_THROW(state_mgr.RequestStopAll());
+}
+
+TEST_F(StateManagerTest, RequestStopAll_NullRegistry) {
+    MockLifecycleManager mgr;
+    StateManager state_mgr(mgr);
+
+    auto mock_transmitter = std::make_shared<MockDDSTransmitter>();
+
+    EXPECT_CALL(mgr, GetTransmitter()).WillOnce(Return(mock_transmitter));
+    EXPECT_CALL(mgr, GetRegistry()).WillOnce(Return(nullptr));
+
+    EXPECT_NO_THROW(state_mgr.RequestStopAll());
+}
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

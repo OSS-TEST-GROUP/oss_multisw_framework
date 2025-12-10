@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include "AppController.hpp"
+#include "TestPrinter.hpp"
 
 #include <fstream>
 #include <sstream>
@@ -17,7 +18,7 @@ using namespace adsw_manager::agl;
 #endif
 
 #ifndef MOCK_SYSCTL_LOG
-#define MOCK_SYSCTL_LOG "sysctl.log"  // 빌드 디렉토리에 생성
+#define MOCK_SYSCTL_LOG "sysctl.log"
 #endif
 
 namespace {

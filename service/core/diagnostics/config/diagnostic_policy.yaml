@@ -50,6 +50,20 @@ diagnosic_policies:
         condition :
           - "AdswServiceStatus.status_code = 1"
     active : true
+  - code : 13
+    name : securitymgr
+    rules :
+      - status : "WARNING"
+        message : "Security manager service error detected."
+        condition_operator : "AND"
+        condition :
+          - "DetectionReport.dds_topic not in [\"empty\", \"no error\"]"
+      - status : "PASS"
+        message : "Security manager service success."
+        condition_operator : "AND"
+        condition :
+          - "DetectionReport.dds_topic in [\"empty\", \"no error\"]"
+    active : true
 refer_messages:
   - name : LifecycleDiagReport
     message : mmf/lifecyclemgr/LifecycleDiagReport
@@ -59,4 +73,7 @@ refer_messages:
     protocol : dds
   - name : AdswServiceStatus
     message : mmf/adswmgr/AdswServiceStatus
+    protocol : dds
+  - name : DetectionReport
+    message : security/DetectionReport
     protocol : dds

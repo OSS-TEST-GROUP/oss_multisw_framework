@@ -10,6 +10,7 @@ VssDataStore::VssDataStore() : m_active(true) {
 
 VssDataStore::~VssDataStore() {
     m_active = false;
+    m_cv.notify_one();
     if (m_archiver_thread.joinable()) {
         m_archiver_thread.join();
     }
@@ -74,18 +75,18 @@ std::vector<viss::DataPoint> VssDataStore::getValues(const std::string& path, co
 
 void VssDataStore::archiveLoop() {
     while (m_active) {
-        std::this_thread::sleep_for(std::chrono::seconds(10));
+        std::unique_lock<std::mutex> lock(mtx);
+        if (m_cv.wait_for(lock, std::chrono::seconds(10), [this] { return !m_active.load(); })) {
+            break; // Exit if m_active is false (notified)
+        }
 
-        std::lock_guard<std::mutex> lock(mtx);
-        if (!m_active) break;
+        // Timed out, so m_active is still true.
+        // The lock is held here.
 
         // Copy latest values to history
         for (const auto& pair : m_latest_store) {
             const std::string& path = pair.first;
             const viss::DataPoint& point = pair.second;
-
-            std::cout << "Archiving data for path: " << path << std::endl;
-
             auto& history_deque = m_history_store[path];
             history_deque.push_back(point);
 

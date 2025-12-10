@@ -245,7 +245,7 @@ bool DDSProtocol::SubscribeMessage(const std::string& name) {
     if (discovered_topic_.count(name) > 0) {
         auto topic_info = discovered_topic_[name];
         if (!register_type_object(topic_info)) {
-            LOG_ERROR("Failed to register a type object. topic=" << topic_info->topic_name);
+            LOG_ERROR("Failed to register a type object. topic=" << topic_info->topic_name << ", " << topic_info->topic_type);
         }
         if (!create_datareader(topic_info)) {
             LOG_ERROR("Failed to create a datareader. topic=" << topic_info->topic_name);
@@ -595,12 +595,34 @@ bool DDSProtocol::register_type_object_from_discovery(std::shared_ptr<TopicInfor
 
     auto type_id_complete = topic_information->remote_type_information.complete().typeid_with_size().type_id();
     auto type_id_minimal = topic_information->remote_type_information.minimal().typeid_with_size().type_id();
+    
+    auto ret_complete = DomainParticipantFactory::get_instance()->type_object_registry().get_type_object(
+                type_id_complete, topic_information->remote_type_object);
 
-    if ((RETCODE_OK != DomainParticipantFactory::get_instance()->type_object_registry().get_type_object(
-                type_id_complete, topic_information->remote_type_object)) &&
-            (RETCODE_OK != DomainParticipantFactory::get_instance()->type_object_registry().get_type_object(
-                type_id_minimal, topic_information->remote_type_object)))
+    auto ret_minimal = DomainParticipantFactory::get_instance()->type_object_registry().get_type_object(
+                type_id_minimal, topic_information->remote_type_object);
+
+    if (RETCODE_OK != ret_complete)
     {
+        LOG_DEBUG("register_type_object_from_discovery register_type_object complete " << topic_information->topic_name << ", type_id=" << ret_complete);
+        //return false;
+    }
+    if (RETCODE_OK != ret_minimal)
+    {
+        LOG_DEBUG("register_type_object_from_discovery register_type_object minimal " << topic_information->topic_name << ", type_id=" << ret_minimal);
+        //return false;
+    }
+
+    if (RETCODE_OK != DomainParticipantFactory::get_instance()->type_object_registry().get_type_object(
+            type_id_complete, topic_information->remote_type_object))
+    {
+        LOG_DEBUG("register_type_object_from_discovery get_type_object complete " << topic_information->topic_name << ", type_id=" << topic_information->remote_type);
+        return false;
+    }
+    if (RETCODE_OK != DomainParticipantFactory::get_instance()->type_object_registry().get_type_object(
+            type_id_minimal, topic_information->remote_type_object))
+    {
+        LOG_DEBUG("register_type_object_from_discovery get_type_object minimal " << topic_information->topic_name << ", type_id=" << topic_information->remote_type);
         return false;
     }
 
@@ -609,6 +631,7 @@ bool DDSProtocol::register_type_object_from_discovery(std::shared_ptr<TopicInfor
         topic_information->remote_type_object);
     if (!type_builder)
     {
+        LOG_DEBUG("register_type_object_from_discovery create_type_w_type_object null for " << topic_information->topic_name);
         return false;
     }
 
@@ -616,6 +639,7 @@ bool DDSProtocol::register_type_object_from_discovery(std::shared_ptr<TopicInfor
     topic_information->remote_type = type_builder->build();
     if (!topic_information->remote_type)
     {
+        LOG_DEBUG("register_type_object_from_discovery fail topic_information->remote_type null for " << topic_information->topic_name);
         return false;
     }
 

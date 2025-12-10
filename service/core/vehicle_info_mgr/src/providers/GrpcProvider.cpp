@@ -1,7 +1,6 @@
 #include "GrpcProvider.h"
 #include "Utils.h"
 #include "Logger.h"
-#include <grpcpp/alarm.h>
 #include <iostream>
 #include <chrono>
 
@@ -99,7 +98,7 @@ void GrpcProvider::Subscription::run() {
     }
 
     if (m_is_active.load()) {
-        LOG_WARN << "gRPC stream for " << m_path << " (ID: " << m_id << ") terminated unexpectedly.";
+        LOG_WARN << "gRPC stream for " << m_path << " (ID: " << m_id << ") terminated unexpectedly. Queuing for cleanup.";
         if (m_cleanup_handler) {
             m_cleanup_handler(m_id);
         }
@@ -111,63 +110,52 @@ void GrpcProvider::Subscription::run() {
 // --- GrpcProvider Implementation ---
 
 GrpcProvider::GrpcProvider(const std::string& server_address)
-    : m_name("GrpcProvider"), m_server_address(server_address), m_monitoring_active(false) {
+    : m_name("GrpcProvider"),
+      m_server_address(server_address) {
     m_channel = grpc::CreateChannel(m_server_address, grpc::InsecureChannelCredentials());
     m_stub = grpcProtobufMessages::VISS::NewStub(m_channel);
 }
 
 GrpcProvider::~GrpcProvider() {
-    LOG_INFO << "GrpcProvider destructor called." << m_monitoring_active.load();
     if (m_monitoring_active.load()) {
         stop();
     }
+    LOG_INFO << "GrpcProvider destructor completed.";
 }
 
 void GrpcProvider::start() {
+    if (m_monitoring_active.exchange(true)) {
+        LOG_WARN << "GrpcProvider already started.";
+        return;
+    }
     LOG_INFO << "GrpcProvider started for address: " << m_server_address;
-    m_monitoring_active = true;
+    m_is_stopping = false;
     m_state_monitor_thread = std::thread(&GrpcProvider::state_monitor_loop, this);
     m_cleanup_thread = std::thread(&GrpcProvider::cleanup_thread_main, this);
 }
 
 void GrpcProvider::stop() {
-    if (!m_monitoring_active.exchange(false)) {
-        return; // Already stopped
+    if (m_is_stopping.exchange(true)) {
+        return; // Stop is already in progress.
     }
+
     LOG_INFO << "GrpcProvider::stop() called.";
 
-    // Post a custom event to unblock the state_monitor_loop's cq.Next()
-    new grpc::Alarm(&m_cq, gpr_now(GPR_CLOCK_MONOTONIC), (void*)0);
+    // 1. Signal loops to terminate.
+    m_monitoring_active = false;
 
-    // Shutdown the completion queue. This will cause Next() in the monitor thread to return false.
-    m_cq.Shutdown();
-
-    // Wait for the monitoring thread to finish. It will drain the CQ.
-    if (m_state_monitor_thread.joinable()) {
-        LOG_INFO << "Waiting for state monitor thread to join...";
-        m_state_monitor_thread.join();
-        LOG_INFO << "State monitor thread joined.";
-    }
-    
-    /*
-        // This loop is problematic because it's called after the consumer thread has joined,
-        // leading to a deadlock if the queue is not empty.
-        // The consumer thread (state_monitor_thread) is responsible for draining the queue.
-        void* tag;
-        bool ok;
-        while (m_cq.Next(&tag, &ok)) { 
-            LOG_INFO << "Draining GrpcProvider CQ tag: " << tag;
-        }
-        LOG_INFO << "CompletionQueue drained and shut down.";
-    */
-    
-    // Unblock the cleanup thread
+    // 2. Unblock the cleanup_thread if it's waiting.
     m_cleanup_queue.push(""); // Poison pill
 
+    // 4. Wait for all provider-managed threads to finish.
+    if (m_state_monitor_thread.joinable()) {
+        m_state_monitor_thread.join();
+    }
     if (m_cleanup_thread.joinable()) {
         m_cleanup_thread.join();
     }
 
+    // 5. Clean up all subscription objects (which includes joining their threads).
     cleanup_all_subscriptions();
 
     LOG_INFO << "GrpcProvider::stop() completed.";
@@ -317,9 +305,7 @@ void GrpcProvider::cleanup_thread_main() {
         
         if (sub_to_stop) {
             LOG_INFO << "Cleanup thread processing subscription ID: " << sub_id_to_clean << " (path: " << path_to_clean << ")";
-            // Stop the subscription thread and clean up resources
             sub_to_stop->stop();
-            // Remove from maps
             std::lock_guard<std::mutex> lock(m_subscription_mutex);
             m_subscriptions.erase(sub_id_to_clean);
             m_path_to_subscription_id.erase(path_to_clean);
@@ -329,39 +315,25 @@ void GrpcProvider::cleanup_thread_main() {
 }
 
 void GrpcProvider::state_monitor_loop() {
-    void* tag;
-    bool ok;
-    
-    auto last_known_state = m_channel->GetState(true);
+    grpc_connectivity_state last_known_state = GRPC_CHANNEL_IDLE;
 
     while (m_monitoring_active.load()) {
-        LOG_INFO << "gRPC Channel State: " << last_known_state;
-        
-        m_channel->NotifyOnStateChange(last_known_state, gpr_inf_future(GPR_CLOCK_REALTIME), &m_cq, (void*)1);
+        grpc_connectivity_state current_state = m_channel->GetState(true);
 
-        if (m_cq.Next(&tag, &ok) && ok) {
-            if (tag == (void*)0) { // Shutdown event from stop()
-                LOG_INFO << "Received shutdown event in state_monitor_loop.";
-                break;
-            }
-
-            auto new_state = m_channel->GetState(true);
-            if (last_known_state == GRPC_CHANNEL_READY && new_state != GRPC_CHANNEL_READY) {
+        if (current_state != last_known_state) {
+            LOG_INFO << "gRPC Channel State changed to: " << current_state;
+            if (last_known_state == GRPC_CHANNEL_READY && current_state != GRPC_CHANNEL_READY) {
                 LOG_WARN << "gRPC connection lost. Cleaning up all subscriptions.";
                 cleanup_all_subscriptions();
             }
-            
-            last_known_state = new_state;
-
-            if (last_known_state == GRPC_CHANNEL_READY) {
+            if (current_state == GRPC_CHANNEL_READY) {
                 LOG_INFO << "gRPC channel is ready. Subscribing to Vehicle.*";
                 subscribe("Vehicle.*");
             }
-            
-        } else {
-            LOG_INFO << "State monitor completion queue shut down completely.";
-            break;
+            last_known_state = current_state;
         }
+
+        std::this_thread::sleep_for(std::chrono::seconds(1));
     }
     LOG_INFO << "gRPC state monitoring loop finished.";
 }

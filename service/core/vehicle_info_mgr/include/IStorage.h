@@ -10,6 +10,7 @@
 #include <mutex>
 #include <thread>
 #include <atomic>
+#include <condition_variable>
 
 class IStorage {
 public:
@@ -39,6 +40,7 @@ private:
     mutable std::mutex mtx;
     std::thread m_archiver_thread;
     std::atomic<bool> m_active{false};
+    std::condition_variable m_cv;
     const size_t MAX_HISTORY_SIZE = 100;
 };
 

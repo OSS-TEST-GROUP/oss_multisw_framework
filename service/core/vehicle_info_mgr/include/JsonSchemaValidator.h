@@ -4,9 +4,9 @@
 //#define RAPIDJSON_HAS_STDSTRING 1   
 
 #include "rapidjson/document.h"
+#include "rapidjson/schema.h"
 #include <string>
 #include <memory>
-#include "valijson/schema.hpp"
 
 class JsonSchemaValidator {
 public:
@@ -23,7 +23,7 @@ private:
     JsonSchemaValidator(const JsonSchemaValidator&) = delete;
     JsonSchemaValidator& operator=(const JsonSchemaValidator&) = delete;
 
-    valijson::Schema schema_;
+    std::unique_ptr<rapidjson::SchemaDocument> schema_doc_;
     static std::string schema_path_;
 };
 

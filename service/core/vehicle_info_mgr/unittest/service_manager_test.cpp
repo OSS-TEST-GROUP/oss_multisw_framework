@@ -139,3 +139,72 @@ TEST_F(ServiceManagerTest, ProcessSetRequest) {
     ASSERT_TRUE(dp.HasMember("value"));
     EXPECT_STREQ(dp["value"].GetString(), "true");
 }
+
+TEST_F(ServiceManagerTest, ProcessSubscribeRequest) {
+    auto request = std::make_shared<RequestData>();
+    request->requestId = "test-subscribe-01";
+    request->responseChan = std::make_shared<ThreadSafeQueue<std::shared_ptr<PooledResponseMap>>>();
+    request->request_doc->Parse(R"({
+        "action": "subscribe",
+        "path": "Vehicle.Speed",
+        "requestId": "test-subscribe-01"
+    })");
+
+    request_queue->push(request);
+
+    std::shared_ptr<PooledResponseMap> response_map_ptr;
+    request->responseChan->wait_and_pop(response_map_ptr);
+    ASSERT_TRUE(response_map_ptr != nullptr);
+    auto& response_map = *response_map_ptr;
+
+    EXPECT_TRUE(response_map.HasMember("action"));
+    EXPECT_STREQ(response_map["action"].GetString(), "subscribe");
+    EXPECT_TRUE(response_map.HasMember("requestId"));
+    EXPECT_STREQ(response_map["requestId"].GetString(), "test-subscribe-01");
+    EXPECT_TRUE(response_map.HasMember("subscriptionId"));
+    EXPECT_FALSE(response_map["subscriptionId"].GetStringLength() == 0);
+}
+
+TEST_F(ServiceManagerTest, ProcessUnsubscribeRequest) {
+    // First, subscribe to a path
+    auto sub_request = std::make_shared<RequestData>();
+    sub_request->requestId = "test-sub-for-unsub";
+    sub_request->responseChan = std::make_shared<ThreadSafeQueue<std::shared_ptr<PooledResponseMap>>>();
+    sub_request->request_doc->Parse(R"({
+        "action": "subscribe",
+        "path": "Vehicle.Speed",
+        "requestId": "test-sub-for-unsub"
+    })");
+    request_queue->push(sub_request);
+
+    std::shared_ptr<PooledResponseMap> sub_response_ptr;
+    sub_request->responseChan->wait_and_pop(sub_response_ptr);
+    ASSERT_TRUE(sub_response_ptr != nullptr);
+    auto& sub_response = *sub_response_ptr;
+    std::string subscriptionId = sub_response["subscriptionId"].GetString();
+
+    // Now, unsubscribe
+    auto unsub_request = std::make_shared<RequestData>();
+    unsub_request->requestId = "test-unsub-01";
+    unsub_request->responseChan = std::make_shared<ThreadSafeQueue<std::shared_ptr<PooledResponseMap>>>();
+    unsub_request->request_doc->Parse(
+        (std::string(R"({
+            "action": "unsubscribe",
+            "subscriptionId": ")") + subscriptionId + R"(",
+            "requestId": "test-unsub-01"
+        })").c_str()
+    );
+    request_queue->push(unsub_request);
+
+    std::shared_ptr<PooledResponseMap> unsub_response_ptr;
+    unsub_request->responseChan->wait_and_pop(unsub_response_ptr);
+    ASSERT_TRUE(unsub_response_ptr != nullptr);
+    auto& unsub_response = *unsub_response_ptr;
+
+    EXPECT_TRUE(unsub_response.HasMember("action"));
+    EXPECT_STREQ(unsub_response["action"].GetString(), "unsubscribe");
+    EXPECT_TRUE(unsub_response.HasMember("requestId"));
+    EXPECT_STREQ(unsub_response["requestId"].GetString(), "test-unsub-01");
+    EXPECT_TRUE(unsub_response.HasMember("subscriptionId"));
+    EXPECT_STREQ(unsub_response["subscriptionId"].GetString(), subscriptionId.c_str());
+}

@@ -41,7 +41,8 @@ private:
     grpc::CompletionQueue m_cq;
     std::thread m_state_monitor_thread;
     std::thread m_cleanup_thread;
-    std::atomic<bool> m_monitoring_active;
+    std::atomic<bool> m_monitoring_active{false};
+    std::atomic<bool> m_is_stopping{false};
 
     // Mutex to protect access to subscription maps
     std::mutex m_subscription_mutex;

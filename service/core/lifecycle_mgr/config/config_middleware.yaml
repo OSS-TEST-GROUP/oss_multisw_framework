@@ -29,8 +29,8 @@ config_middleware:
     name : ota_mgr
     exepath : "./OtaManager"
     args :
-      - arg_name : "arg1"
-        description : ""
+      - arg_name : "delay_time"
+        description : "ota manager start delay time for sync with other services"
         arg_type : "int"
         arg_default : "3"
     active : true

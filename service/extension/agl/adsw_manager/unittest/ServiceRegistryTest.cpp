@@ -2,6 +2,7 @@
 #include <gtest/gtest.h>
 #include <optional>
 #include <algorithm>
+#include "TestPrinter.hpp"
 
 using namespace adsw_manager::agl;
 using namespace lifecyclemgr;

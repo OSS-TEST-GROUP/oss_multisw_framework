@@ -17,7 +17,7 @@ namespace adsw_manager::agl {
             NotifyAppStateWriter() = default;
             virtual ~NotifyAppStateWriter();
             
-            bool Initialize(eprosima::fastdds::dds::Publisher* publisher,
+            virtual bool Initialize(eprosima::fastdds::dds::Publisher* publisher,
                             eprosima::fastdds::dds::DomainParticipant* participant);
             virtual bool Publish(const lifecyclemgr::NotifyServiceState& msg);
 

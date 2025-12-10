@@ -336,7 +336,6 @@ set(VISS_APP_SOURCES
     src/core/VssDataStore.cpp
     src/core/JsonSchemaValidator.cpp
     src/transport/grpc_transport.cpp
-    src/transport/VISSAsyncServiceImpl.cpp
     src/providers/CANProvider.cpp
     src/providers/NetworkProvider.cpp
     src/providers/GrpcProvider.cpp
@@ -350,7 +349,7 @@ if(BUILD_FOR_ANDROID)
     # Protobuf/gRPC sources are added by the gradle plugin or need to be handled separately
 else()
     list(APPEND VISS_APP_SOURCES
-        src/transport/mqtt_transport.cpp
+        #src/transport/mqtt_transport.cpp
         src/transport/dds_transport.cpp
         src/providers/DDSProvider.cpp
     )
@@ -400,8 +399,8 @@ else()
         idl_types
         paho-mqttpp3-static
         paho-mqtt3as-static
+	fastcdr
         fastdds
-        fastcdr
         ${OPENSSL_LIBRARIES}
     )
 endif()
@@ -473,8 +472,8 @@ target_include_directories(dds_client_test
 target_link_libraries(dds_client_test
     PRIVATE
     idl_types
-    fastdds
     fastcdr
+    fastdds
     pthread
 )
 
@@ -508,17 +507,32 @@ if (BUILD_UNITTEST)
 	    unittest/vss_data_store_test.cpp
 	    unittest/vss_subscription_manager_test.cpp
 	    unittest/service_manager_test.cpp
+	    unittest/json_schema_validator_test.cpp
+	    unittest/can_provider_test.cpp
+	    unittest/dds_provider_test.cpp
+	    unittest/grpc_provider_test.cpp
+	    unittest/network_provider_test.cpp
+	    unittest/grpc_transport_test.cpp
+	    unittest/dds_transport_test.cpp
 	    src/core/VssTreeParser.cpp
 	    src/common/Utils.cpp
 	    src/core/VssDataStore.cpp
 	    src/core/VssSubscriptionManager.cpp
 	    src/core/ServiceManager.cpp
+	    src/core/JsonSchemaValidator.cpp
+	    src/providers/CANProvider.cpp
+	    src/providers/DDSProvider.cpp
+	    src/providers/GrpcProvider.cpp
+	    src/providers/NetworkProvider.cpp
+	    src/transport/grpc_transport.cpp
+	    src/transport/dds_transport.cpp
 	    src/common/StatusCodes.cpp
 	)
 	
 	target_include_directories(VehicleInfoMgrTest
 	    PRIVATE
 	    ${PROJECT_INCLUDE_DIR}
+	    ${GENERATED_IDL_DIR}
 	)
 	
 	target_link_libraries(VehicleInfoMgrTest
@@ -526,6 +540,10 @@ if (BUILD_UNITTEST)
 	    gtest_main
             ${PROTOBUF_LIBRARY}
             ${GRPC_LIBRARY}
+            fastcdr
+            fastdds
+            idl_types
+            proto_gen_files
 	)
 	
 	include(GoogleTest)

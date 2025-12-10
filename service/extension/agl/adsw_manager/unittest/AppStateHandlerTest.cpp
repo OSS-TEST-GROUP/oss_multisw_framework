@@ -1,7 +1,10 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include "TestPrinter.hpp"
 
+#define private public
 #include "AppStateHandler.hpp"
+#undef private
 
 #include <fastdds/dds/domain/DomainParticipant.hpp>
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp>
@@ -70,4 +73,17 @@ TEST_F(AppStateHandlerTest, AppStateHandler_Publish) {
 
     EXPECT_TRUE(test_handler.PublishResponse(res));
 
+}
+
+TEST_F(AppStateHandlerTest, Destructor_WhenReaderAndWriterAreNull_DoesNotCrash) {
+    AppStateHandler handler;
+    
+    handler.participant_ = participant_;
+    handler.publisher_   = publisher_;
+    handler.subscriber_  = subscriber_;
+
+    handler.req_topic_ = nullptr;
+    handler.res_topic_ = nullptr;
+    handler.reader_    = nullptr;
+    handler.writer_    = nullptr;
 }

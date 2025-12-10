@@ -273,6 +273,207 @@ TEST_F(VariantDataTest, GetValueNum_TC001) {
     EXPECT_EQ(4U, ins->GetValueNum());
 }
 
+TEST_F(VariantDataTest, GetValueNum_Empty_TC002) {
+    EXPECT_EQ(0U, ins->GetValueNum());
+}
+
+TEST_F(VariantDataTest, HasKey_NonExistent_TC002) {
+    ins->SetValue("existing", 123);
+    EXPECT_TRUE(ins->HasKey("existing"));
+    EXPECT_FALSE(ins->HasKey("nonexistent"));
+    EXPECT_FALSE(ins->HasKey(""));
+}
+
+TEST_F(VariantDataTest, GetChild_NonExistent_TC002) {
+    VariantData* child = ins->GetChild("nonexistent");
+    EXPECT_EQ(nullptr, child);
+}
+
+TEST_F(VariantDataTest, GetChild_WrongType_TC003) {
+    ins->SetValue("not_child", 123);
+    VariantData* child = ins->GetChild("not_child");
+    EXPECT_EQ(nullptr, child);
+}
+
+TEST_F(VariantDataTest, GetInt64_NonExistent_TC002) {
+    int64_t out;
+    EXPECT_FALSE(ins->GetInt64("nonexistent", out));
+}
+
+TEST_F(VariantDataTest, GetInt64_WrongType_TC003) {
+    ins->SetValue("str_key", "hello");
+    int64_t out;
+    EXPECT_FALSE(ins->GetInt64("str_key", out));
+}
+
+TEST_F(VariantDataTest, GetUInt64_NonExistent_TC002) {
+    uint64_t out;
+    EXPECT_FALSE(ins->GetUInt64("nonexistent", out));
+}
+
+TEST_F(VariantDataTest, GetDouble_NonExistent_TC002) {
+    double out;
+    EXPECT_FALSE(ins->GetDouble("nonexistent", out));
+}
+
+TEST_F(VariantDataTest, GetString_NonExistent_TC002) {
+    std::string out;
+    EXPECT_FALSE(ins->GetString("nonexistent", out));
+}
+
+TEST_F(VariantDataTest, GetChildFromList_NonExistent_TC002) {
+    VariantData* child = ins->GetChildFromList("nonexistent", 0);
+    EXPECT_EQ(nullptr, child);
+}
+
+TEST_F(VariantDataTest, GetChildFromList_OutOfBounds_TC003) {
+    VariantData child;
+    std::vector<VariantData> children = { child };
+    ins->SetValue("listKey", children);
+
+    VariantData* result = ins->GetChildFromList("listKey", 10);
+    EXPECT_EQ(nullptr, result);
+}
+
+TEST_F(VariantDataTest, GetInt64FromList_NonExistent_TC002) {
+    int64_t out;
+    EXPECT_FALSE(ins->GetInt64FromList("nonexistent", 0, out));
+}
+
+TEST_F(VariantDataTest, GetInt64FromList_OutOfBounds_TC003) {
+    std::vector<int64_t> values = { 123LL };
+    ins->SetValue("listKey", values);
+
+    int64_t out;
+    EXPECT_FALSE(ins->GetInt64FromList("listKey", 10, out));
+}
+
+TEST_F(VariantDataTest, GetUInt64FromList_NonExistent_TC002) {
+    uint64_t out;
+    EXPECT_FALSE(ins->GetUInt64FromList("nonexistent", 0, out));
+}
+
+TEST_F(VariantDataTest, GetDoubleFromList_NonExistent_TC002) {
+    double out;
+    EXPECT_FALSE(ins->GetDoubleFromList("nonexistent", 0, out));
+}
+
+TEST_F(VariantDataTest, GetStringFromList_NonExistent_TC002) {
+    std::string out;
+    EXPECT_FALSE(ins->GetStringFromList("nonexistent", 0, out));
+}
+
+TEST_F(VariantDataTest, AllIntegerTypes_TC010) {
+    ins->SetValue("int8", int8_t(127));
+    ins->SetValue("int16", int16_t(32767));
+    ins->SetValue("int32", int32_t(2147483647));
+    ins->SetValue("uint8", uint8_t(255));
+    ins->SetValue("uint16", uint16_t(65535));
+    ins->SetValue("uint32", uint32_t(4294967295));
+    
+    EXPECT_TRUE(ins->HasKey("int8"));
+    EXPECT_TRUE(ins->HasKey("int16"));
+    EXPECT_TRUE(ins->HasKey("int32"));
+    EXPECT_TRUE(ins->HasKey("uint8"));
+    EXPECT_TRUE(ins->HasKey("uint16"));
+    EXPECT_TRUE(ins->HasKey("uint32"));
+}
+
+TEST_F(VariantDataTest, VectorTypes_TC011) {
+    std::vector<int32_t> int_vec = {1, 2, 3};
+    std::vector<double> double_vec = {1.1, 2.2, 3.3};
+    std::vector<std::string> str_vec = {"a", "b", "c"};
+    std::vector<bool> bool_vec = {true, false, true};
+    
+    ins->SetValue("int_vec", int_vec);
+    ins->SetValue("double_vec", double_vec);
+    ins->SetValue("str_vec", str_vec);
+    ins->SetValue("bool_vec", bool_vec);
+    
+    EXPECT_EQ(4U, ins->GetValueNum());
+}
+
+TEST_F(VariantDataTest, GetValueAsVariant_TC012) {
+    ins->SetValue("test_key", 42);
+    VariantValue vv = ins->GetValueAsVariant("test_key");
+    EXPECT_EQ(std::type_index(typeid(int64_t)), vv.type);
+}
+
+TEST_F(VariantDataTest, GetValueAsVariantFromList_ValidIndex_TC013) {
+    std::vector<int32_t> values = {10, 20, 30};
+    ins->SetValue("list", values);
+    
+    VariantValue vv = ins->GetValueAsVariantFromList("list", 1);
+    EXPECT_EQ(std::type_index(typeid(int32_t)), vv.type);
+}
+
+TEST_F(VariantDataTest, GetValueAsVariantFromList_InvalidIndex_TC014) {
+    std::vector<int32_t> values = {10, 20};
+    ins->SetValue("list", values);
+    
+    VariantValue vv = ins->GetValueAsVariantFromList("list", 10);
+    // Should have default type
+}
+
+TEST_F(VariantDataTest, GetValueAsVariantFromList_NonExistent_TC015) {
+    VariantValue vv = ins->GetValueAsVariantFromList("nonexistent", 0);
+    // Should have default type
+}
+
+TEST_F(VariantDataTest, NestedVariantData_TC016) {
+    VariantData child1;
+    child1.SetName("child1");
+    child1.SetValue("child_key", 123);
+    
+    VariantData child2;
+    child2.SetName("child2");
+    child2.SetValue("child_key", 456);
+    
+    ins->SetValue("nested1", child1);
+    ins->SetValue("nested2", child2);
+    
+    auto* retrieved1 = ins->GetChild("nested1");
+    auto* retrieved2 = ins->GetChild("nested2");
+    
+    ASSERT_NE(nullptr, retrieved1);
+    ASSERT_NE(nullptr, retrieved2);
+    EXPECT_EQ("child1", retrieved1->GetName());
+    EXPECT_EQ("child2", retrieved2->GetName());
+}
+
+TEST_F(VariantDataTest, EmptyKeyList_TC017) {
+    std::vector<std::string> keys = ins->GetKeyList();
+    EXPECT_TRUE(keys.empty());
+}
+
+TEST_F(VariantDataTest, LargeKeyList_TC018) {
+    for (int i = 0; i < 100; ++i) {
+        ins->SetValue("key" + std::to_string(i), i);
+    }
+    
+    std::vector<std::string> keys = ins->GetKeyList();
+    EXPECT_EQ(100U, keys.size());
+}
+
+TEST_F(VariantDataTest, SpecialCharactersInKeys_TC019) {
+    ins->SetValue("key-1_test", 1);
+    ins->SetValue("key.2.test", 2);
+    ins->SetValue("key@3", 3);
+    
+    EXPECT_TRUE(ins->HasKey("key-1_test"));
+    EXPECT_TRUE(ins->HasKey("key.2.test"));
+    EXPECT_TRUE(ins->HasKey("key@3"));
+}
+
+TEST_F(VariantDataTest, OverwriteValue_TC020) {
+    ins->SetValue("key1", 123);
+    ins->SetValue("key1", 456);
+    
+    int64_t out;
+    EXPECT_TRUE(ins->GetInt64("key1", out));
+    EXPECT_EQ(456, out);
+}
+
 
 int main(int argc, char* argv[]) {
     ::testing::InitGoogleTest(&argc, argv);

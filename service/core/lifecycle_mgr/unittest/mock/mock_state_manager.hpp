@@ -17,6 +17,7 @@ public:
     MOCK_METHOD(void, ProcessServiceHandling, (std::set<std::shared_ptr<Service>> service_list), ());
     MOCK_METHOD(void, OnStart, (lifecyclemgr::StartServiceResponse* message), ());
     MOCK_METHOD(void, OnStop, (lifecyclemgr::StopServiceResponse* message), ());    
+    MOCK_METHOD(void, RequestStopAll, (), ());
     // Add more mocks as needed 
 };
 
@@ -53,6 +54,14 @@ void StateManager::OnStart(lifecyclemgr::StartServiceResponse* message) {
 
 void StateManager::OnStop(lifecyclemgr::StopServiceResponse* message) {
     Mock_StateManager->OnStop(message);
+}
+
+void StateManager::RequestStopAll() {
+    if (Mock_StateManager) {
+        Mock_StateManager->RequestStopAll();
+        return;
+    }
+    // Default no-op to avoid performing real actions during unit tests
 }
 
 

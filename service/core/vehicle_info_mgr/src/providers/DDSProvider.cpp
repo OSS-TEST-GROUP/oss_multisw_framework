@@ -2,6 +2,13 @@
 #include "Utils.h" // For any_to_string
 
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp>
+#include <fastdds/dds/domain/DomainParticipantListener.hpp>
+#include <fastdds/dds/builtin/topic/ParticipantBuiltinTopicData.hpp>
+#include <fastdds/dds/builtin/topic/PublicationBuiltinTopicData.hpp>
+#include <fastdds/dds/builtin/topic/SubscriptionBuiltinTopicData.hpp>
+#include <fastdds/rtps/participant/ParticipantDiscoveryInfo.hpp>
+#include <fastdds/rtps/reader/ReaderDiscoveryStatus.hpp>
+#include <fastdds/rtps/writer/WriterDiscoveryStatus.hpp>
 #include <fastdds/dds/publisher/Publisher.hpp>
 #include <fastdds/dds/publisher/DataWriter.hpp>
 #include <fastdds/dds/publisher/DataWriterListener.hpp>
@@ -24,8 +31,74 @@
 
 #include <iostream>
 #include <cmath> // For M_PI
+#include "Logger.h"
 
 using namespace eprosima::fastdds::dds;
+
+// Listener for DDS Discovery
+class DDSProvider::DiscoveryListener : public DomainParticipantListener
+{
+public:
+    void on_participant_discovery(
+            DomainParticipant* participant,
+            eprosima::fastdds::rtps::ParticipantDiscoveryStatus reason,
+            const ParticipantBuiltinTopicData& info,
+            bool& should_be_ignored) override
+    {
+        (void)participant;
+        (void)should_be_ignored;
+        switch (reason)
+        {
+            case eprosima::fastdds::rtps::ParticipantDiscoveryStatus::DISCOVERED_PARTICIPANT:
+                LOG_INFO << "[DDS Discovery] Discovered Participant: " << info.participant_name.to_string();
+                break;
+            case eprosima::fastdds::rtps::ParticipantDiscoveryStatus::REMOVED_PARTICIPANT:
+            case eprosima::fastdds::rtps::ParticipantDiscoveryStatus::DROPPED_PARTICIPANT:
+                LOG_INFO << "[DDS Discovery] Removed or Dropped Participant: " << info.participant_name.to_string();
+                break;
+            default:
+                break;
+        }
+    }
+
+    void on_data_writer_discovery(
+            DomainParticipant* participant,
+            eprosima::fastdds::rtps::WriterDiscoveryStatus reason,
+            const PublicationBuiltinTopicData& info,
+            bool& should_be_ignored) override
+    {
+        (void)participant;
+        (void)should_be_ignored;
+        switch(reason)
+        {
+            case eprosima::fastdds::rtps::WriterDiscoveryStatus::DISCOVERED_WRITER:
+                LOG_INFO << "[DDS Discovery] Discovered Publisher for topic '" << info.topic_name << "' with type '" << info.type_name << "'";
+                break;
+            case eprosima::fastdds::rtps::WriterDiscoveryStatus::REMOVED_WRITER:
+                LOG_INFO << "[DDS Discovery] Removed Publisher for topic '" << info.topic_name << "' with type '" << info.type_name << "'";
+                break;
+        }
+    }
+
+    void on_data_reader_discovery(
+            DomainParticipant* participant,
+            eprosima::fastdds::rtps::ReaderDiscoveryStatus reason,
+            const SubscriptionBuiltinTopicData& info,
+            bool& should_be_ignored) override
+    {
+        (void)participant;
+        (void)should_be_ignored;
+        switch(reason)
+        {
+            case eprosima::fastdds::rtps::ReaderDiscoveryStatus::DISCOVERED_READER:
+                LOG_INFO << "[DDS Discovery] Discovered Subscriber for topic '" << info.topic_name << "' with type '" << info.type_name << "'";
+                break;
+            case eprosima::fastdds::rtps::ReaderDiscoveryStatus::REMOVED_READER:
+                LOG_INFO << "[DDS Discovery] Removed Subscriber for topic '" << info.topic_name << "' with type '" << info.type_name << "'";
+                break;
+        }
+    }
+};
 
 // Listener for VehicleDataTopic
 class DDSProvider::VehicleDataListener : public DataReaderListener
@@ -33,6 +106,18 @@ class DDSProvider::VehicleDataListener : public DataReaderListener
 public:
     VehicleDataListener(ThreadSafeQueue<VehicleData>* channel) 
     : channel_(channel) {}
+
+    void on_subscription_matched(DataReader* reader, const SubscriptionMatchedStatus& info) override
+    {
+        if (info.current_count_change == 1)
+        {
+            LOG_INFO << "******************** [DDS Matched] DataReader matched for topic: [" << reader->get_topicdescription()->get_name() << "]";
+        }
+        else if (info.current_count_change == -1)
+        {
+            LOG_INFO << "******************** [DDS Unmatched] DataReader unmatched for topic: [" << reader->get_topicdescription()->get_name() << "]";
+        }
+    }
 
     void on_data_available(DataReader* reader) override
     {
@@ -42,7 +127,7 @@ public:
         {
             if (info.valid_data)
             {
-                std::cout << "DDS Data Received: " << sample.path() << " = " << sample.value() << std::endl;
+                LOG_INFO << "DDS Data Received: " << sample.path() << " = " << sample.value();
                 if (channel_)
                 {
                     VehicleData data;
@@ -66,6 +151,18 @@ public:
     GnssInsOrientationListener(ThreadSafeQueue<VehicleData>* channel)
     : channel_(channel) {}
 
+    void on_subscription_matched(DataReader* reader, const SubscriptionMatchedStatus& info) override
+    {
+        if (info.current_count_change == 1)
+        {
+            LOG_INFO << "******************** [DDS Matched] DataReader matched for topic: [" << reader->get_topicdescription()->get_name() << "]";
+        }
+        else if (info.current_count_change == -1)
+        {
+            LOG_INFO << "******************** [DDS Unmatched] DataReader unmatched for topic: [" << reader->get_topicdescription()->get_name() << "]";
+        }
+    }
+
     void on_data_available(DataReader* reader) override
     {
         SampleInfo info;
@@ -74,7 +171,7 @@ public:
         {
             if (info.valid_data)
             {
-                std::cout << "Autoware GnssInsOrientationStamped Received" << std::endl;
+                LOG_INFO << "Autoware GnssInsOrientationStamped Received";
                 if (channel_)
                 {
                     // Create a JSON object from the GnssInsOrientationStamped message
@@ -104,7 +201,7 @@ public:
                     rapidjson::StringBuffer buffer;
                     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
                     std::any_cast<std::shared_ptr<rapidjson::Document>>(data.value)->Accept(writer);
-                    std::cout << "DDSProvider: Pushing to channel -> Path: " << data.path << ", Value: " << buffer.GetString() << std::endl;
+                    LOG_INFO << "DDSProvider: Pushing to channel -> Path: " << data.path << ", Value: " << buffer.GetString();
 
                     channel_->push(data);
                 }
@@ -122,6 +219,18 @@ public:
     TrajectoryListener(
         ThreadSafeQueue<VehicleData>* channel)
         : channel_(channel) {}
+    
+    void on_subscription_matched(DataReader* reader, const SubscriptionMatchedStatus& info) override
+    {
+        if (info.current_count_change == 1)
+        {
+            LOG_INFO << "******************** [DDS Matched] DataReader matched for topic: [" << reader->get_topicdescription()->get_name() << "]";
+        }
+        else if (info.current_count_change == -1)
+        {
+            LOG_INFO << "******************** [DDS Unmatched] DataReader unmatched for topic: [" << reader->get_topicdescription()->get_name() << "]";
+        }
+    }
 
     void on_data_available(DataReader* reader) override
     {
@@ -181,18 +290,34 @@ public:
                     rapidjson::StringBuffer buffer;
                     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
                     std::any_cast<std::shared_ptr<rapidjson::Document>>(data.value)->Accept(writer);
-                    std::cout << "DDSProvider: Pushing to channel -> Path: " << data.path << ", Value: " << buffer.GetString() << std::endl;
+                    LOG_INFO << "DDSProvider: Pushing to channel -> Path: " << data.path << ", Value: " << buffer.GetString();
 
                     channel_->push(data);
 
                 } catch (const std::exception& e) {
-                    std::cerr << "Error processing Trajectory data: " << e.what() << std::endl;
+                    LOG_ERROR << "Error processing Trajectory data: " << e.what();
                 }
             }
         }
     }
 private:
     ThreadSafeQueue<VehicleData>* channel_;
+};
+
+class DDSProvider::VehicleDataWriterListener : public DataWriterListener
+{
+public:
+    void on_publication_matched(DataWriter* writer, const PublicationMatchedStatus& info) override
+    {
+        if (info.current_count_change == 1)
+        {
+            LOG_INFO << "******************** [DDS Matched] DataWriter matched for topic: [" << writer->get_topic()->get_name() << "]";
+        }
+        else if (info.current_count_change == -1)
+        {
+            LOG_INFO << "******************** [DDS Unmatched] DataWriter unmatched for topic: [" << writer->get_topic()->get_name() << "]";
+        }
+    }
 };
 
 
@@ -211,13 +336,14 @@ DDSProvider::DDSProvider()
     , trajectory_reader_(nullptr)
     , trajectory_type_(new autoware_planning_msgs::msg::TrajectoryPubSubType())
     , active_(false)
+    , discovery_listener_(std::make_unique<DiscoveryListener>())
 {
     // Create Participant
     DomainParticipantQos pqos = PARTICIPANT_QOS_DEFAULT;
     pqos.name("VISS_Participant");
-    participant_ = DomainParticipantFactory::get_instance()->create_participant(0, pqos);
+    participant_ = DomainParticipantFactory::get_instance()->create_participant(0, pqos, discovery_listener_.get());
     if (participant_ == nullptr) {
-        std::cerr << "Failed to create DDS Participant" << std::endl;
+        LOG_ERROR << "Failed to create DDS Participant";
         return;
     }
 
@@ -268,10 +394,11 @@ void DDSProvider::start()
 
 
     // Create DataWriter for VehicleDataTopic
-    vehicle_data_writer_ = publisher_->create_datawriter(vehicle_data_topic_, DATAWRITER_QOS_DEFAULT, nullptr);
+    vehicle_data_writer_listener_ = std::make_unique<VehicleDataWriterListener>();
+    vehicle_data_writer_ = publisher_->create_datawriter(vehicle_data_topic_, DATAWRITER_QOS_DEFAULT, vehicle_data_writer_listener_.get());
 
     active_ = true;
-    std::cout << "DDSProvider started." << std::endl;
+    LOG_INFO << "DDSProvider started.";
 }
 
 void DDSProvider::stop()
@@ -298,7 +425,7 @@ void DDSProvider::stop()
     {
         publisher_->delete_datawriter(vehicle_data_writer_);
     }
-    std::cout << "DDSProvider stopped." << std::endl;
+    LOG_INFO << "DDSProvider stopped.";
 }
 
 std::string DDSProvider::getName() const
@@ -321,7 +448,7 @@ void DDSProvider::setValue(const std::string& path, const std::any& value)
         sample.path(path);
         sample.value(any_to_string(value)); // Using helper to convert any to string
         vehicle_data_writer_->write(&sample);
-        std::cout << "DDSProvider: Published data for path " << path << std::endl;
+        LOG_INFO << "DDSProvider: Published data for path " << path;
     }
 }
 

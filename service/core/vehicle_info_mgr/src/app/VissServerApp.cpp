@@ -10,6 +10,7 @@
 #include <typeinfo>
 #include <filesystem>
 #include <csignal>
+#include <optional>
 
 #include "VissServerApp.h"
 #include "Logger.h"
@@ -30,7 +31,7 @@
 static VissServerApp* g_app_ptr = nullptr;
 
 void signal_handler(int signum) {
-    LOG_INFO << "Interrupt signal (" << signum << ") received. Shutting down...";
+    LOG_INFO << "Interrupt signal (" << signum << ") received. Shutting down..." << g_app_ptr;
     if (g_app_ptr) {
         g_app_ptr->stop();
     }
@@ -62,7 +63,7 @@ VissServerApp::VissServerApp(const std::string& himPath, const std::string& grpc
     // Add Transports
     transports.push_back(std::make_unique<GrpcTransport>(request_pool_, requestQueue));
 #ifndef BUILD_FOR_ANDROID
-    transports.push_back(std::make_unique<MqttTransport>(request_pool_, requestQueue));
+    //transports.push_back(std::make_unique<MqttTransport>(request_pool_, requestQueue));
     transports.push_back(std::make_unique<DDSTransport>(request_pool_, requestQueue));
 #endif
 }
@@ -133,7 +134,8 @@ void VissServerApp::stop() {
     LOG_INFO << "VissServerApp::stop() completed.";
 }
 
-// ################### Main Entry Point ###################
+// ################### Main Entry Point (for non-Android builds) ###################
+#ifndef BUILD_FOR_ANDROID
 std::optional<std::string> getEnv(const std::string& key) {
     const char* val = std::getenv(key.c_str());
     return val ? std::optional<std::string>(val) : std::nullopt;
@@ -142,11 +144,9 @@ std::optional<std::string> getEnv(const std::string& key) {
 int main(int argc, char** argv) {
     // Default paths relative to the executable for a typical installation structure
     std::string configPath = getEnv("VEHICLE_CONFIG_PATH").value_or("config");
-    std::string himPath = configPath.append("/viss.him"); 
-    std::string schemaPath = configPath.append("/vissv3.0-schema.json");
-    //std::string himPath = "config/viss.him"; 
-    //std::string schemaPath = "config/vissv3.0-schema.json";
-    std::string grpcProviderAddr = "127.0.0.1:50052";
+    std::string himPath = configPath + "/viss.him"; 
+    std::string schemaPath = configPath + "/vissv3.0-schema.json";
+    std::string grpcProviderAddr = getEnv("GRPC_PROVIDER_ADDR").value_or("127.0.0.1:50052");
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -174,3 +174,4 @@ int main(int argc, char** argv) {
     g_app_ptr = nullptr;
     return 0;
 }
+#endif

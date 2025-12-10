@@ -456,5 +456,75 @@ rapidjson::Value VSSTree::createTemplateRecursive(Node_t* node, rapidjson::Docum
     return result;
 }
 
+rapidjson::Document VSSTree::getMetadata(const std::string& path, int depth) {
+    LOG_INFO << "Getting metadata for path: " << path << " with depth: " << depth;
+    rapidjson::Document doc;
+    doc.SetObject();
+    Node_t* node = findNode(path);
+    if (!node) {
+        LOG_WARN << "Node not found for path: " << path;
+        // The ServiceManager will check if the doc is empty.
+        return doc;
+    }
+    
+    rapidjson::Value node_val = getMetadataRecursive(node, depth, 1, doc.GetAllocator());
+    rapidjson::Value key(node->Name.c_str(), doc.GetAllocator());
+    doc.AddMember(key, node_val, doc.GetAllocator());
+
+    #ifdef DEBUG_LOGGING
+        rapidjson::StringBuffer buffer;
+        rapidjson::PrettyWriter<rapidjson::StringBuffer> writer(buffer);
+        doc.Accept(writer);
+        LOG_DEBUG << "Generated metadata: " << buffer.GetString();
+    #endif
+
+    return doc;
+}
+
+rapidjson::Value VSSTree::getMetadataRecursive(Node_t* node, int max_depth, int current_depth, rapidjson::Document::AllocatorType& allocator) {
+    LOG_DEBUG << "Recursively getting metadata for node: " << node->Name << " at depth: " << current_depth;
+    rapidjson::Value result(rapidjson::kObjectType);
+    
+    // Add all relevant metadata fields from the Node_t struct
+    result.AddMember("type", rapidjson::Value(node->getTypeAsString().c_str(), allocator), allocator);
+    if (!node->Description.empty()) {
+        result.AddMember("description", rapidjson::Value(node->Description.c_str(), allocator), allocator);
+    }
+    if (!node->Datatype.empty()) {
+        result.AddMember("datatype", rapidjson::Value(node->Datatype.c_str(), allocator), allocator);
+    }
+    if (!node->Unit.empty()) {
+        result.AddMember("unit", rapidjson::Value(node->Unit.c_str(), allocator), allocator);
+    }
+    if (!node->Min.empty()) {
+        result.AddMember("min", rapidjson::Value(node->Min.c_str(), allocator), allocator);
+    }
+    if (!node->Max.empty()) {
+        result.AddMember("max", rapidjson::Value(node->Max.c_str(), allocator), allocator);
+    }
+    if (node->Allowed > 0 && !node->AllowedDef.empty()) {
+         rapidjson::Value allowed_array(rapidjson::kArrayType);
+         for(const auto& val : node->AllowedDef) {
+            allowed_array.PushBack(rapidjson::Value(val.c_str(), allocator), allocator);
+         }
+        result.AddMember("allowed", allowed_array, allocator);
+    }
+    if (!node->DefaultValue.empty()) {
+        result.AddMember("default", rapidjson::Value(node->DefaultValue.c_str(), allocator), allocator);
+    }
+
+    // Recurse through children if depth allows (depth 0 means infinite)
+    if (!node->Child.empty() && (max_depth == 0 || current_depth < max_depth)) {
+        rapidjson::Value children(rapidjson::kObjectType);
+        for (const auto& [key, child_node] : node->Child) {
+            rapidjson::Value key_val(key.c_str(), allocator);
+            children.AddMember(key_val, getMetadataRecursive(child_node.get(), max_depth, current_depth + 1, allocator), allocator);
+        }
+        result.AddMember("children", children, allocator);
+    }
+
+    return result;
+}
+
 
 } // namespace viss

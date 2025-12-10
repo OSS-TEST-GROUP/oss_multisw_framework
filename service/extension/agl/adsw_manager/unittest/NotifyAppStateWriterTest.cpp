@@ -1,7 +1,11 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
+#include "TestPrinter.hpp"
+
+#define private public
 #include "NotifyAppStateWriter.hpp"
+#undef private
 
 #include <fastdds/dds/domain/DomainParticipant.hpp>
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp>
@@ -62,5 +66,31 @@ TEST_F(NotifyAppStateWriterTest, NotifyAppStateWriter_Publish) {
     msg.service_state_list().push_back(lifecyclemgr::ServiceState::NOT_RUNNING);
 
     EXPECT_TRUE(test_writer.Publish(msg));
+
+}
+
+// ----------------------------- Initialize (failure: null args) -----------------------------
+
+TEST_F(NotifyAppStateWriterTest, Initialize_Fails_WhenParticipantIsNull) {
+    NotifyAppStateWriter writer;
+
+    EXPECT_FALSE(writer.Initialize(publisher_, nullptr));
+}
+
+TEST_F(NotifyAppStateWriterTest, Initialize_Fails_WhenPublisherIsNull) {
+    NotifyAppStateWriter writer;
+
+    EXPECT_FALSE(writer.Initialize(nullptr, participant_));
+}
+
+// ----------------------------- Destructor branches -----------------------------
+
+TEST_F(NotifyAppStateWriterTest, Destructor_WhenTopicAndWriterAreNull_DoesNotCrash) {
+    NotifyAppStateWriter writer;
+
+    writer.participant_ = participant_;
+    writer.publisher_   = publisher_;
+    writer.topic_       = nullptr;
+    writer.writer_      = nullptr;
 
 }

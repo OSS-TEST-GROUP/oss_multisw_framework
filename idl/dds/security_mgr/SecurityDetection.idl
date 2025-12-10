@@ -1,0 +1,11 @@
+module security {
+
+    /* TopicName - security/DetectionReport */
+    struct DetectionReport {
+        string   client_id;     // Security Client ID
+        string   dds_topic;     // 공격이 탐지된 DDS 토픽 이름 (예: "rt/DoorUnlockLockIndicator")
+        string   rule;          // 탐지된 규칙 (예: "custom rule anomaly detection")
+        long long timestamp_ms; // 탐지 시간 (epoch milliseconds)
+    };
+};
+ 

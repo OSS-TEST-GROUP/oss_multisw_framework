@@ -73,6 +73,12 @@ rapidjson::Value convertSingleFilter(const grpcProtobufMessages::FilterExpressio
                 exp_obj.AddMember("parameter", rapidjson::Value(filter_exp.value().valuehistory().timeperiod().c_str(), allocator), allocator);
             }
             break;
+        case grpcProtobufMessages::FilterExpressions_FilterExpression_FilterVariant_METADATA:
+            variant_str = "metadata";
+            if (filter_exp.value().has_valuemetadata()) {
+                exp_obj.AddMember("parameter", rapidjson::Value(filter_exp.value().valuemetadata().tree().c_str(), allocator), allocator);
+            }
+            break;
         default:
             return rapidjson::Value(rapidjson::kNullType); // Return null for unknown variants
     }
@@ -82,17 +88,11 @@ rapidjson::Value convertSingleFilter(const grpcProtobufMessages::FilterExpressio
 
 // Helper function to convert protobuf FilterExpressions to rapidjson Value
 void populateFilterExpressions(const grpcProtobufMessages::FilterExpressions& filters, rapidjson::Value& out_value, rapidjson::Document::AllocatorType& allocator) {
-    if (filters.filterexp_size() == 1) {
-        // Only one filter, create a JSON object
-        out_value.CopyFrom(convertSingleFilter(filters.filterexp(0), allocator), allocator);
-    } else {
-        // Multiple filters, create a JSON array
-        out_value.SetArray();
-        for (const auto& filter_exp : filters.filterexp()) {
-            rapidjson::Value exp_obj = convertSingleFilter(filter_exp, allocator);
-            if (!exp_obj.IsNull()) {
-                out_value.PushBack(exp_obj, allocator);
-            }
+    out_value.SetArray();
+    for (const auto& filter_exp : filters.filterexp()) {
+        rapidjson::Value exp_obj = convertSingleFilter(filter_exp, allocator);
+        if (!exp_obj.IsNull()) {
+            out_value.PushBack(exp_obj, allocator);
         }
     }
 }
@@ -175,6 +175,14 @@ grpc::Status VISSServiceImpl::GetRequest(grpc::ServerContext* context, const grp
         } else if (data_val.IsObject()) {
             populateDataPackage(data_val, data_pack->add_data());
         }
+    } else if (response_doc->HasMember("metadata")) {
+        response->set_status(grpcProtobufMessages::ResponseStatus::SUCCESS);
+        auto success_resp = response->mutable_successresponse();
+        const auto& metadata_val = (*response_doc)["metadata"];
+        rapidjson::StringBuffer meta_buffer;
+        rapidjson::Writer<rapidjson::StringBuffer> meta_writer(meta_buffer);
+        metadata_val.Accept(meta_writer);
+        success_resp->set_metadata(meta_buffer.GetString());
     }
 
     if (response_doc->HasMember("ts") && (*response_doc)["ts"].IsString()) {
@@ -297,6 +305,11 @@ grpc::Status VISSServiceImpl::SubscribeRequest(grpc::ServerContext* context, con
     
     initial_response.set_mtype(grpcProtobufMessages::SubscribeResponseType::RESPONSE);
     auto resp_msg = initial_response.mutable_response();
+    resp_msg->set_requestid(request->requestid());
+    if (initial_response_doc->HasMember("ts") && (*initial_response_doc)["ts"].IsString()) {
+        resp_msg->set_ts((*initial_response_doc)["ts"].GetString());
+    }
+
     if (initial_response_doc->HasMember("error") && (*initial_response_doc)["error"].IsObject()) {
         initial_response.set_status(grpcProtobufMessages::ResponseStatus::ERROR);
         const auto& error_obj = (*initial_response_doc)["error"];
@@ -310,14 +323,14 @@ grpc::Status VISSServiceImpl::SubscribeRequest(grpc::ServerContext* context, con
         if (error_obj.HasMember("description") && error_obj["description"].IsString()) {
              error_resp->set_description(error_obj["description"].GetString());
         }
+        
+        writer->Write(initial_response);
+        return grpc::Status::OK;
     } else {
         initial_response.set_status(grpcProtobufMessages::ResponseStatus::SUCCESS);
         resp_msg->set_subscriptionid(subscriptionId);
     }
-    resp_msg->set_requestid(request->requestid());
-    if (initial_response_doc->HasMember("ts") && (*initial_response_doc)["ts"].IsString()) {
-        resp_msg->set_ts((*initial_response_doc)["ts"].GetString());
-    }
+
     writer->Write(initial_response);
 
     while (!context->IsCancelled()) {
@@ -366,21 +379,28 @@ grpc::Status VISSServiceImpl::UnsubscribeRequest(grpc::ServerContext* context, c
     auto responseChan = std::make_shared<ThreadSafeQueue<std::shared_ptr<PooledResponseMap>>>();
     
     auto unsubscribeRequest = pool_->acquire();
-    unsubscribeRequest->requestId = request->subscriptionid();
+    // Use the requestId from the incoming request, not the subscriptionId
+    unsubscribeRequest->requestId = request->requestid();
     unsubscribeRequest->responseChan = responseChan;
 
     unsubscribeRequest->request_doc->SetObject();
-    rapidjson::Value action_val("unsubscribe", unsubscribeRequest->request_doc->GetAllocator());
-    rapidjson::Value sub_id_val(request->subscriptionid().c_str(), unsubscribeRequest->request_doc->GetAllocator());
+    rapidjson::Document::AllocatorType& allocator = unsubscribeRequest->request_doc->GetAllocator();
 
-    unsubscribeRequest->request_doc->AddMember("action", action_val, unsubscribeRequest->request_doc->GetAllocator());
-    unsubscribeRequest->request_doc->AddMember("subscriptionId", sub_id_val, unsubscribeRequest->request_doc->GetAllocator());
+    rapidjson::Value action_val("unsubscribe", allocator);
+    rapidjson::Value sub_id_val(request->subscriptionid().c_str(), allocator);
+    rapidjson::Value req_id_val(request->requestid().c_str(), allocator);
+
+    unsubscribeRequest->request_doc->AddMember("action", action_val, allocator);
+    unsubscribeRequest->request_doc->AddMember("subscriptionId", sub_id_val, allocator);
+    // Also add the requestId to the internal JSON document
+    unsubscribeRequest->request_doc->AddMember("requestId", req_id_val, allocator);
     
     requestQueue->push(unsubscribeRequest);
 
     std::shared_ptr<PooledResponseMap> response_doc;
     responseChan->wait_and_pop(response_doc);
     
+    // Set the requestId in the final response
     response->set_requestid(request->requestid());
     if (response_doc->HasMember("error") && (*response_doc)["error"].IsObject()) {
         response->set_status(grpcProtobufMessages::ResponseStatus::ERROR);
@@ -406,39 +426,6 @@ grpc::Status VISSServiceImpl::UnsubscribeRequest(grpc::ServerContext* context, c
 
 
 // GrpcTransport implementation
-
-#ifdef USE_ASYNC_GRPC_SERVER
-
-GrpcTransport::GrpcTransport(
-    std::shared_ptr<ObjectPool<RequestData>> pool,
-    std::shared_ptr<ThreadSafeQueue<std::shared_ptr<RequestData>>> queue) 
-    : server_address("0.0.0.0:50051") {
-    async_service_ = std::make_unique<VISSAsyncServiceImpl>(pool, queue);
-}
-
-GrpcTransport::~GrpcTransport() {
-    stop();
-}
-
-void GrpcTransport::start() {
-    server_thread_ = std::thread([this]() {
-        this->async_service_->Run(this->server_address);
-    });
-    LOG_INFO << "Async gRPC transport thread started.";
-}
-
-void GrpcTransport::stop() {
-    LOG_INFO << "GrpcTransport::stop() called for async server.";
-    if (async_service_) {
-        async_service_->Shutdown();
-    }
-    if (server_thread_.joinable()) {
-        server_thread_.join();
-    }
-    LOG_INFO << "Async gRPC transport stopped.";
-}
-
-#else
 
 GrpcTransport::GrpcTransport(
     std::shared_ptr<ObjectPool<RequestData>> pool,
@@ -496,4 +483,3 @@ void GrpcTransport::stop() {
     }
 }
 
-#endif
