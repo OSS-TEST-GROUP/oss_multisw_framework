@@ -73,6 +73,10 @@ std::shared_ptr<Service> LifecycleManager::GetService(std::string name) {
     return Mock_LifecycleManager->GetService(name);
 }
 
+void LifecycleManager::SetState(ManagerState state){
+    Mock_LifecycleManager->SetState(state);
+}
+
 
 } // namespace lifecycle_manager
 

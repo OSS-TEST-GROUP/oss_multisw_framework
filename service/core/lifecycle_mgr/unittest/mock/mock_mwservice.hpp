@@ -9,8 +9,8 @@ namespace lifecycle_manager {
 class MockMWService : public MWService {
 public:
     MockMWService(int32_t code, const std::string& name, const std::string& exepath, bool active, const std::vector<ArgumentConfig>& args)
-        : MWService(code, name, exepath, active, args) { lifecycle_manager::gMockMWService = this; }
-    virtual ~MockMWService() { lifecycle_manager::gMockMWService = nullptr; }
+        : MWService(code, name, exepath, active, args) {  }
+    virtual ~MockMWService() { }
 
     MOCK_METHOD(std::string, GetName, (), ());
     MOCK_METHOD(std::string, GetPath, (), ());
@@ -20,7 +20,7 @@ public:
     MOCK_METHOD(bool, IsActive, (), ());
 };
 
-inline MockMWService* gMockMWService = nullptr;
+inline MockMWService* Mock_MWService = nullptr;
 
 
 MWService::MWService(int32_t code, const std::string& name, const std::string& exepath, bool active, const std::vector<ArgumentConfig>& args){}

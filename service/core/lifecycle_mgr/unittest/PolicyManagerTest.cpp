@@ -2,10 +2,11 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
-#include "unittest/mock/mock_policy_manager.hpp"
-#include "unittest/mock/mock_service.hpp"
-#include "unittest/mock/mock_policy_always.hpp"
-#include "unittest/mock/mock_policy_base.hpp"
+#include "policy/PolicyManager.hpp"
+#include "policy/PolicyAlways.hpp"
+
+#include "mock/mock_service.hpp"
+#include "mock/mock_logger.hpp"
 
 using namespace lifecycle_manager;
 
@@ -26,26 +27,30 @@ using ::testing::Combine;
 
 class PolicyManagerTest : public ::testing::Test {
 protected:
-    void SetUp() override {
-        // Setup code if needed
+    virtual void SetUp(){
+        Mock_Logger = new MockLogger();
+        Mock_Service = new MockService();
     }
-    void TearDown() override {
-        // Cleanup code if needed
+    virtual void TearDown(){
+        delete Mock_Logger;
+        Mock_Logger = nullptr;
+        delete Mock_Service;
+        Mock_Service = nullptr;
     }
 };
 
-TEST(PolicyManagerTest, StartAndStop) {
-    MockPolicyManager policy;
-    EXPECT_CALL(policy, Start()).WillOnce(::testing::Return(true));
-    EXPECT_TRUE(policy.Start());
-    EXPECT_CALL(policy, Stop()).Times(1);
-    policy.Stop();
+
+TEST_F(PolicyManagerTest, StartAndStop) {
+    PolicyManager manager;
+    EXPECT_TRUE(manager.Start());
+    manager.Stop();
+
 }
 
 // Add more tests for PolicyManager as needed
-TEST(PolicyManagerTest, GetPolicyByEnumReturnsCorrectPolicy) {
+TEST_F(PolicyManagerTest, GetPolicyByEnumReturnsCorrectPolicy) {
     PolicyManager manager;
-    manager.Start();
+    EXPECT_TRUE(manager.Start());
 
     auto policy = manager.GetPolicy(RecoveryPolicy::ALWAYS);
     ASSERT_NE(policy, nullptr);
@@ -60,7 +65,7 @@ TEST(PolicyManagerTest, GetPolicyByEnumReturnsCorrectPolicy) {
     EXPECT_EQ(policy->GetName(), "Policy-Manual");
 }
 
-TEST(PolicyManagerTest, GetPolicyByNameReturnsCorrectPolicy) {
+TEST_F(PolicyManagerTest, GetPolicyByNameReturnsCorrectPolicy) {
     PolicyManager manager;
     manager.Start();
 
@@ -76,7 +81,7 @@ TEST(PolicyManagerTest, GetPolicyByNameReturnsCorrectPolicy) {
     EXPECT_EQ(policy, nullptr);
 }
 
-TEST(PolicyManagerTest, EvaluateReturnsPolicyAction) {
+TEST_F(PolicyManagerTest, EvaluateReturnsPolicyAction) {
     PolicyManager manager;
     manager.Start();
 
@@ -85,12 +90,14 @@ TEST(PolicyManagerTest, EvaluateReturnsPolicyAction) {
 
     auto service = std::make_shared<MockService>();
     EXPECT_CALL(*service, GetRecoveryPolicy()).WillOnce(Return(RecoveryPolicy::ALWAYS));
+    EXPECT_CALL(*service, GetServiceMode()).WillOnce(Return(ServiceMode::NORMAL));
+    EXPECT_CALL(*service, GetServiceState()).WillOnce(Return(ServiceState::NOT_RUNNING));
 
     // PolicyAlways::Evaluate returns ServiceControlAction::RESTART by default
     EXPECT_EQ(manager.Evaluate(service), ServiceControlAction::START);
 }
 
-TEST(PolicyManagerTest, EvaluateReturnsNoneIfPolicyNotFound) {
+TEST_F(PolicyManagerTest, EvaluateReturnsNoneIfPolicyNotFound) {
     PolicyManager manager;
     manager.Start();
 

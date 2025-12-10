@@ -33,17 +33,17 @@ protected:
 
         Mock_Logger = new MockLogger();
         Mock_MessageQueue = new MockMessageQueue(ins);
-        Mock_MessageEndPoint = new MockMessageEndPoint("test_topic");
+        MockMessageEndPoint::Mock_MessageEndPoint = new MockMessageEndPoint("test_topic");
     }
     virtual void TearDown(){
         delete ins;
         delete Mock_Logger;
         delete Mock_MessageQueue;
-        delete Mock_MessageEndPoint;
+        delete MockMessageEndPoint::Mock_MessageEndPoint;
 
         Mock_Logger = nullptr;
         Mock_MessageQueue = nullptr;
-        Mock_MessageEndPoint = nullptr;
+        MockMessageEndPoint::Mock_MessageEndPoint = nullptr;
     }
 
     DDSTransmitter* ins;

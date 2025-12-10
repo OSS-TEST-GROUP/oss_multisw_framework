@@ -11,9 +11,10 @@
 #include <sys/wait.h>
 #include <signal.h>
 
-#include "mock/mock_mw_service_manager.hpp"
+#include "service/MWServiceManager.hpp"
 #include "mock/mock_mwservice.hpp"
 #include "mock/mock_argumentconfig.hpp"
+#include "mock/mock_logger.hpp"
 
 using namespace lifecycle_manager;
 
@@ -34,19 +35,24 @@ using ::testing::Combine;
 
 class MWServiceManagerTest : public ::testing::Test {
 protected:
-    void SetUp() override {
-        // Setup code if needed
+    virtual void SetUp(){
+        Mock_Logger = new MockLogger();
+        Mock_MWService = new MockMWService(1, "test_service", "/bin/true", true, std::vector<ArgumentConfig>{});
     }
-    void TearDown() override {
-        // Cleanup code if needed
+    virtual void TearDown(){
+        delete Mock_Logger;
+        delete Mock_MWService;
+
+        Mock_Logger = nullptr;
+        Mock_MWService = nullptr;
+        
     }
 };
 
 TEST_F(MWServiceManagerTest, StartAndInitialize) {
-    MockMWServiceManager mw;
-    EXPECT_CALL(mw, Initialize()).WillOnce(::testing::Return(true));
+    MWServiceManager mw;
+    
     EXPECT_TRUE(mw.Initialize());
-    EXPECT_CALL(mw, Start()).WillOnce(::testing::Return(true));
     EXPECT_TRUE(mw.Start());
 }
 

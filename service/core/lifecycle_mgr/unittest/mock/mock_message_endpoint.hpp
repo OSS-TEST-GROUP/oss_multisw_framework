@@ -7,9 +7,15 @@
 namespace lifecycle_manager {
 class MockMessageEndPoint : public MessageEndPoint {
 public:
-    MockMessageEndPoint(std::string topic) : MessageEndPoint(topic) {}
-    ~MockMessageEndPoint() = default;
+    // Declare the global pointer before using it
+    inline static MockMessageEndPoint* Mock_MessageEndPoint = nullptr;
 
+    MockMessageEndPoint(std::string topic) : MessageEndPoint(topic) {
+        Mock_MessageEndPoint = this;
+    }
+    ~MockMessageEndPoint() {
+        if (Mock_MessageEndPoint == this) Mock_MessageEndPoint = nullptr;
+    }
     // Only mock virtual methods
     MOCK_METHOD(std::string, GetTopic, (), ());
     MOCK_METHOD(std::string, GetTypeName, (), ());
@@ -19,32 +25,30 @@ public:
     MOCK_METHOD(void, OnDataAvailable, (), ());
 };
 
-inline MockMessageEndPoint* Mock_MessageEndPoint = nullptr;
-
 
 MessageEndPoint::MessageEndPoint(std::string topic) : topic_(topic) {
 }
 MessageEndPoint::~MessageEndPoint() {
-    Mock_MessageEndPoint = nullptr;
+    MockMessageEndPoint::Mock_MessageEndPoint = nullptr;
 }
 std::string MessageEndPoint::GetTopic() {
-    return Mock_MessageEndPoint->GetTopic();
+    return MockMessageEndPoint::Mock_MessageEndPoint->GetTopic();
 }
 std::string MessageEndPoint::GetTypeName() {
-    return Mock_MessageEndPoint->GetTypeName();
+    return MockMessageEndPoint::Mock_MessageEndPoint->GetTypeName();
 }
 std::shared_ptr<TypeSupport> MessageEndPoint::GetTypeSupport() {
-    return Mock_MessageEndPoint->GetTypeSupport();  
+    return MockMessageEndPoint::Mock_MessageEndPoint->GetTypeSupport();  
 }   
 void MessageEndPoint::SetTypeSupport(std::shared_ptr<TypeSupport> typesupport) {
-    Mock_MessageEndPoint->SetTypeSupport(typesupport);  
+    MockMessageEndPoint::Mock_MessageEndPoint->SetTypeSupport(typesupport);  
 }
 
 void MessageEndPoint::OnDataPublished(bool ret) {
-    Mock_MessageEndPoint->OnDataPublished(ret);     
+    MockMessageEndPoint::Mock_MessageEndPoint->OnDataPublished(ret);     
 }   
 void MessageEndPoint::OnDataAvailable() {
-    Mock_MessageEndPoint->OnDataAvailable();      
+    MockMessageEndPoint::Mock_MessageEndPoint->OnDataAvailable();      
 }
 
 } // namespace lifecycle_manager

@@ -2,14 +2,18 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
-#include "unittest/mock/mock_state_manager.hpp"
-#include "unittest/mock/mock_policy_manager.hpp"
-#include "unittest/mock/mock_mw_service_manager.hpp"
-#include "unittest/mock/mock_state_monitor.hpp"
-#include "unittest/mock/mock_service_registry.hpp"
-#include "unittest/mock/mock_manager_base.hpp"
-#include "unittest/mock/mock_service.hpp"
-#include "unittest/mock/mock_lifecycle_manager.hpp"
+#include "manager/LifecycleManager.hpp"
+
+#include "mock/mock_state_manager.hpp"
+#include "mock/mock_policy_manager.hpp"
+#include "mock/mock_mw_service_manager.hpp"
+#include "mock/mock_state_monitor.hpp"
+#include "mock/mock_service_registry.hpp"
+#include "mock/mock_manager_base.hpp"
+#include "mock/mock_service.hpp"
+#include "mock/mock_endpoint_factory.hpp"
+#include "mock/mock_dds_transmitter.hpp"
+#include "mock/mock_logger.hpp"
 
 
 using namespace lifecycle_manager;
@@ -41,12 +45,23 @@ protected:
         void SetServiceRegistry(std::shared_ptr<ServiceRegistry> sr) { service_registry_ = sr; }
     };
 
-    void SetUp() override {
-        // No setup required for now
+    virtual void SetUp(){
+        Mock_Logger = new MockLogger();
+        Mock_Service = new MockService();
+        Mock_StateManager = new MockStateManager(mgr);
+        Mock_ServiceRegistry = new MockServiceRegistry();
     }
-    void TearDown() override {
-        mgr.Stop(); // Ensure any threads are stopped before destruction
+    virtual void TearDown(){
+        delete Mock_Logger;
+        Mock_Logger = nullptr;
+        delete Mock_Service;
+        Mock_Service = nullptr;
+        delete Mock_StateManager;
+        Mock_StateManager = nullptr;
+        delete Mock_ServiceRegistry;
+        Mock_ServiceRegistry = nullptr;
     }
+
     TestableLifecycleManager mgr;
 };
 

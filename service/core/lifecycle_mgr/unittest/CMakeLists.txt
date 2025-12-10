@@ -46,15 +46,33 @@ enable_testing()
 include (GoogleTest)
 
 # Add test executable
-#add_executable ( LifecycleManagerTest LifecycleManagerTest.cpp )
+add_executable ( LifecycleManagerTest LifecycleManagerTest.cpp ../manager/LifecycleManager.cpp )
 add_executable ( DDSTransmitterTest DDSTransmitterTest.cpp ../transmitter/DDSTransmitter.cpp )
-#add_executable ( EndPointFactoryTest EndPointFactoryTest.cpp )
-#add_executable ( MWServiceManagerTest MWServiceManagerTest.cpp )
-#add_executable ( LFPolicyManagerTest PolicyManagerTest.cpp )
+add_executable ( EndPointFactoryTest EndPointFactoryTest.cpp 
+                ../endpoint/EndPointFactory.cpp
+                ../endpoint/GetServiceStateEndPoint.cpp
+                ../endpoint/LifecycleDiagReportEndPoint.cpp
+                ../endpoint/NotifyServiceStateEndPoint.cpp
+                ../endpoint/SetServiceModeEndPoint.cpp
+                ../endpoint/StartServiceEndPoint.cpp
+                ../endpoint/StopServiceEndPoint.cpp
+                ../endpoint/UpdateServiceListEndPoint.cpp
+                ${GENERATED_DDS_FILES}
+                )
+add_executable ( MWServiceManagerTest MWServiceManagerTest.cpp ../service/MWServiceManager.cpp)
+add_executable ( LFPolicyManagerTest PolicyManagerTest.cpp 
+                ../policy/PolicyManager.cpp 
+                ../policy/PolicyBase.cpp
+                ../policy/PolicyAlways.cpp
+                ../policy/PolicyOnFailure.cpp
+                ../policy/PolicyManual.cpp
+                ../policy/PolicyOnSuccess.cpp
+                ../policy/PolicyOnNotResponding.cpp
+                )
 add_executable ( ServiceRegistryTest ServiceRegistryTest.cpp ../service/ServiceRegistry.cpp)
 add_executable ( ServiceTest ServiceTest.cpp ../service/Service.cpp )
 add_executable ( StateManagerTest StateManagerTest.cpp ../state/StateManager.cpp )
-#add_executable ( StateMonitorTest StateMonitorTest.cpp )
+add_executable ( StateMonitorTest StateMonitorTest.cpp ../state/StateMonitor.cpp)
 add_executable ( ArgumentConfigTest ArgumentConfigTest.cpp ../service/ArgumentConfig.cpp )
 add_executable ( MWServiceTest MWServiceTest.cpp ../service/MWService.cpp ../service/ArgumentConfig.cpp )
 
@@ -77,6 +95,11 @@ install ( TARGETS
                 DDSTransmitterTest
                 StateManagerTest    
                 MWServiceTest
+                LFPolicyManagerTest
+                StateMonitorTest
+                MWServiceManagerTest
+                EndPointFactoryTest
+                LifecycleManagerTest
     RUNTIME DESTINATION bin/unittest/lifecycle_mgr
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib

@@ -38,7 +38,9 @@ std::shared_ptr<PolicyManager> ManagerBase::GetPolicy() {
 const char* ManagerBase::GetTopic(MessageType mtype) {
     return Mock_ManagerBase->GetTopic(mtype);
 }
-
+std::shared_ptr<StateManager> ManagerBase::GetStateManager() {
+    return Mock_ManagerBase->GetStateManager();
+}
 
 } // namespace lifecycle_manager
 
