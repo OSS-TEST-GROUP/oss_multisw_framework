@@ -9,17 +9,16 @@ namespace lifecycle_manager {
 class MockEndPointFactory : public EndPointFactory {
 public:
     MockEndPointFactory() : EndPointFactory() {}
-    virtual ~MockEndPointFactory() {}
+    ~MockEndPointFactory() = default;
 
-    // Mock methods for EndPointFactory
+    // Only mock virtual methods
     MOCK_METHOD(int, Initialize, (), ());
     MOCK_METHOD(int, CreateEndPoints, (std::shared_ptr<DDSTransmitter>), ());
     MOCK_METHOD(const char*, GetTopic, (MessageType mtype), ());
-
-    // Add more mocks as needed
 };
 
-MockEndPointFactory* Mock_EndPointFactory;
+inline MockEndPointFactory* Mock_EndPointFactory = nullptr;
+
 
 EndPointFactory::EndPointFactory() {}
 EndPointFactory::~EndPointFactory() {}
@@ -34,7 +33,6 @@ int EndPointFactory::CreateEndPoints(std::shared_ptr<DDSTransmitter> transmitter
 const char* EndPointFactory::GetTopic(MessageType mtype) {
     return Mock_EndPointFactory->GetTopic(mtype);
 }
-
 
 } // namespace lifecycle_manager
 

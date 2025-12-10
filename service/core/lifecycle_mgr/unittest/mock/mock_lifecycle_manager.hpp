@@ -8,6 +8,7 @@ namespace lifecycle_manager {
 
 class MockLifecycleManager : public LifecycleManager {
 public:
+    // Only mock virtual methods
     MOCK_METHOD(bool, Initialize, (), ());
     MOCK_METHOD(bool, Start, (), ());
     MOCK_METHOD(void, Stop, (), ());
@@ -21,7 +22,8 @@ public:
     MOCK_METHOD(std::shared_ptr<Service>, GetService, (std::string name), ());
 };
 
-MockLifecycleManager* Mock_LifecycleManager;
+inline MockLifecycleManager* Mock_LifecycleManager = nullptr;
+
 
 LifecycleManager::LifecycleManager() {}
 LifecycleManager::~LifecycleManager() {}
@@ -69,6 +71,10 @@ std::shared_ptr<ServiceRegistry> LifecycleManager::GetRegistry() {
 
 std::shared_ptr<Service> LifecycleManager::GetService(std::string name) {
     return Mock_LifecycleManager->GetService(name);
+}
+
+void LifecycleManager::SetState(ManagerState state){
+    Mock_LifecycleManager->SetState(state);
 }
 
 

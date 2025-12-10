@@ -9,6 +9,7 @@ namespace lifecycle_manager {
 
 class MockServiceRegistry : public ServiceRegistry {
 public:
+    // Only mock virtual methods
     MOCK_METHOD(std::shared_ptr<lifecycle_manager::Service>, GetService, (std::string), ());
     MOCK_METHOD(bool, AddService, (std::shared_ptr<lifecycle_manager::Service>, std::string), ());
     MOCK_METHOD(void, RemoveService, (std::string), ());
@@ -31,12 +32,10 @@ public:
     MOCK_METHOD(bool, hasService, (std::string), ());
     MOCK_METHOD(std::shared_ptr<lifecycle_manager::Service>, getService, (std::string), ());
     MOCK_METHOD(std::vector<std::string>, GetGroupList, (), ());
-
 };
 
+inline MockServiceRegistry* Mock_ServiceRegistry = nullptr;
 
-
-MockServiceRegistry* Mock_ServiceRegistry;
 
 ServiceRegistry::ServiceRegistry() {}
 ServiceRegistry::~ServiceRegistry() {}

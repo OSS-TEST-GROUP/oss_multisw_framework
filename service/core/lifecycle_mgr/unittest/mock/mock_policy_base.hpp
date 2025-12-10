@@ -1,30 +1,23 @@
-
 #ifndef MOCK_LIFECYCLE_POLICY_BASE_HPP_
 #define MOCK_LIFECYCLE_POLICY_BASE_HPP_
 
-
-#include "policy/PolicyBase.hpp"
 #include <gmock/gmock.h>
-
+#include "policy/PolicyBase.hpp"
 
 namespace lifecycle_manager {
-
 class MockPolicyBase : public PolicyBase {
 public:
     MockPolicyBase(RecoveryPolicy policy, std::string name) : PolicyBase(policy, name) {}
-    virtual ~MockPolicyBase() {}
+    ~MockPolicyBase() = default;
 
-    // Mock method for GetPolicy
+    // Only mock virtual methods
     MOCK_METHOD(RecoveryPolicy, GetPolicy, (), ());
-    // Mock method for GetName
     MOCK_METHOD(std::string, GetName, (), ());
-    
-    // Mock method for Evaluate
-
-    MOCK_METHOD(ServiceControlAction, Evaluate, (std::shared_ptr<Service> service), (override));
+    MOCK_METHOD(ServiceControlAction, Evaluate, (std::shared_ptr<Service> service), ());
 };
 
-MockPolicyBase* Mock_PolicyBase = nullptr;
+inline MockPolicyBase* Mock_PolicyBase = nullptr;
+
 
 PolicyBase::PolicyBase(RecoveryPolicy policy, std::string name) {
 }
@@ -43,7 +36,7 @@ ServiceControlAction PolicyBase::Evaluate(std::shared_ptr<Service> service) {
     return Mock_PolicyBase->Evaluate(service);
 }
 
-}
- // namespace lifecycle_manager
+
+} // namespace lifecycle_manager
 
 #endif // MOCK_LIFECYCLE_POLICY_BASE_HPP_

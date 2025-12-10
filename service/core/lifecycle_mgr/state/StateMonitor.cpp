@@ -15,7 +15,12 @@ StateMonitor::StateMonitor(LifecycleManager& lifecycle)
     : ManagerBase(lifecycle){
 }
 
-StateMonitor::~StateMonitor() {}
+StateMonitor::~StateMonitor() {
+    std::cout << "StateMonitor destructor called" << std::endl;
+    if (processing_thread_.joinable()) {
+        processing_thread_.join();
+    }
+}
 
 bool StateMonitor::Start() {
     

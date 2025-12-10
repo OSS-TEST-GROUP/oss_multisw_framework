@@ -1,4 +1,3 @@
-
 #ifndef MOCK_LIFECYCLE_POLICY_MANAGER_HPP_
 #define MOCK_LIFECYCLE_POLICY_MANAGER_HPP_
 
@@ -8,16 +7,16 @@
 namespace lifecycle_manager {
 class MockPolicyManager : public PolicyManager {
 public:
+    // Only mock virtual methods
     MOCK_METHOD(bool, Start, (), ());
     MOCK_METHOD(void, Stop, (), ());
-
     MOCK_METHOD(std::shared_ptr<PolicyBase>, GetPolicy, (RecoveryPolicy policy), ());
     MOCK_METHOD(std::shared_ptr<PolicyBase>, GetPolicy, (std::string name), ());
     MOCK_METHOD(ServiceControlAction, Evaluate, (std::shared_ptr<Service> service), ());
-    // Add more mocks as needed
 };
 
-MockPolicyManager* Mock_PolicyManager;
+inline MockPolicyManager* Mock_PolicyManager = nullptr;
+
 
 PolicyManager::PolicyManager() {}
 PolicyManager::~PolicyManager() {}
