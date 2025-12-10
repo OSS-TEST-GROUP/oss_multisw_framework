@@ -541,13 +541,34 @@ bool DDSProtocol::register_type_object_from_discovery(std::shared_ptr<TopicInfor
 
     auto type_id_complete = topic_information->remote_type_information.complete().typeid_with_size().type_id();
     auto type_id_minimal = topic_information->remote_type_information.minimal().typeid_with_size().type_id();
+    
+    auto ret_complete = DomainParticipantFactory::get_instance()->type_object_registry().get_type_object(
+                type_id_complete, topic_information->remote_type_object);
 
-    if ((RETCODE_OK != DomainParticipantFactory::get_instance()->type_object_registry().get_type_object(
-                type_id_complete, topic_information->remote_type_object)) &&
-            (RETCODE_OK != DomainParticipantFactory::get_instance()->type_object_registry().get_type_object(
-                type_id_minimal, topic_information->remote_type_object)))
+    auto ret_minimal = DomainParticipantFactory::get_instance()->type_object_registry().get_type_object(
+                type_id_minimal, topic_information->remote_type_object);
+
+    if (RETCODE_OK != ret_complete)
     {
-        LOG_DEBUG("register_type_object_from_discovery get_type_object error " << topic_information->topic_name);
+        LOG_DEBUG("register_type_object_from_discovery register_type_object complete " << topic_information->topic_name << ", type_id=" << ret_complete);
+        //return false;
+    }
+    if (RETCODE_OK != ret_minimal)
+    {
+        LOG_DEBUG("register_type_object_from_discovery register_type_object minimal " << topic_information->topic_name << ", type_id=" << ret_minimal);
+        //return false;
+    }
+
+    if (RETCODE_OK != DomainParticipantFactory::get_instance()->type_object_registry().get_type_object(
+            type_id_complete, topic_information->remote_type_object))
+    {
+        LOG_DEBUG("register_type_object_from_discovery get_type_object complete " << topic_information->topic_name << ", type_id=" << topic_information->remote_type);
+        return false;
+    }
+    if (RETCODE_OK != DomainParticipantFactory::get_instance()->type_object_registry().get_type_object(
+            type_id_minimal, topic_information->remote_type_object))
+    {
+        LOG_DEBUG("register_type_object_from_discovery get_type_object minimal " << topic_information->topic_name << ", type_id=" << topic_information->remote_type);
         return false;
     }
 
