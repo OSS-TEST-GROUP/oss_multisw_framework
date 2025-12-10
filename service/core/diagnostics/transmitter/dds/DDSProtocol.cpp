@@ -35,6 +35,11 @@ std::string convertTypeName(const std::string& input_type, bool to_simple = true
         if (it != ros2_dds_to_simple_map.end()) {
             return it->second;
         }
+        // extract simple type name for fine mapping table
+        std::string simple_type = input_type.substr(input_type.find_last_of("::") + 1);
+        if (simple_type.length() > 0) {
+            return simple_type;
+        }
     } else {
         // Convert simple type to ROS2 DDS type (for sending)
         for (const auto& pair : ros2_dds_to_simple_map) {
@@ -240,7 +245,6 @@ bool DDSProtocol::SubscribeMessage(const std::string& name) {
 
     subscribed_topic_.insert(name);
     LOG_INFO("SubscribeMessage a type object. topic=" << name);
-
     
     if (discovered_topic_.count(name) > 0) {
         auto topic_info = discovered_topic_[name];
@@ -479,7 +483,7 @@ void DDSProtocol::load_dds_dynamic_idl(const std::string& path) {
         }
         
         parsed_dynamic_type_supports_[type_name] = iter;
-        LOG_VERBOSE("Loaded and registered dynamic type: " << type_name);
+        LOG_DEBUG("Loaded and registered dynamic type: " << type_name);
     }
 
     LOG_INFO("loaded " << type_support_list.size() << " dynamic types.");
@@ -552,7 +556,7 @@ void DDSProtocol::on_data_writer_discovery(DomainParticipant* participant,
         if (discovered_topic_.count(info.topic_name.to_string()) > 0) {
             return;
         }
-        LOG_VERBOSE("on_data_writer_discovery: " << info.topic_name.to_string() << ", " << info.type_name.to_string());
+        LOG_DEBUG("on_data_writer_discovery: " << info.topic_name.to_string() << ", " << info.type_name.to_string());
 
         // Notify run thread that type has been discovered
         topic_info = std::make_shared<TopicInformation>();
@@ -582,6 +586,7 @@ void DDSProtocol::on_data_writer_discovery(DomainParticipant* participant,
 }
 
 bool DDSProtocol::register_type_object(std::shared_ptr<TopicInformation> topic_information) {
+
     if (register_type_object_from_dynamic_idl(topic_information)) {
         return true;
     }
@@ -661,7 +666,7 @@ bool DDSProtocol::register_type_object_from_discovery(std::shared_ptr<TopicInfor
 }
 
 bool DDSProtocol::register_type_object_from_dynamic_idl(std::shared_ptr<TopicInformation> topic_information) {
-    LOG_VERBOSE("Looking for type: " << topic_information->topic_type << " for topic: " << topic_information->topic_name);
+    LOG_DEBUG("Looking for type: " << topic_information->topic_type << " for topic: " << topic_information->topic_name);
     
     // Try to find the type directly first
     auto iter = parsed_dynamic_type_supports_.find(topic_information->topic_type);
@@ -673,13 +678,13 @@ bool DDSProtocol::register_type_object_from_dynamic_idl(std::shared_ptr<TopicInf
         // Map ROS2 DDS type names to simple type names
         mapped_type_name = toSimpleType(topic_information->topic_type);  // Convert to simple type for IDL lookup
         
-        LOG_VERBOSE("Mapped ROS2 type '" << topic_information->topic_type << "' to '" << mapped_type_name << "'");
+        LOG_DEBUG("Mapped ROS2 type '" << topic_information->topic_type << "' to '" << mapped_type_name << "'");
         iter = parsed_dynamic_type_supports_.find(mapped_type_name);
     }
     
     if (iter == parsed_dynamic_type_supports_.end()) {
-        LOG_VERBOSE("Type not found in dynamic IDL: " << topic_information->topic_type << " for topic: " << topic_information->topic_name);
-        LOG_VERBOSE("Will try discovery fallback for type: " << topic_information->topic_type);
+        LOG_DEBUG("Type not found in dynamic IDL: " << topic_information->topic_type << " for topic: " << topic_information->topic_name);
+        LOG_DEBUG("Will try discovery fallback for type: " << topic_information->topic_type);
         return false;
     }
 
@@ -721,6 +726,11 @@ bool DDSProtocol::create_datareader(std::shared_ptr<TopicInformation> topic_info
             LOG_ERROR("Failed to create topic: name=" << topic_information->topic_name << ", type=" << topic_information->topic_type);
             return false;
         }
+    }
+
+    if (topic_information->reader != nullptr) {
+        LOG_INFO("DataReader already exists for topic: " << topic_information->topic_name);
+        return true;
     }
 
     DataReaderQos reader_qos = DATAREADER_QOS_DEFAULT;
