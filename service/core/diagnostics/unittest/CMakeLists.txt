@@ -34,7 +34,13 @@ add_custom_command(
     DEPENDS ${TEST_IDL_LIFECYCLE_DIAG_REPORT}
     COMMENT "Generating Fast DDS code from ${TEST_IDL_LIFECYCLE_DIAG_REPORT}"
 )
-
+set(TEST_IDL_SECURITY_REPORT "${CMAKE_CURRENT_SOURCE_DIR}/idl/SecurityDetection.idl")
+add_custom_command(
+    OUTPUT ${GENERATED_DIR}/SecurityDetectionPubSubTypes.cxx ${GENERATED_DIR}/SecurityDetectionTypeObjectSupport.cxx
+    COMMAND fastddsgen -d ${GENERATED_DIR} ${TEST_IDL_SECURITY_REPORT}
+    DEPENDS ${TEST_IDL_SECURITY_REPORT}
+    COMMENT "Generating Fast DDS code from ${TEST_IDL_SECURITY_REPORT}"
+)
 
 ## Source
 include_directories (
@@ -124,6 +130,8 @@ set(GENERATED_DDS_FILES ${GENERATED_DIR}/DataTypeTestPubSubTypes.cxx
                         ${GENERATED_DIR}/diagnostic/DiagnosticNotificationTypeObjectSupport.cxx
                         ${GENERATED_DIR}/diagnostic/DiagnosticInfoPubSubTypes.cxx
                         ${GENERATED_DIR}/diagnostic/DiagnosticInfoTypeObjectSupport.cxx
+                        ${GENERATED_DIR}/security_mgr/SecurityDetectionPubSubTypes.cxx
+                        ${GENERATED_DIR}/security_mgr/SecurityDetectionTypeObjectSupport.cxx
 )
 
 add_executable ( HelloWorldPublisher test/HelloWorldPublisher.cpp ${GENERATED_DDS_FILES} )
@@ -136,9 +144,11 @@ target_include_directories ( LifecycleDiagReportPublisher PUBLIC ${GENERATED_DIR
 add_executable ( DiagnosticNotificationReceiver test/DiagnosticNotificationReceiver.cpp ${GENERATED_DDS_FILES} )
 target_include_directories ( DiagnosticNotificationReceiver PUBLIC ${GENERATED_DIR} )
 add_executable ( DiagnosticInfoTestClient test/DiagnosticInfoTestClient.cpp ${GENERATED_DDS_FILES} )
-target_include_directories ( DiagnosticNotificationReceiver PUBLIC ${GENERATED_DIR} )
+target_include_directories ( DiagnosticInfoTestClient PUBLIC ${GENERATED_DIR} )
+add_executable ( SecurityDetectionPublisher test/SecurityDetectionPublisher.cpp ${GENERATED_DDS_FILES} )
+target_include_directories ( SecurityDetectionPublisher PUBLIC ${GENERATED_DIR} )
 
-install ( TARGETS HelloWorldPublisher HelloWorldPublisherNoDynamic LifecycleDiagReportPublisher DiagnosticNotificationReceiver DiagnosticInfoTestClient
+install ( TARGETS HelloWorldPublisher HelloWorldPublisherNoDynamic LifecycleDiagReportPublisher DiagnosticNotificationReceiver DiagnosticInfoTestClient SecurityDetectionPublisher
     RUNTIME DESTINATION bin/unittest/diagnostics/test
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
