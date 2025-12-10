@@ -14,7 +14,7 @@ namespace adsw_manager {
 class MockDDSMessageEndpoint : public DDSMessageEndpoint {
   public:
     MockDDSMessageEndpoint() : DDSMessageEndpoint() {}
-    virtual ~MockDDSMessageEndpoint() {}
+    ~MockDDSMessageEndpoint() override = default;
 
     MOCK_METHOD(void, OnDataAvailable, (), (override));
     MOCK_METHOD(bool, Write, (void* value), ());
@@ -41,11 +41,9 @@ class MockDDSMessageEndpoint : public DDSMessageEndpoint {
     MockDDSMessageEndpoint* Mock_DDSMessageEndpoint;
 
     DDSMessageEndpoint::DDSMessageEndpoint(){
-        Mock_DDSMessageEndpoint = new MockDDSMessageEndpoint();
     }
 
     DDSMessageEndpoint::~DDSMessageEndpoint() {
-        Mock_DDSMessageEndpoint = nullptr;
     }
     bool DDSMessageEndpoint::Initialize(DomainParticipant* participant, Publisher* publisher, Subscriber* subscriber) {
         return Mock_DDSMessageEndpoint->Initialize(participant, publisher, subscriber);

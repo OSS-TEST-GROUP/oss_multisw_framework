@@ -42,11 +42,9 @@ namespace adsw_manager {
     MockADSWManager* Mock_ADSWManager;
 
     ADSWManager::ADSWManager() {
-        Mock_ADSWManager = new MockADSWManager();
     }
     
     ADSWManager::~ADSWManager() {
-        Mock_ADSWManager = nullptr;
     }
     bool ADSWManager::Initialize() {
         return Mock_ADSWManager->Initialize();

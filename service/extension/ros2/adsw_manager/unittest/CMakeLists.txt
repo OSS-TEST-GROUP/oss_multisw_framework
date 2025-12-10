@@ -49,6 +49,10 @@ add_executable ( ADSWROSDiscoveryInfoEndpointTest
     ${ROS2_GENEREATED_IDL}
 )
 
+add_executable( ADSWManager ADSWManagerTest.cpp ../ADSWManager.cpp
+#    ${ROS2_GENEREATED_IDL}
+)
+
 gtest_discover_tests ( ADSWServiceTest )
 gtest_discover_tests ( ADSWServiceRegistryTest )
 gtest_discover_tests ( ADSWServiceMonitorTest )
@@ -61,6 +65,7 @@ install ( TARGETS
           ADSWServiceRegistryTest
           ADSWDDSTransmitterTest
           ADSWROSDiscoveryInfoEndpointTest
+          ADSWManager
     RUNTIME DESTINATION bin/unittest/adsw_manager
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib

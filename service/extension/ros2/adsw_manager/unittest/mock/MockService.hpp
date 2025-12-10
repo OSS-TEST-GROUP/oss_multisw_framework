@@ -14,7 +14,7 @@ namespace adsw_manager {
 class MockService : public Service {
   public:
     MockService(std::string name) : Service(name, ServiceType::NORMAL, RecoveryPolicy::ALWAYS, false) {}
-    virtual ~MockService() {}
+    ~MockService() override = default;
 
     MOCK_METHOD(std::string, GetName, (), ());
     MOCK_METHOD(ServiceType, GetServiceType, (), ());
@@ -38,10 +38,8 @@ MockService* Mock_Service;
 Service::Service(const std::string& name, ServiceType service_type, RecoveryPolicy recovery_policy, bool is_enable)
     : name_(name), service_type_(service_type), recovery_policy_(recovery_policy), is_enabled_(is_enable),
       service_state_(ServiceState::NOT_RUNNING), launch_file_(""), max_nodes_(0), current_nodes_(0), pid_(0){
-    Mock_Service = new MockService(name);
 }
 Service::~Service() {
-    Mock_Service = nullptr;
 }
 
 std::string Service::GetName() {

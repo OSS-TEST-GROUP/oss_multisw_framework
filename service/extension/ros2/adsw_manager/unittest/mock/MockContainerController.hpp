@@ -11,6 +11,7 @@ class MockContainerController : public ContainerController {
 public:
     MockContainerController()
         : ContainerController() {}
+    ~MockContainerController(){}
 
     MOCK_METHOD(bool, Initialize, (), ());
     MOCK_METHOD(void, Finalize, (), ());
@@ -27,13 +28,10 @@ public:
 
 MockContainerController* Mock_ContainerController;
 
-ContainerController::ContainerController()
-{
-    Mock_ContainerController = new MockContainerController();
+ContainerController::ContainerController(){
 }
 
 ContainerController::~ContainerController() {
-    Mock_ContainerController = nullptr;
 }
 bool ContainerController::Initialize() {
     return Mock_ContainerController->Initialize();

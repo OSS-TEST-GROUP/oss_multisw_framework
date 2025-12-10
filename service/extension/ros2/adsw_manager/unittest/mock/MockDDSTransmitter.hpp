@@ -14,7 +14,7 @@ namespace adsw_manager {
 class MockDDSTransmitter : public DDSTransmitter {
   public:
     MockDDSTransmitter() : DDSTransmitter() {}
-    virtual ~MockDDSTransmitter() {}
+    ~MockDDSTransmitter(){}
 
     MOCK_METHOD(bool, Initialize, (), ());
     MOCK_METHOD(void, Finalize, (), ());
@@ -29,11 +29,9 @@ class MockDDSTransmitter : public DDSTransmitter {
 MockDDSTransmitter* Mock_DDSTransmitter;
 
 DDSTransmitter::DDSTransmitter() {
-    Mock_DDSTransmitter = new MockDDSTransmitter();
 }
 
 DDSTransmitter::~DDSTransmitter() {
-    Mock_DDSTransmitter = nullptr;
 }
 bool DDSTransmitter::Initialize() {
     return Mock_DDSTransmitter->Initialize();

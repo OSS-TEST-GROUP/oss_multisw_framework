@@ -16,7 +16,7 @@ namespace adsw_manager {
 class MockServiceRegistry : public ServiceRegistry {
 public:
     MockServiceRegistry() : ServiceRegistry() {}
-    virtual ~MockServiceRegistry() {}
+    ~MockServiceRegistry() override = default;
 
     MOCK_METHOD(bool, LoadServiceList, (), ());
     MOCK_METHOD(void, AddGroup, (const std::string& name), ());
@@ -42,10 +42,8 @@ public:
 MockServiceRegistry* Mock_ServiceRegistry;
 
 ServiceRegistry::ServiceRegistry() {
-    Mock_ServiceRegistry = new MockServiceRegistry();
 }
 ServiceRegistry::~ServiceRegistry() {
-    Mock_ServiceRegistry = nullptr;
 }
 bool ServiceRegistry::LoadServiceList() {
     return Mock_ServiceRegistry->LoadServiceList();

@@ -12,6 +12,7 @@
 #include "mock/MockDDSMessageEndpoint.hpp"
 #include "mock/MockContainerController.hpp"
 #include "mock/MockContainer.hpp"
+#include "mock/MockLogger.hpp"
 
 using ::testing::Return;
 using ::testing::_;
@@ -34,10 +35,16 @@ class ServiceRegistryTest : public ::testing::Test {
 protected:
     void SetUp() override {
         registry = std::make_unique<ServiceRegistry>();
+        Mock_Logger = new MockLogger();
+        Mock_Service = new MockService("TestService");
     }
 
     void TearDown() override {
         registry.reset();
+        delete Mock_Logger;
+        Mock_Logger = nullptr;
+        delete Mock_Service;
+        Mock_Service = nullptr;
     }
 
     std::shared_ptr<Service> MakeService(const std::string& name) {
