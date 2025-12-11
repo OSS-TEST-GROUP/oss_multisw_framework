@@ -138,12 +138,15 @@ std::vector<std::shared_ptr<Service>> ServiceRegistry::GetServicesByGroup(std::s
     {
         std::shared_ptr<std::vector<std::string>> group_ptr = getGroup(group);
 
-        for (auto iter = group_ptr->begin() ; iter != group_ptr->end() ; iter++) {
+        if (group_ptr != nullptr){
 
-            std::shared_ptr<Service> service = getService(*iter);
+            for (auto iter = group_ptr->begin() ; iter != group_ptr->end() ; iter++) {
 
-            if (service){
-                group_list.push_back(service);
+                std::shared_ptr<Service> service = getService(*iter);
+
+                if (service){
+                    group_list.push_back(service);
+                }
             }
         }
     }
@@ -167,14 +170,17 @@ std::vector<std::string> ServiceRegistry::GetServicesNameByGroup(std::string gro
     {
         std::shared_ptr<std::vector<std::string>> group_ptr = getGroup(group);
 
-        for (auto iter = group_ptr->begin() ; iter != group_ptr->end() ; iter++) {
+        if (group_ptr != nullptr){
+            for (auto iter = group_ptr->begin() ; iter != group_ptr->end() ; iter++) {
 
-            std::shared_ptr<Service> service = getService(*iter);
+                std::shared_ptr<Service> service = getService(*iter);
 
-            if (service){
-                group_list.push_back(service->GetName());
+                if (service){
+                    group_list.push_back(service->GetName());
+                }
             }
         }
+
     }
     return group_list;
 
