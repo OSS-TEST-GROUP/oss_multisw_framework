@@ -1,7 +1,9 @@
 // Unit tests for DDSTransmitter class using Google Test and Google Mock
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "adsw_manager/endpoint/EndPointFactory.hpp"
+
+#include "endpoint/EndPointFactory.hpp"
+
 #include "mock/MockDDSTransmitter.hpp"
 
 using ::testing::Return;

@@ -5,6 +5,8 @@
 namespace ros2 {
 namespace adsw_manager {
 
+static std::shared_ptr<ADSWManager> shared_instance_;
+
 ADSWManager::ADSWManager() {}
 
 ADSWManager::~ADSWManager() {}
@@ -127,7 +129,13 @@ std::shared_ptr<ADSWManager> ADSWManager::getShared()
         {
             delete p;
         });
+
+    shared_instance_ = instance;
     return instance;
+}
+
+void ADSWManager::SetShared(std::shared_ptr<ADSWManager> instance) {
+    shared_instance_ = instance;
 }
 
 } // namespace adsw_manager

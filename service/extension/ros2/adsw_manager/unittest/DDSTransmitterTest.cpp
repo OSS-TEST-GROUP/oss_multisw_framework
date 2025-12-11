@@ -1,11 +1,12 @@
 // Unit tests for DDSTransmitter class using Google Test and Google Mock
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
+
 #include "transmitter/DDSTransmitter.cpp"  // Include implementation directl
-#include "logger/Logger.cpp"
 
 #include "mock/MockDDSMessageEndpoint.hpp"
 #include "mock/MockMessageQueue.hpp"
+#include "mock/MockLogger.hpp"
 
 using ::testing::Return;
 using ::testing::_;
@@ -29,10 +30,19 @@ class DDSTransmitterTest : public ::testing::Test {
 protected:
     void SetUp() override {
         ins = std::make_unique<DDSTransmitter>();
+        Mock_Logger = new MockLogger();
+        Mock_MessageQueue = new MockMessageQueue();
     }
 
     void TearDown() override {
         ins.reset();
+        
+        delete Mock_Logger;
+        Mock_Logger = nullptr;
+
+        delete Mock_MessageQueue;
+        Mock_MessageQueue = nullptr;
+
     }
 
     std::unique_ptr<DDSTransmitter> ins;

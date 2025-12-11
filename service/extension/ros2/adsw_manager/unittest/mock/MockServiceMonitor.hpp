@@ -17,7 +17,7 @@ namespace adsw_manager {
 class MockServiceMonitor : public ServiceMonitor {
 public:
     MockServiceMonitor() : ServiceMonitor() {}
-    virtual ~MockServiceMonitor() {}
+    ~MockServiceMonitor() override = default;
 
     MOCK_METHOD(bool, Initialize, (), ());
     MOCK_METHOD(void, Finalize, (), ());
@@ -34,10 +34,8 @@ public:
 MockServiceMonitor* Mock_ServiceMonitor;
 
 ServiceMonitor::ServiceMonitor() {
-    Mock_ServiceMonitor = new MockServiceMonitor();
 }
 ServiceMonitor::~ServiceMonitor() {
-    Mock_ServiceMonitor = nullptr;
 }
 bool ServiceMonitor::Initialize() {
     return Mock_ServiceMonitor->Initialize();
@@ -66,8 +64,9 @@ int32_t ServiceMonitor::NodeCount(std::string service) {
 void ServiceMonitor::UpdateServiceState() {
     Mock_ServiceMonitor->UpdateServiceState();
 }
-
-
+void ServiceMonitor::NotifyAdswStatus(int32_t status_code, std::string status_msg) {
+    Mock_ServiceMonitor->NotifyAdswStatus(status_code, status_msg);
+}
 
 }
 }

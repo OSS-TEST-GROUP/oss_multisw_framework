@@ -1,7 +1,12 @@
 // Unit tests for DDSTransmitter class using Google Test and Google Mock
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "adsw_manager/transmitter/MessageQueue.hpp"
+#include "transmitter/MessageQueue.hpp"
+
+#include "mock/MockADSWManager.hpp"
+#include "mock/MockDDSMessageEndpoint.hpp"
+#include "mock/MockDDSTransmitter.hpp"
+#include "mock/MockLogger.hpp"
 
 using ::testing::Return;
 using ::testing::_;
@@ -18,8 +23,31 @@ using ::testing::AllOf;
 using ::testing::AtLeast;
 using ::testing::Combine;
 
+using namespace ros2::adsw_manager;
+
 class MessageQueueTest : public ::testing::Test {
 protected:
+    void SetUp() override {
+        Mock_Logger = new MockLogger();
+        Mock_ADSWManager = new MockADSWManager();
+        ADSWManager::SetShared(std::shared_ptr<ADSWManager>(Mock_ADSWManager));
+
+        Mock_DDSTransmitter = new MockDDSTransmitter();
+
+        ON_CALL(*Mock_ADSWManager, Get()).WillByDefault(::testing::Return(Mock_ADSWManager));
+        ON_CALL(*Mock_ADSWManager, GetTopic(::testing::_)).WillByDefault(::testing::Return("mock_topic"));
+        ON_CALL(*Mock_ADSWManager, GetTransmitter()).WillByDefault(::testing::Return(std::make_shared<MockDDSTransmitter>()));
+    }
+
+    void TearDown() override {
+        delete Mock_Logger;
+        Mock_Logger = nullptr;
+        // Do NOT delete Mock_ADSWManager here!
+        Mock_ADSWManager = nullptr;
+
+        delete Mock_DDSTransmitter;
+        Mock_DDSTransmitter = nullptr;
+    }
     ros2::adsw_manager::MessageQueue queue;
 };
 
@@ -40,7 +68,7 @@ TEST_F(MessageQueueTest, SendMessageEnqueues) {
 
 TEST_F(MessageQueueTest, PublishingLoopProcessesMessages) {
     ASSERT_TRUE(queue.Start());
-    
+
     ros2::adsw_manager::MsgType msg{ros2::adsw_manager::MessageType::STOP_SERVICE_REQUEST, reinterpret_cast<void*>(0x5678)};
     queue.SendMessage(msg);
     

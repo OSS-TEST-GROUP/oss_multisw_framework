@@ -9,6 +9,9 @@ namespace adsw_manager {
 
 class MockMessageQueue : public MessageQueue {
 public:
+    MockMessageQueue() : MessageQueue() {}
+     ~MockMessageQueue() override = default;
+
     MOCK_METHOD(void, SendMessage, (MsgType& message), ());
     MOCK_METHOD(bool, Start, (), ());
     MOCK_METHOD(void, Stop, (), ());

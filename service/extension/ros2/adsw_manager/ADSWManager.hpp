@@ -45,6 +45,7 @@ class ADSWManager {
 
   private:
     static std::shared_ptr<ADSWManager> getShared();
+    static void SetShared(std::shared_ptr<ADSWManager> instance);
 
   private:
     std::shared_ptr<DDSTransmitter> dds_transmitter_;
@@ -54,7 +55,6 @@ class ADSWManager {
     std::shared_ptr<EndPointFactory> endpoint_factory_;
 
     AdswState adsw_state_;
-
 
 };
 

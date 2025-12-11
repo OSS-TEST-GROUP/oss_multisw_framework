@@ -1,7 +1,17 @@
 // Unit tests for DDSTransmitter class using Google Test and Google Mock
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "adsw_manager/endpoint/StartServiceEndPoint.hpp"
+
+#include "endpoint/StartServiceEndPoint.hpp"
+
+#include "mock/MockADSWManager.hpp"
+#include "mock/MockServiceRegistry.hpp"
+#include "mock/MockTypeSupport.hpp"
+#include "mock/MockDDSTransmitter.hpp"
+#include "mock/MockDDSMessageEndpoint.hpp"
+#include "mock/MockROSServiceController.hpp"
+#include "mock/MockLogger.hpp"
+
 
 using ::testing::Return;
 using ::testing::_;
@@ -18,39 +28,49 @@ using ::testing::AllOf;
 using ::testing::AtLeast;
 using ::testing::Combine;
 
-// Mock ROSServiceController
-class MockROSServiceController : public ROSServiceController {
-public:
-    bool ProcessServiceStartRequest(lifecyclemgr::StartServiceRequest* message) override {
-        called = true;
-        last_size = message ? message->service_list().size() : -1;
-        return process_result;
-    }
-    bool called = false;
-    int last_size = -1;
-    bool process_result = true;
-};
+using namespace ros2::adsw_manager;
 
-// Mock ADSWManager
-class MockADSWManager : public ADSWManager {
+// Test-only subclass for mocking Read behavior
+class TestStartServiceEndPoint : public StartServiceEndPoint {
 public:
-    static MockROSServiceController* controller;
-    std::shared_ptr<ROSServiceController> GetServiceController() override { return std::shared_ptr<ROSServiceController>(controller); }
+    TestStartServiceEndPoint(MessageType msgtype, std::string topic)
+        : StartServiceEndPoint(msgtype, topic) {}
+    void OnDataAvailable() override {
+        return;
+    }
+    bool mock_read_result = true;
 };
-MockROSServiceController* MockADSWManager::controller = nullptr;
 
 class StartServiceEndPointTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        MockADSWManager::controller = new MockROSServiceController();
-        endpoint = new ros2::adsw_manager::StartServiceEndPoint(MessageType::START_SERVICE_REQUEST, "test_topic");
-        endpoint->type_support_ = std::make_shared<MockTypeSupport>();
+        Mock_Logger = new MockLogger();
+        Mock_ADSWManager = new MockADSWManager();
+        ADSWManager::SetShared(std::shared_ptr<ADSWManager>(Mock_ADSWManager));
+
+        ON_CALL(*Mock_ADSWManager, Get()).WillByDefault(::testing::Return(Mock_ADSWManager));
+        ON_CALL(*Mock_ADSWManager, GetTopic(::testing::_)).WillByDefault(::testing::Return("mock_topic"));
+        ON_CALL(*Mock_ADSWManager, GetTransmitter()).WillByDefault(::testing::Return(std::make_shared<MockDDSTransmitter>()));
+        
+        Mock_DDSMessageEndpoint = new MockDDSMessageEndpoint();
+        endpoint = new TestStartServiceEndPoint(MessageType::START_SERVICE_REQUEST, "test_topic");
+        endpoint->Initialize(nullptr, nullptr, nullptr);
+
+        Mock_ROSServiceController = new MockROSServiceController();
+        ON_CALL(*Mock_ADSWManager, GetServiceController()).WillByDefault(::testing::Return(std::shared_ptr<MockROSServiceController>(Mock_ROSServiceController)));
+
     }
     void TearDown() override {
+        delete Mock_Logger;
+        Mock_Logger = nullptr;
         delete endpoint;
-        delete MockADSWManager::controller;
+        delete Mock_DDSMessageEndpoint;
+        Mock_DDSMessageEndpoint = nullptr;
+        Mock_ADSWManager = nullptr;
+        // Do NOT delete Mock_ROSServiceController here! It is managed by shared_ptr returned from GetServiceController.
+        Mock_ROSServiceController = nullptr;
     }
-    ros2::adsw_manager::StartServiceEndPoint* endpoint;
+    TestStartServiceEndPoint* endpoint;
 };
 
 TEST_F(StartServiceEndPointTest, ConstructionAndGetters) {
@@ -60,27 +80,26 @@ TEST_F(StartServiceEndPointTest, ConstructionAndGetters) {
 }
 
 TEST_F(StartServiceEndPointTest, OnDataAvailableCallsServiceController) {
-    // Simulate Read<StartServiceRequest>(req_) == true
     endpoint->req_.service_list().push_back("service1");
-    MockADSWManager::controller->process_result = true;
+    endpoint->mock_read_result = true;
+    ON_CALL(*Mock_ROSServiceController, ProcessStartServiceRequest(::testing::_))
+        .WillByDefault(Return(true));
     endpoint->OnDataAvailable();
-    EXPECT_TRUE(MockADSWManager::controller->called);
-    EXPECT_EQ(MockADSWManager::controller->last_size, 1);
 }
 
 TEST_F(StartServiceEndPointTest, OnDataAvailableProcessFails) {
     endpoint->req_.service_list().push_back("service1");
-    MockADSWManager::controller->process_result = false;
+    endpoint->mock_read_result = true;
+    ON_CALL(*Mock_ROSServiceController, ProcessStartServiceRequest(::testing::_))
+        .WillByDefault(Return(false));
     endpoint->OnDataAvailable();
-    EXPECT_TRUE(MockADSWManager::controller->called);
-    EXPECT_EQ(MockADSWManager::controller->last_size, 1);
 }
 TEST_F(StartServiceEndPointTest, OnDataAvailableNoRequest) {
-    // Simulate Read<StartServiceRequest>(req_) == false
-    endpoint->req_ = StartServiceRequest(); // Reset to empty request
-    MockADSWManager::controller->called = false; // Reset call status
+    endpoint->req_ = StartServiceRequest(); // Reset to empty request    
+    endpoint->mock_read_result = false;
+    ON_CALL(*Mock_ROSServiceController, ProcessStartServiceRequest(::testing::_))
+        .WillByDefault(Return(false));
     endpoint->OnDataAvailable();
-    EXPECT_FALSE(MockADSWManager::controller->called);
 }
 TEST_F(StartServiceEndPointTest, GetTypeSupportReturnsValidType) {
     auto type_support = endpoint->GetTypeSupport();

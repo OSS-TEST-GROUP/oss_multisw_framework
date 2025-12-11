@@ -14,7 +14,7 @@ namespace adsw_manager {
 class MockEndPointFactory : public EndPointFactory {
   public:
     MockEndPointFactory() : EndPointFactory() {}
-    virtual ~MockEndPointFactory() {}
+     ~MockEndPointFactory() override = default;
 
     MOCK_METHOD(bool, Initialize, (), ());
     MOCK_METHOD(int32_t, CreateEndPoints, (std::shared_ptr<DDSTransmitter> transmitter), ());
@@ -26,10 +26,8 @@ class MockEndPointFactory : public EndPointFactory {
 MockEndPointFactory* Mock_EndPointFactory;
 
 EndPointFactory::EndPointFactory() {
-    Mock_EndPointFactory = new MockEndPointFactory();
 }
 EndPointFactory::~EndPointFactory() {
-    Mock_EndPointFactory = nullptr;
 }
 bool EndPointFactory::Initialize() {
     return Mock_EndPointFactory->Initialize();

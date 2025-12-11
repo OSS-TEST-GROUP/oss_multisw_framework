@@ -28,13 +28,10 @@ Container::Container(const std::string& name, const std::string& image, const st
     : name_(name),
       image_(image),
       deploy_file_(deploy_file),
-      namespace_(namespace_)
-{
-    Mock_Container = new MockContainer();
+      namespace_(namespace_){
 }
 
 Container::~Container() {
-    Mock_Container = nullptr;
 }
 std::string Container::GetName() const {
     return Mock_Container->GetName();

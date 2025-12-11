@@ -7,7 +7,7 @@
 class MockLogger : public Logger {
 public:
     MockLogger(LogLevel level = LogLevel::INFO, const std::string& filename = "") : Logger(level, filename) {}
-    ~MockLogger() {}
+    ~MockLogger(){}
 
     MOCK_METHOD(void, setLogLevel, (LogLevel level), ());
     MOCK_METHOD(void, critical, (const std::string msg), ());

@@ -12,8 +12,11 @@ namespace adsw_manager {
 // Mock classes for DDS dependencies
 class MockTypeSupport : public TypeSupport {
 public:
-    std::string get_type_name()  { return "MockType"; }
-    int register_type(DomainParticipant*)  { return RETCODE_OK; }
+    MockTypeSupport() : TypeSupport() {}
+    ~MockTypeSupport() {}
+
+    MOCK_METHOD(std::string, get_type_name, (), ());
+    MOCK_METHOD(int, register_type, (DomainParticipant*), ());
 };
 
 

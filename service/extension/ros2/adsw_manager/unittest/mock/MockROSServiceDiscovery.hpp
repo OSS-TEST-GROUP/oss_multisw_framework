@@ -15,7 +15,7 @@ namespace adsw_manager {
 class MockROSServiceDiscovery : public ROSServiceDiscovery {
   public:
     MockROSServiceDiscovery(ServiceMonitor* service_monitor) : ROSServiceDiscovery(service_monitor) {}
-    virtual ~MockROSServiceDiscovery() {}
+    ~MockROSServiceDiscovery() override = default;
 
     MOCK_METHOD(bool, Initialize, (), ());
     MOCK_METHOD(void, Finalize, (), ());
@@ -28,10 +28,8 @@ MockROSServiceDiscovery* Mock_ROSServiceDiscovery;
 
 
 ROSServiceDiscovery::ROSServiceDiscovery(ServiceMonitor* service_monitor) {
-    Mock_ROSServiceDiscovery = new MockROSServiceDiscovery(service_monitor);
 }
 ROSServiceDiscovery::~ROSServiceDiscovery() {
-    Mock_ROSServiceDiscovery = nullptr;
 }
 bool ROSServiceDiscovery::Initialize() {
     return Mock_ROSServiceDiscovery->Initialize();

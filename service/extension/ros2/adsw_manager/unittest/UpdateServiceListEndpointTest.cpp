@@ -1,7 +1,15 @@
 // Unit tests for DDSTransmitter class using Google Test and Google Mock
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "adsw_manager/endpoint/UpdateServiceListEndPoint.hpp"
+
+#include "endpoint/UpdateServiceListEndPoint.hpp"
+
+#include "mock/MockADSWManager.hpp"
+#include "mock/MockServiceRegistry.hpp"
+#include "mock/MockTypeSupport.hpp"
+#include "mock/MockDDSTransmitter.hpp"
+#include "mock/MockDDSMessageEndpoint.hpp"
+#include "mock/MockLogger.hpp"
 
 using ::testing::Return;
 using ::testing::_;
@@ -18,24 +26,43 @@ using ::testing::AllOf;
 using ::testing::AtLeast;
 using ::testing::Combine;
 
-// Mock UpdateServiceListResponse
-class MockUpdateServiceListResponse : public UpdateServiceListResponse {
+using namespace ros2::adsw_manager;
+
+// Test-only subclass for mocking Read behavior
+class TestUpdateServiceListEndPoint : public UpdateServiceListEndPoint {
 public:
-    int32_t ret_code_ = 42;
-    int32_t ret_code() const override { return ret_code_; }
+    TestUpdateServiceListEndPoint(MessageType msgtype, std::string topic)
+        : UpdateServiceListEndPoint(msgtype, topic) {}
+    void OnDataAvailable() override {
+        return;
+    }
 };
 
 class UpdateServiceListEndPointTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        endpoint = new ros2::adsw_manager::UpdateServiceListEndPoint(MessageType::UPDATE_SERVICE_LIST_RESPONSE, "test_topic");
-        endpoint->type_support_ = std::make_shared<MockTypeSupport>();
-        endpoint->resp_ = MockUpdateServiceListResponse();
+        Mock_Logger = new MockLogger();
+        Mock_ADSWManager = new MockADSWManager();
+        ADSWManager::SetShared(std::shared_ptr<ADSWManager>(Mock_ADSWManager));
+
+        ON_CALL(*Mock_ADSWManager, Get()).WillByDefault(::testing::Return(Mock_ADSWManager));
+        ON_CALL(*Mock_ADSWManager, GetTopic(::testing::_)).WillByDefault(::testing::Return("mock_topic"));
+        ON_CALL(*Mock_ADSWManager, GetTransmitter()).WillByDefault(::testing::Return(std::make_shared<MockDDSTransmitter>()));
+        
+        Mock_DDSMessageEndpoint = new MockDDSMessageEndpoint();
+        endpoint = new TestUpdateServiceListEndPoint(MessageType::UPDATE_SERVICE_LIST_RESPONSE, "test_topic");
+        endpoint->Initialize(nullptr, nullptr, nullptr);
     }
     void TearDown() override {
+        delete Mock_Logger;
+        Mock_Logger = nullptr;
         delete endpoint;
+        delete Mock_DDSMessageEndpoint;
+        Mock_DDSMessageEndpoint = nullptr;
+        Mock_ADSWManager = nullptr;
     }
-    ros2::adsw_manager::UpdateServiceListEndPoint* endpoint;
+
+    TestUpdateServiceListEndPoint* endpoint;
 };
 
 TEST_F(UpdateServiceListEndPointTest, ConstructionAndGetters) {
@@ -50,7 +77,7 @@ TEST_F(UpdateServiceListEndPointTest, OnDataAvailableDoesNotCrash) {
 
 TEST_F(UpdateServiceListEndPointTest, OnDataAvailableProcessesResponse) {
     endpoint->OnDataAvailable();
-    EXPECT_EQ(endpoint->resp_.ret_code(), 42);
+    EXPECT_EQ(static_cast<int>(endpoint->resp_.ret_code()), 42); // <-- If ret_code is an int, this is fine. If it's an enum, compare to the enum value.
 }
 TEST_F(UpdateServiceListEndPointTest, GetTypeSupportReturnsValidType) {
     auto type_support = endpoint->GetTypeSupport();
@@ -63,7 +90,6 @@ TEST_F(UpdateServiceListEndPointTest, GetTopicReturnsCorrectTopic) {
 TEST_F(UpdateServiceListEndPointTest, GetTypeNameReturnsCorrectTypeName) {
     EXPECT_EQ(endpoint->GetTypeName(), "MockType");
 }
-
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
