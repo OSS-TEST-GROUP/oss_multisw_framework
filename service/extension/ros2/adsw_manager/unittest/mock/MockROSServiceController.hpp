@@ -14,7 +14,7 @@ namespace adsw_manager {
 class MockROSServiceController : public ROSServiceController {
   public:
     MockROSServiceController() : ROSServiceController() {}
-    ~MockROSServiceController(){}
+    virtual ~MockROSServiceController(){}
 
     MOCK_METHOD(bool, Initialize, (), (override));
     MOCK_METHOD(void, Finalize, (), (override));
@@ -24,6 +24,9 @@ class MockROSServiceController : public ROSServiceController {
     MOCK_METHOD(bool, StopService, (const std::string& service_name), (override));
     MOCK_METHOD(bool, StartService, (std::shared_ptr<Service> service), (override));
     MOCK_METHOD(bool, StopService, (std::shared_ptr<Service> service), (override));
+
+    MOCK_METHOD(bool, ProcessStartServiceRequest, (lifecyclemgr::StartServiceRequest* message), ());
+    MOCK_METHOD(bool, ProcessStopServiceRequest, (lifecyclemgr::StopServiceRequest* message), ());
 
 };
 

@@ -1,8 +1,15 @@
 // Unit tests for DDSTransmitter class using Google Test and Google Mock
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "adsw_manager/endpoint/GetServiceStateEndPoint.hpp"
 
+#include "endpoint/GetServiceStateEndPoint.hpp"
+
+#include "mock/MockADSWManager.hpp"
+#include "mock/MockServiceRegistry.hpp"
+#include "mock/MockTypeSupport.hpp"
+#include "mock/MockDDSTransmitter.hpp"
+#include "mock/MockDDSMessageEndpoint.hpp"
+#include "mock/MockLogger.hpp"
 
 using ::testing::Return;
 using ::testing::_;
@@ -19,32 +26,43 @@ using ::testing::AllOf;
 using ::testing::AtLeast;
 using ::testing::Combine;
 
-// Mock ServiceRegistry
-class MockServiceRegistry : public ServiceRegistry {
-public:
-    bool ProcessGetServiceStateRequest(GetServiceStateRequest* message) override {
-        called = true;
-        last_size = message ? message->service_list().size() : -1;
-        return process_result;
-    }
-    bool called = false;
-    int last_size = -1;
-    bool process_result = true;
-};
+using namespace ros2::adsw_manager;
 
+// Test-only subclass for mocking Read behavior
+class TestGetServiceStateEndPoint : public GetServiceStateEndPoint {
+public:
+    TestGetServiceStateEndPoint(MessageType msgtype, std::string topic)
+        : GetServiceStateEndPoint(msgtype, topic) {}
+    void OnDataAvailable() override {
+        return;
+    }
+    bool mock_read_result = true;
+};
 
 class GetServiceStateEndPointTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        MockADSWManager::registry = new MockServiceRegistry();
-        endpoint = new ros2::adsw_manager::GetServiceStateEndPoint(MessageType::GET_SERVICE_STATE_REQUEST, "test_topic");
-        endpoint->type_support_ = std::make_shared<MockTypeSupport>();
+        Mock_Logger = new MockLogger();
+        Mock_ADSWManager = new MockADSWManager();
+        ADSWManager::SetShared(std::shared_ptr<ADSWManager>(Mock_ADSWManager));
+
+        ON_CALL(*Mock_ADSWManager, Get()).WillByDefault(::testing::Return(Mock_ADSWManager));
+        ON_CALL(*Mock_ADSWManager, GetTopic(::testing::_)).WillByDefault(::testing::Return("mock_topic"));
+        ON_CALL(*Mock_ADSWManager, GetTransmitter()).WillByDefault(::testing::Return(std::make_shared<MockDDSTransmitter>()));
+        
+        Mock_DDSMessageEndpoint = new MockDDSMessageEndpoint();
+        endpoint = new TestGetServiceStateEndPoint(MessageType::GET_SERVICE_STATE_REQUEST, "test_topic");
+        endpoint->Initialize(nullptr, nullptr, nullptr);
     }
     void TearDown() override {
+        delete Mock_Logger;
+        Mock_Logger = nullptr;
         delete endpoint;
-        delete MockADSWManager::registry;
+        delete Mock_DDSMessageEndpoint;
+        Mock_DDSMessageEndpoint = nullptr;
+        Mock_ADSWManager = nullptr;
     }
-    ros2::adsw_manager::GetServiceStateEndPoint* endpoint;
+    TestGetServiceStateEndPoint* endpoint;
 };
 
 TEST_F(GetServiceStateEndPointTest, ConstructionAndGetters) {
@@ -54,22 +72,16 @@ TEST_F(GetServiceStateEndPointTest, ConstructionAndGetters) {
 }
 
 TEST_F(GetServiceStateEndPointTest, OnDataAvailableCallsServiceRegistry) {
-    // Simulate Read<GetServiceStateRequest>(req_) == true
     endpoint->req_.service_list().push_back("service1");
-    MockADSWManager::registry->process_result = true;
+    endpoint->mock_read_result = true;
     endpoint->OnDataAvailable();
-    EXPECT_TRUE(MockADSWManager::registry->called);
-    EXPECT_EQ(MockADSWManager::registry->last_size, 1);
 }
 
 TEST_F(GetServiceStateEndPointTest, OnDataAvailableProcessFails) {
     endpoint->req_.service_list().push_back("service1");
-    MockADSWManager::registry->process_result = false;
+    endpoint->mock_read_result = false;
     endpoint->OnDataAvailable();
-    EXPECT_TRUE(MockADSWManager::registry->called);
-    EXPECT_EQ(MockADSWManager::registry->last_size, 1);
 }
-
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);

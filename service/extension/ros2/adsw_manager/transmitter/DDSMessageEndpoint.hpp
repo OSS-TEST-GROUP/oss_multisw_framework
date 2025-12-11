@@ -39,31 +39,18 @@ class DDSMessageEndpoint : public DataWriterListener, public DataReaderListener 
     template<typename T>
     bool Read(T &value) {
         SampleInfo info;
+        
+        if (data_reader_ == nullptr) {
+            return false;
+        }
         if (data_reader_->take_next_sample(&value, &info) == eprosima::fastdds::dds::RETCODE_OK)
         {
             if (info.valid_data) {
+                
                 return true;
             }
         }
         return false;
-    }
-
-    template<typename T>
-    bool Read(std::vector<T>& value) {
-        SampleInfo info;
-        bool ret_flag = false;
-        while (true) {
-            auto& val = value.emplace_back();
-            if (data_reader_->take_next_sample(&val, &info) == eprosima::fastdds::dds::RETCODE_OK)
-            {
-                if (info.valid_data) {
-                    ret_flag = true;
-                    continue;
-                }
-            } else {
-                return ret_flag;
-            }
-        }
     }
 
     uint64_t GetPendingReadData();
@@ -83,6 +70,10 @@ class DDSMessageEndpoint : public DataWriterListener, public DataReaderListener 
     void on_subscription_matched(
             DataReader* reader,
             const SubscriptionMatchedStatus& info) override;
+
+
+    // This is for unittesting purpose..!! do not use it
+    // testability: allow injection of mock DataReader
 
   private:
     DomainParticipant* participant_;

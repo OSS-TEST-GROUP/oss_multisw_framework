@@ -16,22 +16,23 @@ MessageQueue::MessageQueue() {}
 MessageQueue::~MessageQueue() {}
 
 bool MessageQueue::Start() {
-    
-    // Start publishing thread
+    if (publishing_thread_.joinable()) {
+        // Already running, do not start again
+        return false;
+    }
+    stop_publisher_.store(false);
     publishing_thread_ = std::thread(&MessageQueue::PublishingLoop, this);
-
     return true;
 }
 
 void MessageQueue::Stop() {
     stop_publisher_.store(true);
-    
+    outgoing_cv_.notify_one();  // Wake up the thread if it's waiting
+
     if (publishing_thread_.joinable())
     {
         publishing_thread_.join();
     }
-    outgoing_cv_.notify_one();
-
 }
 
 void MessageQueue::SendMessage(MsgType& message){

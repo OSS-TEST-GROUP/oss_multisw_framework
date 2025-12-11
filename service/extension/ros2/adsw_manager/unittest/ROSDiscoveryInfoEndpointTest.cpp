@@ -2,10 +2,9 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
-#include "endpoint/ROSDiscoveryInfoEndpoint.cpp"
+#include "endpoint/ROSDiscoveryInfoEndpoint.hpp"
 
 #include "mock/MockADSWManager.hpp"
-#include "mock/MockROSServiceDiscovery.hpp"
 #include "mock/MockTypeSupport.hpp"
 #include "mock/MockDDSMessageEndpoint.hpp"
 #include "mock/MockNodeInfo.hpp"
@@ -13,6 +12,7 @@
 #include "mock/MockService.hpp"
 #include "mock/MockDDSTransmitter.hpp"
 #include "mock/MockDDS.hpp"
+#include "mock/MockServiceMonitor.hpp"
 #include "mock/MockLogger.hpp"
 
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp>

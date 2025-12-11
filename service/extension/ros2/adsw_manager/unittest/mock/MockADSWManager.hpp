@@ -41,6 +41,8 @@ namespace adsw_manager {
 
     MockADSWManager* Mock_ADSWManager;
 
+    std::shared_ptr<ADSWManager> shared_instance_;
+
     ADSWManager::ADSWManager() {
     }
     
@@ -86,7 +88,11 @@ namespace adsw_manager {
     }
 
     ADSWManager* ADSWManager::Get() {
-        return Mock_ADSWManager->Get();
+        return shared_instance_.get();
+    }
+
+    void ADSWManager::SetShared(std::shared_ptr<ADSWManager> instance) {
+        shared_instance_ = instance;
     }
 }
 }
