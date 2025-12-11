@@ -81,5 +81,6 @@ install(
 install(DIRECTORY
     ${CMAKE_SOURCE_DIR}/idl/dds/common
     ${CMAKE_SOURCE_DIR}/idl/dds/diagnostic
+    ${CMAKE_SOURCE_DIR}/idl/dds/security_mgr
     DESTINATION bin/idl
 )
