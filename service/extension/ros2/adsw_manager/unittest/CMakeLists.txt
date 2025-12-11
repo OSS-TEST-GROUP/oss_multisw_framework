@@ -102,6 +102,13 @@ gtest_discover_tests ( ADSWServiceRegistryTest )
 gtest_discover_tests ( ADSWServiceMonitorTest )
 gtest_discover_tests ( ADSWDDSTransmitterTest )
 gtest_discover_tests ( ADSWROSDiscoveryInfoEndpointTest )
+gtest_discover_tests ( ADSWMessageQueueTest )
+gtest_discover_tests ( GetServiceStateEndPointTest )
+gtest_discover_tests ( NotifyServiceStateEndPointTest )
+gtest_discover_tests ( StartServiceEndpointTest )   
+gtest_discover_tests ( StopServiceEndpointTest )
+gtest_discover_tests ( UpdateServiceListEndpointTest )
+    
 
 ## Install
 install ( TARGETS

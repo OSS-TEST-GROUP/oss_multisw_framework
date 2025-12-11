@@ -41,9 +41,12 @@ class ServiceRegistryTest : public ::testing::Test {
 protected:
     virtual void SetUp(){
         ins = new ServiceRegistry();
+        Mock_Service = new MockService("test", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);   
     }
     virtual void TearDown(){
         delete ins;
+        delete Mock_Service;
+        Mock_Service = nullptr;
     }
 
     ServiceRegistry* ins;
