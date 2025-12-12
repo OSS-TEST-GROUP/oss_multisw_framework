@@ -17,6 +17,7 @@ public:
     MOCK_METHOD(std::shared_ptr<ServiceRegistry>, GetRegistry, (), ());
     MOCK_METHOD(std::shared_ptr<PolicyManager>, GetPolicy, (), ());
     MOCK_METHOD(const char*, GetTopic, (MessageType mtype), ());
+    MOCK_METHOD(std::shared_ptr<StateManager>, GetStateManager, (), ());
 };
 
 inline MockManagerBase* Mock_ManagerBase = nullptr;

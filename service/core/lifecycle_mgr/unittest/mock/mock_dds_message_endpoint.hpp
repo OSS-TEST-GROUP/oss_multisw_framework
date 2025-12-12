@@ -32,13 +32,19 @@ inline MockDDSMessageEndPoint* Mock_DDSMessageEndPoint = nullptr;
 DDSMessageEndPoint::DDSMessageEndPoint(std::string topic) : MessageEndPoint(topic) {
 }
 DDSMessageEndPoint::~DDSMessageEndPoint() {
-    Mock_DDSMessageEndPoint = nullptr;
+    // Don't set to nullptr here as multiple endpoints may exist
 }
 bool DDSMessageEndPoint::Initialize(DomainParticipant* participant, Publisher* publisher, Subscriber* subscriber) {
-    return Mock_DDSMessageEndPoint->Initialize(participant, publisher, subscriber);
+    if (Mock_DDSMessageEndPoint && Mock_DDSMessageEndPoint != this) {
+        return Mock_DDSMessageEndPoint->Initialize(participant, publisher, subscriber);
+    }
+    // Real implementation - return true for tests
+    return true;
 }
 void DDSMessageEndPoint::Finalize() {
-    Mock_DDSMessageEndPoint->Finalize();    
+    if (Mock_DDSMessageEndPoint && Mock_DDSMessageEndPoint != this) {
+        Mock_DDSMessageEndPoint->Finalize();
+    }
 }
 #if 0
 std::string DDSMessageEndPoint::GetTopic() {
@@ -65,16 +71,25 @@ void DDSMessageEndPoint::OnDataAvailable() {
 #endif
 
 void DDSMessageEndPoint::on_publication_matched(DataWriter* writer, const PublicationMatchedStatus& status) {
-    Mock_DDSMessageEndPoint->on_publication_matched(writer, status);        
+    if (Mock_DDSMessageEndPoint && Mock_DDSMessageEndPoint != this) {
+        Mock_DDSMessageEndPoint->on_publication_matched(writer, status);
+    }
 }
 void DDSMessageEndPoint::on_subscription_matched(DataReader* reader, const SubscriptionMatchedStatus& status) {
-    Mock_DDSMessageEndPoint->on_subscription_matched(reader, status);   
+    if (Mock_DDSMessageEndPoint && Mock_DDSMessageEndPoint != this) {
+        Mock_DDSMessageEndPoint->on_subscription_matched(reader, status);
+    }
 }
 void DDSMessageEndPoint::on_data_available(DataReader* reader) {
-    Mock_DDSMessageEndPoint->on_data_available(reader);     
+    if (Mock_DDSMessageEndPoint && Mock_DDSMessageEndPoint != this) {
+        Mock_DDSMessageEndPoint->on_data_available(reader);
+    }
 }
 bool DDSMessageEndPoint::Write(const void* const data) {
-    return Mock_DDSMessageEndPoint->Write(data);
+    if (Mock_DDSMessageEndPoint && Mock_DDSMessageEndPoint != this) {
+        return Mock_DDSMessageEndPoint->Write(data);
+    }
+    return true;
 }
 
 } // namespace lifecycle_manager
