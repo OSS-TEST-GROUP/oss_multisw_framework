@@ -196,6 +196,10 @@ pid_t MWServiceManager::run_process(const std::string exename, const std::string
 }
 
 bool MWServiceManager::kill_process(pid_t pid) {
+    if (pid <= 0) {
+        LOG_ERROR("Invalid PID: " << pid);
+        return false;
+    }
     if (kill(pid, SIGKILL) == 0) {
         return true;
     }

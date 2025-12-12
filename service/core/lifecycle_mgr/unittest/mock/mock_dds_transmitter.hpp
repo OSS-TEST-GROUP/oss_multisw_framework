@@ -17,6 +17,7 @@ public:
     MOCK_METHOD(void, Finalize, (), ());
     MOCK_METHOD(bool, AddMessageEndpoint, (std::shared_ptr<DDSMessageEndPoint>), ());
     MOCK_METHOD(std::shared_ptr<DDSMessageEndPoint>, GetMessageEndPoint, (std::string), ());
+    MOCK_METHOD(bool, SendMessage, (MessageType mtype, void* ptr), ());
     MOCK_METHOD(DomainParticipant*, GetDomain, (), ());
     MOCK_METHOD(Publisher*, GetPublisher, (), ());
     MOCK_METHOD(Subscriber*, GetSubscriber, (), ());
