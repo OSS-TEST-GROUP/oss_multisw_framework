@@ -387,6 +387,143 @@ TEST_F(ServiceRegistryTest, RemoveGroupWithServices_TC043) {
     EXPECT_FALSE(registry->IsGroup("ToBeRemoved"));
 }
 
+// ============================================================================
+// Additional tests for improved coverage
+// ============================================================================
+
+TEST_F(ServiceRegistryTest, AddService_EmptyGroup_TC044) {
+    auto svc = MakeService("TestService");
+    // AddService with empty group should fail
+    EXPECT_FALSE(registry->AddService(svc, ""));
+}
+
+TEST_F(ServiceRegistryTest, ProcessGetServiceStateRequest_NullMessage_TC045) {
+    EXPECT_FALSE(registry->ProcessGetServiceStateRequest(nullptr));
+}
+
+TEST_F(ServiceRegistryTest, ExtractRos2LaunchCommands_MixedContent_TC046) {
+    std::string script = R"(
+        echo "Starting services"
+        ros2 launch navigation_pkg nav2_launch.py use_sim_time:=true
+        sleep 5
+        ros2 launch perception_pkg perception.launch.py
+    )";
+    auto commands = registry->extractRos2LaunchCommands(script);
+    EXPECT_EQ(commands.size(), 2);
+    EXPECT_EQ(std::get<1>(commands[0]), "navigation_pkg");
+    EXPECT_EQ(std::get<1>(commands[1]), "perception_pkg");
+}
+
+TEST_F(ServiceRegistryTest, ExtractRos2RunCommands_WithArgs_TC047) {
+    std::string script = "ros2 run my_pkg my_node --ros-args -p param:=value";
+    auto commands = registry->extractRos2RunCommands(script);
+    EXPECT_EQ(commands.size(), 1);
+    EXPECT_EQ(std::get<1>(commands[0]), "my_pkg");
+    EXPECT_EQ(std::get<2>(commands[0]), "my_node");
+}
+
+TEST_F(ServiceRegistryTest, RemoveService_FromGroup_TC048) {
+    auto s1 = MakeService("ServiceInGroup");
+    registry->AddService(s1, "MyGroup");
+    
+    EXPECT_EQ(registry->GetServiceNumInGroup("MyGroup"), 1);
+    
+    registry->RemoveService("ServiceInGroup");
+    
+    EXPECT_EQ(registry->GetServiceNumInGroup("MyGroup"), 0);
+    EXPECT_EQ(registry->GetService("ServiceInGroup"), nullptr);
+}
+
+TEST_F(ServiceRegistryTest, GetServicesByGroup_EmptyGroup_TC049) {
+    registry->AddGroup("EmptyGroup");
+    auto services = registry->GetServicesByGroup("EmptyGroup");
+    EXPECT_TRUE(services.empty());
+}
+
+TEST_F(ServiceRegistryTest, ServiceInMultipleGroupsNotAllowed_TC050) {
+    auto s1 = MakeService("S1");
+    registry->AddService(s1, "Group1");
+    
+    // Same service can't be added to another group (already exists)
+    auto s1_duplicate = MakeService("S1");
+    EXPECT_FALSE(registry->AddService(s1_duplicate, "Group2"));
+}
+
+TEST_F(ServiceRegistryTest, RemoveNonExistentService_TC051) {
+    // Should not crash
+    EXPECT_NO_THROW(registry->RemoveService("DoesNotExist"));
+}
+
+TEST_F(ServiceRegistryTest, GetGroupNameByService_NotInRegistry_TC052) {
+    auto orphan = MakeService("OrphanService");
+    // Service not added to registry
+    EXPECT_EQ(registry->GetGroupNameByService(orphan), "");
+}
+
+TEST_F(ServiceRegistryTest, ExtractRos2LaunchCommands_EmptyScript_TC053) {
+    std::string script = "";
+    auto commands = registry->extractRos2LaunchCommands(script);
+    EXPECT_TRUE(commands.empty());
+}
+
+TEST_F(ServiceRegistryTest, ExtractRos2RunCommands_EmptyScript_TC054) {
+    std::string script = "";
+    auto commands = registry->extractRos2RunCommands(script);
+    EXPECT_TRUE(commands.empty());
+}
+
+TEST_F(ServiceRegistryTest, MultipleServicesInSameGroup_TC055) {
+    auto s1 = MakeService("Svc1");
+    auto s2 = MakeService("Svc2");
+    auto s3 = MakeService("Svc3");
+    
+    registry->AddService(s1, "SharedGroup");
+    registry->AddService(s2, "SharedGroup");
+    registry->AddService(s3, "SharedGroup");
+    
+    EXPECT_EQ(registry->GetServiceNumInGroup("SharedGroup"), 3);
+    EXPECT_EQ(registry->GetGroupNum(), 1);
+}
+
+TEST_F(ServiceRegistryTest, RemoveGroup_Empty_TC056) {
+    registry->AddGroup("EmptyGroup");
+    EXPECT_TRUE(registry->IsGroup("EmptyGroup"));
+    
+    registry->RemoveGroup("EmptyGroup");
+    EXPECT_FALSE(registry->IsGroup("EmptyGroup"));
+}
+
+TEST_F(ServiceRegistryTest, AddGroup_Idempotent_TC057) {
+    registry->AddGroup("TestGroup");
+    registry->AddGroup("TestGroup");
+    registry->AddGroup("TestGroup");
+    
+    // Should still only have one group
+    EXPECT_EQ(registry->GetGroupNum(), 1);
+}
+
+TEST_F(ServiceRegistryTest, ExtractRos2LaunchCommands_BackgroundProcess_TC058) {
+    std::string script = "ros2 launch pkg1 launch1.py &";
+    auto commands = registry->extractRos2LaunchCommands(script);
+    EXPECT_EQ(commands.size(), 1);
+}
+
+TEST_F(ServiceRegistryTest, ExtractRos2LaunchCommands_Newlines_TC059) {
+    std::string script = "ros2 launch pkg1 launch1.py\nros2 launch pkg2 launch2.py";
+    auto commands = registry->extractRos2LaunchCommands(script);
+    EXPECT_EQ(commands.size(), 2);
+}
+
+TEST_F(ServiceRegistryTest, LoadServiceList_InvalidPath_TC060) {
+    // Loading from non-existent path should fail gracefully
+    EXPECT_FALSE(registry->LoadServiceList("/nonexistent/path/config.yaml"));
+}
+
+TEST_F(ServiceRegistryTest, LoadServiceSaved_InvalidPath_TC061) {
+    // Loading from non-existent path should fail gracefully
+    EXPECT_FALSE(registry->LoadServiceSaved("/nonexistent/path/saved.yaml"));
+}
+
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);

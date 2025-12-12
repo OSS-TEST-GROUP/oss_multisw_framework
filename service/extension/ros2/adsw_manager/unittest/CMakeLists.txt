@@ -39,8 +39,10 @@ include (GoogleTest)
 add_executable ( ADSWServiceTest ServiceTest.cpp )
 add_executable ( ADSWServiceRegistryTest ServiceRegistryTest.cpp
                 ../service/ServiceRegistry.cpp )
+add_executable ( ADSWTypeConvertTest TypeConvertTest.cpp )
                 
 add_executable ( ADSWServiceMonitorTest ServiceMonitorTest.cpp)
+add_executable ( ADSWROSServiceDiscoveryTest ROSServiceDiscoveryTest.cpp)
 add_executable ( ADSWDDSTransmitterTest
     DDSTransmitterTest.cpp 
     ${GENERATED_DIR}/lifecycle/LifecycleCommonTypeObjectSupport.cxx
@@ -60,35 +62,37 @@ add_executable ( ADSWROSDiscoveryInfoEndpointTest ROSDiscoveryInfoEndpointTest.c
 
 add_executable( ADSWManager ADSWManagerTest.cpp ../ADSWManager.cpp)
 add_executable( ADSWMessageQueueTest MessageQueueTest.cpp ../transmitter/MessageQueue.cpp)
-add_executable( GetServiceStateEndPointTest GetServiceStateEndPointTest.cpp
+add_executable( ADSWDDSMessageEndpointTest DDSMessageEndpointTest.cpp 
+                ../transmitter/DDSMessageEndpoint.cpp)
+add_executable( ADSWGetServiceStateEndPointTest GetServiceStateEndPointTest.cpp
                 ../endpoint/GetServiceStateEndPoint.cpp
                 ${GENERATED_DIR}/lifecycle/GetServiceStateRequestPubSubTypes.cxx
                 ${GENERATED_DIR}/lifecycle/GetServiceStateRequestTypeObjectSupport.cxx
                 ${GENERATED_DIR}/lifecycle/LifecycleCommonPubSubTypes.cxx
                 ${GENERATED_DIR}/lifecycle/LifecycleCommonTypeObjectSupport.cxx        
 )
-add_executable( NotifyServiceStateEndPointTest NotifyServiceStateEndPointTest.cpp
+add_executable( ADSWNotifyServiceStateEndPointTest NotifyServiceStateEndPointTest.cpp
                 ../endpoint/NotifyServiceStateEndPoint.cpp
                 ${GENERATED_DIR}/lifecycle/NotifyServiceStatePubSubTypes.cxx
                 ${GENERATED_DIR}/lifecycle/NotifyServiceStateTypeObjectSupport.cxx
                 ${GENERATED_DIR}/lifecycle/LifecycleCommonPubSubTypes.cxx
                 ${GENERATED_DIR}/lifecycle/LifecycleCommonTypeObjectSupport.cxx        
 )
-add_executable( StartServiceEndpointTest StartServiceEndpointTest.cpp
+add_executable( ADSWStartServiceEndpointTest StartServiceEndpointTest.cpp
                 ../endpoint/StartServiceEndPoint.cpp
                 ${GENERATED_DIR}/lifecycle/StartServiceRequestPubSubTypes.cxx
                 ${GENERATED_DIR}/lifecycle/StartServiceRequestTypeObjectSupport.cxx
                 ${GENERATED_DIR}/lifecycle/LifecycleCommonPubSubTypes.cxx
                 ${GENERATED_DIR}/lifecycle/LifecycleCommonTypeObjectSupport.cxx        
 )
-add_executable( StopServiceEndpointTest StopServiceEndpointTest.cpp
+add_executable( ADSWStopServiceEndpointTest StopServiceEndpointTest.cpp
                 ../endpoint/StopServiceEndPoint.cpp
                 ${GENERATED_DIR}/lifecycle/StopServiceRequestPubSubTypes.cxx
                 ${GENERATED_DIR}/lifecycle/StopServiceRequestTypeObjectSupport.cxx
                 ${GENERATED_DIR}/lifecycle/LifecycleCommonPubSubTypes.cxx
                 ${GENERATED_DIR}/lifecycle/LifecycleCommonTypeObjectSupport.cxx        
 )
-add_executable( UpdateServiceListEndpointTest UpdateServiceListEndpointTest.cpp
+add_executable( ADSWUpdateServiceListEndpointTest UpdateServiceListEndpointTest.cpp
                 ../endpoint/UpdateServiceListEndPoint.cpp
                 ${GENERATED_DIR}/lifecycle/UpdateServiceListRequestPubSubTypes.cxx
                 ${GENERATED_DIR}/lifecycle/UpdateServiceListRequestTypeObjectSupport.cxx
@@ -99,30 +103,37 @@ add_executable( UpdateServiceListEndpointTest UpdateServiceListEndpointTest.cpp
 
 gtest_discover_tests ( ADSWServiceTest )
 gtest_discover_tests ( ADSWServiceRegistryTest )
+gtest_discover_tests ( ADSWTypeConvertTest )
 gtest_discover_tests ( ADSWServiceMonitorTest )
+gtest_discover_tests ( ADSWROSServiceDiscoveryTest )
 gtest_discover_tests ( ADSWDDSTransmitterTest )
 gtest_discover_tests ( ADSWROSDiscoveryInfoEndpointTest )
 gtest_discover_tests ( ADSWMessageQueueTest )
-gtest_discover_tests ( GetServiceStateEndPointTest )
-gtest_discover_tests ( NotifyServiceStateEndPointTest )
-gtest_discover_tests ( StartServiceEndpointTest )   
-gtest_discover_tests ( StopServiceEndpointTest )
-gtest_discover_tests ( UpdateServiceListEndpointTest )
-    
+gtest_discover_tests ( ADSWDDSMessageEndpointTest )
+gtest_discover_tests ( ADSWGetServiceStateEndPointTest )
+gtest_discover_tests ( ADSWNotifyServiceStateEndPointTest )
+gtest_discover_tests ( ADSWStartServiceEndpointTest )   
+gtest_discover_tests ( ADSWStopServiceEndpointTest )
+gtest_discover_tests ( ADSWUpdateServiceListEndpointTest )
+
 
 ## Install
 install ( TARGETS
           ADSWServiceTest
           ADSWServiceRegistryTest
+          ADSWTypeConvertTest
+          ADSWServiceMonitorTest
+          ADSWROSServiceDiscoveryTest
           ADSWDDSTransmitterTest
           ADSWROSDiscoveryInfoEndpointTest
           ADSWManager
           ADSWMessageQueueTest
-          GetServiceStateEndPointTest
-            NotifyServiceStateEndPointTest
-            StartServiceEndpointTest
-            StopServiceEndpointTest
-            UpdateServiceListEndpointTest
+          ADSWDDSMessageEndpointTest
+          ADSWGetServiceStateEndPointTest
+          ADSWNotifyServiceStateEndPointTest
+          ADSWStartServiceEndpointTest
+          ADSWStopServiceEndpointTest
+          ADSWUpdateServiceListEndpointTest
     RUNTIME DESTINATION bin/unittest/adsw_manager
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
