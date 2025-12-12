@@ -132,17 +132,17 @@ void ServiceManager::processRequest(std::shared_ptr<RequestData> request) {
                             auto variant = filter_item["variant"].GetString();
                             if (strcmp(variant, "metadata") == 0) {
                                 is_get_metadata = true;
-                                if (filter_item.HasMember("parameter") && filter_item["parameter"].IsString()) {
+                                if (filter_item.HasMember("parameter") && filter_item["parameter"].IsArray() && !filter_item["parameter"].Empty() && filter_item["parameter"][0].IsString()) {
                                     try {
-                                        depth = std::stoi(filter_item["parameter"].GetString());
+                                        depth = std::stoi(filter_item["parameter"][0].GetString());
                                     } catch (const std::invalid_argument& ia) {
-                                        LOG_ERROR << "Invalid argument for depth: " << filter_item["parameter"].GetString();
+                                        LOG_ERROR << "Invalid argument for depth: " << filter_item["parameter"][0].GetString();
                                         depth = 0; // Default to 0 on error
                                     }
                                 }
                             } else if (strcmp(variant, "history") == 0) {
-                                if (filter_item.HasMember("parameter") && filter_item["parameter"].IsString()) {
-                                    timePeriod = filter_item["parameter"].GetString();
+                                if (filter_item.HasMember("parameter") && filter_item["parameter"].IsArray() && !filter_item["parameter"].Empty() && filter_item["parameter"][0].IsString()) {
+                                    timePeriod = filter_item["parameter"][0].GetString();
                                 }
                             }
                         }

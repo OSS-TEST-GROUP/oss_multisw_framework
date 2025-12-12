@@ -385,12 +385,35 @@ void RequestListener::on_data_available(eprosima::fastdds::dds::DataReader* read
                 return;
             }
 
-            // Ensure the filter is always an array for ServiceManager
-            if (request_doc_ptr->HasMember("filter") && (*request_doc_ptr)["filter"].IsObject()) {
-                rapidjson::Value filter_array(rapidjson::kArrayType);
-                filter_array.PushBack((*request_doc_ptr)["filter"], request_doc_ptr->GetAllocator());
-                (*request_doc_ptr).RemoveMember("filter");
-                (*request_doc_ptr).AddMember("filter", filter_array, request_doc_ptr->GetAllocator());
+            // Ensure 'filter' is an array, and its 'parameter' is also an array for ServiceManager.
+            if (request_doc_ptr->HasMember("filter")) {
+                auto& allocator = request_doc_ptr->GetAllocator();
+                rapidjson::Value& filters = (*request_doc_ptr)["filter"];
+                rapidjson::Value new_filter_array(rapidjson::kArrayType);
+
+                // Lambda to process a single filter object
+                auto process_filter = [&](rapidjson::Value& filter_obj) {
+                    if (filter_obj.IsObject() && filter_obj.HasMember("parameter") && !filter_obj["parameter"].IsArray()) {
+                        rapidjson::Value param_copy(filter_obj["parameter"], allocator); // Deep copy
+                        filter_obj.RemoveMember("parameter");
+                        rapidjson::Value new_param_array(rapidjson::kArrayType);
+                        new_param_array.PushBack(param_copy, allocator);
+                        filter_obj.AddMember("parameter", new_param_array, allocator);
+                    }
+                    new_filter_array.PushBack(filter_obj, allocator);
+                };
+
+                if (filters.IsArray()) {
+                    for (auto& filter : filters.GetArray()) {
+                        process_filter(filter);
+                    }
+                } else if (filters.IsObject()) {
+                    process_filter(filters);
+                }
+
+                // Replace original 'filter' with the new, processed array
+                request_doc_ptr->RemoveMember("filter");
+                request_doc_ptr->AddMember("filter", new_filter_array, allocator);
             }
             
             auto requestData = p_impl->pool->acquire();

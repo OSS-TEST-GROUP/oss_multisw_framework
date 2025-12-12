@@ -8,6 +8,7 @@
 #include <sstream>
 #include "rapidjson/istreamwrapper.h"
 #include "rapidjson/error/en.h"
+#include "rapidjson/prettywriter.h"
 #include "Logger.h"
 
 
@@ -231,13 +232,6 @@ std::shared_ptr<Node_t> VSSTree::VSSReadTree(const std::string& filename) {
     }
 }
 
-// Dummy implementation for VSSsearchNodes as it's not the focus
-int VSSTree::searchNodes(const std::string& searchPath, Node_t* rootNode, std::vector<SearchData_t>& searchData, bool anyDepth, bool leafNodesOnly) {
-    // This function needs a proper implementation based on path matching logic.
-    // For now, we'll leave it empty to allow compilation.
-    return 0;
-}
-
 
 VSSTree::VSSTree(const std::string& him_file_path) : him_path_(him_file_path), is_valid_(false) {
     std::filesystem::path him_fs_path(him_file_path);
@@ -355,7 +349,7 @@ viss::Node_t* VSSTree::findRootNode(const std::string& path, std::string& out_fo
     return nullptr;
 }
 
-std::vector<std::string> VSSTree::getPaths(const std::string& path, const rapidjson::Document* filter) {
+std::vector<std::string> VSSTree::getPaths(const std::string& path, const rapidjson::Document* req) {
     std::vector<std::string> resulting_paths;
     
     Node_t* base_node = findNode(path);
@@ -363,15 +357,10 @@ std::vector<std::string> VSSTree::getPaths(const std::string& path, const rapidj
         return resulting_paths; // Base path does not exist, return empty
     }
 
-    if (filter && filter->IsObject() && filter->HasMember("filter")) {
-        const auto& filter_val = (*filter)["filter"];
+    if (req && req->IsObject() && req->HasMember("filter")) {
+        const auto& filter_val = (*req)["filter"];
         const rapidjson::Value* expressions = &filter_val;
         rapidjson::Document doc;
-        if (!filter_val.IsArray()) {
-            doc.SetArray();
-            doc.PushBack(rapidjson::Value(filter_val, doc.GetAllocator()), doc.GetAllocator());
-            expressions = &doc;
-        }
 
         for (const auto& exp : expressions->GetArray()) {
             if (exp.IsObject() && exp.HasMember("variant") && exp["variant"].IsString()) {
@@ -395,8 +384,12 @@ std::vector<std::string> VSSTree::getPaths(const std::string& path, const rapidj
         }
     }
 
+    auto node = findNode(path);
+    if (node && (node->NodeType == NodeTypes::ACTUATOR || node->NodeType == NodeTypes::SENSOR || node->NodeType == NodeTypes::ATTRIBUTE)) {
+            resulting_paths.push_back(path);
+    }
     // No 'paths' filter, so just return the valid base path
-    resulting_paths.push_back(path);
+    //resulting_paths.push_back(path);
     return resulting_paths;
 }
 
@@ -407,6 +400,12 @@ rapidjson::Document VSSTree::getDataTypeTemplate(const std::string& path) {
     }
     rapidjson::Document doc;
     doc.CopyFrom(createTemplateRecursive(node, doc.GetAllocator()), doc.GetAllocator());
+
+    rapidjson::StringBuffer buffer;
+    rapidjson::PrettyWriter<rapidjson::StringBuffer> writer(buffer);
+    doc.Accept(writer);
+    LOG_INFO << "Generated data type template for path " << path << ": " << buffer.GetString();
+
     return doc;
 }
 

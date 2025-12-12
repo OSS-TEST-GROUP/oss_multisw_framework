@@ -109,13 +109,18 @@ public:
 
     void on_subscription_matched(DataReader* reader, const SubscriptionMatchedStatus& info) override
     {
+        const auto participant = reader->get_subscriber()->get_participant();
+        const std::string participant_name = participant->get_qos().name().to_string();
+
         if (info.current_count_change == 1)
         {
-            LOG_INFO << "******************** [DDS Matched] DataReader matched for topic: [" << reader->get_topicdescription()->get_name() << "]";
+            LOG_INFO << "******************** [DDS Matched] DataReader matched on participant [" << participant_name
+                     << "] for topic: [" << reader->get_topicdescription()->get_name() << "]";
         }
         else if (info.current_count_change == -1)
         {
-            LOG_INFO << "******************** [DDS Unmatched] DataReader unmatched for topic: [" << reader->get_topicdescription()->get_name() << "]";
+            LOG_INFO << "******************** [DDS Unmatched] DataReader unmatched on participant [" << participant_name
+                     << "] for topic: [" << reader->get_topicdescription()->get_name() << "]";
         }
     }
 
@@ -153,13 +158,18 @@ public:
 
     void on_subscription_matched(DataReader* reader, const SubscriptionMatchedStatus& info) override
     {
+        const auto participant = reader->get_subscriber()->get_participant();
+        const std::string participant_name = participant->get_qos().name().to_string();
+
         if (info.current_count_change == 1)
         {
-            LOG_INFO << "******************** [DDS Matched] DataReader matched for topic: [" << reader->get_topicdescription()->get_name() << "]";
+            LOG_INFO << "******************** [DDS Matched] DataReader matched on participant [" << participant_name
+                     << "] for topic: [" << reader->get_topicdescription()->get_name() << "]";
         }
         else if (info.current_count_change == -1)
         {
-            LOG_INFO << "******************** [DDS Unmatched] DataReader unmatched for topic: [" << reader->get_topicdescription()->get_name() << "]";
+            LOG_INFO << "******************** [DDS Unmatched] DataReader unmatched on participant [" << participant_name
+                     << "] for topic: [" << reader->get_topicdescription()->get_name() << "]";
         }
     }
 
@@ -171,7 +181,6 @@ public:
         {
             if (info.valid_data)
             {
-                LOG_INFO << "Autoware GnssInsOrientationStamped Received";
                 if (channel_)
                 {
                     // Create a JSON object from the GnssInsOrientationStamped message
@@ -222,13 +231,18 @@ public:
     
     void on_subscription_matched(DataReader* reader, const SubscriptionMatchedStatus& info) override
     {
+        const auto participant = reader->get_subscriber()->get_participant();
+        const std::string participant_name = participant->get_qos().name().to_string();
+
         if (info.current_count_change == 1)
         {
-            LOG_INFO << "******************** [DDS Matched] DataReader matched for topic: [" << reader->get_topicdescription()->get_name() << "]";
+            LOG_INFO << "******************** [DDS Matched] DataReader matched on participant [" << participant_name
+                     << "] for topic: [" << reader->get_topicdescription()->get_name() << "]";
         }
         else if (info.current_count_change == -1)
         {
-            LOG_INFO << "******************** [DDS Unmatched] DataReader unmatched for topic: [" << reader->get_topicdescription()->get_name() << "]";
+            LOG_INFO << "******************** [DDS Unmatched] DataReader unmatched on participant [" << participant_name
+                     << "] for topic: [" << reader->get_topicdescription()->get_name() << "]";
         }
     }
 
@@ -309,13 +323,18 @@ class DDSProvider::VehicleDataWriterListener : public DataWriterListener
 public:
     void on_publication_matched(DataWriter* writer, const PublicationMatchedStatus& info) override
     {
+        const auto participant = writer->get_publisher()->get_participant();
+        const std::string participant_name = participant->get_qos().name().to_string();
+
         if (info.current_count_change == 1)
         {
-            LOG_INFO << "******************** [DDS Matched] DataWriter matched for topic: [" << writer->get_topic()->get_name() << "]";
+            LOG_INFO << "******************** [DDS Matched] DataWriter matched on participant [" << participant_name
+                     << "] for topic: [" << writer->get_topic()->get_name() << "]";
         }
         else if (info.current_count_change == -1)
         {
-            LOG_INFO << "******************** [DDS Unmatched] DataWriter unmatched for topic: [" << writer->get_topic()->get_name() << "]";
+            LOG_INFO << "******************** [DDS Unmatched] DataWriter unmatched on participant [" << participant_name
+                     << "] for topic: [" << writer->get_topic()->get_name() << "]";
         }
     }
 };
@@ -326,6 +345,7 @@ DDSProvider::DDSProvider()
     , publisher_(nullptr)
     , subscriber_(nullptr)
     , vehicle_data_topic_(nullptr)
+    , set_vehicle_data_topic_(nullptr)
     , vehicle_data_writer_(nullptr)
     , vehicle_data_reader_(nullptr)
     , vehicle_data_type_(new VehicleDataTopicPubSubType())
@@ -338,12 +358,27 @@ DDSProvider::DDSProvider()
     , active_(false)
     , discovery_listener_(std::make_unique<DiscoveryListener>())
 {
+    // Determine Domain ID from environment variable, default to 0
+    int domain_id = 0;
+    const char* domain_id_str = std::getenv("VISS_DDS_DOMAIN_ID");
+    if (domain_id_str) {
+        try {
+            domain_id = std::stoi(domain_id_str);
+        } catch (const std::invalid_argument& e) {
+            LOG_WARN << "Invalid VISS_DDS_DOMAIN_ID: " << domain_id_str << ". Using default 0.";
+            domain_id = 0;
+        } catch (const std::out_of_range& e) {
+            LOG_WARN << "VISS_DDS_DOMAIN_ID out of range: " << domain_id_str << ". Using default 0.";
+            domain_id = 0;
+        }
+    }
+
     // Create Participant
     DomainParticipantQos pqos = PARTICIPANT_QOS_DEFAULT;
     pqos.name("VISS_Participant");
-    participant_ = DomainParticipantFactory::get_instance()->create_participant(0, pqos, discovery_listener_.get());
+    participant_ = DomainParticipantFactory::get_instance()->create_participant(domain_id, pqos, discovery_listener_.get(), StatusMask::none());
     if (participant_ == nullptr) {
-        LOG_ERROR << "Failed to create DDS Participant";
+        LOG_ERROR << "Failed to create DDS Participant on domain " << domain_id;
         return;
     }
 
@@ -358,6 +393,7 @@ DDSProvider::DDSProvider()
 
     // Create Topics
     vehicle_data_topic_ = participant_->create_topic("VehicleData", vehicle_data_type_.get_type_name(), TOPIC_QOS_DEFAULT);
+    set_vehicle_data_topic_ = participant_->create_topic("SetVehicleData", vehicle_data_type_.get_type_name(), TOPIC_QOS_DEFAULT);
     gnss_orientation_topic_ = participant_->create_topic("rt/autoware_orientation", gnss_orientation_type_.get_type_name(), TOPIC_QOS_DEFAULT);
     trajectory_topic_ = participant_->create_topic("rt/trajectory", trajectory_type_.get_type_name(), TOPIC_QOS_DEFAULT);
 }
@@ -381,13 +417,11 @@ void DDSProvider::start()
     reliable_qos.reliability().kind = RELIABLE_RELIABILITY_QOS;
 
     // Create DataReaders and Listeners
-    if (data_channel_) {
-        vehicle_data_listener_ = std::make_unique<VehicleDataListener>(data_channel_.get());
-        vehicle_data_reader_ = subscriber_->create_datareader(vehicle_data_topic_, reliable_qos, vehicle_data_listener_.get());
+    vehicle_data_listener_ = std::make_unique<VehicleDataListener>(data_channel_.get());
+    vehicle_data_reader_ = subscriber_->create_datareader(vehicle_data_topic_, reliable_qos, vehicle_data_listener_.get());
 
-        gnss_orientation_listener_ = std::make_unique<GnssInsOrientationListener>(data_channel_.get());
-        gnss_orientation_reader_ = subscriber_->create_datareader(gnss_orientation_topic_, reliable_qos, gnss_orientation_listener_.get());
-    }
+    gnss_orientation_listener_ = std::make_unique<GnssInsOrientationListener>(data_channel_.get());
+    gnss_orientation_reader_ = subscriber_->create_datareader(gnss_orientation_topic_, reliable_qos, gnss_orientation_listener_.get());
 
     trajectory_listener_ = std::make_unique<TrajectoryListener>(data_channel_.get());
     trajectory_reader_ = subscriber_->create_datareader(trajectory_topic_, reliable_qos, trajectory_listener_.get());
@@ -395,7 +429,7 @@ void DDSProvider::start()
 
     // Create DataWriter for VehicleDataTopic
     vehicle_data_writer_listener_ = std::make_unique<VehicleDataWriterListener>();
-    vehicle_data_writer_ = publisher_->create_datawriter(vehicle_data_topic_, DATAWRITER_QOS_DEFAULT, vehicle_data_writer_listener_.get());
+    vehicle_data_writer_ = publisher_->create_datawriter(set_vehicle_data_topic_, DATAWRITER_QOS_DEFAULT, vehicle_data_writer_listener_.get());
 
     active_ = true;
     LOG_INFO << "DDSProvider started.";

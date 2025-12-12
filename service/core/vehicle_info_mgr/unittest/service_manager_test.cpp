@@ -17,7 +17,7 @@ protected:
     }
     void SetUp() override {
         request_queue = std::make_shared<ThreadSafeQueue<std::shared_ptr<RequestData>>>();
-        config_path = getEnv("VEHICLE_CONFIG_PATH").value_or("config");
+        config_path = getEnv("VEHICLE_CONFIG_PATH").value_or("../config");
         config_path.append("/viss.him");
         vss_tree = std::make_shared<viss::VSSTree>(config_path);
         if (!vss_tree->isValid()) {
@@ -89,6 +89,75 @@ TEST_F(ServiceManagerTest, ProcessGetRequest) {
     // The value is stored as a string "true"
     EXPECT_STREQ(dp["value"].GetString(), "true");
 }
+
+
+TEST_F(ServiceManagerTest, ProcessGetRequestWithMetaFilter) {
+    // First, set a value to ensure there is something to get
+    auto get_request = std::make_shared<RequestData>();
+    get_request->requestId = "test-set-for-get";
+    get_request->responseChan = std::make_shared<ThreadSafeQueue<std::shared_ptr<PooledResponseMap>>>();
+    get_request->request_doc->Parse(R"({
+        "action": "get",
+        "path": "Vehicle.Speed",
+        "filter":[{"variant":"metadata", "parameter":["1"]}],
+        "requestId": "test-set-for-get"
+    })");
+    request_queue->push(get_request);
+
+    // Wait for the response
+    std::shared_ptr<PooledResponseMap> get_response_ptr;
+    get_request->responseChan->wait_and_pop(get_response_ptr);
+    ASSERT_TRUE(get_response_ptr != nullptr);
+    auto& response_map = *get_response_ptr;
+
+    // Check the response
+    EXPECT_TRUE(response_map.HasMember("action"));
+    EXPECT_STREQ(response_map["action"].GetString(), "get");
+    EXPECT_TRUE(response_map.HasMember("requestId"));
+    EXPECT_STREQ(response_map["requestId"].GetString(), "test-set-for-get");
+    ASSERT_TRUE(response_map.HasMember("metadata"));
+    //const auto& data = response_map["data"];
+    //ASSERT_TRUE(data.HasMember("dp"));
+    //const auto& dp = data["dp"];
+    //ASSERT_TRUE(dp.HasMember("value"));
+    // The value is stored as a string "true"
+    //EXPECT_STREQ(dp["value"].GetString(), "true");
+}
+
+TEST_F(ServiceManagerTest, ProcessGetRequestWithInvalidPath) {
+    // First, set a value to ensure there is something to get
+    auto get_request = std::make_shared<RequestData>();
+    get_request->requestId = "test-set-for-get";
+    get_request->responseChan = std::make_shared<ThreadSafeQueue<std::shared_ptr<PooledResponseMap>>>();
+    get_request->request_doc->Parse(R"({
+        "action": "get",
+        "path": "Vehicle.InvalidPath",
+        "filter":[{"variant":"metadata", "parameter":["1"]}],
+        "requestId": "test-set-for-get"
+    })");
+    request_queue->push(get_request);
+
+    // Wait for the response
+    std::shared_ptr<PooledResponseMap> get_response_ptr;
+    get_request->responseChan->wait_and_pop(get_response_ptr);
+    ASSERT_TRUE(get_response_ptr != nullptr);
+    auto& response_map = *get_response_ptr;
+
+    // Check the response
+    EXPECT_TRUE(response_map.HasMember("action"));
+    EXPECT_STREQ(response_map["action"].GetString(), "get");
+    EXPECT_TRUE(response_map.HasMember("requestId"));
+    EXPECT_STREQ(response_map["requestId"].GetString(), "test-set-for-get");
+    ASSERT_TRUE(response_map.HasMember("error"));
+    //const auto& data = response_map["data"];
+    //ASSERT_TRUE(data.HasMember("dp"));
+    //const auto& dp = data["dp"];
+    //ASSERT_TRUE(dp.HasMember("value"));
+    // The value is stored as a string "true"
+    //EXPECT_STREQ(dp["value"].GetString(), "true");
+}
+
+
 
 TEST_F(ServiceManagerTest, ProcessSetRequest) {
     // Prepare a "set" request for an actuator
@@ -207,4 +276,90 @@ TEST_F(ServiceManagerTest, ProcessUnsubscribeRequest) {
     EXPECT_STREQ(unsub_response["requestId"].GetString(), "test-unsub-01");
     EXPECT_TRUE(unsub_response.HasMember("subscriptionId"));
     EXPECT_STREQ(unsub_response["subscriptionId"].GetString(), subscriptionId.c_str());
+}
+
+TEST_F(ServiceManagerTest, ProcessUnsubscribeRequestWithIntID) {
+    // First, subscribe to a path
+    auto sub_request = std::make_shared<RequestData>();
+    sub_request->requestId = "test-sub-for-unsub";
+    sub_request->responseChan = std::make_shared<ThreadSafeQueue<std::shared_ptr<PooledResponseMap>>>();
+    sub_request->request_doc->Parse(R"({
+        "action": "subscribe",
+        "path": "Vehicle.Speed",
+        "requestId": "test-sub-for-unsub"
+    })");
+    request_queue->push(sub_request);
+
+    std::shared_ptr<PooledResponseMap> sub_response_ptr;
+    sub_request->responseChan->wait_and_pop(sub_response_ptr);
+    ASSERT_TRUE(sub_response_ptr != nullptr);
+    auto& sub_response = *sub_response_ptr;
+    std::string subscriptionId = sub_response["subscriptionId"].GetString();
+
+    // Now, unsubscribe
+    auto unsub_request = std::make_shared<RequestData>();
+    unsub_request->requestId = "test-unsub-01";
+    unsub_request->responseChan = std::make_shared<ThreadSafeQueue<std::shared_ptr<PooledResponseMap>>>();
+    unsub_request->request_doc->Parse(
+        (std::string(R"({
+            "action": "unsubscribe",
+            "subscriptionId": )") + subscriptionId + R"(,
+            "requestId": "test-unsub-01"
+        })").c_str()
+    );
+    request_queue->push(unsub_request);
+
+    std::shared_ptr<PooledResponseMap> unsub_response_ptr;
+    unsub_request->responseChan->wait_and_pop(unsub_response_ptr);
+    ASSERT_TRUE(unsub_response_ptr != nullptr);
+    auto& unsub_response = *unsub_response_ptr;
+
+    EXPECT_TRUE(unsub_response.HasMember("action"));
+    EXPECT_STREQ(unsub_response["action"].GetString(), "unsubscribe");
+    EXPECT_TRUE(unsub_response.HasMember("error"));
+    EXPECT_TRUE(unsub_response.HasMember("requestId"));
+    EXPECT_STREQ(unsub_response["requestId"].GetString(), "test-unsub-01");
+}
+
+TEST_F(ServiceManagerTest, ProcessUnsubscribeRequestWithUnknownID) {
+    // First, subscribe to a path
+    auto sub_request = std::make_shared<RequestData>();
+    sub_request->requestId = "test-sub-for-unsub";
+    sub_request->responseChan = std::make_shared<ThreadSafeQueue<std::shared_ptr<PooledResponseMap>>>();
+    sub_request->request_doc->Parse(R"({
+        "action": "subscribe",
+        "path": "Vehicle.Speed",
+        "requestId": "test-sub-for-unsub"
+    })");
+    request_queue->push(sub_request);
+
+    std::shared_ptr<PooledResponseMap> sub_response_ptr;
+    sub_request->responseChan->wait_and_pop(sub_response_ptr);
+    ASSERT_TRUE(sub_response_ptr != nullptr);
+    auto& sub_response = *sub_response_ptr;
+    std::string subscriptionId = "unknown-id";//sub_response["subscriptionId"].GetString();
+
+    // Now, unsubscribe
+    auto unsub_request = std::make_shared<RequestData>();
+    unsub_request->requestId = "test-unsub-01";
+    unsub_request->responseChan = std::make_shared<ThreadSafeQueue<std::shared_ptr<PooledResponseMap>>>();
+    unsub_request->request_doc->Parse(
+        (std::string(R"({
+            "action": "unsubscribe",
+            "subscriptionId": ")") + subscriptionId + R"(",
+            "requestId": "test-unsub-01"
+        })").c_str()
+    );
+    request_queue->push(unsub_request);
+
+    std::shared_ptr<PooledResponseMap> unsub_response_ptr;
+    unsub_request->responseChan->wait_and_pop(unsub_response_ptr);
+    ASSERT_TRUE(unsub_response_ptr != nullptr);
+    auto& unsub_response = *unsub_response_ptr;
+
+    EXPECT_TRUE(unsub_response.HasMember("action"));
+    EXPECT_STREQ(unsub_response["action"].GetString(), "unsubscribe");
+    EXPECT_TRUE(unsub_response.HasMember("error"));
+    EXPECT_TRUE(unsub_response.HasMember("requestId"));
+    EXPECT_STREQ(unsub_response["requestId"].GetString(), "test-unsub-01");
 }
