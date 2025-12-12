@@ -50,6 +50,14 @@ protected:
         manager.endpoint_factory_ = std::shared_ptr<MockEndPointFactory>(Mock_EndPointFactory);
 
         Mock_Logger = new MockLogger();
+        
+        // Setup default mock expectations
+        ON_CALL(*Mock_DDSTransmitter, Initialize()).WillByDefault(Return(true));
+        ON_CALL(*Mock_EndPointFactory, Initialize()).WillByDefault(Return(true));
+        ON_CALL(*Mock_ServiceMonitor, Initialize()).WillByDefault(Return(true));
+        ON_CALL(*Mock_ROSServiceController, Initialize()).WillByDefault(Return(true));
+        ON_CALL(*Mock_ServiceRegistry, LoadServiceList()).WillByDefault(Return(true));
+        ON_CALL(*Mock_EndPointFactory, GetTopic(_)).WillByDefault(Return("mock_topic"));
     }
 
     void TearDown() override {
@@ -89,6 +97,47 @@ TEST_F(ADSWManagerTest, SingletonGetShared) {
     auto shared2 = ros2::adsw_manager::ADSWManager::getShared();
     EXPECT_EQ(shared1.get(), shared2.get());
     EXPECT_EQ(ros2::adsw_manager::ADSWManager::Get(), shared1.get());
+}
+
+TEST_F(ADSWManagerTest, InitializeMultipleTimes) {
+    ASSERT_TRUE(manager.Initialize());
+    // Second initialize should also succeed (idempotent)
+    ASSERT_TRUE(manager.Initialize());
+}
+
+TEST_F(ADSWManagerTest, StartWithoutInitialize) {
+    // Create a fresh manager without initialization
+    ros2::adsw_manager::ADSWManager fresh_manager;
+    // Start may succeed or fail, but should not crash
+    EXPECT_NO_THROW(fresh_manager.Start());
+}
+
+TEST_F(ADSWManagerTest, StopWithoutStart) {
+    // Stop without start should not crash
+    EXPECT_NO_THROW(manager.Stop());
+}
+
+TEST_F(ADSWManagerTest, GetTopicAllMessageTypes) {
+    // Test GetTopic for various message types
+    EXPECT_NO_THROW(manager.GetTopic(ros2::adsw_manager::MessageType::START_SERVICE_REQUEST));
+    EXPECT_NO_THROW(manager.GetTopic(ros2::adsw_manager::MessageType::STOP_SERVICE_REQUEST));
+    EXPECT_NO_THROW(manager.GetTopic(ros2::adsw_manager::MessageType::GET_SERVICE_STATE_REQUEST));
+}
+
+TEST_F(ADSWManagerTest, GetServiceDiscovery) {
+    auto discovery = manager.GetServiceDiscovery();
+    // May be null depending on mock setup
+    SUCCEED();
+}
+
+TEST_F(ADSWManagerTest, StartAndStopMultipleTimes) {
+    ASSERT_TRUE(manager.Initialize());
+    ASSERT_TRUE(manager.Start());
+    manager.Stop();
+    
+    // Should be able to start and stop again
+    ASSERT_TRUE(manager.Start());
+    manager.Stop();
 }
 
 

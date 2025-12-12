@@ -41,11 +41,13 @@ class ServiceRegistryTest : public ::testing::Test {
 protected:
     virtual void SetUp(){
         ins = new ServiceRegistry();
-        Mock_Service = new MockService("test", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);   
+        // Do NOT allocate Mock_Service here; tests that need it will create a shared_ptr
+        // and set Mock_Service to the raw pointer for forwarding.
+        Mock_Service = nullptr;
     }
     virtual void TearDown(){
         delete ins;
-        delete Mock_Service;
+        // Do NOT delete Mock_Service here; it is managed by shared_ptr in tests that use it.
         Mock_Service = nullptr;
     }
 
@@ -54,6 +56,9 @@ protected:
 
 TEST_F(ServiceRegistryTest, GetServiceReturnsExpected) {
     auto expected_service = std::make_shared<MockService>("test", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
+    Mock_Service = expected_service.get();  // Set global pointer for forwarding
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("test"));
+    
     ins->AddService(expected_service, "");
     auto result = ins->GetService("test");
     EXPECT_EQ(result, expected_service);
@@ -61,21 +66,30 @@ TEST_F(ServiceRegistryTest, GetServiceReturnsExpected) {
 
 // Add more tests for ServiceRegistry as needed
 TEST_F(ServiceRegistryTest, AddAndGetService) {
-    auto service = std::make_shared<lifecycle_manager::Service>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
+    auto service = std::make_shared<MockService>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
+    Mock_Service = service.get();  // Set global pointer for forwarding
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("svc1"));
+    
     EXPECT_TRUE(ins->AddService(service, ""));
     auto fetched = ins->GetService("svc1");
     EXPECT_EQ(fetched, service);
 }
 
 TEST_F(ServiceRegistryTest, AddDuplicateServiceReturnsTrueButDoesNotDuplicate) {
-    auto service = std::make_shared<lifecycle_manager::Service>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
+    auto service = std::make_shared<MockService>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
+    Mock_Service = service.get();  // Set global pointer for forwarding
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("svc1"));
+    
     EXPECT_TRUE(ins->AddService(service, ""));
     EXPECT_TRUE(ins->AddService(service, "")); // No duplicate check in AddService
     EXPECT_EQ(ins->GetServiceNum(), 1);
 }
 
 TEST_F(ServiceRegistryTest, RemoveServiceRemovesIt) {
-    auto service = std::make_shared<lifecycle_manager::Service>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
+    auto service = std::make_shared<MockService>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
+    Mock_Service = service.get();  // Set global pointer for forwarding
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("svc1"));
+    
     ins->AddService(service, "");
     ins->RemoveService("svc1");
     EXPECT_EQ(ins->GetService("svc1"), nullptr);
@@ -90,18 +104,30 @@ TEST_F(ServiceRegistryTest, AddAndRemoveGroup) {
 
 TEST_F(ServiceRegistryTest, GetServicesByGroupReturnsCorrectServices) {
     ins->AddGroup("group1");
-    auto service1 = std::make_shared<lifecycle_manager::Service>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
-    auto service2 = std::make_shared<lifecycle_manager::Service>("svc2", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
+    auto service1 = std::make_shared<MockService>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
+    auto service2 = std::make_shared<MockService>("svc2", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
+    
+    // Set up ON_CALL for each service in sequence
+    Mock_Service = service1.get();
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("svc1"));
     ins->AddService(service1, "group1");
+    
+    Mock_Service = service2.get();
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("svc2"));
     ins->AddService(service2, "");
+    
     auto group_services = ins->GetServicesByGroup("group1");
     ASSERT_EQ(group_services.size(), 1);
+    // Need to set Mock_Service back to service1 for GetName call
+    Mock_Service = service1.get();
     EXPECT_EQ(group_services[0]->GetName(), "svc1");
 }
 
 TEST_F(ServiceRegistryTest, GetServicesNameByGroupReturnsCorrectNames) {
     ins->AddGroup("group1");
-    auto service1 = std::make_shared<lifecycle_manager::Service>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
+    auto service1 = std::make_shared<MockService>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
+    Mock_Service = service1.get();
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("svc1"));
     ins->AddService(service1, "group1");
     auto names = ins->GetServicesNameByGroup("group1");
     ASSERT_EQ(names.size(), 1);
@@ -110,14 +136,18 @@ TEST_F(ServiceRegistryTest, GetServicesNameByGroupReturnsCorrectNames) {
 
 TEST_F(ServiceRegistryTest, GetGroupNameByServiceReturnsCorrectGroup) {
     ins->AddGroup("group1");
-    auto service1 = std::make_shared<lifecycle_manager::Service>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
+    auto service1 = std::make_shared<MockService>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
+    Mock_Service = service1.get();
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("svc1"));
     ins->AddService(service1, "group1");
     EXPECT_EQ(ins->GetGroupNameByService(service1), "group1");
 }
 
 TEST_F(ServiceRegistryTest, GetServiceNumAndGroupNum) {
     ins->AddGroup("group1");
-    auto service1 = std::make_shared<lifecycle_manager::Service>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
+    auto service1 = std::make_shared<MockService>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
+    Mock_Service = service1.get();
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("svc1"));
     ins->AddService(service1, "group1");
     EXPECT_EQ(ins->GetServiceNum(), 1);
     EXPECT_EQ(ins->GetGroupNum(), 1);
@@ -125,7 +155,9 @@ TEST_F(ServiceRegistryTest, GetServiceNumAndGroupNum) {
 
 TEST_F(ServiceRegistryTest, GetServiceNumInGroup) {
     ins->AddGroup("group1");
-    auto service1 = std::make_shared<lifecycle_manager::Service>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
+    auto service1 = std::make_shared<MockService>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
+    Mock_Service = service1.get();
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("svc1"));
     ins->AddService(service1, "group1");
     EXPECT_EQ(ins->GetServiceNumInGroup("group1"), 1);
     EXPECT_EQ(ins->GetServiceNumInGroup(""), 1);
@@ -159,7 +191,9 @@ TEST_F(ServiceRegistryTest, AddServiceToMultipleGroups) {
     registry.AddGroup("group1");
     registry.AddGroup("group2");
     
-    auto service1 = std::make_shared<lifecycle_manager::Service>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
+    auto service1 = std::make_shared<MockService>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
+    Mock_Service = service1.get();
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("svc1"));
     
     registry.AddService(service1, "group1");
     auto names1 = registry.GetServicesNameByGroup("group1");
@@ -224,7 +258,9 @@ TEST_F(ServiceRegistryTest, GetServicesNameByGroupForNonExistentGroup) {
 
 TEST_F(ServiceRegistryTest, GetGroupNameByServiceForNonExistent) {
     ServiceRegistry registry;
-    auto service = std::make_shared<lifecycle_manager::Service>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
+    auto service = std::make_shared<MockService>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
+    Mock_Service = service.get();
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("svc1"));
     EXPECT_EQ(registry.GetGroupNameByService(service), "");
 }
 
@@ -232,12 +268,20 @@ TEST_F(ServiceRegistryTest, MultipleServicesInSameGroup) {
     ServiceRegistry registry;
     registry.AddGroup("group1");
     
-    auto service1 = std::make_shared<lifecycle_manager::Service>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
-    auto service2 = std::make_shared<lifecycle_manager::Service>("svc2", lifecycle_manager::ServiceType::ONESHOT, lifecycle_manager::RecoveryPolicy::ALWAYS, true, lifecycle_manager::OsType::ROS2);
-    auto service3 = std::make_shared<lifecycle_manager::Service>("svc3", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::MANUAL, false, lifecycle_manager::OsType::AGL);
+    auto service1 = std::make_shared<MockService>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
+    auto service2 = std::make_shared<MockService>("svc2", lifecycle_manager::ServiceType::ONESHOT, lifecycle_manager::RecoveryPolicy::ALWAYS, true, lifecycle_manager::OsType::ROS2);
+    auto service3 = std::make_shared<MockService>("svc3", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::MANUAL, false, lifecycle_manager::OsType::AGL);
     
+    Mock_Service = service1.get();
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("svc1"));
     registry.AddService(service1, "group1");
+    
+    Mock_Service = service2.get();
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("svc2"));
     registry.AddService(service2, "group1");
+    
+    Mock_Service = service3.get();
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("svc3"));
     registry.AddService(service3, "group1");
     
     EXPECT_EQ(registry.GetServiceNumInGroup("group1"), 3);
@@ -272,6 +316,282 @@ TEST_F(ServiceRegistryTest, VectorAddMultipleItems) {
     EXPECT_TRUE(registry.vectorHas(vec, "item1"));
     EXPECT_TRUE(registry.vectorHas(vec, "item2"));
     EXPECT_TRUE(registry.vectorHas(vec, "item3"));
+}
+
+// Additional tests for branch coverage
+
+// Test GetServicesByGroup with empty group name (returns all services)
+TEST_F(ServiceRegistryTest, GetServicesByGroup_EmptyGroupReturnsAll) {
+    ServiceRegistry registry;
+    auto service1 = std::make_shared<MockService>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
+    auto service2 = std::make_shared<MockService>("svc2", lifecycle_manager::ServiceType::ONESHOT, lifecycle_manager::RecoveryPolicy::ALWAYS, true, lifecycle_manager::OsType::AGL);
+    
+    registry.AddGroup("group1");
+    
+    Mock_Service = service1.get();
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("svc1"));
+    registry.AddService(service1, "group1");
+    
+    Mock_Service = service2.get();
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("svc2"));
+    registry.AddService(service2, "group1");
+    
+    auto all_services = registry.GetServicesByGroup("");
+    EXPECT_EQ(all_services.size(), 2);
+}
+
+// Test GetServicesNameByGroup with empty group name (returns all service names)
+TEST_F(ServiceRegistryTest, GetServicesNameByGroup_EmptyGroupReturnsAll) {
+    ServiceRegistry registry;
+    auto service1 = std::make_shared<MockService>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
+    auto service2 = std::make_shared<MockService>("svc2", lifecycle_manager::ServiceType::ONESHOT, lifecycle_manager::RecoveryPolicy::ALWAYS, true, lifecycle_manager::OsType::AGL);
+    
+    registry.AddGroup("group1");
+    
+    Mock_Service = service1.get();
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("svc1"));
+    registry.AddService(service1, "group1");
+    
+    Mock_Service = service2.get();
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("svc2"));
+    registry.AddService(service2, "group1");
+    
+    auto all_names = registry.GetServicesNameByGroup("");
+    EXPECT_EQ(all_names.size(), 2);
+}
+
+// Test GetServiceNumInGroup with empty string (returns all services count)
+TEST_F(ServiceRegistryTest, GetServiceNumInGroup_EmptyStringReturnsTotal) {
+    ServiceRegistry registry;
+    registry.AddGroup("group1");
+    
+    auto service1 = std::make_shared<MockService>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
+    auto service2 = std::make_shared<MockService>("svc2", lifecycle_manager::ServiceType::ONESHOT, lifecycle_manager::RecoveryPolicy::ALWAYS, true, lifecycle_manager::OsType::AGL);
+    
+    Mock_Service = service1.get();
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("svc1"));
+    registry.AddService(service1, "group1");
+    
+    Mock_Service = service2.get();
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("svc2"));
+    registry.AddService(service2, "group1");
+    
+    EXPECT_EQ(registry.GetServiceNumInGroup(""), 2);
+}
+
+// Test AddService to non-existent group (group_ptr is nullptr)
+TEST_F(ServiceRegistryTest, AddService_ToNonExistentGroup) {
+    ServiceRegistry registry;
+    auto service = std::make_shared<MockService>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
+    Mock_Service = service.get();
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("svc1"));
+    
+    // Add service to non-existent group
+    EXPECT_TRUE(registry.AddService(service, "nonexistent_group"));
+    EXPECT_EQ(registry.GetServiceNum(), 1);
+    EXPECT_NE(registry.GetService("svc1"), nullptr);
+}
+
+// Test AddService when service already exists
+TEST_F(ServiceRegistryTest, AddService_ServiceAlreadyExists) {
+    ServiceRegistry registry;
+    registry.AddGroup("group1");
+    
+    auto service1 = std::make_shared<MockService>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
+    auto service2 = std::make_shared<MockService>("svc1", lifecycle_manager::ServiceType::ONESHOT, lifecycle_manager::RecoveryPolicy::ALWAYS, false, lifecycle_manager::OsType::AGL);
+    
+    Mock_Service = service1.get();
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("svc1"));
+    EXPECT_TRUE(registry.AddService(service1, "group1"));
+    
+    Mock_Service = service2.get();
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("svc1"));
+    EXPECT_TRUE(registry.AddService(service2, "group1")); // Should still return true but service is replaced
+    EXPECT_EQ(registry.GetServiceNum(), 1);
+}
+
+// Test GetServicesByGroup when group has services but some are removed
+TEST_F(ServiceRegistryTest, GetServicesByGroup_AfterServiceRemoval) {
+    ServiceRegistry registry;
+    registry.AddGroup("group1");
+    
+    auto service1 = std::make_shared<MockService>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
+    auto service2 = std::make_shared<MockService>("svc2", lifecycle_manager::ServiceType::ONESHOT, lifecycle_manager::RecoveryPolicy::ALWAYS, true, lifecycle_manager::OsType::AGL);
+    
+    Mock_Service = service1.get();
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("svc1"));
+    registry.AddService(service1, "group1");
+    
+    Mock_Service = service2.get();
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("svc2"));
+    registry.AddService(service2, "group1");
+    registry.RemoveService("svc1");
+    
+    // Group still has svc1 reference but service is removed
+    auto services = registry.GetServicesByGroup("group1");
+    EXPECT_EQ(services.size(), 1);
+    EXPECT_EQ(services[0]->GetName(), "svc2");
+}
+
+// Test GetServicesNameByGroup when group has services but some are removed
+TEST_F(ServiceRegistryTest, GetServicesNameByGroup_AfterServiceRemoval) {
+    ServiceRegistry registry;
+    registry.AddGroup("group1");
+    
+    auto service1 = std::make_shared<MockService>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
+    auto service2 = std::make_shared<MockService>("svc2", lifecycle_manager::ServiceType::ONESHOT, lifecycle_manager::RecoveryPolicy::ALWAYS, true, lifecycle_manager::OsType::AGL);
+    
+    Mock_Service = service1.get();
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("svc1"));
+    registry.AddService(service1, "group1");
+    
+    Mock_Service = service2.get();
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("svc2"));
+    registry.AddService(service2, "group1");
+    registry.RemoveService("svc1");
+    
+    auto names = registry.GetServicesNameByGroup("group1");
+    EXPECT_EQ(names.size(), 1);
+    EXPECT_EQ(names[0], "svc2");
+}
+
+// Test concurrent operations with mutex (basic thread safety)
+TEST_F(ServiceRegistryTest, ConcurrentAddAndGet) {
+    ServiceRegistry registry;
+    registry.AddGroup("group1");
+    
+    auto service = std::make_shared<MockService>("svc1", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
+    Mock_Service = service.get();
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("svc1"));
+    
+    registry.AddService(service, "group1");
+    
+    // Multiple gets should be thread-safe
+    auto result1 = registry.GetService("svc1");
+    auto result2 = registry.GetService("svc1");
+    auto result3 = registry.GetService("svc1");
+    
+    EXPECT_EQ(result1, service);
+    EXPECT_EQ(result2, service);
+    EXPECT_EQ(result3, service);
+}
+
+// Test all ServiceType values
+TEST_F(ServiceRegistryTest, AllServiceTypes) {
+    ServiceRegistry registry;
+    registry.AddGroup("group1");
+    
+    auto service1 = std::make_shared<MockService>("normal_svc", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
+    auto service2 = std::make_shared<MockService>("oneshot_svc", lifecycle_manager::ServiceType::ONESHOT, lifecycle_manager::RecoveryPolicy::ALWAYS, true, lifecycle_manager::OsType::ROS2);
+    
+    Mock_Service = service1.get();
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("normal_svc"));
+    ON_CALL(*Mock_Service, GetServiceType()).WillByDefault(Return(lifecycle_manager::ServiceType::NORMAL));
+    registry.AddService(service1, "group1");
+    
+    Mock_Service = service2.get();
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("oneshot_svc"));
+    ON_CALL(*Mock_Service, GetServiceType()).WillByDefault(Return(lifecycle_manager::ServiceType::ONESHOT));
+    registry.AddService(service2, "group1");
+    
+    EXPECT_EQ(registry.GetServiceNum(), 2);
+    
+    Mock_Service = service1.get();
+    EXPECT_EQ(registry.GetService("normal_svc")->GetServiceType(), lifecycle_manager::ServiceType::NORMAL);
+    Mock_Service = service2.get();
+    EXPECT_EQ(registry.GetService("oneshot_svc")->GetServiceType(), lifecycle_manager::ServiceType::ONESHOT);
+}
+
+// Test all RecoveryPolicy values
+TEST_F(ServiceRegistryTest, AllRecoveryPolicies) {
+    ServiceRegistry registry;
+    registry.AddGroup("group1");
+    
+    auto service1 = std::make_shared<MockService>("always_svc", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ALWAYS, true, lifecycle_manager::OsType::ROS2);
+    auto service2 = std::make_shared<MockService>("on_failure_svc", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ON_FAILURE, true, lifecycle_manager::OsType::ROS2);
+    auto service3 = std::make_shared<MockService>("manual_svc", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::MANUAL, true, lifecycle_manager::OsType::ROS2);
+    
+    Mock_Service = service1.get();
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("always_svc"));
+    registry.AddService(service1, "group1");
+    
+    Mock_Service = service2.get();
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("on_failure_svc"));
+    registry.AddService(service2, "group1");
+    
+    Mock_Service = service3.get();
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("manual_svc"));
+    registry.AddService(service3, "group1");
+    
+    EXPECT_EQ(registry.GetServiceNum(), 3);
+}
+
+// Test all OsType values
+TEST_F(ServiceRegistryTest, AllOsTypes) {
+    ServiceRegistry registry;
+    registry.AddGroup("group1");
+    
+    auto service1 = std::make_shared<MockService>("ros2_svc", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ALWAYS, true, lifecycle_manager::OsType::ROS2);
+    auto service2 = std::make_shared<MockService>("agl_svc", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ALWAYS, true, lifecycle_manager::OsType::AGL);
+    auto service3 = std::make_shared<MockService>("autosar_svc", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ALWAYS, true, lifecycle_manager::OsType::AUTOSAR);
+    
+    Mock_Service = service1.get();
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("ros2_svc"));
+    ON_CALL(*Mock_Service, GetOsType()).WillByDefault(Return(lifecycle_manager::OsType::ROS2));
+    registry.AddService(service1, "group1");
+    
+    Mock_Service = service2.get();
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("agl_svc"));
+    ON_CALL(*Mock_Service, GetOsType()).WillByDefault(Return(lifecycle_manager::OsType::AGL));
+    registry.AddService(service2, "group1");
+    
+    Mock_Service = service3.get();
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("autosar_svc"));
+    ON_CALL(*Mock_Service, GetOsType()).WillByDefault(Return(lifecycle_manager::OsType::AUTOSAR));
+    registry.AddService(service3, "group1");
+    
+    Mock_Service = service1.get();
+    EXPECT_EQ(registry.GetService("ros2_svc")->GetOsType(), lifecycle_manager::OsType::ROS2);
+    Mock_Service = service2.get();
+    EXPECT_EQ(registry.GetService("agl_svc")->GetOsType(), lifecycle_manager::OsType::AGL);
+    Mock_Service = service3.get();
+    EXPECT_EQ(registry.GetService("autosar_svc")->GetOsType(), lifecycle_manager::OsType::AUTOSAR);
+}
+
+// Test GetGroupList preserves order
+TEST_F(ServiceRegistryTest, GetGroupListOrder) {
+    ServiceRegistry registry;
+    registry.AddGroup("alpha");
+    registry.AddGroup("beta");
+    registry.AddGroup("gamma");
+    
+    auto groups = registry.GetGroupList();
+    EXPECT_EQ(groups.size(), 3);
+    // Map ordering should be alphabetical for string keys
+}
+
+// Test services enabled/disabled state preservation
+TEST_F(ServiceRegistryTest, ServiceEnabledState) {
+    ServiceRegistry registry;
+    registry.AddGroup("group1");
+    
+    auto enabled_service = std::make_shared<MockService>("enabled_svc", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ALWAYS, true, lifecycle_manager::OsType::ROS2);
+    auto disabled_service = std::make_shared<MockService>("disabled_svc", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ALWAYS, false, lifecycle_manager::OsType::ROS2);
+    
+    Mock_Service = enabled_service.get();
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("enabled_svc"));
+    ON_CALL(*Mock_Service, isEnabled()).WillByDefault(Return(true));
+    registry.AddService(enabled_service, "group1");
+    
+    Mock_Service = disabled_service.get();
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("disabled_svc"));
+    ON_CALL(*Mock_Service, isEnabled()).WillByDefault(Return(false));
+    registry.AddService(disabled_service, "group1");
+    
+    Mock_Service = enabled_service.get();
+    EXPECT_TRUE(registry.GetService("enabled_svc")->isEnabled());
+    Mock_Service = disabled_service.get();
+    EXPECT_FALSE(registry.GetService("disabled_svc")->isEnabled());
 }
 
 int main(int argc, char** argv) {

@@ -36,6 +36,7 @@ using namespace ros2::adsw_manager;
 class ServiceMonitorTest : public ::testing::Test {
 protected:
     void SetUp() override {
+        Mock_Logger = new MockLogger();
         registry = new MockServiceRegistry();
         monitor = new ServiceMonitor();
         monitor->Initialize();
@@ -44,6 +45,8 @@ protected:
         monitor->Finalize();
         delete monitor;
         delete registry;
+        delete Mock_Logger;
+        Mock_Logger = nullptr;
     }
     ServiceMonitor* monitor;
     MockServiceRegistry* registry = nullptr;
@@ -131,6 +134,50 @@ TEST_F(ServiceMonitorTest, GetServiceDiscoveryWithParticipant) {
     ASSERT_TRUE(participant != nullptr);
     EXPECT_EQ(participant->nodes.size(), 1);
     EXPECT_EQ(participant->nodes[0].node_name, "node1");
+}
+
+TEST_F(ServiceMonitorTest, NodeStartedMultipleServices) {
+    monitor->NodeStarted("service1", "node1");
+    monitor->NodeStarted("service2", "node2");
+    
+    EXPECT_EQ(monitor->NodeCount("service1"), 1);
+    EXPECT_EQ(monitor->NodeCount("service2"), 1);
+}
+
+TEST_F(ServiceMonitorTest, NodeStoppedNonExistent) {
+    // Stop a node that was never started - should not crash
+    EXPECT_NO_THROW(monitor->NodeStopped("nonexistent", "node1"));
+    EXPECT_EQ(monitor->NodeCount("nonexistent"), 0);
+}
+
+TEST_F(ServiceMonitorTest, NodeCountEmptyService) {
+    EXPECT_EQ(monitor->NodeCount(""), 0);
+}
+
+TEST_F(ServiceMonitorTest, InitializeMultipleTimes) {
+    EXPECT_TRUE(monitor->Initialize());
+    EXPECT_TRUE(monitor->Initialize());  // Should be idempotent
+}
+
+TEST_F(ServiceMonitorTest, FinalizeMultipleTimes) {
+    monitor->Finalize();
+    EXPECT_NO_THROW(monitor->Finalize());  // Should not crash
+}
+
+TEST_F(ServiceMonitorTest, NodeStartedDuplicateNode) {
+    monitor->NodeStarted("service1", "node1");
+    monitor->NodeStarted("service1", "node1");  // Duplicate
+    
+    // Behavior depends on implementation - either 1 or 2
+    EXPECT_GE(monitor->NodeCount("service1"), 1);
+}
+
+TEST_F(ServiceMonitorTest, NodeStoppedMoreThanStarted) {
+    monitor->NodeStarted("service1", "node1");
+    monitor->NodeStopped("service1", "node1");
+    monitor->NodeStopped("service1", "node1");  // Extra stop
+    
+    EXPECT_EQ(monitor->NodeCount("service1"), 0);
 }
 
 

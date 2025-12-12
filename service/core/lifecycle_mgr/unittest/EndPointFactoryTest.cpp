@@ -109,6 +109,80 @@ TEST_F(EndPointFactoryTest, CreateEndPointsReturnsCorrectSize) {
     //EXPECT_EQ(size, 12);
 }
 
+// Additional tests for branch coverage
+
+// Test GetTopic for all message types
+TEST_F(EndPointFactoryTest, GetTopic_AllMessageTypes) {
+    EndPointFactory factory;
+    factory.Initialize();
+    
+    EXPECT_NE(factory.GetTopic(MessageType::LIFECYCLE_DIAG_REPORT), nullptr);
+    EXPECT_NE(factory.GetTopic(MessageType::GET_SERVICE_STATE_REQUEST), nullptr);
+    EXPECT_NE(factory.GetTopic(MessageType::GET_SERVICE_STATE_RESPONSE), nullptr);
+    EXPECT_NE(factory.GetTopic(MessageType::NOTIFY_SERVICE_STATE), nullptr);
+    EXPECT_NE(factory.GetTopic(MessageType::SET_SERVICE_MODE_REQUST), nullptr);
+    EXPECT_NE(factory.GetTopic(MessageType::SET_SERVICE_MODE_RESPONSE), nullptr);
+    EXPECT_NE(factory.GetTopic(MessageType::START_SERVICE_REQUEST), nullptr);
+    EXPECT_NE(factory.GetTopic(MessageType::START_SERVICE_RESPONSE), nullptr);
+    EXPECT_NE(factory.GetTopic(MessageType::STOP_SERVICE_REQUEST), nullptr);
+    EXPECT_NE(factory.GetTopic(MessageType::STOP_SERVICE_RESPONSE), nullptr);
+    EXPECT_NE(factory.GetTopic(MessageType::UPDATE_SERVICE_LIST_REQUEST), nullptr);
+    EXPECT_NE(factory.GetTopic(MessageType::UPDATE_SERVICE_LIST_RESPONSE), nullptr);
+}
+
+// Test Initialize multiple times
+TEST_F(EndPointFactoryTest, Initialize_MultipleCalls) {
+    EndPointFactory factory;
+    
+    int32_t size1 = factory.Initialize();
+    int32_t size2 = factory.Initialize();
+    
+    EXPECT_EQ(size1, 12);
+    EXPECT_EQ(size2, 12);
+}
+
+// Test GetTopic without Initialize
+TEST_F(EndPointFactoryTest, GetTopic_WithoutInitialize) {
+    EndPointFactory factory;
+    
+    // Without Initialize, map is empty, should return nullptr
+    EXPECT_EQ(factory.GetTopic(MessageType::LIFECYCLE_DIAG_REPORT), nullptr);
+}
+
+// Test SetCustomCreator for multiple message types
+TEST_F(EndPointFactoryTest, SetCustomCreator_MultipleTimes) {
+    EndPointFactory factory;
+    
+    auto creator1 = [](MessageType type, const std::string& topic) {
+        return std::make_shared<MockDDSMessageEndPoint>(topic);
+    };
+    
+    auto creator2 = [](MessageType type, const std::string& topic) {
+        return std::make_shared<MockDDSMessageEndPoint>(topic);
+    };
+    
+    factory.SetCustomCreator(MessageType::LIFECYCLE_DIAG_REPORT, creator1);
+    factory.SetCustomCreator(MessageType::START_SERVICE_REQUEST, creator2);
+    
+    factory.Initialize();
+    
+    // Just verify no crash
+    EXPECT_EQ(factory.Initialize(), 12);
+}
+
+// Test destructor
+TEST_F(EndPointFactoryTest, Destructor_DoesNotCrash) {
+    EndPointFactory* factory = new EndPointFactory();
+    factory->Initialize();
+    EXPECT_NO_THROW(delete factory);
+}
+
+// Test default constructor
+TEST_F(EndPointFactoryTest, DefaultConstructor) {
+    EndPointFactory factory;
+    EXPECT_EQ(factory.GetTopic(MessageType::LIFECYCLE_DIAG_REPORT), nullptr);
+}
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

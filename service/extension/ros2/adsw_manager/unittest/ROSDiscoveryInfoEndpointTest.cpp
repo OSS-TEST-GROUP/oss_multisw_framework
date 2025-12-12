@@ -39,13 +39,21 @@ using namespace rmw_dds_common::msg;
 class ROSDiscoveryInfoEndpointTest : public ::testing::Test {
 protected:
     void SetUp() override {
+        // Setup logger mock first as it's used throughout initialization
+        Mock_Logger = new MockLogger();
+        
+        // Setup ADSWManager mock
+        Mock_ADSWManager = new MockADSWManager();
+        
+        // Setup DDSMessageEndpoint mock - this is critical for Initialize to work
+        Mock_DDSMessageEndpoint = new MockDDSMessageEndpoint();
+        ON_CALL(*Mock_DDSMessageEndpoint, Initialize(_, _, _)).WillByDefault(Return(true));
+        
 		// TODO
         //ins = std::make_unique<ROSDiscoveryInfoEndpoint>(std::bind(&ROSDiscoveryInfoEndpointTest::MessageCallback, this, std::placeholders::_1));
         ins = std::make_unique<ROSDiscoveryInfoEndpoint>(ros2::adsw_manager::MessageType::ROS2_DISCOVREY_INFO, "topic");
         //MockADSWManager::discovery = new MockROSServiceDiscovery();
         endpoint = new ros2::adsw_manager::ROSDiscoveryInfoEndpoint(MessageType::ROS2_DISCOVREY_INFO, "test_topic");
-
-        Mock_DDSMessageEndpoint = new MockDDSMessageEndpoint();
 
         InitDDS();
     }
@@ -62,6 +70,12 @@ protected:
         Mock_DDSMessageEndpoint = nullptr;
 
         FinalizeDDS();
+        
+        delete Mock_ADSWManager;
+        Mock_ADSWManager = nullptr;
+        
+        delete Mock_Logger;
+        Mock_Logger = nullptr;
     }
 
     pid_t startProcess(char* args[]) {
@@ -151,8 +165,11 @@ protected:
 };
 
 TEST_F(ROSDiscoveryInfoEndpointTest, Initialize_TC001) {
-    EXPECT_TRUE(ins->Initialize(participant_, publisher_, subscriber_));
-    ins->Finalize();
+    bool result = ins->Initialize(participant_, publisher_, subscriber_);
+    if (result) {
+        ins->Finalize();
+    }
+    EXPECT_TRUE(result);
 }
 
 TEST_F(ROSDiscoveryInfoEndpointTest, ReceiveTest_TC001) {
