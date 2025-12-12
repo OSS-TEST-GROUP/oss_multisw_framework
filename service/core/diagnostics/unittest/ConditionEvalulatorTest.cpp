@@ -438,6 +438,204 @@ TEST_F(ConditionEvaluatorTest, ParseMalformedArray_Throws) {
     EXPECT_EQ(0, ins->ParseArrayValue<int>("[1,,2]").size()); // double comma
 }
 
+// ==================== NEW TESTS FOR COVERAGE GAPS ====================
+
+// Test for condition cache hit (lines 19-20)
+TEST_F(ConditionEvaluatorTest, EvaluateCondition_CacheHit) {
+    // First call parses and caches the condition
+    EXPECT_TRUE(ins->EvaluateCondition("10 > 5"));
+    // Second call should use the cached condition (covers line 19-20)
+    EXPECT_TRUE(ins->EvaluateCondition("10 > 5"));
+    // Verify consistent result
+    EXPECT_TRUE(ins->EvaluateCondition("10 > 5"));
+}
+
+// Test for UNKNOWN operator type (lines 26-28) - invalid syntax
+TEST_F(ConditionEvaluatorTest, EvaluateCondition_InvalidSyntax_ReturnsUnknownOperator) {
+    // This malformed condition should fail regex match and return UNKNOWN operator type
+    // Note: We need to test with something that parses but gives UNKNOWN operator
+    // The regex might still match but operator won't be found
+    EXPECT_FALSE(ins->EvaluateCondition("invalid_condition_without_operator"));
+}
+
+// Test for FLOATING case in IN/NOT_IN list evaluation (lines 49-54)
+TEST_F(ConditionEvaluatorTest, EvaluateCondition_Floating_IN_List) {
+    EXPECT_TRUE(ins->EvaluateCondition("3.14 in [1.0, 2.0, 3.14, 4.0]"));
+    EXPECT_FALSE(ins->EvaluateCondition("5.5 in [1.0, 2.0, 3.0]"));
+}
+
+TEST_F(ConditionEvaluatorTest, EvaluateCondition_Floating_NOT_IN_List) {
+    EXPECT_TRUE(ins->EvaluateCondition("9.99 not in [1.0, 2.0, 3.0]"));
+    EXPECT_FALSE(ins->EvaluateCondition("2.0 not in [1.0, 2.0, 3.0]"));
+}
+
+TEST_F(ConditionEvaluatorTest, EvaluateCondition_Variable_Float_IN_List) {
+    AddTestValue("Temperature", "value", 25.5);
+    AddReferenceMessage("Temp", "Temperature", MessageProtocolType::DDS);
+    EXPECT_TRUE(ins->EvaluateCondition("Temp.value in [20.0, 25.5, 30.0]"));
+    EXPECT_FALSE(ins->EvaluateCondition("Temp.value in [10.0, 15.0, 20.0]"));
+}
+
+// Test for Tokenize function (lines 160-173)
+TEST_F(ConditionEvaluatorTest, Tokenize_BasicFunctionality) {
+    auto tokens = ins->Tokenize("a,b,c", ',');
+    ASSERT_EQ(3u, tokens.size());
+    EXPECT_EQ("a", tokens[0]);
+    EXPECT_EQ("b", tokens[1]);
+    EXPECT_EQ("c", tokens[2]);
+}
+
+TEST_F(ConditionEvaluatorTest, Tokenize_EmptyTokensSkipped) {
+    auto tokens = ins->Tokenize("a,,b,", ',');
+    ASSERT_EQ(2u, tokens.size());
+    EXPECT_EQ("a", tokens[0]);
+    EXPECT_EQ("b", tokens[1]);
+}
+
+TEST_F(ConditionEvaluatorTest, Tokenize_EmptyString) {
+    auto tokens = ins->Tokenize("", ',');
+    EXPECT_TRUE(tokens.empty());
+}
+
+TEST_F(ConditionEvaluatorTest, Tokenize_SingleElement) {
+    auto tokens = ins->Tokenize("single", ',');
+    ASSERT_EQ(1u, tokens.size());
+    EXPECT_EQ("single", tokens[0]);
+}
+
+// Test for ConcatReleatedToken function (lines 175-202)
+TEST_F(ConditionEvaluatorTest, ConcatReleatedToken_NotToken) {
+    std::vector<std::string> tokens = {"not", "in", "abc"};
+    ins->ConcatReleatedToken(tokens);
+    ASSERT_EQ(2u, tokens.size());
+    EXPECT_EQ("not in", tokens[0]);
+    EXPECT_EQ("abc", tokens[1]);
+}
+
+TEST_F(ConditionEvaluatorTest, ConcatReleatedToken_NoRelatedTokens) {
+    std::vector<std::string> tokens = {"a", "b", "c"};
+    ins->ConcatReleatedToken(tokens);
+    ASSERT_EQ(3u, tokens.size());
+    EXPECT_EQ("a", tokens[0]);
+    EXPECT_EQ("b", tokens[1]);
+    EXPECT_EQ("c", tokens[2]);
+}
+
+TEST_F(ConditionEvaluatorTest, ConcatReleatedToken_EndsWithNot) {
+    std::vector<std::string> tokens = {"a", "not"};
+    ins->ConcatReleatedToken(tokens);
+    // Should return early since "not" is at the end with no following token
+    ASSERT_EQ(2u, tokens.size());
+}
+
+TEST_F(ConditionEvaluatorTest, ConcatReleatedToken_EmptyVector) {
+    std::vector<std::string> tokens;
+    ins->ConcatReleatedToken(tokens);
+    EXPECT_TRUE(tokens.empty());
+}
+
+// Test for ConvertOperatorTypeToString function (lines 215-220)
+TEST_F(ConditionEvaluatorTest, ConvertOperatorTypeToString_AllTypes) {
+    EXPECT_EQ("=", ins->ConvertOperatorTypeToString(ConditionOperatorType::EQUAL));
+    EXPECT_EQ("!=", ins->ConvertOperatorTypeToString(ConditionOperatorType::NOT_EQUAL));
+    EXPECT_EQ(">=", ins->ConvertOperatorTypeToString(ConditionOperatorType::EQUAL_ABOVE));
+    EXPECT_EQ("<=", ins->ConvertOperatorTypeToString(ConditionOperatorType::EQUAL_LESS));
+    EXPECT_EQ(">", ins->ConvertOperatorTypeToString(ConditionOperatorType::ABOVE));
+    EXPECT_EQ("<", ins->ConvertOperatorTypeToString(ConditionOperatorType::LESS));
+    EXPECT_EQ("in", ins->ConvertOperatorTypeToString(ConditionOperatorType::IN));
+    EXPECT_EQ("not in", ins->ConvertOperatorTypeToString(ConditionOperatorType::NOT_IN));
+}
+
+TEST_F(ConditionEvaluatorTest, ConvertOperatorTypeToString_Unknown) {
+    EXPECT_EQ("", ins->ConvertOperatorTypeToString(ConditionOperatorType::UNKNOWN));
+}
+
+// Test for ConvertStringToOperatorType returning UNKNOWN (line 228)
+TEST_F(ConditionEvaluatorTest, ConvertStringToOperatorType_Unknown) {
+    EXPECT_EQ(ConditionOperatorType::UNKNOWN, ins->ConvertStringToOperatorType("invalid"));
+    EXPECT_EQ(ConditionOperatorType::UNKNOWN, ins->ConvertStringToOperatorType("&&"));
+    EXPECT_EQ(ConditionOperatorType::UNKNOWN, ins->ConvertStringToOperatorType("||"));
+}
+
+// Test for ConvertTypeIndexToOperandType with various types
+TEST_F(ConditionEvaluatorTest, ConvertTypeIndexToOperandType_AllIntegerTypes) {
+    EXPECT_EQ(ConditionOperandType::INTEGER, ins->ConvertTypeIndexToOperandType(typeid(char)));
+    EXPECT_EQ(ConditionOperandType::INTEGER, ins->ConvertTypeIndexToOperandType(typeid(wchar_t)));
+    EXPECT_EQ(ConditionOperandType::INTEGER, ins->ConvertTypeIndexToOperandType(typeid(int8_t)));
+    EXPECT_EQ(ConditionOperandType::INTEGER, ins->ConvertTypeIndexToOperandType(typeid(int16_t)));
+    EXPECT_EQ(ConditionOperandType::INTEGER, ins->ConvertTypeIndexToOperandType(typeid(int32_t)));
+    EXPECT_EQ(ConditionOperandType::INTEGER, ins->ConvertTypeIndexToOperandType(typeid(int64_t)));
+    EXPECT_EQ(ConditionOperandType::INTEGER, ins->ConvertTypeIndexToOperandType(typeid(uint8_t)));
+    EXPECT_EQ(ConditionOperandType::INTEGER, ins->ConvertTypeIndexToOperandType(typeid(uint16_t)));
+    EXPECT_EQ(ConditionOperandType::INTEGER, ins->ConvertTypeIndexToOperandType(typeid(uint32_t)));
+    EXPECT_EQ(ConditionOperandType::INTEGER, ins->ConvertTypeIndexToOperandType(typeid(uint64_t)));
+}
+
+TEST_F(ConditionEvaluatorTest, ConvertTypeIndexToOperandType_FloatingTypes) {
+    EXPECT_EQ(ConditionOperandType::FLOATING, ins->ConvertTypeIndexToOperandType(typeid(float)));
+    EXPECT_EQ(ConditionOperandType::FLOATING, ins->ConvertTypeIndexToOperandType(typeid(double)));
+}
+
+TEST_F(ConditionEvaluatorTest, ConvertTypeIndexToOperandType_BoolType) {
+    EXPECT_EQ(ConditionOperandType::BOOLEAN, ins->ConvertTypeIndexToOperandType(typeid(bool)));
+}
+
+TEST_F(ConditionEvaluatorTest, ConvertTypeIndexToOperandType_StringTypes) {
+    EXPECT_EQ(ConditionOperandType::STRING, ins->ConvertTypeIndexToOperandType(typeid(std::string)));
+    EXPECT_EQ(ConditionOperandType::STRING, ins->ConvertTypeIndexToOperandType(typeid(std::wstring)));
+}
+
+TEST_F(ConditionEvaluatorTest, ConvertTypeIndexToOperandType_UnknownType) {
+    // Test with a type that doesn't map to any operand type
+    struct CustomType {};
+    EXPECT_EQ(ConditionOperandType::UNKNOWN, ins->ConvertTypeIndexToOperandType(typeid(CustomType)));
+}
+
+// Test for EvaluateOperandByOperatorWithList with non-array value (lines 368-370)
+TEST_F(ConditionEvaluatorTest, EvaluateOperandByOperatorWithList_NonArrayRH) {
+    // When rh is not an array, should return false and log error
+    EXPECT_FALSE(ins->EvaluateOperandByOperatorWithList(5, "not_an_array", ConditionOperatorType::IN));
+    EXPECT_FALSE(ins->EvaluateOperandByOperatorWithList(5, "123", ConditionOperatorType::NOT_IN));
+}
+
+// Test for ResolveMessageName function
+TEST_F(ConditionEvaluatorTest, ResolveMessageName_NoDotsInName) {
+    // If name has no dot, should return as-is
+    std::string result = ins->ResolveMessageName("SimpleName");
+    EXPECT_EQ("SimpleName", result);
+}
+
+TEST_F(ConditionEvaluatorTest, ResolveMessageName_WithReferenceMessage) {
+    AddReferenceMessage("RefMsg", "ActualMessage", MessageProtocolType::DDS);
+    std::string result = ins->ResolveMessageName("RefMsg.field");
+    EXPECT_EQ("ActualMessage.field", result);
+}
+
+TEST_F(ConditionEvaluatorTest, ResolveMessageName_NoMatchingReference) {
+    // No reference message added, should return original name
+    std::string result = ins->ResolveMessageName("Unknown.field");
+    EXPECT_EQ("Unknown.field", result);
+}
+
+// Test for ParseArrayValue with invalid formats
+TEST_F(ConditionEvaluatorTest, ParseArrayValue_MissingOpenBracket) {
+    auto result = ins->ParseArrayValue<int>("1,2,3]");
+    EXPECT_TRUE(result.empty());
+}
+
+TEST_F(ConditionEvaluatorTest, ParseArrayValue_InvalidIntElement) {
+    auto result = ins->ParseArrayValue<int>("[1, abc, 3]");
+    EXPECT_TRUE(result.empty());
+}
+
+TEST_F(ConditionEvaluatorTest, ParseArrayValue_DoubleArray) {
+    auto result = ins->ParseArrayValue<double>("[1.5, 2.5, 3.5]");
+    std::set<double> expected = {1.5, 2.5, 3.5};
+    EXPECT_EQ(result, expected);
+}
+
+// ==================== END NEW TESTS ====================
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

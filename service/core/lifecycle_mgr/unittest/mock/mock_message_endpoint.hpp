@@ -11,7 +11,7 @@ public:
     inline static MockMessageEndPoint* Mock_MessageEndPoint = nullptr;
 
     MockMessageEndPoint(std::string topic) : MessageEndPoint(topic) {
-        Mock_MessageEndPoint = this;
+        // Don't auto-set Mock_MessageEndPoint in constructor
     }
     ~MockMessageEndPoint() {
         if (Mock_MessageEndPoint == this) Mock_MessageEndPoint = nullptr;
@@ -29,26 +29,29 @@ public:
 MessageEndPoint::MessageEndPoint(std::string topic) : topic_(topic) {
 }
 MessageEndPoint::~MessageEndPoint() {
-    MockMessageEndPoint::Mock_MessageEndPoint = nullptr;
 }
 std::string MessageEndPoint::GetTopic() {
-    return MockMessageEndPoint::Mock_MessageEndPoint->GetTopic();
+    // Don't forward to mock - use real implementation
+    return topic_;
 }
 std::string MessageEndPoint::GetTypeName() {
-    return MockMessageEndPoint::Mock_MessageEndPoint->GetTypeName();
+    if (type_support_) {
+        return type_support_->get_type_name();
+    }
+    return "";
 }
 std::shared_ptr<TypeSupport> MessageEndPoint::GetTypeSupport() {
-    return MockMessageEndPoint::Mock_MessageEndPoint->GetTypeSupport();  
+    return type_support_;
 }   
 void MessageEndPoint::SetTypeSupport(std::shared_ptr<TypeSupport> typesupport) {
-    MockMessageEndPoint::Mock_MessageEndPoint->SetTypeSupport(typesupport);  
+    type_support_ = typesupport;
 }
 
 void MessageEndPoint::OnDataPublished(bool ret) {
-    MockMessageEndPoint::Mock_MessageEndPoint->OnDataPublished(ret);     
+    // Base implementation does nothing
 }   
 void MessageEndPoint::OnDataAvailable() {
-    MockMessageEndPoint::Mock_MessageEndPoint->OnDataAvailable();      
+    // Base implementation does nothing
 }
 
 } // namespace lifecycle_manager

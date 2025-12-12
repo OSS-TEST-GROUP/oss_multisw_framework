@@ -100,8 +100,155 @@ TEST_F(DDSProtocolTest, InitializeAndFinalize_TC001) {
     ins->Finalize();
 }
 
+// Test Finalize without Initialize (null participant)
+TEST_F(DDSProtocolTest, Finalize_TC002_without_initialize) {
+    // Finalize should handle null participant gracefully
+    ins->Finalize();
+    // No crash or exception expected
+}
+
+// Test multiple Initialize and Finalize calls
+TEST_F(DDSProtocolTest, InitializeAndFinalize_TC002_multiple_calls) {
+    EXPECT_TRUE(ins->Initialize());
+    ins->Finalize();
+    
+    // Second init/finalize cycle
+    EXPECT_TRUE(ins->Initialize());
+    ins->Finalize();
+}
+
 TEST_F(DDSProtocolTest, GetProtocolType_TC001) {
     EXPECT_EQ(MessageProtocolType::DDS, ins->GetProtocolType());
+}
+
+// Test UnsubscribeMessage when topic is not subscribed
+TEST_F(DDSProtocolTest, UnsubscribeMessage_TC002_not_subscribed) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    // Try to unsubscribe a topic that was never subscribed
+    bool result = ins->UnsubscribeMessage("/NonExistentTopic");
+    EXPECT_FALSE(result);
+    
+    ins->Finalize();
+}
+
+// Test SubscribeMessage twice for same topic (idempotency)
+TEST_F(DDSProtocolTest, SubscribeMessage_TC002_duplicate_subscription) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    EXPECT_TRUE(ins->SubscribeMessage("/TestTopic"));
+    // Subscribe again - should not fail
+    EXPECT_TRUE(ins->SubscribeMessage("/TestTopic"));
+    
+    // Unsubscribe once
+    EXPECT_TRUE(ins->UnsubscribeMessage("/TestTopic"));
+    // Second unsubscribe should fail
+    EXPECT_FALSE(ins->UnsubscribeMessage("/TestTopic"));
+    
+    ins->Finalize();
+}
+
+// Test SubscribeMessage with multiple different topics
+TEST_F(DDSProtocolTest, SubscribeMessage_TC003_multiple_topics) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    EXPECT_TRUE(ins->SubscribeMessage("/Topic1"));
+    EXPECT_TRUE(ins->SubscribeMessage("/Topic2"));
+    EXPECT_TRUE(ins->SubscribeMessage("/Topic3"));
+    
+    // Verify all topics are in the subscribed list
+    EXPECT_EQ(3, ins->subscribed_topic_.size());
+    
+    // Unsubscribe all
+    EXPECT_TRUE(ins->UnsubscribeMessage("/Topic1"));
+    EXPECT_TRUE(ins->UnsubscribeMessage("/Topic2"));
+    EXPECT_TRUE(ins->UnsubscribeMessage("/Topic3"));
+    
+    EXPECT_EQ(0, ins->subscribed_topic_.size());
+    
+    ins->Finalize();
+}
+
+// ==================== Helper Function Coverage ====================
+
+// Test getEnvPath with existing environment variable
+TEST_F(DDSProtocolTest, getEnvPath_TC001_existing_env) {
+    // Test with a common environment variable that usually exists
+    auto result = getEnvPath("PATH");
+    // PATH should exist in most environments
+    // If it doesn't exist, result will be nullopt
+    if (result.has_value()) {
+        EXPECT_FALSE(result.value().empty());
+    }
+}
+
+// Test getEnvPath with non-existing environment variable
+TEST_F(DDSProtocolTest, getEnvPath_TC002_non_existing_env) {
+    auto result = getEnvPath("NON_EXISTING_ENV_VARIABLE_12345");
+    EXPECT_FALSE(result.has_value());
+}
+
+// Test convertTypeName with ROS2 DDS type to simple type (to_simple = true)
+TEST_F(DDSProtocolTest, convertTypeName_TC001_ros2_to_simple) {
+    // Test known ROS2 DDS type mapping
+    std::string simple_type = convertTypeName("diagnosticmgr::msg::dds_::DiagnosticInfoRequest_", true);
+    EXPECT_EQ("DiagnosticInfoRequest", simple_type);
+}
+
+// Test convertTypeName with simple type to ROS2 DDS type (to_simple = false)
+TEST_F(DDSProtocolTest, convertTypeName_TC002_simple_to_ros2) {
+    std::string ros2_type = convertTypeName("DiagnosticInfoRequest", false);
+    EXPECT_EQ("diagnosticmgr::msg::dds_::DiagnosticInfoRequest_", ros2_type);
+}
+
+// Test convertTypeName with unknown type (to_simple = true)
+TEST_F(DDSProtocolTest, convertTypeName_TC003_unknown_type_to_simple) {
+    std::string result = convertTypeName("UnknownType", true);
+    // Should return original type if no mapping found and extraction fails
+    EXPECT_EQ("UnknownType", result);
+}
+
+// Test convertTypeName with unknown type (to_simple = false)
+TEST_F(DDSProtocolTest, convertTypeName_TC004_unknown_type_to_ros2) {
+    std::string result = convertTypeName("UnknownType", false);
+    // Should return original type if no mapping found
+    EXPECT_EQ("UnknownType", result);
+}
+
+// Test convertTypeName with type containing :: (extract simple type)
+TEST_F(DDSProtocolTest, convertTypeName_TC005_extract_simple_type) {
+    std::string result = convertTypeName("some::namespace::MyType", true);
+    // Should extract after last ::
+    EXPECT_EQ("MyType", result);
+}
+
+// Test toSimpleType convenience function
+TEST_F(DDSProtocolTest, toSimpleType_TC001) {
+    std::string simple = toSimpleType("diagnosticmgr::msg::dds_::DiagnosticNotification_");
+    EXPECT_EQ("DiagnosticNotification", simple);
+}
+
+// Test toRos2DdsType convenience function
+TEST_F(DDSProtocolTest, toRos2DdsType_TC001) {
+    std::string ros2 = toRos2DdsType("DiagnosticInfoResponse");
+    EXPECT_EQ("diagnosticmgr::msg::dds_::DiagnosticInfoResponse_", ros2);
+}
+
+// Test all ROS2 DDS type mappings
+TEST_F(DDSProtocolTest, convertTypeName_TC006_all_mappings) {
+    // Test all mappings - ROS2 to simple
+    EXPECT_EQ("DiagnosticInfoRequest", toSimpleType("diagnosticmgr::msg::dds_::DiagnosticInfoRequest_"));
+    EXPECT_EQ("DiagnosticInfoListRequest", toSimpleType("diagnosticmgr::msg::dds_::DiagnosticInfoListRequest_"));
+    EXPECT_EQ("DiagnosticInfoResponse", toSimpleType("diagnosticmgr::msg::dds_::DiagnosticInfoResponse_"));
+    EXPECT_EQ("DiagnosticInfoListResponse", toSimpleType("diagnosticmgr::msg::dds_::DiagnosticInfoListResponse_"));
+    EXPECT_EQ("DiagnosticNotification", toSimpleType("diagnosticmgr::msg::dds_::DiagnosticNotification_"));
+    
+    // Test all mappings - simple to ROS2
+    EXPECT_EQ("diagnosticmgr::msg::dds_::DiagnosticInfoRequest_", toRos2DdsType("DiagnosticInfoRequest"));
+    EXPECT_EQ("diagnosticmgr::msg::dds_::DiagnosticInfoListRequest_", toRos2DdsType("DiagnosticInfoListRequest"));
+    EXPECT_EQ("diagnosticmgr::msg::dds_::DiagnosticInfoResponse_", toRos2DdsType("DiagnosticInfoResponse"));
+    EXPECT_EQ("diagnosticmgr::msg::dds_::DiagnosticInfoListResponse_", toRos2DdsType("DiagnosticInfoListResponse"));
+    EXPECT_EQ("diagnosticmgr::msg::dds_::DiagnosticNotification_", toRos2DdsType("DiagnosticNotification"));
 }
 
 TEST_F(DDSProtocolTest, PublishMessage_TC001) {
