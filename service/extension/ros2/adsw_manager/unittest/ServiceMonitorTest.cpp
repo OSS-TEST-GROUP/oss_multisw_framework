@@ -89,7 +89,13 @@ protected:
         
         // Don't delete mock_registry_ as it's managed by shared_ptr in some cases
         mock_registry_ = nullptr;
+        
+        // Reset the static shared_ptr - this will delete Mock_ADSWManager
+        ADSWManager::SetShared(nullptr);
         Mock_ADSWManager = nullptr;
+        
+        // Delete Mock_ROSServiceDiscovery - it was wrapped in shared_ptr with no-op deleter
+        delete Mock_ROSServiceDiscovery;
         Mock_ROSServiceDiscovery = nullptr;
     }
     

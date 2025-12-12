@@ -97,7 +97,13 @@ protected:
         Mock_Logger = nullptr;
         delete Mock_DDSMessageEndpoint;
         Mock_DDSMessageEndpoint = nullptr;
+        
+        // Reset the static shared_ptr - this will delete Mock_ADSWManager
+        ADSWManager::SetShared(nullptr);
         Mock_ADSWManager = nullptr;
+        
+        // Delete Mock_ServiceRegistry - it was wrapped in shared_ptr with no-op deleter
+        delete Mock_ServiceRegistry;
         Mock_ServiceRegistry = nullptr;
     }
 };

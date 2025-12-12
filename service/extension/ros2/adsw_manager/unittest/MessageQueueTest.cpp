@@ -42,7 +42,9 @@ protected:
     void TearDown() override {
         delete Mock_Logger;
         Mock_Logger = nullptr;
-        // Do NOT delete Mock_ADSWManager here!
+        
+        // Reset the static shared_ptr - this will delete Mock_ADSWManager
+        ADSWManager::SetShared(nullptr);
         Mock_ADSWManager = nullptr;
 
         delete Mock_DDSTransmitter;
