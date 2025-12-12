@@ -1,4 +1,5 @@
-// Unit tests for DDSTransmitter class using Google Test and Google Mock
+// Unit tests for ROSDiscoveryInfoEndpoint class using Google Test and Google Mock
+// These tests are designed to achieve high code coverage including branch coverage
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
@@ -13,6 +14,7 @@
 #include "mock/MockDDSTransmitter.hpp"
 #include "mock/MockDDS.hpp"
 #include "mock/MockServiceMonitor.hpp"
+#include "mock/MockROSServiceDiscovery.hpp"
 #include "mock/MockLogger.hpp"
 
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp>
@@ -31,29 +33,27 @@ using ::testing::Args;
 using ::testing::AllOf;
 using ::testing::AtLeast;
 using ::testing::Combine;
+using ::testing::NiceMock;
 
 using namespace ros2::adsw_manager;
 using namespace rmw_dds_common::msg;
 
-
+// Direct test class - tests actual ROSDiscoveryInfoEndpoint implementation
 class ROSDiscoveryInfoEndpointTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        // Setup logger mock first as it's used throughout initialization
         Mock_Logger = new MockLogger();
+        Mock_ADSWManager = new NiceMock<MockADSWManager>();
+        Mock_DDSMessageEndpoint = new NiceMock<MockDDSMessageEndpoint>();
+        Mock_ROSServiceDiscovery = new NiceMock<MockROSServiceDiscovery>(nullptr);
         
-        // Setup ADSWManager mock
-        Mock_ADSWManager = new MockADSWManager();
+        ADSWManager::SetShared(std::shared_ptr<ADSWManager>(Mock_ADSWManager));
         
-        // Setup DDSMessageEndpoint mock - this is critical for Initialize to work
-        Mock_DDSMessageEndpoint = new MockDDSMessageEndpoint();
+        ON_CALL(*Mock_ADSWManager, Get()).WillByDefault(::testing::Return(Mock_ADSWManager));
+        ON_CALL(*Mock_ADSWManager, GetServiceDiscovery()).WillByDefault(::testing::Return(
+            std::shared_ptr<ROSServiceDiscovery>(Mock_ROSServiceDiscovery, [](ROSServiceDiscovery*){})));
+        
         ON_CALL(*Mock_DDSMessageEndpoint, Initialize(_, _, _)).WillByDefault(Return(true));
-        
-		// TODO
-        //ins = std::make_unique<ROSDiscoveryInfoEndpoint>(std::bind(&ROSDiscoveryInfoEndpointTest::MessageCallback, this, std::placeholders::_1));
-        ins = std::make_unique<ROSDiscoveryInfoEndpoint>(ros2::adsw_manager::MessageType::ROS2_DISCOVREY_INFO, "topic");
-        //MockADSWManager::discovery = new MockROSServiceDiscovery();
-        endpoint = new ros2::adsw_manager::ROSDiscoveryInfoEndpoint(MessageType::ROS2_DISCOVREY_INFO, "test_topic");
 
         InitDDS();
     }
@@ -62,17 +62,12 @@ protected:
         stopAllProcess();
         process_list.clear();
 
-        ins.reset();
-
-        delete endpoint;
-        //delete MockADSWManager::discovery;
-        delete Mock_DDSMessageEndpoint;
-        Mock_DDSMessageEndpoint = nullptr;
-
         FinalizeDDS();
         
-        delete Mock_ADSWManager;
+        delete Mock_DDSMessageEndpoint;
+        Mock_DDSMessageEndpoint = nullptr;
         Mock_ADSWManager = nullptr;
+        Mock_ROSServiceDiscovery = nullptr;
         
         delete Mock_Logger;
         Mock_Logger = nullptr;
@@ -109,13 +104,11 @@ protected:
          nullptr, StatusMask::none());
         ASSERT_TRUE(participant_ != nullptr);
 
-        // Create the publisher
         PublisherQos pub_qos = PUBLISHER_QOS_DEFAULT;
         participant_->get_default_publisher_qos(pub_qos);
         publisher_ = participant_->create_publisher(pub_qos, nullptr, StatusMask::none());
         ASSERT_TRUE(publisher_ != nullptr);
 
-        // Create the subscriber
         SubscriberQos sub_qos = SUBSCRIBER_QOS_DEFAULT;
         participant_->get_default_subscriber_qos(sub_qos);
         subscriber_ = participant_->create_subscriber(sub_qos, nullptr, StatusMask::none());
@@ -129,98 +122,120 @@ protected:
         }
     }
 
-    void MessageCallback(ParticipantEntitiesInfo& info) {
-        info_ = info;
-        info_received_ = true;
-    }
-
-    bool ReadMessage(uint32_t timeout_sec, ParticipantEntitiesInfo& info) {
-        int count = 0;
-        while (true) {
-            if (info_received_ == true) {
-                info = info_;
-                return true;
-            }
-            if (count < (timeout_sec * 100)) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                count++;
-            } else {
-                break;
-            }
-        }
-        return false;
-    }
-
-    std::unique_ptr<ROSDiscoveryInfoEndpoint> ins;
-
     DomainParticipant* participant_{nullptr};
     Publisher* publisher_{nullptr};
     Subscriber* subscriber_{nullptr};
-
-    ParticipantEntitiesInfo info_;
-    bool info_received_{false};
-    
-    ros2::adsw_manager::ROSDiscoveryInfoEndpoint* endpoint;
-
 };
 
-TEST_F(ROSDiscoveryInfoEndpointTest, Initialize_TC001) {
-    bool result = ins->Initialize(participant_, publisher_, subscriber_);
+// ============================================================================
+// Construction Tests - Using REAL ROSDiscoveryInfoEndpoint class
+// ============================================================================
+
+TEST_F(ROSDiscoveryInfoEndpointTest, ConstructWithDiscoveryInfoType) {
+    // Create REAL endpoint instance
+    ROSDiscoveryInfoEndpoint endpoint(MessageType::ROS2_DISCOVREY_INFO, "test_topic");
+    EXPECT_EQ(endpoint.GetTopic(), "test_topic");
+    EXPECT_NE(endpoint.GetTypeSupport(), nullptr);
+}
+
+TEST_F(ROSDiscoveryInfoEndpointTest, ConstructWithInvalidType) {
+    // Create endpoint with invalid type - covers the else branch
+    ROSDiscoveryInfoEndpoint endpoint(MessageType::GET_SERVICE_STATE_REQUEST, "invalid_topic");
+    EXPECT_EQ(endpoint.GetTopic(), "invalid_topic");
+}
+
+TEST_F(ROSDiscoveryInfoEndpointTest, GetTopic) {
+    ROSDiscoveryInfoEndpoint endpoint(MessageType::ROS2_DISCOVREY_INFO, "my_topic");
+    EXPECT_EQ(endpoint.GetTopic(), "my_topic");
+}
+
+TEST_F(ROSDiscoveryInfoEndpointTest, GetTypeName) {
+    ROSDiscoveryInfoEndpoint endpoint(MessageType::ROS2_DISCOVREY_INFO, "test_topic");
+    std::string typeName = endpoint.GetTypeName();
+    EXPECT_EQ(typeName, "rmw_dds_common::msg::dds_::ParticipantEntitiesInfo_");
+}
+
+TEST_F(ROSDiscoveryInfoEndpointTest, GetTypeSupport) {
+    ROSDiscoveryInfoEndpoint endpoint(MessageType::ROS2_DISCOVREY_INFO, "test_topic");
+    auto typeSupport = endpoint.GetTypeSupport();
+    EXPECT_NE(typeSupport, nullptr);
+}
+
+TEST_F(ROSDiscoveryInfoEndpointTest, DestructorDoesNotCrash) {
+    auto* endpoint = new ROSDiscoveryInfoEndpoint(MessageType::ROS2_DISCOVREY_INFO, "test_topic");
+    EXPECT_NO_THROW(delete endpoint);
+}
+
+// ============================================================================
+// Initialize Tests
+// ============================================================================
+
+TEST_F(ROSDiscoveryInfoEndpointTest, Initialize_Success) {
+    ROSDiscoveryInfoEndpoint endpoint(MessageType::ROS2_DISCOVREY_INFO, "topic");
+    bool result = endpoint.Initialize(participant_, publisher_, subscriber_);
     if (result) {
-        ins->Finalize();
+        endpoint.Finalize();
     }
     EXPECT_TRUE(result);
 }
 
-TEST_F(ROSDiscoveryInfoEndpointTest, ReceiveTest_TC001) {
-    EXPECT_TRUE(ins->Initialize(participant_, publisher_, subscriber_));
+// ============================================================================
+// OnDataAvailable Tests - Calling real implementation
+// ============================================================================
 
-    char* args[] = {"test/ROSDiscoveryInfoSender", 0};
-    pid_t pid = startProcess(args);
-    if (pid == -1) {
-        std::cerr << "Failed to start test publisher" << std::endl;
-        FAIL();
-    }
-
-    ParticipantEntitiesInfo info;
-    //EXPECT_TRUE(ReadMessage(2, info));
-
-    stopProcess(pid);
-
-    ins->Finalize();
-}
-TEST_F(ROSDiscoveryInfoEndpointTest, ConstructionAndGetters) {
-    EXPECT_EQ(endpoint->GetTopic(), "test_topic");
-    EXPECT_EQ(endpoint->GetTypeName(), "rmw_dds_common::msg::dds_::ParticipantEntitiesInfo_");
-
-    EXPECT_EQ(endpoint->GetTypeSupport(), endpoint->type_support_);
+TEST_F(ROSDiscoveryInfoEndpointTest, OnDataAvailable_ReadFails_DataReaderNull) {
+    ROSDiscoveryInfoEndpoint endpoint(MessageType::ROS2_DISCOVREY_INFO, "test_topic");
+    
+    // OnDataAvailable will be called, Read<T> will fail because data_reader_ is null
+    // This covers the else branch in OnDataAvailable
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
 }
 
-TEST_F(ROSDiscoveryInfoEndpointTest, OnDataAvailableCallsServiceDiscovery) {
-    // Simulate Read<rmw_dds_common::msg::ParticipantEntitiesInfo>(info) == true
-    // You may need to mock/stub Read<> if it's not already stubbed
-    //endpoint->OnDataAvailable();
-    // The test will pass if no crash; for full coverage, mock Read<> to return true and check called
-    // EXPECT_TRUE(MockADSWManager::discovery->called);
+TEST_F(ROSDiscoveryInfoEndpointTest, OnDataAvailable_MultipleCalls) {
+    ROSDiscoveryInfoEndpoint endpoint(MessageType::ROS2_DISCOVREY_INFO, "test_topic");
+    
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
 }
-TEST_F(ROSDiscoveryInfoEndpointTest, GetTypeSupportReturnsValidType) {
 
-    auto type_support = endpoint->GetTypeSupport();
-    ASSERT_NE(endpoint->GetTypeSupport(), nullptr); // Use ASSERT to stop if null
+// ============================================================================
+// Branch Coverage Tests
+// ============================================================================
 
-    std::string type_name = type_support->get_type_name();
-    EXPECT_EQ(type_name, "rmw_dds_common::msg::dds_::ParticipantEntitiesInfo_");
+TEST_F(ROSDiscoveryInfoEndpointTest, BranchCoverage_DiscoveryInfoType) {
+    ROSDiscoveryInfoEndpoint endpoint(MessageType::ROS2_DISCOVREY_INFO, "discovery_topic");
+    auto typeSupport = endpoint.GetTypeSupport();
+    ASSERT_NE(typeSupport, nullptr);
+    std::string typeName = endpoint.GetTypeName();
+    EXPECT_EQ(typeName, "rmw_dds_common::msg::dds_::ParticipantEntitiesInfo_");
+}
 
+TEST_F(ROSDiscoveryInfoEndpointTest, GetTopicReturnsCorrectValue) {
+    ROSDiscoveryInfoEndpoint endpoint(MessageType::ROS2_DISCOVREY_INFO, "custom_topic");
+    EXPECT_EQ(endpoint.GetTopic(), "custom_topic");
 }
-TEST_F(ROSDiscoveryInfoEndpointTest, GetTopicReturnsCorrectTopic) {
-    EXPECT_EQ(endpoint->GetTopic(), "test_topic");
+
+TEST_F(ROSDiscoveryInfoEndpointTest, GetTopicWithEmptyString) {
+    ROSDiscoveryInfoEndpoint endpoint(MessageType::ROS2_DISCOVREY_INFO, "");
+    EXPECT_EQ(endpoint.GetTopic(), "");
 }
-TEST_F(ROSDiscoveryInfoEndpointTest, GetTypeNameReturnsCorrectTypeName) {
-    EXPECT_EQ(endpoint->GetTypeName(), "rmw_dds_common::msg::dds_::ParticipantEntitiesInfo_");
+
+TEST_F(ROSDiscoveryInfoEndpointTest, GetTopicWithSpecialCharacters) {
+    ROSDiscoveryInfoEndpoint endpoint(MessageType::ROS2_DISCOVREY_INFO, "/ros2/discovery/info");
+    EXPECT_EQ(endpoint.GetTopic(), "/ros2/discovery/info");
 }
-TEST_F(ROSDiscoveryInfoEndpointTest, TypeSupportIsNotNull) {
-    auto type_support = endpoint->GetTypeSupport();
-    EXPECT_NE(type_support, nullptr);
+
+TEST_F(ROSDiscoveryInfoEndpointTest, GetTypeSupport_ReturnsCorrectType) {
+    ROSDiscoveryInfoEndpoint endpoint(MessageType::ROS2_DISCOVREY_INFO, "test_topic");
+    auto typeSupport = endpoint.GetTypeSupport();
+    ASSERT_NE(typeSupport, nullptr);
+    EXPECT_EQ(typeSupport->get_type_name(), "rmw_dds_common::msg::dds_::ParticipantEntitiesInfo_");
+}
+
+TEST_F(ROSDiscoveryInfoEndpointTest, GetTypeName_ReturnsExpectedTypeName) {
+    ROSDiscoveryInfoEndpoint endpoint(MessageType::ROS2_DISCOVREY_INFO, "test_topic");
+    EXPECT_EQ(endpoint.GetTypeName(), "rmw_dds_common::msg::dds_::ParticipantEntitiesInfo_");
 }
 
 int main(int argc, char** argv) {

@@ -22,6 +22,7 @@ using ::testing::Args;
 using ::testing::AllOf;
 using ::testing::AtLeast;
 using ::testing::Combine;
+using ::testing::NiceMock;
 
 
 using namespace ros2::adsw_manager;
@@ -32,6 +33,9 @@ protected:
         ins = std::make_unique<DDSTransmitter>();
         Mock_Logger = new MockLogger();
         Mock_MessageQueue = new MockMessageQueue();
+        // Initialize the global mock pointer to prevent null pointer dereference
+        default_mock_endpoint_ = new NiceMock<MockDDSMessageEndpoint>();
+        Mock_DDSMessageEndpoint = default_mock_endpoint_;
         finalized_ = false;
     }
 
@@ -48,12 +52,25 @@ protected:
         delete Mock_MessageQueue;
         Mock_MessageQueue = nullptr;
 
+        // Restore the global mock pointer to default before cleanup
+        Mock_DDSMessageEndpoint = default_mock_endpoint_;
+        
+        // Clean up the default mock endpoint
+        delete default_mock_endpoint_;
+        default_mock_endpoint_ = nullptr;
+        Mock_DDSMessageEndpoint = nullptr;
     }
     
     void MarkFinalized() { finalized_ = true; }
+    
+    // Helper to set the global mock pointer to a specific endpoint for testing
+    void SetGlobalMockEndpoint(MockDDSMessageEndpoint* endpoint) {
+        Mock_DDSMessageEndpoint = endpoint;
+    }
 
     std::unique_ptr<DDSTransmitter> ins;
     bool finalized_;
+    MockDDSMessageEndpoint* default_mock_endpoint_{nullptr};
 };
 
 TEST_F(DDSTransmitterTest, InitializeFinalize_TC001) {
@@ -76,6 +93,9 @@ TEST_F(DDSTransmitterTest, AddMessageEndpoint_TC001) {
     // Setup mock to return a topic name when GetTopic is called
     ON_CALL(*endpoint, GetTopic()).WillByDefault(Return("TestTopic"));
     
+    // Set global mock pointer to the local endpoint so base class methods work
+    SetGlobalMockEndpoint(endpoint.get());
+    
     EXPECT_TRUE(ins->AddMessageEndpoint(endpoint));
 }
 
@@ -87,6 +107,9 @@ TEST_F(DDSTransmitterTest, GetMessageEndPoint_TC001) {
     ON_CALL(*endpoint, GetTypeName()).WillByDefault(Return("TestType"));
     ON_CALL(*endpoint, GetTypeSupport()).WillByDefault(Return(nullptr));
     ON_CALL(*endpoint, Initialize(_, _, _)).WillByDefault(Return(true));
+    
+    // Set global mock pointer to the local endpoint so base class methods work
+    SetGlobalMockEndpoint(endpoint.get());
     
     EXPECT_TRUE(ins->AddMessageEndpoint(endpoint));
     EXPECT_TRUE(ins->Initialize());
@@ -157,7 +180,12 @@ TEST_F(DDSTransmitterTest, AddMultipleEndpoints_TC001) {
     ON_CALL(*endpoint1, GetTopic()).WillByDefault(Return("Topic1"));
     ON_CALL(*endpoint2, GetTopic()).WillByDefault(Return("Topic2"));
     
+    // Set global mock pointer to endpoint1 for first add
+    SetGlobalMockEndpoint(endpoint1.get());
     EXPECT_TRUE(ins->AddMessageEndpoint(endpoint1));
+    
+    // Set global mock pointer to endpoint2 for second add
+    SetGlobalMockEndpoint(endpoint2.get());
     EXPECT_TRUE(ins->AddMessageEndpoint(endpoint2));
 }
 

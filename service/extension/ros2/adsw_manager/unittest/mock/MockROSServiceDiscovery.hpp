@@ -26,6 +26,9 @@ class MockROSServiceDiscovery : public ROSServiceDiscovery {
 
 MockROSServiceDiscovery* Mock_ROSServiceDiscovery;
 
+// Only define mock implementations when MOCK_ROS_SERVICE_DISCOVERY_IMPL is defined
+// This prevents multiple definition errors when linking with real ROSServiceDiscovery.cpp
+#ifdef MOCK_ROS_SERVICE_DISCOVERY_IMPL
 
 ROSServiceDiscovery::ROSServiceDiscovery(ServiceMonitor* service_monitor) {
 }
@@ -43,6 +46,8 @@ void ROSServiceDiscovery::ParseROSDiscoveryInfo(rmw_dds_common::msg::Participant
 std::shared_ptr<ROS2Participant> ROSServiceDiscovery::GetROSParticipant(const std::string& participant_id) {
     return Mock_ROSServiceDiscovery->GetROSParticipant(participant_id);
 }
+
+#endif // MOCK_ROS_SERVICE_DISCOVERY_IMPL
 
 }
 }

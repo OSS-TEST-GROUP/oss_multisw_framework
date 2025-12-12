@@ -10,6 +10,7 @@
 #include "mock/MockDDS.hpp"
 #include "mock/MockNodeInfo.hpp"
 #include "mock/MockDDSMessageEndpoint.hpp"
+#define MOCK_ROS_SERVICE_DISCOVERY_IMPL
 #include "mock/MockROSServiceDiscovery.hpp"
 #include "mock/MockUpdateServiceInfo.hpp"
 #include "mock/MockLogger.hpp"
