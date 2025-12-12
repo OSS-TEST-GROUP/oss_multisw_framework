@@ -90,20 +90,20 @@ TEST_F(EndPointFactoryTest, GetTopicReturnsNullptrForInvalidType) {
 TEST_F(EndPointFactoryTest, CreateEndPointsReturnsCorrectSize) {
     EndPointFactory factory;
 
-    factory.SetCustomCreator(MessageType::GET_SERVICE_STATE_REQUEST,
+    factory.SetCustomCreator(MessageType::UPDATE_SERVICE_LIST_RESPONSE,
         [](MessageType type, const std::string& topic) {
             auto mock = new MockDDSMessageEndPoint(topic);
             Mock_DDSMessageEndPoint = mock; // set the global pointer
             return std::shared_ptr<MockDDSMessageEndPoint>(mock);
     }   );
- 
+
     factory.Initialize();
-    auto dds = std::make_shared<MockDDSTransmitter>();
+
     // Set up expectations for GetDomain, GetPublisher, GetSubscriber if needed
-    EXPECT_CALL(*dds, GetDomain()).Times(AtLeast(1)).WillRepeatedly(Return(nullptr));
-    EXPECT_CALL(*dds, GetPublisher()).Times(AtLeast(1)).WillRepeatedly(Return(nullptr));
-    EXPECT_CALL(*dds, GetSubscriber()).Times(AtLeast(1)).WillRepeatedly(Return(nullptr));
-    EXPECT_CALL(*dds, AddMessageEndpoint(_)).Times(12);
+    EXPECT_CALL(*Mock_DDSTransmitter, GetDomain()).Times(AtLeast(1)).WillRepeatedly(Return(nullptr));
+    EXPECT_CALL(*Mock_DDSTransmitter, GetPublisher()).Times(AtLeast(1)).WillRepeatedly(Return(nullptr));
+    EXPECT_CALL(*Mock_DDSTransmitter, GetSubscriber()).Times(AtLeast(1)).WillRepeatedly(Return(nullptr));
+    EXPECT_CALL(*Mock_DDSTransmitter, AddMessageEndpoint(_)).Times(12);
 
     //int32_t size = factory.CreateEndPoints(dds);
     //EXPECT_EQ(size, 12);

@@ -265,7 +265,7 @@ TEST_F(MWServiceManagerTest, RunProcessWithWaitTime) {
 
 TEST_F(MWServiceManagerTest, KillProcessInvalidPID) {
     MWServiceManager mgr;
-    EXPECT_FALSE(mgr.kill_process(-1));
+    EXPECT_FALSE(mgr.kill_process(-9999));
 }
 
 TEST_F(MWServiceManagerTest, StopMWServiceWithNoPID) {
