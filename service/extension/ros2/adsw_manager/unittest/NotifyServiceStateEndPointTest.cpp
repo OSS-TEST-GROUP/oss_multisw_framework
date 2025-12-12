@@ -1,4 +1,5 @@
-// Unit tests for DDSTransmitter class using Google Test and Google Mock
+// Unit tests for NotifyServiceStateEndPoint class using Google Test and Google Mock
+// These tests are designed to achieve high code coverage including branch coverage
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
@@ -25,74 +26,127 @@ using ::testing::Args;
 using ::testing::AllOf;
 using ::testing::AtLeast;
 using ::testing::Combine;
+using ::testing::NiceMock;
 
 using namespace ros2::adsw_manager;
 
-// Test-only subclass for mocking Read behavior
-class TestNotifyServiceStateEndPoint : public NotifyServiceStateEndPoint {
-public:
-    TestNotifyServiceStateEndPoint(MessageType msgtype, std::string topic)
-        : NotifyServiceStateEndPoint(msgtype, topic) {}
-    void OnDataAvailable() override {
-        return;
-    }
-};
-
+// Direct test class - creates real instances to test actual implementation
 class NotifyServiceStateEndPointTest : public ::testing::Test {
 protected:
     void SetUp() override {
         Mock_Logger = new MockLogger();
-        Mock_ADSWManager = new MockADSWManager();
+        Mock_ADSWManager = new NiceMock<MockADSWManager>();
         ADSWManager::SetShared(std::shared_ptr<ADSWManager>(Mock_ADSWManager));
 
         ON_CALL(*Mock_ADSWManager, Get()).WillByDefault(::testing::Return(Mock_ADSWManager));
         ON_CALL(*Mock_ADSWManager, GetTopic(::testing::_)).WillByDefault(::testing::Return("mock_topic"));
         ON_CALL(*Mock_ADSWManager, GetTransmitter()).WillByDefault(::testing::Return(std::make_shared<MockDDSTransmitter>()));
         
-        Mock_DDSMessageEndpoint = new MockDDSMessageEndpoint();
+        Mock_DDSMessageEndpoint = new NiceMock<MockDDSMessageEndpoint>();
         ON_CALL(*Mock_DDSMessageEndpoint, Initialize(_, _, _)).WillByDefault(Return(true));
         ON_CALL(*Mock_DDSMessageEndpoint, GetTypeName()).WillByDefault(Return("lifecyclemgr::dds_::NotifyServiceState_"));
         ON_CALL(*Mock_DDSMessageEndpoint, GetTypeSupport()).WillByDefault(Return(nullptr));
-        
-        endpoint = new TestNotifyServiceStateEndPoint(MessageType::NOTIFY_SERVICE_STATE, "test_topic");
-        endpoint->Initialize(nullptr, nullptr, nullptr);
     }
+    
     void TearDown() override {
         delete Mock_Logger;
         Mock_Logger = nullptr;
-        delete endpoint;
         delete Mock_DDSMessageEndpoint;
         Mock_DDSMessageEndpoint = nullptr;
         Mock_ADSWManager = nullptr;
     }
-    
-    TestNotifyServiceStateEndPoint* endpoint;
 };
 
-TEST_F(NotifyServiceStateEndPointTest, ConstructionAndGetters) {
-    EXPECT_EQ(endpoint->GetTopic(), "test_topic");
-    EXPECT_NO_THROW(endpoint->GetTypeName());
-    EXPECT_NO_THROW(endpoint->GetTypeSupport());
+// ============================================================================
+// Construction Tests - Using REAL NotifyServiceStateEndPoint class
+// ============================================================================
+
+TEST_F(NotifyServiceStateEndPointTest, ConstructWithNotifyServiceStateType) {
+    // Create REAL endpoint instance
+    NotifyServiceStateEndPoint endpoint(MessageType::NOTIFY_SERVICE_STATE, "test_topic");
+    EXPECT_EQ(endpoint.GetTopic(), "test_topic");
+    EXPECT_NE(endpoint.GetTypeSupport(), nullptr);
 }
 
-TEST_F(NotifyServiceStateEndPointTest, OnDataAvailableDoesNotCrash) {
-    EXPECT_NO_THROW(endpoint->OnDataAvailable());
+TEST_F(NotifyServiceStateEndPointTest, ConstructWithInvalidType) {
+    // Create endpoint with a type that doesn't match - covers the else branch
+    NotifyServiceStateEndPoint endpoint(MessageType::GET_SERVICE_STATE_REQUEST, "invalid_topic");
+    EXPECT_EQ(endpoint.GetTopic(), "invalid_topic");
 }
-TEST_F(NotifyServiceStateEndPointTest, OnDataAvailableDoesNotProcess) {
-    // Since NotifyServiceState does not process data, we just check that it doesn't crash
-    EXPECT_NO_THROW(endpoint->OnDataAvailable());
+
+TEST_F(NotifyServiceStateEndPointTest, GetTopic) {
+    NotifyServiceStateEndPoint endpoint(MessageType::NOTIFY_SERVICE_STATE, "my_topic");
+    EXPECT_EQ(endpoint.GetTopic(), "my_topic");
 }
-TEST_F(NotifyServiceStateEndPointTest, GetTypeSupportReturnsValidType) {
-    EXPECT_NO_THROW(endpoint->GetTypeSupport());
+
+TEST_F(NotifyServiceStateEndPointTest, GetTypeName) {
+    NotifyServiceStateEndPoint endpoint(MessageType::NOTIFY_SERVICE_STATE, "test_topic");
+    std::string typeName = endpoint.GetTypeName();
+    EXPECT_FALSE(typeName.empty());
 }
-TEST_F(NotifyServiceStateEndPointTest, GetTopicReturnsCorrectTopic) {
-    EXPECT_EQ(endpoint->GetTopic(), "test_topic");
+
+TEST_F(NotifyServiceStateEndPointTest, GetTypeSupport) {
+    NotifyServiceStateEndPoint endpoint(MessageType::NOTIFY_SERVICE_STATE, "test_topic");
+    auto typeSupport = endpoint.GetTypeSupport();
+    EXPECT_NE(typeSupport, nullptr);
 }
-TEST_F(NotifyServiceStateEndPointTest, GetTypeNameReturnsCorrectTypeName) {
-    EXPECT_NO_THROW(endpoint->GetTypeName());
+
+TEST_F(NotifyServiceStateEndPointTest, DestructorDoesNotCrash) {
+    auto* endpoint = new NotifyServiceStateEndPoint(MessageType::NOTIFY_SERVICE_STATE, "test_topic");
+    EXPECT_NO_THROW(delete endpoint);
 }
-TEST_F(NotifyServiceStateEndPointTest, TypeSupportIsNotNull) {
-    EXPECT_NO_THROW(endpoint->GetTypeSupport());
+
+// ============================================================================
+// OnDataAvailable Tests - Calling real implementation
+// ============================================================================
+
+TEST_F(NotifyServiceStateEndPointTest, OnDataAvailable_JustLogs) {
+    NotifyServiceStateEndPoint endpoint(MessageType::NOTIFY_SERVICE_STATE, "test_topic");
+    
+    // OnDataAvailable just logs - verify it doesn't crash
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+}
+
+TEST_F(NotifyServiceStateEndPointTest, OnDataAvailable_MultipleCalls) {
+    NotifyServiceStateEndPoint endpoint(MessageType::NOTIFY_SERVICE_STATE, "test_topic");
+    
+    // Multiple calls should be fine
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+}
+
+// ============================================================================
+// Branch Coverage Tests
+// ============================================================================
+
+TEST_F(NotifyServiceStateEndPointTest, BranchCoverage_NotifyServiceState) {
+    NotifyServiceStateEndPoint endpoint(MessageType::NOTIFY_SERVICE_STATE, "notify_topic");
+    auto typeSupport = endpoint.GetTypeSupport();
+    ASSERT_NE(typeSupport, nullptr);
+    std::string typeName = endpoint.GetTypeName();
+    EXPECT_FALSE(typeName.empty());
+}
+
+TEST_F(NotifyServiceStateEndPointTest, GetTopicReturnsCorrectValue) {
+    NotifyServiceStateEndPoint endpoint(MessageType::NOTIFY_SERVICE_STATE, "custom_topic");
+    EXPECT_EQ(endpoint.GetTopic(), "custom_topic");
+}
+
+TEST_F(NotifyServiceStateEndPointTest, GetTopicWithEmptyString) {
+    NotifyServiceStateEndPoint endpoint(MessageType::NOTIFY_SERVICE_STATE, "");
+    EXPECT_EQ(endpoint.GetTopic(), "");
+}
+
+TEST_F(NotifyServiceStateEndPointTest, GetTopicWithSpecialCharacters) {
+    NotifyServiceStateEndPoint endpoint(MessageType::NOTIFY_SERVICE_STATE, "/ros2/notify/state");
+    EXPECT_EQ(endpoint.GetTopic(), "/ros2/notify/state");
+}
+
+TEST_F(NotifyServiceStateEndPointTest, GetTypeNameReturnsNonEmptyString) {
+    NotifyServiceStateEndPoint endpoint(MessageType::NOTIFY_SERVICE_STATE, "test_topic");
+    std::string typeName = endpoint.GetTypeName();
+    EXPECT_FALSE(typeName.empty());
 }
 
 int main(int argc, char** argv) {
