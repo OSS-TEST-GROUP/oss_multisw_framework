@@ -217,24 +217,27 @@ std::vector<std::shared_ptr<viss::IFilter>> VssSubscriptionManager::Subscription
         std::string variant = exp["variant"].GetString();
         LOG_INFO << "Parsing filter variant: " << variant;
 
-        if (variant == "timebased" && exp.HasMember("parameter") && exp["parameter"].IsObject()) {
-            const auto& param = exp["parameter"];
-            if (param.HasMember("period") && param["period"].IsString()) {
+        if (variant == "timebased" && exp.HasMember("parameter") && exp["parameter"].IsArray() && !exp["parameter"].Empty()) {
+            const auto& param_array = exp["parameter"];
+            if (param_array[0].IsObject() && param_array[0].HasMember("period") && param_array[0]["period"].IsString()) {
                 try {
-                    int period_ms = std::stoi(param["period"].GetString());
+                    int period_ms = std::stoi(param_array[0]["period"].GetString());
                     filters.push_back(std::make_shared<TimeBasedFilter>(period_ms));
                     LOG_INFO << "  - Created TimeBasedFilter with period: " << period_ms << "ms";
                 } catch (const std::invalid_argument& ia) {
-                    LOG_ERROR << "Invalid period for timebased filter: " << param["period"].GetString();
+                    LOG_ERROR << "Invalid period for timebased filter: " << param_array[0]["period"].GetString();
                 }
             }
         } else if (variant == "change") {
+            // 'change' filter might have parameters for logic-op and diff, but we can ignore them for now
             filters.push_back(std::make_shared<ChangeFilter>());
             LOG_INFO << "  - Created ChangeFilter.";
-        } else if (variant == "history" && exp.HasMember("parameter") && exp["parameter"].IsString()) {
-            std::string timePeriod = exp["parameter"].GetString();
-            filters.push_back(std::make_shared<HistoryFilter>(timePeriod));
-            LOG_INFO << "  - Created HistoryFilter with time period: " << timePeriod;
+        } else if (variant == "history" && exp.HasMember("parameter") && exp["parameter"].IsArray() && !exp["parameter"].Empty()) {
+            if (exp["parameter"][0].IsString()) {
+                std::string timePeriod = exp["parameter"][0].GetString();
+                filters.push_back(std::make_shared<HistoryFilter>(timePeriod));
+                LOG_INFO << "  - Created HistoryFilter with time period: " << timePeriod;
+            }
         } else {
             LOG_WARN << "Unsupported or malformed filter variant: " << variant;
         }

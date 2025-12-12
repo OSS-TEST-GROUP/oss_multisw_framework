@@ -349,6 +349,7 @@ if(BUILD_FOR_ANDROID)
     # Protobuf/gRPC sources are added by the gradle plugin or need to be handled separately
 else()
     list(APPEND VISS_APP_SOURCES
+        src/app/main.cpp
         #src/transport/mqtt_transport.cpp
         src/transport/dds_transport.cpp
         src/providers/DDSProvider.cpp
@@ -514,6 +515,10 @@ if (BUILD_UNITTEST)
 	    unittest/network_provider_test.cpp
 	    unittest/grpc_transport_test.cpp
 	    unittest/dds_transport_test.cpp
+	    unittest/status_codes_test.cpp
+	    unittest/viss_server_app_test.cpp
+        unittest/main_test.cpp
+	    src/app/VissServerApp.cpp
 	    src/core/VssTreeParser.cpp
 	    src/common/Utils.cpp
 	    src/core/VssDataStore.cpp
@@ -538,6 +543,7 @@ if (BUILD_UNITTEST)
 	target_link_libraries(VehicleInfoMgrTest
 	    PRIVATE
 	    gtest_main
+	    gmock_main
             ${PROTOBUF_LIBRARY}
             ${GRPC_LIBRARY}
             fastcdr
@@ -554,5 +560,10 @@ if (BUILD_UNITTEST)
 		LIBRARY DESTINATION lib
 		ARCHIVE DESTINATION lib
 	)
+
+    install(DIRECTORY
+        unittest/testfiles/
+        DESTINATION bin/config/testfiles
+    )
 endif()
 endif()

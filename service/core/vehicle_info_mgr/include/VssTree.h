@@ -99,24 +99,18 @@ struct HimTree {
     std::string Description;
 };
 
-struct SearchData_t {
-    std::string NodePath;
-    Node_t* NodeHandle;
-};
 
 class VSSTree {
 public:
     explicit VSSTree(const std::string& him_file_path);
     bool isValid() const;
     viss::Node_t* findNode(const std::string& path);
-    viss::Node_t* findRootNode(const std::string& path, std::string& out_found_root_name);
-    int searchNodes(const std::string& searchPath, Node_t* rootNode, std::vector<SearchData_t>& searchData, bool anyDepth, bool leafNodesOnly);
     std::vector<std::string> getPaths(const std::string& path, const rapidjson::Document* filter);
     rapidjson::Document getDataTypeTemplate(const std::string& path);
     rapidjson::Document getMetadata(const std::string& path, int depth = 0);
 
 private:
-private:
+    viss::Node_t* findRootNode(const std::string& path, std::string& out_found_root_name);
     rapidjson::Value getMetadataRecursive(Node_t* node, int max_depth, int current_depth, rapidjson::Document::AllocatorType& allocator);
     rapidjson::Value createTemplateRecursive(Node_t* node, rapidjson::Document::AllocatorType& allocator);
     // For binary parsing

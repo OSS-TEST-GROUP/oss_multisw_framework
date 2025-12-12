@@ -29,60 +29,72 @@ void populateDataPackage(const rapidjson::Value& data_item, grpcProtobufMessages
 // Helper function to convert a single FilterExpression protobuf to a rapidjson Value
 rapidjson::Value convertSingleFilter(const grpcProtobufMessages::FilterExpressions::FilterExpression& filter_exp, rapidjson::Document::AllocatorType& allocator) {
     rapidjson::Value exp_obj(rapidjson::kObjectType);
-    rapidjson::Value param_obj(rapidjson::kObjectType);
+    rapidjson::Value param_array(rapidjson::kArrayType);
+    bool has_parameter = false;
 
     std::string variant_str;
     switch (filter_exp.variant()) {
         case grpcProtobufMessages::FilterExpressions_FilterExpression_FilterVariant_PATHS:
             variant_str = "paths";
             if (filter_exp.value().has_valuepaths()) {
-                rapidjson::Value paths_val(rapidjson::kArrayType);
                 for (const auto& p : filter_exp.value().valuepaths().relativepath()) {
-                    paths_val.PushBack(rapidjson::Value(p.c_str(), allocator), allocator);
+                    param_array.PushBack(rapidjson::Value(p.c_str(), allocator), allocator);
                 }
-                exp_obj.AddMember("parameter", paths_val, allocator);
+                has_parameter = true;
             }
             break;
         case grpcProtobufMessages::FilterExpressions_FilterExpression_FilterVariant_TIMEBASED:
             variant_str = "timebased";
             if (filter_exp.value().has_valuetimebased()) {
+                rapidjson::Value param_obj(rapidjson::kObjectType);
                 param_obj.AddMember("period", rapidjson::Value(filter_exp.value().valuetimebased().period().c_str(), allocator), allocator);
-                exp_obj.AddMember("parameter", param_obj, allocator);
+                param_array.PushBack(param_obj, allocator);
+                has_parameter = true;
             }
             break;
         case grpcProtobufMessages::FilterExpressions_FilterExpression_FilterVariant_RANGE:
             variant_str = "range";
             if (filter_exp.value().valuerange_size() > 0) {
-                const auto& range = filter_exp.value().valuerange(0);
-                param_obj.AddMember("logic-op", rapidjson::Value(range.logicoperator().c_str(), allocator), allocator);
-                param_obj.AddMember("boundary", rapidjson::Value(range.boundary().c_str(), allocator), allocator);
-                exp_obj.AddMember("parameter", param_obj, allocator);
+                for (const auto& range : filter_exp.value().valuerange()) {
+                    rapidjson::Value range_obj(rapidjson::kObjectType);
+                    range_obj.AddMember("logic-op", rapidjson::Value(range.logicoperator().c_str(), allocator), allocator);
+                    range_obj.AddMember("boundary", rapidjson::Value(range.boundary().c_str(), allocator), allocator);
+                    param_array.PushBack(range_obj, allocator);
+                }
+                has_parameter = true;
             }
             break;
         case grpcProtobufMessages::FilterExpressions_FilterExpression_FilterVariant_CHANGE:
             variant_str = "change";
             if (filter_exp.value().has_valuechange()) {
+                rapidjson::Value param_obj(rapidjson::kObjectType);
                 param_obj.AddMember("logic-op", rapidjson::Value(filter_exp.value().valuechange().logicoperator().c_str(), allocator), allocator);
                 param_obj.AddMember("diff", rapidjson::Value(filter_exp.value().valuechange().diff().c_str(), allocator), allocator);
-                exp_obj.AddMember("parameter", param_obj, allocator);
+                param_array.PushBack(param_obj, allocator);
+                has_parameter = true;
             }
             break;
         case grpcProtobufMessages::FilterExpressions_FilterExpression_FilterVariant_HISTORY:
             variant_str = "history";
             if (filter_exp.value().has_valuehistory()) {
-                exp_obj.AddMember("parameter", rapidjson::Value(filter_exp.value().valuehistory().timeperiod().c_str(), allocator), allocator);
+                param_array.PushBack(rapidjson::Value(filter_exp.value().valuehistory().timeperiod().c_str(), allocator), allocator);
+                has_parameter = true;
             }
             break;
         case grpcProtobufMessages::FilterExpressions_FilterExpression_FilterVariant_METADATA:
             variant_str = "metadata";
             if (filter_exp.value().has_valuemetadata()) {
-                exp_obj.AddMember("parameter", rapidjson::Value(filter_exp.value().valuemetadata().tree().c_str(), allocator), allocator);
+                param_array.PushBack(rapidjson::Value(filter_exp.value().valuemetadata().tree().c_str(), allocator), allocator);
+                has_parameter = true;
             }
             break;
         default:
             return rapidjson::Value(rapidjson::kNullType); // Return null for unknown variants
     }
     exp_obj.AddMember("variant", rapidjson::Value(variant_str.c_str(), allocator), allocator);
+    if (has_parameter) {
+        exp_obj.AddMember("parameter", param_array, allocator);
+    }
     return exp_obj;
 }
 
@@ -310,18 +322,29 @@ grpc::Status VISSServiceImpl::SubscribeRequest(grpc::ServerContext* context, con
         resp_msg->set_ts((*initial_response_doc)["ts"].GetString());
     }
 
-    if (initial_response_doc->HasMember("error") && (*initial_response_doc)["error"].IsObject()) {
+    if (initial_response_doc->HasMember("error")) {
         initial_response.set_status(grpcProtobufMessages::ResponseStatus::ERROR);
-        const auto& error_obj = (*initial_response_doc)["error"];
-        auto error_resp = resp_msg->mutable_errorresponse();
-        if (error_obj.HasMember("number") && error_obj["number"].IsString()) {
-             error_resp->set_number(error_obj["number"].GetString());
+        const auto& error_val = (*initial_response_doc)["error"];
+        const rapidjson::Value* error_obj_ptr = nullptr;
+
+        if (error_val.IsObject()) {
+            error_obj_ptr = &error_val;
+        } else if (error_val.IsArray() && !error_val.Empty() /*&& error_val[0].IsObject()*/) {
+            error_obj_ptr = &error_val[0];
         }
-        if (error_obj.HasMember("reason") && error_obj["reason"].IsString()) {
-             error_resp->set_reason(error_obj["reason"].GetString());
-        }
-        if (error_obj.HasMember("description") && error_obj["description"].IsString()) {
-             error_resp->set_description(error_obj["description"].GetString());
+
+        if (error_obj_ptr) {
+            const auto& error_obj = *error_obj_ptr;
+            auto error_resp = resp_msg->mutable_errorresponse();
+            if (error_obj.HasMember("number") && error_obj["number"].IsString()) {
+                error_resp->set_number(error_obj["number"].GetString());
+            }
+            if (error_obj.HasMember("reason") && error_obj["reason"].IsString()) {
+                error_resp->set_reason(error_obj["reason"].GetString());
+            }
+            if (error_obj.HasMember("description") && error_obj["description"].IsString()) {
+                error_resp->set_description(error_obj["description"].GetString());
+            }
         }
         
         writer->Write(initial_response);
@@ -482,4 +505,3 @@ void GrpcTransport::stop() {
         LOG_INFO << "Sync GrpcTransport::stop() completed.";
     }
 }
-

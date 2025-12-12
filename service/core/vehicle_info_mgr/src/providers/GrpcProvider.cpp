@@ -18,7 +18,7 @@ GrpcProvider::Subscription::Subscription(
     std::string path,
     std::string id,
     std::unique_ptr<grpc::ClientContext> context,
-    std::unique_ptr<grpc::ClientReader<grpcProtobufMessages::SubscribeStreamMessage>> stream,
+    std::unique_ptr<grpc::ClientReaderInterface<grpcProtobufMessages::SubscribeStreamMessage>> stream,
     std::function<void(const VehicleData&)> data_handler,
     std::function<void(const std::string&)> cleanup_handler)
     : m_path(std::move(path)),
@@ -51,21 +51,22 @@ void GrpcProvider::Subscription::stop() {
         LOG_INFO << "Successfully stopped subscription for path: " << m_path << " (ID: " << m_id << ")";
     }
 }
-
+/*
 bool GrpcProvider::Subscription::is_active() const {
     return m_is_active.load();
-}
-
-std::string GrpcProvider::Subscription::get_path() const {
-    return m_path;
 }
 
 std::string GrpcProvider::Subscription::get_id() const {
     return m_id;
 }
+*/
+std::string GrpcProvider::Subscription::get_path() const {
+    return m_path;
+}
 
 void GrpcProvider::Subscription::run() {
     grpcProtobufMessages::SubscribeStreamMessage event;
+    LOG_INFO << "m_is_active.load(): " << m_is_active.load();
     while (m_is_active.load() && m_stream->Read(&event)) {
         if (event.mtype() == grpcProtobufMessages::SubscribeResponseType::EVENT && event.has_event()) {
             const auto& sub_event = event.event();
@@ -84,11 +85,13 @@ void GrpcProvider::Subscription::run() {
                         }
 
                         if (m_data_handler) {
+                            /*
                             try {
                                 LOG_INFO << "gRPC Sub Received: " << vd.path << " = " << std::any_cast<std::string>(vd.value);
                             } catch (const std::bad_any_cast& e) {
                                 LOG_ERROR << "Failed to cast gRPC subscription value to string for logging.";
                             }
+                            */
                             m_data_handler(vd);
                         }
                     }
@@ -114,6 +117,15 @@ GrpcProvider::GrpcProvider(const std::string& server_address)
       m_server_address(server_address) {
     m_channel = grpc::CreateChannel(m_server_address, grpc::InsecureChannelCredentials());
     m_stub = grpcProtobufMessages::VISS::NewStub(m_channel);
+}
+
+// Constructor for testing with a mock stub and channel
+GrpcProvider::GrpcProvider(std::unique_ptr<grpcProtobufMessages::VISS::StubInterface> mock_stub, std::shared_ptr<grpc::ChannelInterface> mock_channel)
+    : m_name("GrpcProvider"),
+      m_server_address("mock-server"),
+      m_channel(std::move(mock_channel)),
+      m_stub(std::move(mock_stub)) {
+    // This constructor is for testing purposes.
 }
 
 GrpcProvider::~GrpcProvider() {
@@ -210,7 +222,7 @@ void GrpcProvider::subscribe(const std::string& path) {
     auto stream = m_stub->SubscribeRequest(context.get(), request);
     
     grpcProtobufMessages::SubscribeStreamMessage response;
-    if (stream->Read(&response)) {
+    if (stream && stream->Read(&response)) {
         if (response.mtype() == grpcProtobufMessages::SubscribeResponseType::RESPONSE && response.has_response()) {
             const auto& sub_response = response.response();
             if (response.status() == grpcProtobufMessages::ResponseStatus::SUCCESS) {

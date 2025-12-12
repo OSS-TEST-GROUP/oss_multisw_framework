@@ -58,6 +58,7 @@ private:
     
     // Resources for VehicleDataTopic
     eprosima::fastdds::dds::Topic* vehicle_data_topic_;
+    eprosima::fastdds::dds::Topic* set_vehicle_data_topic_;
     eprosima::fastdds::dds::DataWriter* vehicle_data_writer_;
     eprosima::fastdds::dds::DataReader* vehicle_data_reader_;
     eprosima::fastdds::dds::TypeSupport vehicle_data_type_;

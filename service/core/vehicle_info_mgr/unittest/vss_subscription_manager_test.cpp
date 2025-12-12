@@ -21,7 +21,7 @@ protected:
         data_store = std::make_shared<VssDataStore>();
         response_pool = std::make_shared<ObjectPool<PooledResponseMap>>();
         // The test must be run from the build directory.
-        config_path = getEnv("VEHICLE_CONFIG_PATH").value_or("config");
+        config_path = getEnv("VEHICLE_CONFIG_PATH").value_or("../config");
         config_path.append("/viss.him");
         vss_tree = std::make_shared<viss::VSSTree>(config_path);
         if (!vss_tree->isValid()) {
@@ -76,7 +76,7 @@ TEST_F(VssSubscriptionManagerTest, SubscriptionWithTimeFilter) {
     request->request_doc->Parse(R"({
         "action": "subscribe",
         "path": "Vehicle.Speed",
-        "filter": [{"variant": "timebased", "parameter": {"period": "200"}}],
+        "filter": [{"variant": "timebased", "parameter": [{"period": "200"}]}],
         "requestId": "test-time-filter"
     })");
 

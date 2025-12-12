@@ -16,6 +16,8 @@ private:
 
 public:
     GrpcProvider(const std::string& server_address);
+    // Constructor for testing with a mock stub and channel
+    GrpcProvider(std::unique_ptr<grpcProtobufMessages::VISS::StubInterface> mock_stub, std::shared_ptr<grpc::ChannelInterface> mock_channel);
     virtual ~GrpcProvider();
 
     void start() override;
@@ -34,9 +36,9 @@ private:
 
     std::string m_name;
     std::string m_server_address;
-    std::shared_ptr<grpc::Channel> m_channel;
+    std::shared_ptr<grpc::ChannelInterface> m_channel;
     std::shared_ptr<ThreadSafeQueue<VehicleData>> m_data_channel;
-    std::unique_ptr<grpcProtobufMessages::VISS::Stub> m_stub;
+    std::unique_ptr<grpcProtobufMessages::VISS::StubInterface> m_stub;
 
     grpc::CompletionQueue m_cq;
     std::thread m_state_monitor_thread;
@@ -61,7 +63,7 @@ private:
             std::string path,
             std::string id,
             std::unique_ptr<grpc::ClientContext> context,
-            std::unique_ptr<grpc::ClientReader<grpcProtobufMessages::SubscribeStreamMessage>> stream,
+            std::unique_ptr<grpc::ClientReaderInterface<grpcProtobufMessages::SubscribeStreamMessage>> stream,
             std::function<void(const VehicleData&)> data_handler,
             std::function<void(const std::string&)> cleanup_handler
         );
@@ -69,9 +71,10 @@ private:
 
         void start();
         void stop();
-        bool is_active() const;
+        //bool is_active() const;
+        //std::string get_id() const;
         std::string get_path() const;
-        std::string get_id() const;
+
 
     private:
         void run();
@@ -81,7 +84,7 @@ private:
         std::atomic<bool> m_is_active;
 
         std::unique_ptr<grpc::ClientContext> m_context;
-        std::unique_ptr<grpc::ClientReader<grpcProtobufMessages::SubscribeStreamMessage>> m_stream;
+        std::unique_ptr<grpc::ClientReaderInterface<grpcProtobufMessages::SubscribeStreamMessage>> m_stream;
         
         std::thread m_thread;
 
