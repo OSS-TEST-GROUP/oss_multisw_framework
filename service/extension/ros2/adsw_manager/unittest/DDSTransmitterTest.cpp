@@ -216,6 +216,40 @@ TEST_F(DDSTransmitterTest, GettersBeforeInitialize_TC001) {
     EXPECT_TRUE(ins->GetSubscriber() == nullptr);
 }
 
+TEST_F(DDSTransmitterTest, SendMessage_Success_TC001) {
+    // Initialize first
+    ASSERT_TRUE(ins->Initialize());
+    
+    // SendMessage after initialization should work
+    int dummy_data = 42;
+    EXPECT_TRUE(ins->SendMessage(ros2::adsw_manager::MessageType::START_SERVICE_REQUEST, &dummy_data));
+}
+
+TEST_F(DDSTransmitterTest, SendMessage_BeforeInitialize_TC002) {
+    // SendMessage without initialization should fail because message_queue_ is nullptr
+    int dummy_data = 42;
+    EXPECT_FALSE(ins->SendMessage(ros2::adsw_manager::MessageType::START_SERVICE_REQUEST, &dummy_data));
+}
+
+TEST_F(DDSTransmitterTest, SendMessage_AllMessageTypes_TC003) {
+    ASSERT_TRUE(ins->Initialize());
+    
+    int dummy_data = 42;
+    EXPECT_TRUE(ins->SendMessage(ros2::adsw_manager::MessageType::START_SERVICE_REQUEST, &dummy_data));
+    EXPECT_TRUE(ins->SendMessage(ros2::adsw_manager::MessageType::START_SERVICE_RESPONSE, &dummy_data));
+    EXPECT_TRUE(ins->SendMessage(ros2::adsw_manager::MessageType::STOP_SERVICE_REQUEST, &dummy_data));
+    EXPECT_TRUE(ins->SendMessage(ros2::adsw_manager::MessageType::STOP_SERVICE_RESPONSE, &dummy_data));
+    EXPECT_TRUE(ins->SendMessage(ros2::adsw_manager::MessageType::UPDATE_SERVICE_LIST_REQUEST, &dummy_data));
+    EXPECT_TRUE(ins->SendMessage(ros2::adsw_manager::MessageType::UPDATE_SERVICE_LIST_RESPONSE, &dummy_data));
+}
+
+TEST_F(DDSTransmitterTest, SendMessage_NullPtr_TC004) {
+    ASSERT_TRUE(ins->Initialize());
+    
+    // SendMessage with nullptr should still work (queue handles it)
+    EXPECT_TRUE(ins->SendMessage(ros2::adsw_manager::MessageType::START_SERVICE_REQUEST, nullptr));
+}
+
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);

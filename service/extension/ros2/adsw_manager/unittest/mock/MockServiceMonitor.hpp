@@ -8,8 +8,6 @@
 #include "service/Service.hpp"
 
 
-using namespace eprosima::fastdds::dds;
-
 namespace ros2 {
 namespace adsw_manager {
     
@@ -28,6 +26,7 @@ public:
     MOCK_METHOD(int32_t, NodeStopped, (std::string service, std::string node), ());
     MOCK_METHOD(int32_t, NodeCount, (std::string service), ());
     MOCK_METHOD(void, UpdateServiceState, (), ());
+    MOCK_METHOD(void, NotifyAdswStatus, (int32_t status_code, std::string status_msg), ());
 
 };
 
