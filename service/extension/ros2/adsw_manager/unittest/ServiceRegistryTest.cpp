@@ -36,19 +36,25 @@ protected:
     void SetUp() override {
         registry = std::make_unique<ServiceRegistry>();
         Mock_Logger = new MockLogger();
-        Mock_Service = new MockService("TestService");
+        // Don't allocate Mock_Service here - each test that needs it will create one
+        // and set Mock_Service to the raw pointer for forwarding
+        Mock_Service = nullptr;
     }
 
     void TearDown() override {
         registry.reset();
         delete Mock_Logger;
         Mock_Logger = nullptr;
-        delete Mock_Service;
+        // Don't delete Mock_Service - it's managed by shared_ptr in tests that use it
         Mock_Service = nullptr;
     }
 
     std::shared_ptr<Service> MakeService(const std::string& name) {
-        return std::make_shared<Service>(name, ServiceType::ONESHOT, RecoveryPolicy::ALWAYS, true);
+        auto svc = std::make_shared<MockService>(name);
+        // Set Mock_Service to the last created service for forwarding
+        // Note: This means only the last service created will have proper forwarding
+        Mock_Service = svc.get();
+        return svc;
     }
 
     std::unique_ptr<ServiceRegistry> registry;

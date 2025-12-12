@@ -1,7 +1,8 @@
-// Unit tests for DDSTransmitter class using Google Test and Google Mock
+// Unit tests for ContainerController class using Google Test and Google Mock
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "adsw_manager/control/ContainerController.hpp"
+#include "mock/MockLogger.hpp"
 
 using ::testing::Return;
 using ::testing::_;
@@ -22,10 +23,13 @@ using ::testing::Combine;
 class ContainerControllerTest : public ::testing::Test {
 protected:
     void SetUp() override {
+        Mock_Logger = new MockLogger();
         controller = new ros2::adsw_manager::ContainerController();
     }
     void TearDown() override {
         delete controller;
+        delete Mock_Logger;
+        Mock_Logger = nullptr;
     }
     ros2::adsw_manager::ContainerController* controller;
 };
