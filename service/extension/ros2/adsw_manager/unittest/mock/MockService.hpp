@@ -43,7 +43,9 @@ Service::~Service() {
 }
 
 std::string Service::GetName() {
-    return Mock_Service->GetName();
+    // Return the stored name directly instead of forwarding to mock
+    // This is essential for ServiceRegistry to work properly
+    return name_;
 }
 ServiceType Service::GetServiceType() {
     return Mock_Service->GetServiceType();
