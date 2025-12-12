@@ -47,17 +47,20 @@ protected:
         Mock_Logger = nullptr;
         // Don't delete Mock_Service - it's managed by shared_ptr in tests that use it
         Mock_Service = nullptr;
+        created_services_.clear();
     }
 
     std::shared_ptr<Service> MakeService(const std::string& name) {
         auto svc = std::make_shared<MockService>(name);
         // Set Mock_Service to the last created service for forwarding
-        // Note: This means only the last service created will have proper forwarding
         Mock_Service = svc.get();
+        // Keep reference to prevent deletion
+        created_services_.push_back(svc);
         return svc;
     }
 
     std::unique_ptr<ServiceRegistry> registry;
+    std::vector<std::shared_ptr<MockService>> created_services_;
 };
 
 // helper lambdas for vector operations (replace missing vectorAdd/vectorRemove/vectorHas APIs)

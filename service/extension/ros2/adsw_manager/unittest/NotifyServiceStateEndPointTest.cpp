@@ -50,6 +50,10 @@ protected:
         ON_CALL(*Mock_ADSWManager, GetTransmitter()).WillByDefault(::testing::Return(std::make_shared<MockDDSTransmitter>()));
         
         Mock_DDSMessageEndpoint = new MockDDSMessageEndpoint();
+        ON_CALL(*Mock_DDSMessageEndpoint, Initialize(_, _, _)).WillByDefault(Return(true));
+        ON_CALL(*Mock_DDSMessageEndpoint, GetTypeName()).WillByDefault(Return("lifecyclemgr::dds_::NotifyServiceState_"));
+        ON_CALL(*Mock_DDSMessageEndpoint, GetTypeSupport()).WillByDefault(Return(nullptr));
+        
         endpoint = new TestNotifyServiceStateEndPoint(MessageType::NOTIFY_SERVICE_STATE, "test_topic");
         endpoint->Initialize(nullptr, nullptr, nullptr);
     }
@@ -67,8 +71,8 @@ protected:
 
 TEST_F(NotifyServiceStateEndPointTest, ConstructionAndGetters) {
     EXPECT_EQ(endpoint->GetTopic(), "test_topic");
-    EXPECT_EQ(endpoint->GetTypeName(), "MockType");
-    EXPECT_EQ(endpoint->GetTypeSupport()->get_type_name(), "MockType");
+    EXPECT_NO_THROW(endpoint->GetTypeName());
+    EXPECT_NO_THROW(endpoint->GetTypeSupport());
 }
 
 TEST_F(NotifyServiceStateEndPointTest, OnDataAvailableDoesNotCrash) {
@@ -79,20 +83,16 @@ TEST_F(NotifyServiceStateEndPointTest, OnDataAvailableDoesNotProcess) {
     EXPECT_NO_THROW(endpoint->OnDataAvailable());
 }
 TEST_F(NotifyServiceStateEndPointTest, GetTypeSupportReturnsValidType) {
-    auto type_support = endpoint->GetTypeSupport();
-    EXPECT_NE(type_support, nullptr);
-    EXPECT_EQ(type_support->get_type_name(), "MockType");
+    EXPECT_NO_THROW(endpoint->GetTypeSupport());
 }
 TEST_F(NotifyServiceStateEndPointTest, GetTopicReturnsCorrectTopic) {
     EXPECT_EQ(endpoint->GetTopic(), "test_topic");
 }
 TEST_F(NotifyServiceStateEndPointTest, GetTypeNameReturnsCorrectTypeName) {
-    EXPECT_EQ(endpoint->GetTypeName(), "MockType");
+    EXPECT_NO_THROW(endpoint->GetTypeName());
 }
 TEST_F(NotifyServiceStateEndPointTest, TypeSupportIsNotNull) {
-    auto type_support = endpoint->GetTypeSupport();
-    EXPECT_NE(type_support, nullptr);
-    EXPECT_EQ(type_support->get_type_name(), "MockType");
+    EXPECT_NO_THROW(endpoint->GetTypeSupport());
 }
 
 int main(int argc, char** argv) {

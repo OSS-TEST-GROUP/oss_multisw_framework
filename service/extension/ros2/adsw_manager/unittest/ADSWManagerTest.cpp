@@ -52,12 +52,8 @@ protected:
         Mock_Logger = new MockLogger();
         
         // Setup default mock expectations
-        ON_CALL(*Mock_DDSTransmitter, Initialize()).WillByDefault(Return(true));
-        ON_CALL(*Mock_EndPointFactory, Initialize()).WillByDefault(Return(true));
-        ON_CALL(*Mock_ServiceMonitor, Initialize()).WillByDefault(Return(true));
-        ON_CALL(*Mock_ROSServiceController, Initialize()).WillByDefault(Return(true));
-        ON_CALL(*Mock_ServiceRegistry, LoadServiceList()).WillByDefault(Return(true));
         ON_CALL(*Mock_EndPointFactory, GetTopic(_)).WillByDefault(Return("mock_topic"));
+        ON_CALL(*Mock_ServiceRegistry, LoadServiceList()).WillByDefault(Return(true));
     }
 
     void TearDown() override {
