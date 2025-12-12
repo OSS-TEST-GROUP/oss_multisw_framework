@@ -48,6 +48,7 @@ include (GoogleTest)
 # Add test executable
 add_executable ( LifecycleManagerTest LifecycleManagerTest.cpp ../manager/LifecycleManager.cpp )
 add_executable ( DDSTransmitterTest DDSTransmitterTest.cpp ../transmitter/DDSTransmitter.cpp )
+add_executable ( DDSMessageEndPointTest DDSMessageEndPointTest.cpp ../transmitter/DDSMessageEndPoint.cpp )
 add_executable ( EndPointFactoryTest EndPointFactoryTest.cpp 
                 ../endpoint/EndPointFactory.cpp
                 ../endpoint/GetServiceStateEndPoint.cpp
@@ -78,6 +79,7 @@ add_executable ( MWServiceTest MWServiceTest.cpp ../service/MWService.cpp ../ser
 
 gtest_discover_tests ( LifecycleManagerTest )
 gtest_discover_tests ( DDSTransmitterTest )
+gtest_discover_tests ( DDSMessageEndPointTest )
 gtest_discover_tests ( EndPointFactoryTest )
 gtest_discover_tests ( MWServiceManagerTest )
 gtest_discover_tests ( LFPolicyManagerTest )
@@ -94,6 +96,7 @@ install ( TARGETS
                 ArgumentConfigTest
                 ServiceTest
                 DDSTransmitterTest
+                DDSMessageEndPointTest
                 StateManagerTest    
                 MWServiceTest
                 LFPolicyManagerTest
