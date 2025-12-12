@@ -23,6 +23,7 @@ using ::testing::Args;
 using ::testing::AllOf;
 using ::testing::AtLeast;
 using ::testing::Combine;
+using ::testing::NiceMock;
 
 using namespace lifecycle_manager;
 
@@ -32,8 +33,12 @@ protected:
         ins = new DDSTransmitter();
 
         Mock_Logger = new MockLogger();
-        Mock_MessageQueue = new MockMessageQueue(ins);
-        MockMessageEndPoint::Mock_MessageEndPoint = new MockMessageEndPoint("test_topic");
+        Mock_MessageQueue = new NiceMock<MockMessageQueue>(ins);
+        MockMessageEndPoint::Mock_MessageEndPoint = new NiceMock<MockMessageEndPoint>("test_topic");
+        
+        // Set default behaviors for mocks
+        ON_CALL(*Mock_MessageQueue, Start()).WillByDefault(Return(true));
+        ON_CALL(*Mock_MessageQueue, SendMessage(_)).WillByDefault(Return());
     }
     virtual void TearDown(){
         delete ins;
@@ -52,6 +57,7 @@ protected:
 
 TEST_F(DDSTransmitterTest, InitializeReturnsTrue) {
     EXPECT_TRUE(ins->Initialize());
+    ins->Finalize();  // Clean up after Initialize
 }
 
 TEST_F(DDSTransmitterTest, FinalizeDoesNotCrash) {
@@ -61,6 +67,7 @@ TEST_F(DDSTransmitterTest, FinalizeDoesNotCrash) {
 TEST_F(DDSTransmitterTest, DoubleInitializeIsIdempotent) {
     EXPECT_TRUE(ins->Initialize());
     EXPECT_TRUE(ins->Initialize());
+    ins->Finalize();
 }
 
 TEST_F(DDSTransmitterTest, DoubleFinalizeIsIdempotent) {
@@ -68,9 +75,25 @@ TEST_F(DDSTransmitterTest, DoubleFinalizeIsIdempotent) {
     ins->Finalize();
 }
 
-TEST_F(DDSTransmitterTest, AddValidMessageEndpointReturnsFalseButStores) {
-    //EXPECT_FALSE(ins->AddMessageEndpoint(Mock_MessageEndPoint));
-    //EXPECT_EQ(ins->GetMessageEndPoint("test_topic"), Mock_MessageEndPoint);
+TEST_F(DDSTransmitterTest, FinalizeAfterInitialize) {
+    // Test the participant_ != nullptr branch in Finalize
+    EXPECT_TRUE(ins->Initialize());
+    EXPECT_NO_THROW(ins->Finalize());
+}
+
+TEST_F(DDSTransmitterTest, AddValidMessageEndpointStoresEndpoint) {
+    auto mockEndpoint = std::make_shared<NiceMock<MockDDSMessageEndPoint>>("test_topic");
+    Mock_DDSMessageEndPoint = mockEndpoint.get();
+    
+    ON_CALL(*mockEndpoint, GetTopic()).WillByDefault(Return("test_topic"));
+    
+    // AddMessageEndpoint returns false but should store the endpoint
+    ins->AddMessageEndpoint(mockEndpoint);
+    
+    // The endpoint should be retrievable
+    auto result = ins->GetMessageEndPoint("test_topic");
+    EXPECT_NE(result, nullptr);
+    EXPECT_EQ(result, mockEndpoint);
 }
 
 TEST_F(DDSTransmitterTest, AddNullMessageEndpointReturnsFalse) {
@@ -81,27 +104,93 @@ TEST_F(DDSTransmitterTest, GetMessageEndPointNotFoundReturnsNullptr) {
     EXPECT_EQ(ins->GetMessageEndPoint("not_exist"), nullptr);
 }
 
-TEST_F(DDSTransmitterTest, SendMessageSuccess) {
-    MsgType msg{MessageType::LIFECYCLE_DIAG_REPORT, nullptr};
-    EXPECT_CALL(*Mock_MessageQueue, SendMessage(_)).Times(1);
-    EXPECT_TRUE(ins->SendMessage(MessageType::LIFECYCLE_DIAG_REPORT, nullptr));
+TEST_F(DDSTransmitterTest, GetMessageEndPointFound) {
+    auto mockEndpoint = std::make_shared<NiceMock<MockDDSMessageEndPoint>>("found_topic");
+    Mock_DDSMessageEndPoint = mockEndpoint.get();
+    
+    ON_CALL(*mockEndpoint, GetTopic()).WillByDefault(Return("found_topic"));
+    
+    ins->AddMessageEndpoint(mockEndpoint);
+    
+    // Now test the found case
+    auto result = ins->GetMessageEndPoint("found_topic");
+    EXPECT_NE(result, nullptr);
+    EXPECT_EQ(result, mockEndpoint);
 }
 
-TEST_F(DDSTransmitterTest, SendMessageFailureWhenQueueNull) {
-    ins->Finalize(); // This will set message_queue_ to nullptr
+TEST_F(DDSTransmitterTest, SendMessageSuccessAfterInitialize) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    EXPECT_CALL(*Mock_MessageQueue, SendMessage(_)).Times(1);
+    EXPECT_TRUE(ins->SendMessage(MessageType::LIFECYCLE_DIAG_REPORT, nullptr));
+    
+    ins->Finalize();
+}
+
+TEST_F(DDSTransmitterTest, SendMessageFailureWhenNotInitialized) {
+    // Without Initialize, message_queue_ is nullptr
     EXPECT_FALSE(ins->SendMessage(MessageType::LIFECYCLE_DIAG_REPORT, nullptr));
 }
 
-TEST_F(DDSTransmitterTest, GetDomainReturnsPointer) {
-    EXPECT_EQ(ins->GetDomain(), ins->GetDomain()); // Just check getter
+TEST_F(DDSTransmitterTest, SendMessageWithDifferentMessageTypes) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    int dummy_data = 42;
+    
+    EXPECT_CALL(*Mock_MessageQueue, SendMessage(_)).Times(3);
+    
+    EXPECT_TRUE(ins->SendMessage(MessageType::LIFECYCLE_DIAG_REPORT, nullptr));
+    EXPECT_TRUE(ins->SendMessage(MessageType::START_SERVICE_REQUEST, &dummy_data));
+    EXPECT_TRUE(ins->SendMessage(MessageType::STOP_SERVICE_REQUEST, &dummy_data));
+    
+    ins->Finalize();
 }
 
-TEST_F(DDSTransmitterTest, GetPublisherReturnsPointer) {
-    EXPECT_EQ(ins->GetPublisher(), ins->GetPublisher());
+TEST_F(DDSTransmitterTest, GetDomainBeforeInitialize) {
+    EXPECT_EQ(ins->GetDomain(), nullptr);
 }
 
-TEST_F(DDSTransmitterTest, GetSubscriberReturnsPointer) {
-    EXPECT_EQ(ins->GetSubscriber(), ins->GetSubscriber());
+TEST_F(DDSTransmitterTest, GetDomainAfterInitialize) {
+    EXPECT_TRUE(ins->Initialize());
+    EXPECT_NE(ins->GetDomain(), nullptr);
+    ins->Finalize();
+}
+
+TEST_F(DDSTransmitterTest, GetPublisherBeforeInitialize) {
+    EXPECT_EQ(ins->GetPublisher(), nullptr);
+}
+
+TEST_F(DDSTransmitterTest, GetPublisherAfterInitialize) {
+    EXPECT_TRUE(ins->Initialize());
+    EXPECT_NE(ins->GetPublisher(), nullptr);
+    ins->Finalize();
+}
+
+TEST_F(DDSTransmitterTest, GetSubscriberBeforeInitialize) {
+    EXPECT_EQ(ins->GetSubscriber(), nullptr);
+}
+
+TEST_F(DDSTransmitterTest, GetSubscriberAfterInitialize) {
+    EXPECT_TRUE(ins->Initialize());
+    EXPECT_NE(ins->GetSubscriber(), nullptr);
+    ins->Finalize();
+}
+
+TEST_F(DDSTransmitterTest, AddMultipleEndpoints) {
+    auto endpoint1 = std::make_shared<NiceMock<MockDDSMessageEndPoint>>("topic1");
+    auto endpoint2 = std::make_shared<NiceMock<MockDDSMessageEndPoint>>("topic2");
+    
+    ON_CALL(*endpoint1, GetTopic()).WillByDefault(Return("topic1"));
+    ON_CALL(*endpoint2, GetTopic()).WillByDefault(Return("topic2"));
+    
+    Mock_DDSMessageEndPoint = endpoint1.get();
+    ins->AddMessageEndpoint(endpoint1);
+    
+    Mock_DDSMessageEndPoint = endpoint2.get();
+    ins->AddMessageEndpoint(endpoint2);
+    
+    EXPECT_NE(ins->GetMessageEndPoint("topic1"), nullptr);
+    EXPECT_NE(ins->GetMessageEndPoint("topic2"), nullptr);
 }
 
 
