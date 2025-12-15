@@ -41,7 +41,15 @@ add_executable ( ADSWServiceRegistryTest ServiceRegistryTest.cpp
                 ../service/ServiceRegistry.cpp )
 add_executable ( ADSWTypeConvertTest TypeConvertTest.cpp )
                 
-add_executable ( ADSWServiceMonitorTest ServiceMonitorTest.cpp)
+add_executable ( ADSWServiceMonitorTest ServiceMonitorTest.cpp
+                 ../monitor/ServiceMonitor.cpp
+                 ${GENERATED_DIR}/lifecycle/NotifyServiceStatePubSubTypes.cxx
+                 ${GENERATED_DIR}/lifecycle/NotifyServiceStateTypeObjectSupport.cxx
+                 ${GENERATED_DIR}/lifecycle/LifecycleCommonPubSubTypes.cxx
+                 ${GENERATED_DIR}/lifecycle/LifecycleCommonTypeObjectSupport.cxx
+                 ${GENERATED_DIR}/ros2/AdswServiceStatusPubSubTypes.cxx
+                 ${GENERATED_DIR}/ros2/AdswServiceStatusTypeObjectSupport.cxx
+)
 add_executable ( ADSWROSServiceDiscoveryTest ROSServiceDiscoveryTest.cpp)
 add_executable ( ADSWDDSTransmitterTest
     DDSTransmitterTest.cpp 
