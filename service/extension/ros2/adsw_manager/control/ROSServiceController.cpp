@@ -125,12 +125,12 @@ bool ROSServiceController::StopService(const std::string& service_name){
 
 bool ROSServiceController::StartService(std::shared_ptr<Service> service){
     
-    LOG_DEBUG("ROSServiceController::StartService start " << service->GetName());
-
     if (service == nullptr) {
         LOG_ERROR("Received null service in StartService.");
         return false;
     }
+
+    LOG_DEBUG("ROSServiceController::StartService start " << service->GetName());
 
     std::string command;
     std::string launchFile = service->GetLaunchFile();
@@ -279,6 +279,11 @@ bool ROSServiceController::StartService(std::shared_ptr<Service> service){
 }
 
 bool ROSServiceController::StopService(std::shared_ptr<Service> service){
+    if (service == nullptr) {
+        LOG_ERROR("Received null service in StopService.");
+        return false;
+    }
+
     uint64_t pid = service->GetPID();
     
     if (pid == 0){
@@ -409,12 +414,12 @@ uint64_t ROSServiceController::GetPID(std::shared_ptr<Service> service){
 
 
 bool ROSServiceController::ProcessServiceStartRequest(lifecyclemgr::StartServiceRequest* message){
-    LOG_DEBUG("Processing service start request for " << message->service_list().size() << " services.");
-
     if (message == nullptr) {
         LOG_ERROR("Received null message in ProcessServiceStartRequest.");
         return false;
     }
+
+    LOG_DEBUG("Processing service start request for " << message->service_list().size() << " services.");
     if (TypeConvert::ToOsType(message->os_type()) == OsType::ROS2) {
         std::vector<std::string> service_list = message->service_list();
         bool is_group = message->is_group();
@@ -468,12 +473,12 @@ bool ROSServiceController::ProcessServiceStartRequest(lifecyclemgr::StartService
 }
 
 bool ROSServiceController::ProcessServiceStopRequest(lifecyclemgr::StopServiceRequest* message){
-    LOG_DEBUG("Processing service stop request for " << message->service_list().size() << " services.");
-
     if (message == nullptr) {
         LOG_ERROR("Received null message in ProcessServiceStopRequest.");
         return false;
     }
+
+    LOG_DEBUG("Processing service stop request for " << message->service_list().size() << " services.");
     if (TypeConvert::ToOsType(message->os_type()) == OsType::ROS2) {
         std::vector<std::string> service_list = message->service_list();
         bool is_group = message->is_group();

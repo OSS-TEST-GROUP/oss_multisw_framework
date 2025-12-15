@@ -109,6 +109,28 @@ add_executable( ADSWUpdateServiceListEndpointTest UpdateServiceListEndpointTest.
 )
 
 
+# Control directory tests
+add_executable( ADSWContainerControllerTest ContinerControllerTest.cpp
+                ../control/ContainerController.cpp
+                ../service/Container.cpp
+)
+
+add_executable( ADSWROS2NodeControllerTest ROS2NodeControllerTest.cpp
+                ../control/ROS2NodeController.cpp
+)
+
+add_executable( ADSWROS2LifecycleControllerTest ROS2LifecycleControllerTest.cpp
+                ../control/ROS2LifecycleController.cpp
+)
+
+add_executable( ADSWROSServiceControllerTest ROSServiceControllerTest.cpp
+                ../control/ROSServiceController.cpp
+                ../control/ContainerController.cpp
+                ../control/ROS2NodeController.cpp
+                ../service/Container.cpp
+)
+
+
 gtest_discover_tests ( ADSWServiceTest )
 gtest_discover_tests ( ADSWServiceRegistryTest )
 gtest_discover_tests ( ADSWTypeConvertTest )
@@ -116,6 +138,7 @@ gtest_discover_tests ( ADSWServiceMonitorTest )
 gtest_discover_tests ( ADSWROSServiceDiscoveryTest )
 gtest_discover_tests ( ADSWDDSTransmitterTest )
 gtest_discover_tests ( ADSWROSDiscoveryInfoEndpointTest )
+gtest_discover_tests ( ADSWManager )
 gtest_discover_tests ( ADSWMessageQueueTest )
 gtest_discover_tests ( ADSWDDSMessageEndpointTest )
 gtest_discover_tests ( ADSWGetServiceStateEndPointTest )
@@ -123,6 +146,10 @@ gtest_discover_tests ( ADSWNotifyServiceStateEndPointTest )
 gtest_discover_tests ( ADSWStartServiceEndpointTest )   
 gtest_discover_tests ( ADSWStopServiceEndpointTest )
 gtest_discover_tests ( ADSWUpdateServiceListEndpointTest )
+gtest_discover_tests ( ADSWContainerControllerTest )
+gtest_discover_tests ( ADSWROS2NodeControllerTest )
+gtest_discover_tests ( ADSWROS2LifecycleControllerTest )
+gtest_discover_tests ( ADSWROSServiceControllerTest )
 
 
 ## Install
@@ -142,6 +169,10 @@ install ( TARGETS
           ADSWStartServiceEndpointTest
           ADSWStopServiceEndpointTest
           ADSWUpdateServiceListEndpointTest
+          ADSWContainerControllerTest
+          ADSWROS2NodeControllerTest
+          ADSWROS2LifecycleControllerTest
+          ADSWROSServiceControllerTest
     RUNTIME DESTINATION bin/unittest/adsw_manager
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib

@@ -1,10 +1,8 @@
 // Unit tests for DDSTransmitter class using Google Test and Google Mock
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "adsw_manager/control/ROSServiceController.hpp"
 
-#include "mock/MockContainerController.hpp"
-
+#include "control/ROSServiceController.hpp"
 
 using ::testing::Return;
 using ::testing::_;
