@@ -48,6 +48,9 @@ int main(int argc, char** argv) {
             schemaPath = argv[++i];
         } else if (arg == "--grpc-provider-addr" && i + 1 < argc) {
             grpcProviderAddr = argv[++i];
+        } else {
+            LOG_ERROR << "Error: Unknown or invalid argument: " << arg;
+            exit(1);
         }
     }
 
