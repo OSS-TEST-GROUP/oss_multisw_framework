@@ -89,7 +89,8 @@ class DDSMessageEndPoint : public MessageEndPoint, public DataWriterListener , p
 
     bool is_stopped() {return false;}
 
-  private:
+  protected:
+    // Protected for testing access
     DomainParticipant* participant_;
     Publisher* publisher_;
     Subscriber* subscriber_;
@@ -99,6 +100,7 @@ class DDSMessageEndPoint : public MessageEndPoint, public DataWriterListener , p
     DataWriter* writer_;
     DataReader* reader_;
 
+  private:
     std::mutex mutex_;
     std::condition_variable cv_;
     std::atomic<bool> stop_;

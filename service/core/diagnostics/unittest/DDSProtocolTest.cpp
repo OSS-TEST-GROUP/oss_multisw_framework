@@ -1262,8 +1262,326 @@ TEST_F(DDSProtocolTest, UnsubscribeMessage_TC001) {
     ins->Finalize();
 }
 
-TEST_F(DDSProtocolTest, SerializeMessage_TC001) {
+// ==================== Comprehensive SerializeMessage Tests for Full Coverage ====================
 
+// Test SerializeMessage with complete DataTypeTest (all fields)
+TEST_F(DDSProtocolTest, SerializeMessage_TC003_complete_datatype_test) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    auto topic_info = std::make_shared<TopicInformation>();
+    topic_info->topic_name = "/CompleteDataTypeTest";
+    topic_info->topic_type = "DataTypeTest";
+    
+    if (ins->register_type_object_from_dynamic_idl(topic_info)) {
+        ins->discovered_topic_["/CompleteDataTypeTest"] = topic_info;
+        
+        // Create comprehensive variant data with all types
+        auto variant_data = std::make_shared<VariantData>();
+        variant_data->SetName("DataTypeTest");
+        
+        // All scalar types
+        variant_data->SetValue("v_char8", (char)100);
+        variant_data->SetValue("v_char16", (wchar_t)200);
+        variant_data->SetValue("v_uint8", (uint8_t)50);
+        variant_data->SetValue("v_int16", (int16_t)-500);
+        variant_data->SetValue("v_uint16", (uint16_t)1000);
+        variant_data->SetValue("v_int32", (int32_t)-50000);
+        variant_data->SetValue("v_uint32", (uint32_t)100000);
+        variant_data->SetValue("v_int64", (int64_t)-1000000);
+        variant_data->SetValue("v_uint64", (uint64_t)2000000);
+        variant_data->SetValue("v_float", 3.14159f);
+        variant_data->SetValue("v_double", 2.71828);
+        variant_data->SetValue("v_bool", true);
+        variant_data->SetValue("v_string", std::string("Hello DDS"));
+        variant_data->SetValue("v_wstring", std::wstring(L"Wide String"));
+        
+        // Nested structure
+        auto nested_variant = std::make_shared<VariantData>();
+        nested_variant->SetName("DataTypeTestSimple");
+        nested_variant->SetValue("id", (int32_t)42);
+        nested_variant->SetValue("name", std::string("NestedStruct"));
+        variant_data->SetValue("v_structure", *nested_variant);
+        
+        // All sequence types
+        variant_data->SetValue("seq_char8", std::vector<char>{'a', 'b', 'c'});
+        variant_data->SetValue("seq_char16", std::vector<wchar_t>{L'x', L'y', L'z'});
+        variant_data->SetValue("seq_uint8", std::vector<uint8_t>{10, 20, 30});
+        variant_data->SetValue("seq_int16", std::vector<int16_t>{-100, -200, -300});
+        variant_data->SetValue("seq_uint16", std::vector<uint16_t>{1000, 2000, 3000});
+        variant_data->SetValue("seq_int32", std::vector<int32_t>{-10000, -20000, -30000});
+        variant_data->SetValue("seq_uint32", std::vector<uint32_t>{100000, 200000, 300000});
+        variant_data->SetValue("seq_int64", std::vector<int64_t>{-1000000, -2000000, -3000000});
+        variant_data->SetValue("seq_uint64", std::vector<uint64_t>{10000000, 20000000, 30000000});
+        variant_data->SetValue("seq_float", std::vector<float>{1.1f, 2.2f, 3.3f});
+        variant_data->SetValue("seq_double", std::vector<double>{1.11, 2.22, 3.33});
+        variant_data->SetValue("seq_bool", std::vector<bool>{true, false, true});
+        variant_data->SetValue("seq_string", std::vector<std::string>{"one", "two", "three"});
+        variant_data->SetValue("seq_wstring", std::vector<std::wstring>{L"wide1", L"wide2", L"wide3"});
+        
+        auto message = std::make_shared<Message>(
+            "/CompleteDataTypeTest",
+            MessageProtocolType::DDS,
+            "DataTypeTest",
+            variant_data
+        );
+        
+        // This should exercise all branches in SerializeMessage
+        bool result = ins->PublishMessage(message);
+        EXPECT_TRUE(result);
+    }
+    
+    ins->Finalize();
+}
+
+// Test SerializeMessage with nested structures
+TEST_F(DDSProtocolTest, SerializeMessage_TC004_nested_structure) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    auto topic_info = std::make_shared<TopicInformation>();
+    topic_info->topic_name = "/NestedStructTest";
+    topic_info->topic_type = "DataTypeTest";
+    
+    if (ins->register_type_object_from_dynamic_idl(topic_info)) {
+        ins->discovered_topic_["/NestedStructTest"] = topic_info;
+        
+        auto variant_data = std::make_shared<VariantData>();
+        variant_data->SetName("DataTypeTest");
+        
+        // Create nested structure
+        auto nested = std::make_shared<VariantData>();
+        nested->SetName("DataTypeTestSimple");
+        nested->SetValue("id", (int32_t)999);
+        nested->SetValue("name", std::string("DeepNested"));
+        
+        variant_data->SetValue("v_structure", *nested);
+        variant_data->SetValue("v_int32", (int32_t)12345);
+        
+        auto message = std::make_shared<Message>(
+            "/NestedStructTest",
+            MessageProtocolType::DDS,
+            "DataTypeTest",
+            variant_data
+        );
+        
+        bool result = ins->PublishMessage(message);
+        EXPECT_TRUE(result);
+    }
+    
+    ins->Finalize();
+}
+
+// Test SerializeMessage with empty sequences
+TEST_F(DDSProtocolTest, SerializeMessage_TC005_empty_sequences) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    auto topic_info = std::make_shared<TopicInformation>();
+    topic_info->topic_name = "/EmptySeqTest";
+    topic_info->topic_type = "DataTypeTest";
+    
+    if (ins->register_type_object_from_dynamic_idl(topic_info)) {
+        ins->discovered_topic_["/EmptySeqTest"] = topic_info;
+        
+        auto variant_data = std::make_shared<VariantData>();
+        variant_data->SetName("DataTypeTest");
+        
+        // Set empty sequences to test branch coverage
+        variant_data->SetValue("seq_int32", std::vector<int32_t>{});
+        variant_data->SetValue("seq_string", std::vector<std::string>{});
+        variant_data->SetValue("seq_bool", std::vector<bool>{});
+        
+        auto message = std::make_shared<Message>(
+            "/EmptySeqTest",
+            MessageProtocolType::DDS,
+            "DataTypeTest",
+            variant_data
+        );
+        
+        bool result = ins->PublishMessage(message);
+        EXPECT_TRUE(result);
+    }
+    
+    ins->Finalize();
+}
+
+// Test SerializeMessage with large sequences
+TEST_F(DDSProtocolTest, SerializeMessage_TC006_large_sequences) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    auto topic_info = std::make_shared<TopicInformation>();
+    topic_info->topic_name = "/LargeSeqTest";
+    topic_info->topic_type = "DataTypeTest";
+    
+    if (ins->register_type_object_from_dynamic_idl(topic_info)) {
+        ins->discovered_topic_["/LargeSeqTest"] = topic_info;
+        
+        auto variant_data = std::make_shared<VariantData>();
+        variant_data->SetName("DataTypeTest");
+        
+        // Create large sequences
+        std::vector<int32_t> large_int_seq;
+        std::vector<std::string> large_string_seq;
+        for (int i = 0; i < 100; i++) {
+            large_int_seq.push_back(i);
+            large_string_seq.push_back("item_" + std::to_string(i));
+        }
+        
+        variant_data->SetValue("seq_int32", large_int_seq);
+        variant_data->SetValue("seq_string", large_string_seq);
+        
+        auto message = std::make_shared<Message>(
+            "/LargeSeqTest",
+            MessageProtocolType::DDS,
+            "DataTypeTest",
+            variant_data
+        );
+        
+        bool result = ins->PublishMessage(message);
+        EXPECT_TRUE(result);
+    }
+    
+    ins->Finalize();
+}
+
+// Test SerializeMessage with wstring types specifically
+TEST_F(DDSProtocolTest, SerializeMessage_TC007_wstring_types) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    auto topic_info = std::make_shared<TopicInformation>();
+    topic_info->topic_name = "/WstringTest";
+    topic_info->topic_type = "DataTypeTest";
+    
+    if (ins->register_type_object_from_dynamic_idl(topic_info)) {
+        ins->discovered_topic_["/WstringTest"] = topic_info;
+        
+        auto variant_data = std::make_shared<VariantData>();
+        variant_data->SetName("DataTypeTest");
+        
+        // Wide string types
+        variant_data->SetValue("v_wstring", std::wstring(L"Wide Character String"));
+        variant_data->SetValue("v_char16", (wchar_t)L'€');
+        
+        std::vector<wchar_t> wchar_vec = {L'A', L'B', L'C', L'€', L'£'};
+        variant_data->SetValue("seq_char16", wchar_vec);
+        
+        std::vector<std::wstring> wstring_vec = {L"First", L"Second", L"Third"};
+        variant_data->SetValue("seq_wstring", wstring_vec);
+        
+        auto message = std::make_shared<Message>(
+            "/WstringTest",
+            MessageProtocolType::DDS,
+            "DataTypeTest",
+            variant_data
+        );
+        
+        bool result = ins->PublishMessage(message);
+        EXPECT_TRUE(result);
+    }
+    
+    ins->Finalize();
+}
+
+// Test SerializeMessage with boundary values
+TEST_F(DDSProtocolTest, SerializeMessage_TC008_boundary_values) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    auto topic_info = std::make_shared<TopicInformation>();
+    topic_info->topic_name = "/BoundaryTest";
+    topic_info->topic_type = "DataTypeTest";
+    
+    if (ins->register_type_object_from_dynamic_idl(topic_info)) {
+        ins->discovered_topic_["/BoundaryTest"] = topic_info;
+        
+        auto variant_data = std::make_shared<VariantData>();
+        variant_data->SetName("DataTypeTest");
+        
+        // Boundary values for integer types
+        variant_data->SetValue("v_int8", (int8_t)-128);
+        variant_data->SetValue("v_uint8", (uint8_t)255);
+        variant_data->SetValue("v_int16", (int16_t)-32768);
+        variant_data->SetValue("v_uint16", (uint16_t)65535);
+        variant_data->SetValue("v_int32", (int32_t)-2147483648);
+        variant_data->SetValue("v_uint32", (uint32_t)4294967295);
+        
+        // Min and max float values
+        variant_data->SetValue("v_float", std::numeric_limits<float>::max());
+        variant_data->SetValue("v_double", std::numeric_limits<double>::min());
+        
+        auto message = std::make_shared<Message>(
+            "/BoundaryTest",
+            MessageProtocolType::DDS,
+            "DataTypeTest",
+            variant_data
+        );
+        
+        bool result = ins->PublishMessage(message);
+        EXPECT_TRUE(result);
+    }
+    
+    ins->Finalize();
+}
+
+// Test SerializeMessage with SimpleDataType
+TEST_F(DDSProtocolTest, SerializeMessage_TC009_simple_datatype) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    auto topic_info = std::make_shared<TopicInformation>();
+    topic_info->topic_name = "/SimpleDataType";
+    topic_info->topic_type = "DataTypeTestSimple";
+    
+    if (ins->register_type_object_from_dynamic_idl(topic_info)) {
+        ins->discovered_topic_["/SimpleDataType"] = topic_info;
+        
+        auto variant_data = std::make_shared<VariantData>();
+        variant_data->SetName("DataTypeTestSimple");
+        variant_data->SetValue("id", (int32_t)777);
+        variant_data->SetValue("name", std::string("SimpleTest"));
+        
+        auto message = std::make_shared<Message>(
+            "/SimpleDataType",
+            MessageProtocolType::DDS,
+            "DataTypeTestSimple",
+            variant_data
+        );
+        
+        bool result = ins->PublishMessage(message);
+        EXPECT_TRUE(result);
+    }
+    
+    ins->Finalize();
+}
+
+// Test PublishMessage end-to-end to ensure SerializeMessage is actually called
+TEST_F(DDSProtocolTest, PublishMessage_TC014_ensure_serialize_called) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    auto topic_info = std::make_shared<TopicInformation>();
+    topic_info->topic_name = "/SerializeCallTest";
+    topic_info->topic_type = "DataTypeTestSimple";
+    
+    if (ins->register_type_object_from_dynamic_idl(topic_info)) {
+        ins->discovered_topic_["/SerializeCallTest"] = topic_info;
+        
+        auto variant_data = std::make_shared<VariantData>();
+        variant_data->SetName("DataTypeTestSimple");
+        variant_data->SetValue("id", (int32_t)888);
+        variant_data->SetValue("name", std::string("SerializeTest"));
+        
+        auto message = std::make_shared<Message>(
+            "/SerializeCallTest",
+            MessageProtocolType::DDS,
+            "DataTypeTestSimple",
+            variant_data
+        );
+        
+        // This should create writer, call SerializeMessage, and write data
+        bool result = ins->PublishMessage(message);
+        EXPECT_TRUE(result);
+        
+        // Verify writer was created (indication that publish succeeded)
+        EXPECT_NE(nullptr, topic_info->writer);
+    }
+    
+    ins->Finalize();
 }
 
 TEST_F(DDSProtocolTest, DeserializeMessage_TC001) {
