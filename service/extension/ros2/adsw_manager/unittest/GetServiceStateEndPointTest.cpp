@@ -57,19 +57,27 @@ public:
                 
                 if (!result) {
                     // LOG_ERROR("Failed to process get service state request.");
+                    process_failed_ = true;
                 }
                 // LOG_DEBUG("Service state response sent for " << message->service_list().size() << " services.");
             }
             else {
                 // LOG_ERROR("Failed to retrieve service state.");
+                manager_null_ = true;
             }
         }
         // If mock_read_result_ is false, Read<T>() fails - nothing happens
     }
     
+    bool WasProcessFailed() const { return process_failed_; }
+    bool WasManagerNull() const { return manager_null_; }
+    void ResetFlags() { process_failed_ = false; manager_null_ = false; }
+    
 private:
     bool mock_read_result_;
     GetServiceStateRequest mock_request_;
+    bool process_failed_ = false;
+    bool manager_null_ = false;
 };
 
 class GetServiceStateEndPointTest : public ::testing::Test {
@@ -156,16 +164,22 @@ TEST_F(GetServiceStateEndPointTest, DestructorWithResponseType) {
 }
 
 // ============================================================================
-// OnDataAvailable Tests - Calling real implementation
-// The Read<T> will return false because data_reader_ is null,
-// which covers the Read failure path
+// Direct OnDataAvailable Tests - Exercise REAL code path
+// When data_reader_ is null, Read<T> will return false, covering that branch
 // ============================================================================
 
-TEST_F(GetServiceStateEndPointTest, OnDataAvailable_ReadFails_DataReaderNull) {
+TEST_F(GetServiceStateEndPointTest, OnDataAvailable_DirectCall_ReadFails) {
+    // Create REAL endpoint and call OnDataAvailable directly
     GetServiceStateEndPoint endpoint(MessageType::GET_SERVICE_STATE_REQUEST, "test_topic");
     
-    // OnDataAvailable will be called, Read<T> will fail because data_reader_ is null
-    // This covers the path where Read returns false
+    // Calling OnDataAvailable - Read<T> will fail because no data_reader_ is initialized
+    // This exercises: LOG_DEBUG, GetTopic(), and the if condition (false branch)
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+}
+
+TEST_F(GetServiceStateEndPointTest, OnDataAvailable_ResponseTypeEndpoint) {
+    // Response type endpoint should also handle OnDataAvailable gracefully
+    GetServiceStateEndPoint endpoint(MessageType::GET_SERVICE_STATE_RESPONSE, "resp_topic");
     EXPECT_NO_THROW(endpoint.OnDataAvailable());
 }
 
@@ -175,13 +189,6 @@ TEST_F(GetServiceStateEndPointTest, OnDataAvailable_MultipleCalls) {
     // Multiple calls should be safe
     EXPECT_NO_THROW(endpoint.OnDataAvailable());
     EXPECT_NO_THROW(endpoint.OnDataAvailable());
-    EXPECT_NO_THROW(endpoint.OnDataAvailable());
-}
-
-TEST_F(GetServiceStateEndPointTest, OnDataAvailable_ResponseTypeEndpoint) {
-    GetServiceStateEndPoint endpoint(MessageType::GET_SERVICE_STATE_RESPONSE, "test_topic");
-    
-    // OnDataAvailable on a response type endpoint
     EXPECT_NO_THROW(endpoint.OnDataAvailable());
 }
 
@@ -224,28 +231,96 @@ TEST_F(GetServiceStateEndPointTest, GetTopicWithSpecialCharacters) {
 }
 
 // ============================================================================
+// Additional Tests for Full Coverage
+// ============================================================================
+
+TEST_F(GetServiceStateEndPointTest, GetTypeSupportForRequest) {
+    GetServiceStateEndPoint endpoint(MessageType::GET_SERVICE_STATE_REQUEST, "topic");
+    auto typeSupport = endpoint.GetTypeSupport();
+    ASSERT_NE(typeSupport, nullptr);
+    // Verify it's the request type
+    std::string typeName = typeSupport->get_type_name();
+    EXPECT_TRUE(typeName.find("Request") != std::string::npos);
+}
+
+TEST_F(GetServiceStateEndPointTest, GetTypeSupportForResponse) {
+    GetServiceStateEndPoint endpoint(MessageType::GET_SERVICE_STATE_RESPONSE, "topic");
+    auto typeSupport = endpoint.GetTypeSupport();
+    ASSERT_NE(typeSupport, nullptr);
+    // Verify it's the response type
+    std::string typeName = typeSupport->get_type_name();
+    EXPECT_TRUE(typeName.find("Response") != std::string::npos);
+}
+
+TEST_F(GetServiceStateEndPointTest, GetTypeNameForRequest) {
+    GetServiceStateEndPoint endpoint(MessageType::GET_SERVICE_STATE_REQUEST, "topic");
+    std::string typeName = endpoint.GetTypeName();
+    EXPECT_TRUE(typeName.find("Request") != std::string::npos);
+}
+
+TEST_F(GetServiceStateEndPointTest, GetTypeNameForResponse) {
+    GetServiceStateEndPoint endpoint(MessageType::GET_SERVICE_STATE_RESPONSE, "topic");
+    std::string typeName = endpoint.GetTypeName();
+    EXPECT_TRUE(typeName.find("Response") != std::string::npos);
+}
+
+TEST_F(GetServiceStateEndPointTest, TopicWithLongName) {
+    std::string longTopic = "/very/long/topic/name/for/get/service/state/endpoint/test";
+    GetServiceStateEndPoint endpoint(MessageType::GET_SERVICE_STATE_REQUEST, longTopic);
+    EXPECT_EQ(endpoint.GetTopic(), longTopic);
+}
+
+TEST_F(GetServiceStateEndPointTest, TopicWithUnicodeCharacters) {
+    GetServiceStateEndPoint endpoint(MessageType::GET_SERVICE_STATE_REQUEST, "topic_테스트");
+    EXPECT_EQ(endpoint.GetTopic(), "topic_테스트");
+}
+
+TEST_F(GetServiceStateEndPointTest, MultipleEndpointsWithSameTopic) {
+    GetServiceStateEndPoint endpoint1(MessageType::GET_SERVICE_STATE_REQUEST, "shared_topic");
+    GetServiceStateEndPoint endpoint2(MessageType::GET_SERVICE_STATE_RESPONSE, "shared_topic");
+    
+    EXPECT_EQ(endpoint1.GetTopic(), endpoint2.GetTopic());
+    // But type supports should be different
+    EXPECT_NE(endpoint1.GetTypeName(), endpoint2.GetTypeName());
+}
+
+TEST_F(GetServiceStateEndPointTest, ConstructAndDestructSequence) {
+    for (int i = 0; i < 10; ++i) {
+        auto* endpoint = new GetServiceStateEndPoint(
+            (i % 2 == 0) ? MessageType::GET_SERVICE_STATE_REQUEST : MessageType::GET_SERVICE_STATE_RESPONSE,
+            "topic_" + std::to_string(i)
+        );
+        EXPECT_EQ(endpoint->GetTopic(), "topic_" + std::to_string(i));
+        delete endpoint;
+    }
+}
+
+// ============================================================================
 // OnDataAvailable Tests - Using TestableGetServiceStateEndPoint
 // ============================================================================
 
-TEST_F(GetServiceStateEndPointTest, OnDataAvailable_ReadSucceeds_ManagerValid_ProcessSucceeds) {
+TEST_F(GetServiceStateEndPointTest, Testable_OnDataAvailable_ReadSucceeds_ManagerValid_ProcessSucceeds) {
     TestableGetServiceStateEndPoint endpoint(MessageType::GET_SERVICE_STATE_REQUEST, "test_topic");
     endpoint.SetMockReadResult(true);
     
     ON_CALL(*Mock_ServiceRegistry, ProcessGetServiceStateRequest(_)).WillByDefault(Return(true));
     
     EXPECT_NO_THROW(endpoint.OnDataAvailable());
+    EXPECT_FALSE(endpoint.WasProcessFailed());
+    EXPECT_FALSE(endpoint.WasManagerNull());
 }
 
-TEST_F(GetServiceStateEndPointTest, OnDataAvailable_ReadSucceeds_ManagerValid_ProcessFails) {
+TEST_F(GetServiceStateEndPointTest, Testable_OnDataAvailable_ReadSucceeds_ManagerValid_ProcessFails) {
     TestableGetServiceStateEndPoint endpoint(MessageType::GET_SERVICE_STATE_REQUEST, "test_topic");
     endpoint.SetMockReadResult(true);
     
     ON_CALL(*Mock_ServiceRegistry, ProcessGetServiceStateRequest(_)).WillByDefault(Return(false));
     
     EXPECT_NO_THROW(endpoint.OnDataAvailable());
+    EXPECT_TRUE(endpoint.WasProcessFailed());
 }
 
-TEST_F(GetServiceStateEndPointTest, OnDataAvailable_ReadSucceeds_ManagerNull) {
+TEST_F(GetServiceStateEndPointTest, Testable_OnDataAvailable_ReadSucceeds_ManagerNull) {
     TestableGetServiceStateEndPoint endpoint(MessageType::GET_SERVICE_STATE_REQUEST, "test_topic");
     endpoint.SetMockReadResult(true);
     
@@ -253,17 +328,20 @@ TEST_F(GetServiceStateEndPointTest, OnDataAvailable_ReadSucceeds_ManagerNull) {
     ON_CALL(*Mock_ADSWManager, GetServiceRegistry()).WillByDefault(Return(nullptr));
     
     EXPECT_NO_THROW(endpoint.OnDataAvailable());
+    EXPECT_TRUE(endpoint.WasManagerNull());
 }
 
-TEST_F(GetServiceStateEndPointTest, OnDataAvailable_ReadFails) {
+TEST_F(GetServiceStateEndPointTest, Testable_OnDataAvailable_ReadFails) {
     TestableGetServiceStateEndPoint endpoint(MessageType::GET_SERVICE_STATE_REQUEST, "test_topic");
     endpoint.SetMockReadResult(false);
     
     // When Read fails, no processing should happen
     EXPECT_NO_THROW(endpoint.OnDataAvailable());
+    EXPECT_FALSE(endpoint.WasProcessFailed());
+    EXPECT_FALSE(endpoint.WasManagerNull());
 }
 
-TEST_F(GetServiceStateEndPointTest, OnDataAvailable_WithRequest) {
+TEST_F(GetServiceStateEndPointTest, Testable_OnDataAvailable_WithRequest) {
     TestableGetServiceStateEndPoint endpoint(MessageType::GET_SERVICE_STATE_REQUEST, "test_topic");
     
     // Set up a mock request
@@ -273,6 +351,24 @@ TEST_F(GetServiceStateEndPointTest, OnDataAvailable_WithRequest) {
     
     ON_CALL(*Mock_ServiceRegistry, ProcessGetServiceStateRequest(_)).WillByDefault(Return(true));
     
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+    EXPECT_FALSE(endpoint.WasProcessFailed());
+}
+
+TEST_F(GetServiceStateEndPointTest, Testable_OnDataAvailable_MultipleCalls) {
+    TestableGetServiceStateEndPoint endpoint(MessageType::GET_SERVICE_STATE_REQUEST, "test_topic");
+    
+    // First call with Read failing
+    endpoint.SetMockReadResult(false);
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+    EXPECT_FALSE(endpoint.WasProcessFailed());
+    
+    // Reset flags
+    endpoint.ResetFlags();
+    
+    // Second call with Read succeeding
+    endpoint.SetMockReadResult(true);
+    ON_CALL(*Mock_ServiceRegistry, ProcessGetServiceStateRequest(_)).WillByDefault(Return(true));
     EXPECT_NO_THROW(endpoint.OnDataAvailable());
 }
 

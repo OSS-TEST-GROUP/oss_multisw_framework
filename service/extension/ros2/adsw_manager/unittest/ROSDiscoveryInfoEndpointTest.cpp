@@ -180,14 +180,16 @@ TEST_F(ROSDiscoveryInfoEndpointTest, Initialize_Success) {
 }
 
 // ============================================================================
-// OnDataAvailable Tests - Calling real implementation
+// Direct OnDataAvailable Tests - Exercise REAL code path
+// When data_reader_ is null, Read<T> will return false, covering that branch
 // ============================================================================
 
-TEST_F(ROSDiscoveryInfoEndpointTest, OnDataAvailable_ReadFails_DataReaderNull) {
+TEST_F(ROSDiscoveryInfoEndpointTest, OnDataAvailable_DirectCall_ReadFails) {
+    // Create REAL endpoint and call OnDataAvailable directly
     ROSDiscoveryInfoEndpoint endpoint(MessageType::ROS2_DISCOVREY_INFO, "test_topic");
     
-    // OnDataAvailable will be called, Read<T> will fail because data_reader_ is null
-    // This covers the else branch in OnDataAvailable
+    // Calling OnDataAvailable - Read<T> will fail because no data_reader_ is initialized
+    // This exercises the else branch in OnDataAvailable (LOG_ERROR)
     EXPECT_NO_THROW(endpoint.OnDataAvailable());
 }
 
@@ -239,6 +241,55 @@ TEST_F(ROSDiscoveryInfoEndpointTest, GetTypeName_ReturnsExpectedTypeName) {
 }
 
 // ============================================================================
+// Additional Tests for Full Coverage
+// ============================================================================
+
+TEST_F(ROSDiscoveryInfoEndpointTest, TopicWithLongName) {
+    std::string longTopic = "/very/long/topic/name/for/ros/discovery/info/endpoint/test";
+    ROSDiscoveryInfoEndpoint endpoint(MessageType::ROS2_DISCOVREY_INFO, longTopic);
+    EXPECT_EQ(endpoint.GetTopic(), longTopic);
+}
+
+TEST_F(ROSDiscoveryInfoEndpointTest, TopicWithUnicodeCharacters) {
+    ROSDiscoveryInfoEndpoint endpoint(MessageType::ROS2_DISCOVREY_INFO, "topic_테스트");
+    EXPECT_EQ(endpoint.GetTopic(), "topic_테스트");
+}
+
+TEST_F(ROSDiscoveryInfoEndpointTest, MultipleEndpoints) {
+    ROSDiscoveryInfoEndpoint endpoint1(MessageType::ROS2_DISCOVREY_INFO, "topic1");
+    ROSDiscoveryInfoEndpoint endpoint2(MessageType::ROS2_DISCOVREY_INFO, "topic2");
+    
+    EXPECT_NE(endpoint1.GetTopic(), endpoint2.GetTopic());
+    // Type supports should be the same type
+    EXPECT_EQ(endpoint1.GetTypeName(), endpoint2.GetTypeName());
+}
+
+TEST_F(ROSDiscoveryInfoEndpointTest, ConstructAndDestructSequence) {
+    for (int i = 0; i < 10; ++i) {
+        auto* endpoint = new ROSDiscoveryInfoEndpoint(
+            MessageType::ROS2_DISCOVREY_INFO,
+            "topic_" + std::to_string(i)
+        );
+        EXPECT_EQ(endpoint->GetTopic(), "topic_" + std::to_string(i));
+        delete endpoint;
+    }
+}
+
+TEST_F(ROSDiscoveryInfoEndpointTest, DestructorWithInvalidType) {
+    auto* endpoint = new ROSDiscoveryInfoEndpoint(MessageType::GET_SERVICE_STATE_REQUEST, "test_topic");
+    EXPECT_NO_THROW(delete endpoint);
+}
+
+TEST_F(ROSDiscoveryInfoEndpointTest, InitializeAndFinalize) {
+    ROSDiscoveryInfoEndpoint endpoint(MessageType::ROS2_DISCOVREY_INFO, "topic");
+    bool result = endpoint.Initialize(participant_, publisher_, subscriber_);
+    EXPECT_TRUE(result);
+    // Test multiple OnDataAvailable calls after initialization
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+    endpoint.Finalize();
+}
+
+// ============================================================================
 // OnDataAvailable Tests - Using Testable Subclass
 // ============================================================================
 
@@ -282,7 +333,7 @@ private:
     bool read_failed_ = false;
 };
 
-TEST_F(ROSDiscoveryInfoEndpointTest, OnDataAvailable_ReadSucceeds_ManagerValid) {
+TEST_F(ROSDiscoveryInfoEndpointTest, Testable_OnDataAvailable_ReadSucceeds_ManagerValid) {
     TestableROSDiscoveryInfoEndpoint endpoint(MessageType::ROS2_DISCOVREY_INFO, "test_topic");
     endpoint.SetMockReadResult(true);
     
@@ -293,7 +344,7 @@ TEST_F(ROSDiscoveryInfoEndpointTest, OnDataAvailable_ReadSucceeds_ManagerValid) 
     EXPECT_FALSE(endpoint.WasManagerNull());
 }
 
-TEST_F(ROSDiscoveryInfoEndpointTest, OnDataAvailable_ReadSucceeds_ManagerNull) {
+TEST_F(ROSDiscoveryInfoEndpointTest, Testable_OnDataAvailable_ReadSucceeds_ManagerNull) {
     TestableROSDiscoveryInfoEndpoint endpoint(MessageType::ROS2_DISCOVREY_INFO, "test_topic");
     endpoint.SetMockReadResult(true);
     
@@ -304,7 +355,7 @@ TEST_F(ROSDiscoveryInfoEndpointTest, OnDataAvailable_ReadSucceeds_ManagerNull) {
     EXPECT_FALSE(endpoint.WasParseCalled());
 }
 
-TEST_F(ROSDiscoveryInfoEndpointTest, OnDataAvailable_ReadFails) {
+TEST_F(ROSDiscoveryInfoEndpointTest, Testable_OnDataAvailable_ReadFails) {
     TestableROSDiscoveryInfoEndpoint endpoint(MessageType::ROS2_DISCOVREY_INFO, "test_topic");
     endpoint.SetMockReadResult(false);
     
@@ -313,7 +364,7 @@ TEST_F(ROSDiscoveryInfoEndpointTest, OnDataAvailable_ReadFails) {
     EXPECT_FALSE(endpoint.WasParseCalled());
 }
 
-TEST_F(ROSDiscoveryInfoEndpointTest, OnDataAvailable_WithMockInfo) {
+TEST_F(ROSDiscoveryInfoEndpointTest, Testable_OnDataAvailable_WithMockInfo) {
     TestableROSDiscoveryInfoEndpoint endpoint(MessageType::ROS2_DISCOVREY_INFO, "test_topic");
     endpoint.SetMockReadResult(true);
     
@@ -322,6 +373,24 @@ TEST_F(ROSDiscoveryInfoEndpointTest, OnDataAvailable_WithMockInfo) {
     
     EXPECT_CALL(*Mock_ROSServiceDiscovery, ParseROSDiscoveryInfo(_)).Times(1);
     
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+    EXPECT_TRUE(endpoint.WasParseCalled());
+}
+
+TEST_F(ROSDiscoveryInfoEndpointTest, Testable_OnDataAvailable_MultipleCalls) {
+    TestableROSDiscoveryInfoEndpoint endpoint(MessageType::ROS2_DISCOVREY_INFO, "test_topic");
+    
+    // First call with Read failing
+    endpoint.SetMockReadResult(false);
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+    EXPECT_TRUE(endpoint.WasReadFailed());
+    
+    // Reset flags
+    endpoint.ResetFlags();
+    
+    // Second call with Read succeeding
+    endpoint.SetMockReadResult(true);
+    EXPECT_CALL(*Mock_ROSServiceDiscovery, ParseROSDiscoveryInfo(_)).Times(1);
     EXPECT_NO_THROW(endpoint.OnDataAvailable());
     EXPECT_TRUE(endpoint.WasParseCalled());
 }
