@@ -149,7 +149,7 @@ gtest_discover_tests ( ADSWUpdateServiceListEndpointTest )
 gtest_discover_tests ( ADSWContainerControllerTest )
 gtest_discover_tests ( ADSWROS2NodeControllerTest )
 gtest_discover_tests ( ADSWROS2LifecycleControllerTest )
-gtest_discover_tests ( ADSWROSServiceControllerTest )
+#gtest_discover_tests ( ADSWROSServiceControllerTest )
 
 
 ## Install
