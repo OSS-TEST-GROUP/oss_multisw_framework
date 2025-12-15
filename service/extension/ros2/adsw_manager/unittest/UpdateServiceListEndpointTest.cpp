@@ -49,11 +49,17 @@ protected:
     }
     
     void TearDown() override {
+        // Clear the singleton shared instance first
+        ADSWManager::SetShared(nullptr);
+        
+        // Now clear the global pointer (it'll be deleted by shared_ptr)
+        Mock_ADSWManager = nullptr;
+        
+        // Delete objects not wrapped in shared_ptr
         delete Mock_Logger;
         Mock_Logger = nullptr;
         delete Mock_DDSMessageEndpoint;
         Mock_DDSMessageEndpoint = nullptr;
-        Mock_ADSWManager = nullptr;
     }
 };
 
@@ -150,7 +156,102 @@ TEST_F(UpdateServiceListEndPointTest, GetTypeNameReturnsNonEmptyString) {
 }
 
 // ============================================================================
-// OnDataAvailable Tests - Using Testable Subclass
+// Direct OnDataAvailable Tests - Exercise REAL code path
+// When data_reader_ is null, Read<T> will return false, covering that branch
+// ============================================================================
+
+TEST_F(UpdateServiceListEndPointTest, OnDataAvailable_DirectCall_ReadFails) {
+    // Create REAL endpoint and call OnDataAvailable directly
+    // This exercises the real OnDataAvailable code even though Read will fail
+    UpdateServiceListEndPoint endpoint(MessageType::UPDATE_SERVICE_LIST_RESPONSE, "test_topic");
+    
+    // Calling OnDataAvailable - Read<T> will fail because no data_reader_ is initialized
+    // This still exercises: LOG_DEBUG, GetTopic(), and the if condition (false branch)
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+}
+
+TEST_F(UpdateServiceListEndPointTest, OnDataAvailable_RequestTypeEndpoint) {
+    // Request type endpoint should also handle OnDataAvailable gracefully
+    UpdateServiceListEndPoint endpoint(MessageType::UPDATE_SERVICE_LIST_REQUEST, "req_topic");
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+}
+
+TEST_F(UpdateServiceListEndPointTest, OnDataAvailable_MultipleCallsOnRealEndpoint) {
+    UpdateServiceListEndPoint endpoint(MessageType::UPDATE_SERVICE_LIST_RESPONSE, "test_topic");
+    
+    // Multiple calls should be safe
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+}
+
+// ============================================================================
+// Additional Tests for Full Coverage
+// ============================================================================
+
+TEST_F(UpdateServiceListEndPointTest, GetTypeSupportForRequest) {
+    UpdateServiceListEndPoint endpoint(MessageType::UPDATE_SERVICE_LIST_REQUEST, "topic");
+    auto typeSupport = endpoint.GetTypeSupport();
+    ASSERT_NE(typeSupport, nullptr);
+    // Verify it's the request type
+    std::string typeName = typeSupport->get_type_name();
+    EXPECT_TRUE(typeName.find("Request") != std::string::npos);
+}
+
+TEST_F(UpdateServiceListEndPointTest, GetTypeSupportForResponse) {
+    UpdateServiceListEndPoint endpoint(MessageType::UPDATE_SERVICE_LIST_RESPONSE, "topic");
+    auto typeSupport = endpoint.GetTypeSupport();
+    ASSERT_NE(typeSupport, nullptr);
+    // Verify it's the response type
+    std::string typeName = typeSupport->get_type_name();
+    EXPECT_TRUE(typeName.find("Response") != std::string::npos);
+}
+
+TEST_F(UpdateServiceListEndPointTest, GetTypeNameForRequest) {
+    UpdateServiceListEndPoint endpoint(MessageType::UPDATE_SERVICE_LIST_REQUEST, "topic");
+    std::string typeName = endpoint.GetTypeName();
+    EXPECT_TRUE(typeName.find("Request") != std::string::npos);
+}
+
+TEST_F(UpdateServiceListEndPointTest, GetTypeNameForResponse) {
+    UpdateServiceListEndPoint endpoint(MessageType::UPDATE_SERVICE_LIST_RESPONSE, "topic");
+    std::string typeName = endpoint.GetTypeName();
+    EXPECT_TRUE(typeName.find("Response") != std::string::npos);
+}
+
+TEST_F(UpdateServiceListEndPointTest, TopicWithLongName) {
+    std::string longTopic = "/very/long/topic/name/for/update/service/list/endpoint/test";
+    UpdateServiceListEndPoint endpoint(MessageType::UPDATE_SERVICE_LIST_REQUEST, longTopic);
+    EXPECT_EQ(endpoint.GetTopic(), longTopic);
+}
+
+TEST_F(UpdateServiceListEndPointTest, TopicWithUnicodeCharacters) {
+    UpdateServiceListEndPoint endpoint(MessageType::UPDATE_SERVICE_LIST_REQUEST, "topic_테스트");
+    EXPECT_EQ(endpoint.GetTopic(), "topic_테스트");
+}
+
+TEST_F(UpdateServiceListEndPointTest, MultipleEndpointsWithSameTopic) {
+    UpdateServiceListEndPoint endpoint1(MessageType::UPDATE_SERVICE_LIST_REQUEST, "shared_topic");
+    UpdateServiceListEndPoint endpoint2(MessageType::UPDATE_SERVICE_LIST_RESPONSE, "shared_topic");
+    
+    EXPECT_EQ(endpoint1.GetTopic(), endpoint2.GetTopic());
+    // But type supports should be different
+    EXPECT_NE(endpoint1.GetTypeName(), endpoint2.GetTypeName());
+}
+
+TEST_F(UpdateServiceListEndPointTest, ConstructAndDestructSequence) {
+    for (int i = 0; i < 10; ++i) {
+        auto* endpoint = new UpdateServiceListEndPoint(
+            (i % 2 == 0) ? MessageType::UPDATE_SERVICE_LIST_REQUEST : MessageType::UPDATE_SERVICE_LIST_RESPONSE,
+            "topic_" + std::to_string(i)
+        );
+        EXPECT_EQ(endpoint->GetTopic(), "topic_" + std::to_string(i));
+        delete endpoint;
+    }
+}
+
+// ============================================================================
+// OnDataAvailable Tests - Using Testable Subclass for branch coverage
 // ============================================================================
 
 // Test subclass that allows controlled testing of OnDataAvailable logic
@@ -184,13 +285,15 @@ private:
     int32_t last_ret_code_ = 0;
 };
 
-TEST_F(UpdateServiceListEndPointTest, OnDataAvailable_ReadFails) {
+TEST_F(UpdateServiceListEndPointTest, Testable_OnDataAvailable_ReadFails) {
     // When Read returns false, nothing happens
-    UpdateServiceListEndPoint endpoint(MessageType::UPDATE_SERVICE_LIST_RESPONSE, "test_topic");
+    TestableUpdateServiceListEndPoint endpoint(MessageType::UPDATE_SERVICE_LIST_RESPONSE, "test_topic");
+    endpoint.SetMockReadResult(false);
     EXPECT_NO_THROW(endpoint.OnDataAvailable());
+    EXPECT_FALSE(endpoint.WasResponseProcessed());
 }
 
-TEST_F(UpdateServiceListEndPointTest, OnDataAvailable_ReadSucceeds) {
+TEST_F(UpdateServiceListEndPointTest, Testable_OnDataAvailable_ReadSucceeds) {
     TestableUpdateServiceListEndPoint endpoint(MessageType::UPDATE_SERVICE_LIST_RESPONSE, "test_topic");
     endpoint.SetMockReadResult(true);
     
@@ -203,7 +306,7 @@ TEST_F(UpdateServiceListEndPointTest, OnDataAvailable_ReadSucceeds) {
     EXPECT_EQ(endpoint.GetLastRetCode(), static_cast<int32_t>(lifecyclemgr::ReturnCode::SUCCESS));
 }
 
-TEST_F(UpdateServiceListEndPointTest, OnDataAvailable_ReadSucceeds_ErrorCode) {
+TEST_F(UpdateServiceListEndPointTest, Testable_OnDataAvailable_ReadSucceeds_ErrorCode) {
     TestableUpdateServiceListEndPoint endpoint(MessageType::UPDATE_SERVICE_LIST_RESPONSE, "test_topic");
     endpoint.SetMockReadResult(true);
     
@@ -216,7 +319,7 @@ TEST_F(UpdateServiceListEndPointTest, OnDataAvailable_ReadSucceeds_ErrorCode) {
     EXPECT_EQ(endpoint.GetLastRetCode(), static_cast<int32_t>(lifecyclemgr::ReturnCode::FAILED));
 }
 
-TEST_F(UpdateServiceListEndPointTest, OnDataAvailable_MultipleCalls) {
+TEST_F(UpdateServiceListEndPointTest, Testable_OnDataAvailable_MultipleCalls) {
     TestableUpdateServiceListEndPoint endpoint(MessageType::UPDATE_SERVICE_LIST_RESPONSE, "test_topic");
     
     // First call with Read failing

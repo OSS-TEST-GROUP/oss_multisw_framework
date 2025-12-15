@@ -58,11 +58,22 @@ protected:
     }
 
     void TearDown() override {
+        // Reset the manager's shared_ptrs first
         manager.dds_transmitter_ = nullptr;
         manager.service_registry_ = nullptr;
         manager.service_monitor_ = nullptr;
         manager.service_controller_ = nullptr;
         manager.endpoint_factory_ = nullptr;
+        
+        // Clear the shared instance first to release all shared_ptrs
+        ADSWManager::SetShared(nullptr);
+        
+        // Clear the global raw pointers (they've already been deleted by shared_ptr)
+        Mock_DDSTransmitter = nullptr;
+        Mock_ServiceRegistry = nullptr;
+        Mock_ServiceMonitor = nullptr;
+        Mock_ROSServiceController = nullptr;
+        Mock_EndPointFactory = nullptr;
         
         delete Mock_Logger;
         Mock_Logger = nullptr;
