@@ -7,6 +7,11 @@
 // A simple test fixture for VissServerApp tests
 class VissServerAppTest : public ::testing::Test {
 protected:
+    std::optional<std::string> getEnv(const std::string& key) {
+        const char* val = std::getenv(key.c_str());
+        return val ? std::optional<std::string>(val) : std::nullopt;
+    }
+
     void SetUp() override {
         // It's crucial to have a valid HIM and schema for the app to initialize.
         // We assume these are in the standard config path relative to where the test is run.
@@ -19,10 +24,9 @@ protected:
 };
 
 TEST_F(VissServerAppTest, AppInitializesAndShutsDown) {
-    // 1. Create the application instance
-    // This will test if the constructor successfully initializes all components
-    // without crashing.
-    VissServerApp app("../config/viss.him", "127.0.0.1:50052");
+    auto config_path = getEnv("VEHICLE_CONFIG_PATH").value_or("../config");
+    config_path.append("/viss.him");
+    VissServerApp app(config_path, "127.0.0.1:50052");
 
     // 2. Run the app in a separate thread
     std::thread app_thread(&VissServerApp::run, &app);
@@ -45,8 +49,9 @@ TEST_F(VissServerAppTest, AppInitializesAndShutsDown) {
 }
 
 TEST_F(VissServerAppTest, StopIsIdempotent) {
-    // 1. Create the application instance
-    VissServerApp app("../config/viss.him", "127.0.0.1:50052");
+    auto config_path = getEnv("VEHICLE_CONFIG_PATH").value_or("../config");
+    config_path.append("/viss.him");
+    VissServerApp app(config_path, "127.0.0.1:50052");
 
     // 2. Run the app in a separate thread
     std::thread app_thread(&VissServerApp::run, &app);
@@ -69,8 +74,9 @@ TEST_F(VissServerAppTest, StopIsIdempotent) {
 }
 
 TEST_F(VissServerAppTest, RunIsIdempotent) {
-    // 1. Create the application instance
-    VissServerApp app("../config/viss.him", "127.0.0.1:50052");
+    auto config_path = getEnv("VEHICLE_CONFIG_PATH").value_or("../config");
+    config_path.append("/viss.him");
+    VissServerApp app(config_path, "127.0.0.1:50052");
 
     // 2. Run the app in a separate thread
     std::thread app_thread(&VissServerApp::run, &app);
