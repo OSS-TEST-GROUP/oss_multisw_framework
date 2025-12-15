@@ -72,6 +72,7 @@ add_executable ( PolicyManagerTest PolicyManagerTest.cpp )
 add_executable ( DataManagerTest DataManagerTest.cpp )
 add_executable ( DiagnosticAnalyzerTest DiagnosticAnalyzerTest.cpp )
 add_executable ( ConditionEvalulatorTest ConditionEvalulatorTest.cpp )
+add_executable ( IncomingMessageBaseTest IncomingMessageBaseTest.cpp )
 
 # Activate CTest
 gtest_discover_tests ( DiagInfoRegistryTest )
@@ -91,6 +92,7 @@ gtest_discover_tests ( PolicyManagerTest )
 gtest_discover_tests ( DataManagerTest )
 gtest_discover_tests ( DiagnosticAnalyzerTest )
 gtest_discover_tests ( ConditionEvalulatorTest )
+gtest_discover_tests ( IncomingMessageBaseTest )
 
 ## Install
 install ( TARGETS DiagInfoRegistryTest
@@ -110,6 +112,7 @@ install ( TARGETS DiagInfoRegistryTest
                   DataManagerTest
                   DiagnosticAnalyzerTest
                   ConditionEvalulatorTest
+                  IncomingMessageBaseTest
     RUNTIME DESTINATION bin/unittest/diagnostics
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib

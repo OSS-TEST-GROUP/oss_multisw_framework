@@ -189,7 +189,7 @@ void ConditionEvaluator::ConcatReleatedToken(std::vector<std::string>& token_lis
         }
         if (related) {
             if (idx + 1 >= token_list.size()) {
-                LOG_ERROR("Invalid condition. It ends with '" << related_token_list[idx] << "'.");
+                LOG_ERROR("Invalid condition. It ends with '" << related_token_list[related_token_idx] << "'.");
                 return;
             }
             std::string new_token = related_token_list[related_token_idx] + " " + token_list[idx+1];

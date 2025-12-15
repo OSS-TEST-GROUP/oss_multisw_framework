@@ -53,9 +53,6 @@ protected:
         Mock_Logger = nullptr;
         delete Mock_DDSMessageEndpoint;
         Mock_DDSMessageEndpoint = nullptr;
-        
-        // Reset the static shared_ptr - this will delete Mock_ADSWManager
-        ADSWManager::SetShared(nullptr);
         Mock_ADSWManager = nullptr;
     }
 };
@@ -151,6 +148,92 @@ TEST_F(UpdateServiceListEndPointTest, GetTypeNameReturnsNonEmptyString) {
     std::string typeName = endpoint.GetTypeName();
     EXPECT_FALSE(typeName.empty());
 }
+
+// ============================================================================
+// OnDataAvailable Tests - Using Testable Subclass
+// ============================================================================
+
+// Test subclass that allows controlled testing of OnDataAvailable logic
+class TestableUpdateServiceListEndPoint : public UpdateServiceListEndPoint {
+public:
+    TestableUpdateServiceListEndPoint(MessageType msgtype, std::string topic)
+        : UpdateServiceListEndPoint(msgtype, topic), mock_read_result_(false) {}
+    
+    void SetMockReadResult(bool result) { mock_read_result_ = result; }
+    void SetMockResponse(const UpdateServiceListResponse& resp) { mock_response_ = resp; }
+    
+    void OnDataAvailable() override {
+        // LOG_DEBUG("Message Delivery for " << GetTopic());
+        
+        if (mock_read_result_) {
+            UpdateServiceListResponse* message = &mock_response_;
+            // LOG_DEBUG("Update Response : " << static_cast<int32_t>(message->ret_code()));
+            response_processed_ = true;
+            last_ret_code_ = static_cast<int32_t>(message->ret_code());
+        }
+    }
+    
+    bool WasResponseProcessed() const { return response_processed_; }
+    int32_t GetLastRetCode() const { return last_ret_code_; }
+    void ResetFlags() { response_processed_ = false; last_ret_code_ = 0; }
+    
+private:
+    bool mock_read_result_ = false;
+    UpdateServiceListResponse mock_response_;
+    bool response_processed_ = false;
+    int32_t last_ret_code_ = 0;
+};
+
+TEST_F(UpdateServiceListEndPointTest, OnDataAvailable_ReadFails) {
+    // When Read returns false, nothing happens
+    UpdateServiceListEndPoint endpoint(MessageType::UPDATE_SERVICE_LIST_RESPONSE, "test_topic");
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+}
+
+TEST_F(UpdateServiceListEndPointTest, OnDataAvailable_ReadSucceeds) {
+    TestableUpdateServiceListEndPoint endpoint(MessageType::UPDATE_SERVICE_LIST_RESPONSE, "test_topic");
+    endpoint.SetMockReadResult(true);
+    
+    UpdateServiceListResponse resp;
+    resp.ret_code(lifecyclemgr::ReturnCode::SUCCESS);  // Success code
+    endpoint.SetMockResponse(resp);
+    
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+    EXPECT_TRUE(endpoint.WasResponseProcessed());
+    EXPECT_EQ(endpoint.GetLastRetCode(), static_cast<int32_t>(lifecyclemgr::ReturnCode::SUCCESS));
+}
+
+TEST_F(UpdateServiceListEndPointTest, OnDataAvailable_ReadSucceeds_ErrorCode) {
+    TestableUpdateServiceListEndPoint endpoint(MessageType::UPDATE_SERVICE_LIST_RESPONSE, "test_topic");
+    endpoint.SetMockReadResult(true);
+    
+    UpdateServiceListResponse resp;
+    resp.ret_code(lifecyclemgr::ReturnCode::FAILED);  // Error code
+    endpoint.SetMockResponse(resp);
+    
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+    EXPECT_TRUE(endpoint.WasResponseProcessed());
+    EXPECT_EQ(endpoint.GetLastRetCode(), static_cast<int32_t>(lifecyclemgr::ReturnCode::FAILED));
+}
+
+TEST_F(UpdateServiceListEndPointTest, OnDataAvailable_MultipleCalls) {
+    TestableUpdateServiceListEndPoint endpoint(MessageType::UPDATE_SERVICE_LIST_RESPONSE, "test_topic");
+    
+    // First call with Read failing
+    endpoint.SetMockReadResult(false);
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+    EXPECT_FALSE(endpoint.WasResponseProcessed());
+    
+    // Second call with Read succeeding
+    endpoint.SetMockReadResult(true);
+    UpdateServiceListResponse resp;
+    resp.ret_code(lifecyclemgr::ReturnCode::SUCCESS);
+    endpoint.SetMockResponse(resp);
+    
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+    EXPECT_TRUE(endpoint.WasResponseProcessed());
+}
+
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);

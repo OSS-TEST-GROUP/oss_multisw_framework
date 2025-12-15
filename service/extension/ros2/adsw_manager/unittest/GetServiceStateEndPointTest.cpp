@@ -97,13 +97,7 @@ protected:
         Mock_Logger = nullptr;
         delete Mock_DDSMessageEndpoint;
         Mock_DDSMessageEndpoint = nullptr;
-        
-        // Reset the static shared_ptr - this will delete Mock_ADSWManager
-        ADSWManager::SetShared(nullptr);
         Mock_ADSWManager = nullptr;
-        
-        // Delete Mock_ServiceRegistry - it was wrapped in shared_ptr with no-op deleter
-        delete Mock_ServiceRegistry;
         Mock_ServiceRegistry = nullptr;
     }
 };
@@ -228,6 +222,61 @@ TEST_F(GetServiceStateEndPointTest, GetTopicWithSpecialCharacters) {
     GetServiceStateEndPoint endpoint(MessageType::GET_SERVICE_STATE_REQUEST, "/ros2/topic/test");
     EXPECT_EQ(endpoint.GetTopic(), "/ros2/topic/test");
 }
+
+// ============================================================================
+// OnDataAvailable Tests - Using TestableGetServiceStateEndPoint
+// ============================================================================
+
+TEST_F(GetServiceStateEndPointTest, OnDataAvailable_ReadSucceeds_ManagerValid_ProcessSucceeds) {
+    TestableGetServiceStateEndPoint endpoint(MessageType::GET_SERVICE_STATE_REQUEST, "test_topic");
+    endpoint.SetMockReadResult(true);
+    
+    ON_CALL(*Mock_ServiceRegistry, ProcessGetServiceStateRequest(_)).WillByDefault(Return(true));
+    
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+}
+
+TEST_F(GetServiceStateEndPointTest, OnDataAvailable_ReadSucceeds_ManagerValid_ProcessFails) {
+    TestableGetServiceStateEndPoint endpoint(MessageType::GET_SERVICE_STATE_REQUEST, "test_topic");
+    endpoint.SetMockReadResult(true);
+    
+    ON_CALL(*Mock_ServiceRegistry, ProcessGetServiceStateRequest(_)).WillByDefault(Return(false));
+    
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+}
+
+TEST_F(GetServiceStateEndPointTest, OnDataAvailable_ReadSucceeds_ManagerNull) {
+    TestableGetServiceStateEndPoint endpoint(MessageType::GET_SERVICE_STATE_REQUEST, "test_topic");
+    endpoint.SetMockReadResult(true);
+    
+    // Return nullptr for service registry
+    ON_CALL(*Mock_ADSWManager, GetServiceRegistry()).WillByDefault(Return(nullptr));
+    
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+}
+
+TEST_F(GetServiceStateEndPointTest, OnDataAvailable_ReadFails) {
+    TestableGetServiceStateEndPoint endpoint(MessageType::GET_SERVICE_STATE_REQUEST, "test_topic");
+    endpoint.SetMockReadResult(false);
+    
+    // When Read fails, no processing should happen
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+}
+
+TEST_F(GetServiceStateEndPointTest, OnDataAvailable_WithRequest) {
+    TestableGetServiceStateEndPoint endpoint(MessageType::GET_SERVICE_STATE_REQUEST, "test_topic");
+    
+    // Set up a mock request
+    GetServiceStateRequest req;
+    endpoint.SetMockRequest(req);
+    endpoint.SetMockReadResult(true);
+    
+    ON_CALL(*Mock_ServiceRegistry, ProcessGetServiceStateRequest(_)).WillByDefault(Return(true));
+    
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+}
+
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

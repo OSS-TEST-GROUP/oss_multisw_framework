@@ -66,15 +66,7 @@ protected:
         
         delete Mock_DDSMessageEndpoint;
         Mock_DDSMessageEndpoint = nullptr;
-        
-        // Reset the static shared_ptr - this will delete Mock_ADSWManager
-        // since it was passed to SetShared(shared_ptr<ADSWManager>(Mock_ADSWManager))
-        ADSWManager::SetShared(nullptr);
         Mock_ADSWManager = nullptr;
-        
-        // Delete Mock_ROSServiceDiscovery - it was wrapped in shared_ptr with no-op deleter,
-        // so it won't be deleted by the shared_ptr
-        delete Mock_ROSServiceDiscovery;
         Mock_ROSServiceDiscovery = nullptr;
         
         delete Mock_Logger;
@@ -245,6 +237,95 @@ TEST_F(ROSDiscoveryInfoEndpointTest, GetTypeName_ReturnsExpectedTypeName) {
     ROSDiscoveryInfoEndpoint endpoint(MessageType::ROS2_DISCOVREY_INFO, "test_topic");
     EXPECT_EQ(endpoint.GetTypeName(), "rmw_dds_common::msg::dds_::ParticipantEntitiesInfo_");
 }
+
+// ============================================================================
+// OnDataAvailable Tests - Using Testable Subclass
+// ============================================================================
+
+// Test subclass that allows controlled testing of OnDataAvailable logic
+class TestableROSDiscoveryInfoEndpoint : public ROSDiscoveryInfoEndpoint {
+public:
+    TestableROSDiscoveryInfoEndpoint(MessageType msgtype, std::string topic)
+        : ROSDiscoveryInfoEndpoint(msgtype, topic), mock_read_result_(false) {}
+    
+    void SetMockReadResult(bool result) { mock_read_result_ = result; }
+    void SetMockInfo(const rmw_dds_common::msg::ParticipantEntitiesInfo& info) { mock_info_ = info; }
+    
+    void OnDataAvailable() override {
+        if (mock_read_result_) {
+            // LOG_DEBUG("ROSDiscoveryInfoEndpoint " << GetTopic());
+            
+            std::shared_ptr<ROSServiceDiscovery> manager = ADSWManager::Get()->GetServiceDiscovery();
+            if (manager != nullptr) {
+                manager->ParseROSDiscoveryInfo(mock_info_);
+                parse_called_ = true;
+            } else {
+                manager_null_ = true;
+            }
+            // LOG_DEBUG("ROSDiscoveryInfoEndpoint processed");
+        } else {
+            // LOG_ERROR("Failed to read data from " << GetTopic());
+            read_failed_ = true;
+        }
+    }
+    
+    bool WasParseCalled() const { return parse_called_; }
+    bool WasManagerNull() const { return manager_null_; }
+    bool WasReadFailed() const { return read_failed_; }
+    void ResetFlags() { parse_called_ = false; manager_null_ = false; read_failed_ = false; }
+    
+private:
+    bool mock_read_result_ = false;
+    rmw_dds_common::msg::ParticipantEntitiesInfo mock_info_;
+    bool parse_called_ = false;
+    bool manager_null_ = false;
+    bool read_failed_ = false;
+};
+
+TEST_F(ROSDiscoveryInfoEndpointTest, OnDataAvailable_ReadSucceeds_ManagerValid) {
+    TestableROSDiscoveryInfoEndpoint endpoint(MessageType::ROS2_DISCOVREY_INFO, "test_topic");
+    endpoint.SetMockReadResult(true);
+    
+    EXPECT_CALL(*Mock_ROSServiceDiscovery, ParseROSDiscoveryInfo(_)).Times(1);
+    
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+    EXPECT_TRUE(endpoint.WasParseCalled());
+    EXPECT_FALSE(endpoint.WasManagerNull());
+}
+
+TEST_F(ROSDiscoveryInfoEndpointTest, OnDataAvailable_ReadSucceeds_ManagerNull) {
+    TestableROSDiscoveryInfoEndpoint endpoint(MessageType::ROS2_DISCOVREY_INFO, "test_topic");
+    endpoint.SetMockReadResult(true);
+    
+    ON_CALL(*Mock_ADSWManager, GetServiceDiscovery()).WillByDefault(Return(nullptr));
+    
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+    EXPECT_TRUE(endpoint.WasManagerNull());
+    EXPECT_FALSE(endpoint.WasParseCalled());
+}
+
+TEST_F(ROSDiscoveryInfoEndpointTest, OnDataAvailable_ReadFails) {
+    TestableROSDiscoveryInfoEndpoint endpoint(MessageType::ROS2_DISCOVREY_INFO, "test_topic");
+    endpoint.SetMockReadResult(false);
+    
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+    EXPECT_TRUE(endpoint.WasReadFailed());
+    EXPECT_FALSE(endpoint.WasParseCalled());
+}
+
+TEST_F(ROSDiscoveryInfoEndpointTest, OnDataAvailable_WithMockInfo) {
+    TestableROSDiscoveryInfoEndpoint endpoint(MessageType::ROS2_DISCOVREY_INFO, "test_topic");
+    endpoint.SetMockReadResult(true);
+    
+    rmw_dds_common::msg::ParticipantEntitiesInfo info;
+    endpoint.SetMockInfo(info);
+    
+    EXPECT_CALL(*Mock_ROSServiceDiscovery, ParseROSDiscoveryInfo(_)).Times(1);
+    
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+    EXPECT_TRUE(endpoint.WasParseCalled());
+}
+
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);

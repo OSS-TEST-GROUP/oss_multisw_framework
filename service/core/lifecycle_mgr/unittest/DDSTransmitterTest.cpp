@@ -193,6 +193,101 @@ TEST_F(DDSTransmitterTest, AddMultipleEndpoints) {
     EXPECT_NE(ins->GetMessageEndPoint("topic2"), nullptr);
 }
 
+// ==================== Additional Coverage Tests ====================
+
+TEST_F(DDSTransmitterTest, SendMessage_WithValidData) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    // Test with actual data pointer
+    int test_data = 123;
+    EXPECT_CALL(*Mock_MessageQueue, SendMessage(_)).Times(1);
+    EXPECT_TRUE(ins->SendMessage(MessageType::LIFECYCLE_DIAG_REPORT, &test_data));
+    
+    ins->Finalize();
+}
+
+TEST_F(DDSTransmitterTest, GetMessageEndPoint_AfterAddingMultiple) {
+    auto ep1 = std::make_shared<NiceMock<MockDDSMessageEndPoint>>("topic_a");
+    auto ep2 = std::make_shared<NiceMock<MockDDSMessageEndPoint>>("topic_b");
+    auto ep3 = std::make_shared<NiceMock<MockDDSMessageEndPoint>>("topic_c");
+    
+    ON_CALL(*ep1, GetTopic()).WillByDefault(Return("topic_a"));
+    ON_CALL(*ep2, GetTopic()).WillByDefault(Return("topic_b"));
+    ON_CALL(*ep3, GetTopic()).WillByDefault(Return("topic_c"));
+    
+    Mock_DDSMessageEndPoint = ep1.get();
+    ins->AddMessageEndpoint(ep1);
+    
+    Mock_DDSMessageEndPoint = ep2.get();
+    ins->AddMessageEndpoint(ep2);
+    
+    Mock_DDSMessageEndPoint = ep3.get();
+    ins->AddMessageEndpoint(ep3);
+    
+    // Test found cases (covers the if branch in GetMessageEndPoint)
+    auto found_a = ins->GetMessageEndPoint("topic_a");
+    auto found_b = ins->GetMessageEndPoint("topic_b");
+    auto found_c = ins->GetMessageEndPoint("topic_c");
+    
+    EXPECT_NE(found_a, nullptr);
+    EXPECT_NE(found_b, nullptr);
+    EXPECT_NE(found_c, nullptr);
+    
+    // Test not found case (covers the else branch)
+    auto not_found = ins->GetMessageEndPoint("nonexistent_topic");
+    EXPECT_EQ(not_found, nullptr);
+}
+
+TEST_F(DDSTransmitterTest, AddMessageEndpoint_OverwriteExisting) {
+    auto ep1 = std::make_shared<NiceMock<MockDDSMessageEndPoint>>("same_topic");
+    auto ep2 = std::make_shared<NiceMock<MockDDSMessageEndPoint>>("same_topic");
+    
+    ON_CALL(*ep1, GetTopic()).WillByDefault(Return("same_topic"));
+    ON_CALL(*ep2, GetTopic()).WillByDefault(Return("same_topic"));
+    
+    Mock_DDSMessageEndPoint = ep1.get();
+    ins->AddMessageEndpoint(ep1);
+    
+    Mock_DDSMessageEndPoint = ep2.get();
+    ins->AddMessageEndpoint(ep2);
+    
+    // Should have overwritten with ep2
+    auto found = ins->GetMessageEndPoint("same_topic");
+    EXPECT_EQ(found, ep2);
+}
+
+TEST_F(DDSTransmitterTest, Initialize_MessageQueueNotNull) {
+    // After Initialize, message_queue_ should be set
+    EXPECT_TRUE(ins->Initialize());
+    
+    // SendMessage should work (indicating message_queue_ is not null)
+    EXPECT_CALL(*Mock_MessageQueue, SendMessage(_)).Times(1);
+    EXPECT_TRUE(ins->SendMessage(MessageType::LIFECYCLE_DIAG_REPORT, nullptr));
+    
+    ins->Finalize();
+}
+
+TEST_F(DDSTransmitterTest, SendMessage_LogsFailureWhenQueueNull) {
+    // Without Initialize, message_queue_ is nullptr
+    // This covers the LOG_DEBUG failure path
+    EXPECT_FALSE(ins->SendMessage(MessageType::LIFECYCLE_DIAG_REPORT, nullptr));
+    EXPECT_FALSE(ins->SendMessage(MessageType::START_SERVICE_REQUEST, nullptr));
+    EXPECT_FALSE(ins->SendMessage(MessageType::STOP_SERVICE_REQUEST, nullptr));
+}
+
+TEST_F(DDSTransmitterTest, GettersAfterFinalize) {
+    EXPECT_TRUE(ins->Initialize());
+    ins->Finalize();
+    
+    // After Finalize, participant_ is deleted but the pointer may still exist
+    // Just ensure no crash
+    EXPECT_NO_THROW({
+        ins->GetDomain();
+        ins->GetPublisher();
+        ins->GetSubscriber();
+    });
+}
+
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);

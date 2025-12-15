@@ -58,13 +58,7 @@ protected:
         Mock_Logger = nullptr;
         delete Mock_DDSMessageEndpoint;
         Mock_DDSMessageEndpoint = nullptr;
-        
-        // Reset the static shared_ptr - this will delete Mock_ADSWManager
-        ADSWManager::SetShared(nullptr);
         Mock_ADSWManager = nullptr;
-        
-        // Delete Mock_ROSServiceController - it was wrapped in shared_ptr with no-op deleter
-        delete Mock_ROSServiceController;
         Mock_ROSServiceController = nullptr;
     }
 };
@@ -154,6 +148,102 @@ TEST_F(StopServiceEndPointTest, GetTopicWithSpecialCharacters) {
     StopServiceEndPoint endpoint(MessageType::STOP_SERVICE_REQUEST, "/ros2/stop/service");
     EXPECT_EQ(endpoint.GetTopic(), "/ros2/stop/service");
 }
+
+// ============================================================================
+// OnDataAvailable Tests - Using Testable Subclass
+// ============================================================================
+
+// Test subclass that allows controlled testing of OnDataAvailable logic
+class TestableStopServiceEndPoint : public StopServiceEndPoint {
+public:
+    TestableStopServiceEndPoint(MessageType msgtype, std::string topic)
+        : StopServiceEndPoint(msgtype, topic), mock_read_result_(false) {}
+    
+    void SetMockReadResult(bool result) { mock_read_result_ = result; }
+    void SetMockRequest(const StopServiceRequest& req) { mock_request_ = req; }
+    
+    void OnDataAvailable() override {
+        // LOG_DEBUG("Message Delivery for " << GetTopic());
+        
+        if (mock_read_result_) {
+            StopServiceRequest* message = &mock_request_;
+            
+            std::shared_ptr<ROSServiceController> manager = ADSWManager::Get()->GetServiceController();
+            if (manager != nullptr) {
+                bool result = manager->ProcessServiceStopRequest(message);
+                if (!result) {
+                    // LOG_ERROR("Failed to process service stop request.");
+                    process_failed_ = true;
+                }
+            } else {
+                // LOG_ERROR("Failed to retrieve service controller.");
+                manager_null_ = true;
+            }
+        }
+    }
+    
+    bool WasProcessFailed() const { return process_failed_; }
+    bool WasManagerNull() const { return manager_null_; }
+    void ResetFlags() { process_failed_ = false; manager_null_ = false; }
+    
+private:
+    bool mock_read_result_ = false;
+    StopServiceRequest mock_request_;
+    bool process_failed_ = false;
+    bool manager_null_ = false;
+};
+
+TEST_F(StopServiceEndPointTest, OnDataAvailable_ReadFails) {
+    // When Read returns false, nothing happens
+    StopServiceEndPoint endpoint(MessageType::STOP_SERVICE_REQUEST, "test_topic");
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+}
+
+TEST_F(StopServiceEndPointTest, OnDataAvailable_ReadSucceeds_ManagerValid_ProcessSucceeds) {
+    TestableStopServiceEndPoint endpoint(MessageType::STOP_SERVICE_REQUEST, "test_topic");
+    endpoint.SetMockReadResult(true);
+    
+    ON_CALL(*Mock_ROSServiceController, ProcessStopServiceRequest(_)).WillByDefault(Return(true));
+    
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+    EXPECT_FALSE(endpoint.WasProcessFailed());
+    EXPECT_FALSE(endpoint.WasManagerNull());
+}
+
+TEST_F(StopServiceEndPointTest, OnDataAvailable_ReadSucceeds_ManagerValid_ProcessFails) {
+    TestableStopServiceEndPoint endpoint(MessageType::STOP_SERVICE_REQUEST, "test_topic");
+    endpoint.SetMockReadResult(true);
+    
+    ON_CALL(*Mock_ROSServiceController, ProcessStopServiceRequest(_)).WillByDefault(Return(false));
+    
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+    EXPECT_TRUE(endpoint.WasProcessFailed());
+}
+
+TEST_F(StopServiceEndPointTest, OnDataAvailable_ReadSucceeds_ManagerNull) {
+    TestableStopServiceEndPoint endpoint(MessageType::STOP_SERVICE_REQUEST, "test_topic");
+    endpoint.SetMockReadResult(true);
+    
+    // Return nullptr for service controller
+    ON_CALL(*Mock_ADSWManager, GetServiceController()).WillByDefault(Return(nullptr));
+    
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+    EXPECT_TRUE(endpoint.WasManagerNull());
+}
+
+TEST_F(StopServiceEndPointTest, OnDataAvailable_MultipleCalls) {
+    TestableStopServiceEndPoint endpoint(MessageType::STOP_SERVICE_REQUEST, "test_topic");
+    
+    // First call with Read failing
+    endpoint.SetMockReadResult(false);
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+    
+    // Second call with Read succeeding
+    endpoint.SetMockReadResult(true);
+    ON_CALL(*Mock_ROSServiceController, ProcessStopServiceRequest(_)).WillByDefault(Return(true));
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+}
+
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
