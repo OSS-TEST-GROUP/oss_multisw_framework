@@ -1,12 +1,12 @@
-
 module security {
- 
-  struct DetectionReport {
-    char      client_id[16];    // Security Client ID (최대 15글자 + '\0' 가정 시)
-    char      dds_topic[256];   // 공격이 탐지된 DDS 토픽 이름
-    char      rule[128];        // 탐지된 규칙
-    long long timestamp_ms;     // 탐지 시간 (epoch milliseconds)
-  };
- 
+
+    /* TopicName - mmf/adswmgr/AdswServiceStatus */
+
+    struct DetectionReport {
+        string   client_id;     // Security Client ID
+        string   dds_topic;     // 공격이 탐지된 DDS 토픽 이름 (예: "rt/DoorUnlockLockIndicator")
+        string   rule;          // 탐지된 규칙 (예: "custom rule anomaly detection")
+        long long timestamp_ms; // 탐지 시간 (epoch milliseconds)
+    };
+
 };
- 

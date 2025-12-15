@@ -28,6 +28,7 @@ using ::testing::Args;
 using ::testing::AllOf;
 using ::testing::AtLeast;
 using ::testing::Combine;
+using ::testing::NiceMock;
 
 using namespace ros2::adsw_manager;
 
@@ -134,6 +135,185 @@ TEST_F(ADSWManagerTest, StartAndStopMultipleTimes) {
     // Should be able to start and stop again
     ASSERT_TRUE(manager.Start());
     manager.Stop();
+}
+
+// ==================== Additional tests for improved coverage ====================
+
+// Test Initialize succeeds when all components initialize successfully
+TEST_F(ADSWManagerTest, Initialize_AllComponentsSucceed) {
+    // Setup: All Initialize() calls return true
+    ON_CALL(*Mock_DDSTransmitter, Initialize()).WillByDefault(Return(true));
+    ON_CALL(*Mock_EndPointFactory, Initialize()).WillByDefault(Return(true));
+    ON_CALL(*Mock_ServiceMonitor, Initialize()).WillByDefault(Return(true));
+    ON_CALL(*Mock_ROSServiceController, Initialize()).WillByDefault(Return(true));
+    
+    EXPECT_TRUE(manager.Initialize());
+}
+
+// Test Initialize fails when DDSTransmitter::Initialize() fails
+TEST_F(ADSWManagerTest, Initialize_DDSTransmitterFails) {
+    ON_CALL(*Mock_DDSTransmitter, Initialize()).WillByDefault(Return(false));
+    
+    EXPECT_FALSE(manager.Initialize());
+}
+
+// Test Initialize fails when EndPointFactory::Initialize() fails
+TEST_F(ADSWManagerTest, Initialize_EndPointFactoryFails) {
+    ON_CALL(*Mock_DDSTransmitter, Initialize()).WillByDefault(Return(true));
+    ON_CALL(*Mock_EndPointFactory, Initialize()).WillByDefault(Return(false));
+    
+    EXPECT_FALSE(manager.Initialize());
+}
+
+// Test Initialize fails when ServiceMonitor::Initialize() fails
+TEST_F(ADSWManagerTest, Initialize_ServiceMonitorFails) {
+    ON_CALL(*Mock_DDSTransmitter, Initialize()).WillByDefault(Return(true));
+    ON_CALL(*Mock_EndPointFactory, Initialize()).WillByDefault(Return(true));
+    ON_CALL(*Mock_ServiceMonitor, Initialize()).WillByDefault(Return(false));
+    
+    EXPECT_FALSE(manager.Initialize());
+}
+
+// Test Initialize fails when ROSServiceController::Initialize() fails
+TEST_F(ADSWManagerTest, Initialize_ServiceControllerFails) {
+    ON_CALL(*Mock_DDSTransmitter, Initialize()).WillByDefault(Return(true));
+    ON_CALL(*Mock_EndPointFactory, Initialize()).WillByDefault(Return(true));
+    ON_CALL(*Mock_ServiceMonitor, Initialize()).WillByDefault(Return(true));
+    ON_CALL(*Mock_ROSServiceController, Initialize()).WillByDefault(Return(false));
+    
+    EXPECT_FALSE(manager.Initialize());
+}
+
+// Test Start when endpoint_factory_ is not null
+TEST_F(ADSWManagerTest, Start_WithEndpointFactory) {
+    ON_CALL(*Mock_DDSTransmitter, Initialize()).WillByDefault(Return(true));
+    ON_CALL(*Mock_EndPointFactory, Initialize()).WillByDefault(Return(true));
+    ON_CALL(*Mock_ServiceMonitor, Initialize()).WillByDefault(Return(true));
+    ON_CALL(*Mock_ROSServiceController, Initialize()).WillByDefault(Return(true));
+    ON_CALL(*Mock_ServiceRegistry, LoadServiceList()).WillByDefault(Return(true));
+    
+    EXPECT_CALL(*Mock_EndPointFactory, CreateEndPoints(_)).Times(1);
+    
+    manager.Initialize();
+    EXPECT_TRUE(manager.Start());
+}
+
+// Test Start when service_registry_->LoadServiceList() fails
+TEST_F(ADSWManagerTest, Start_LoadServiceListFails) {
+    ON_CALL(*Mock_ServiceRegistry, LoadServiceList()).WillByDefault(Return(false));
+    
+    EXPECT_FALSE(manager.Start());
+}
+
+// Test Start with null endpoint_factory_
+TEST_F(ADSWManagerTest, Start_NullEndpointFactory) {
+    manager.endpoint_factory_ = nullptr;
+    ON_CALL(*Mock_ServiceRegistry, LoadServiceList()).WillByDefault(Return(true));
+    
+    // Should not call CreateEndPoints and should still succeed
+    EXPECT_TRUE(manager.Start());
+}
+
+// Test Process() function
+TEST_F(ADSWManagerTest, Process_InStartedState) {
+    // Set state to ADSW_STARTED
+    manager.SetState(AdswState::ADSW_STARTED);
+    
+    ON_CALL(*Mock_ServiceRegistry, ProcessUpdateServiceListRequest()).WillByDefault(Return(true));
+    EXPECT_CALL(*Mock_ServiceMonitor, NotifyAdswStatus(1, _)).Times(1);
+    
+    EXPECT_NO_THROW(manager.Process());
+    
+    // State should change to ADSW_RUNNING
+    EXPECT_EQ(manager.GetState(), AdswState::ADSW_RUNNING);
+}
+
+// Test Process() when ProcessUpdateServiceListRequest returns false
+TEST_F(ADSWManagerTest, Process_UpdateServiceListRequestFails) {
+    manager.SetState(AdswState::ADSW_STARTED);
+    
+    ON_CALL(*Mock_ServiceRegistry, ProcessUpdateServiceListRequest()).WillByDefault(Return(false));
+    EXPECT_CALL(*Mock_ServiceMonitor, NotifyAdswStatus(1, _)).Times(1);
+    
+    EXPECT_NO_THROW(manager.Process());
+    
+    // State should remain ADSW_STARTED since ProcessUpdateServiceListRequest returned false
+    EXPECT_EQ(manager.GetState(), AdswState::ADSW_STARTED);
+}
+
+// Test Process() when service_monitor_ is null
+TEST_F(ADSWManagerTest, Process_NullServiceMonitor) {
+    manager.SetState(AdswState::ADSW_STARTED);
+    manager.service_monitor_ = nullptr;
+    
+    ON_CALL(*Mock_ServiceRegistry, ProcessUpdateServiceListRequest()).WillByDefault(Return(true));
+    
+    // Should not crash even with null service_monitor_
+    EXPECT_NO_THROW(manager.Process());
+}
+
+// Test Process() when not in ADSW_STARTED state
+TEST_F(ADSWManagerTest, Process_NotInStartedState) {
+    manager.SetState(AdswState::ADSW_INIT);
+    
+    // Process should do nothing when not in STARTED state
+    EXPECT_NO_THROW(manager.Process());
+    EXPECT_EQ(manager.GetState(), AdswState::ADSW_INIT);
+}
+
+// Test GetState()
+TEST_F(ADSWManagerTest, GetState_ReturnsCorrectState) {
+    manager.SetState(AdswState::ADSW_INIT);
+    EXPECT_EQ(manager.GetState(), AdswState::ADSW_INIT);
+    
+    manager.SetState(AdswState::ADSW_STARTED);
+    EXPECT_EQ(manager.GetState(), AdswState::ADSW_STARTED);
+    
+    manager.SetState(AdswState::ADSW_RUNNING);
+    EXPECT_EQ(manager.GetState(), AdswState::ADSW_RUNNING);
+    
+    manager.SetState(AdswState::ADSW_TERMINATE);
+    EXPECT_EQ(manager.GetState(), AdswState::ADSW_TERMINATE);
+}
+
+// Test GetServiceDiscovery when service_monitor_ is null
+TEST_F(ADSWManagerTest, GetServiceDiscovery_NullServiceMonitor) {
+    manager.service_monitor_ = nullptr;
+    
+    auto discovery = manager.GetServiceDiscovery();
+    EXPECT_EQ(discovery, nullptr);
+}
+
+// Test SetShared()
+TEST_F(ADSWManagerTest, SetShared) {
+    auto custom_manager = std::make_shared<ADSWManager>();
+    
+    ADSWManager::SetShared(custom_manager);
+    
+    // Verify that SetShared was called (we can't easily verify the internal state,
+    // but we ensure it doesn't crash)
+    SUCCEED();
+}
+
+// Test Stop with null components
+TEST_F(ADSWManagerTest, Stop_NullComponents) {
+    manager.service_controller_ = nullptr;
+    manager.service_monitor_ = nullptr;
+    manager.dds_transmitter_ = nullptr;
+    
+    // Should not crash when components are null
+    EXPECT_NO_THROW(manager.Stop());
+}
+
+// Test Stop calls Finalize on all components
+TEST_F(ADSWManagerTest, Stop_CallsFinalize) {
+    EXPECT_CALL(*Mock_ROSServiceController, Finalize()).Times(1);
+    EXPECT_CALL(*Mock_ServiceMonitor, Finalize()).Times(1);
+    EXPECT_CALL(*Mock_DDSTransmitter, Finalize()).Times(1);
+    
+    manager.Stop();
+    
+    EXPECT_EQ(manager.GetState(), AdswState::ADSW_TERMINATE);
 }
 
 

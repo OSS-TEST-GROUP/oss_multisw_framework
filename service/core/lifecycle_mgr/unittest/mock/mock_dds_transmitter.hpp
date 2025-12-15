@@ -33,8 +33,7 @@ bool DDSTransmitter::Initialize() {
     return Mock_DDSTransmitter->Initialize();
 }
 bool DDSTransmitter::AddMessageEndpoint(std::shared_ptr<DDSMessageEndPoint> endpoint) {
-    // Mock implementation
-    return true;
+    return Mock_DDSTransmitter->AddMessageEndpoint(endpoint);
 }
 void DDSTransmitter::Finalize() {
     return Mock_DDSTransmitter->Finalize();

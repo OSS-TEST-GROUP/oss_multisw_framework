@@ -62,12 +62,13 @@ protected:
 };
 
 TEST_F(MessageTransmitterTest, Initialize_and_Finalize_TC001) {
-    EXPECT_CALL(*Mock_DDSProtocol, Initialize()).WillOnce(Return(true));
-    EXPECT_CALL(*Mock_DDSProtocol, Finalize()).WillOnce(Return());
-    EXPECT_CALL(*Mock_DDSProtocol, GetProtocolType()).WillOnce(Return(MessageProtocolType::DDS));
+    // Two DDSProtocol instances are created (DDS and DDS_ROS), so expect 2 calls each
+    EXPECT_CALL(*Mock_DDSProtocol, Initialize()).Times(2).WillRepeatedly(Return(true));
+    EXPECT_CALL(*Mock_DDSProtocol, Finalize()).Times(2).WillRepeatedly(Return());
+    EXPECT_CALL(*Mock_DDSProtocol, GetProtocolType()).Times(0); // Not called in Initialize
 
     EXPECT_TRUE(ins->Initialize());
-    EXPECT_EQ(1, ins->protocols_.size());
+    EXPECT_EQ(2, ins->protocols_.size()); // Both DDS and DDS_ROS protocols
     ins->Finalize();
 }
 
@@ -105,9 +106,10 @@ TEST_F(MessageTransmitterTest, RemoveSubscriber_TC001) {
 TEST_F(MessageTransmitterTest, PublishMessage_TC001) {
     std::shared_ptr<Message> test_msg = std::make_shared<Message>("Test", MessageProtocolType::DDS, "TestType", nullptr);
 
-    EXPECT_CALL(*Mock_DDSProtocol, Initialize()).WillOnce(Return(true));
-    EXPECT_CALL(*Mock_DDSProtocol, Finalize()).WillOnce(Return());
-    EXPECT_CALL(*Mock_DDSProtocol, GetProtocolType()).WillOnce(Return(MessageProtocolType::DDS));
+    // Two DDSProtocol instances are created (DDS and DDS_ROS), so expect 2 calls for init/finalize
+    EXPECT_CALL(*Mock_DDSProtocol, Initialize()).Times(2).WillRepeatedly(Return(true));
+    EXPECT_CALL(*Mock_DDSProtocol, Finalize()).Times(2).WillRepeatedly(Return());
+    EXPECT_CALL(*Mock_DDSProtocol, GetProtocolType()).Times(0); // Not called in Initialize
     EXPECT_CALL(*Mock_DDSProtocol, PublishMessage(test_msg)).WillOnce(Return(true));
 
     EXPECT_TRUE(ins->Initialize());
@@ -118,10 +120,10 @@ TEST_F(MessageTransmitterTest, PublishMessage_TC001) {
 }
 
 TEST_F(MessageTransmitterTest, SubscribeMessage_TC001) {
-    // Prepare for the test
-    EXPECT_CALL(*Mock_DDSProtocol, Initialize()).WillOnce(Return(true));
-    EXPECT_CALL(*Mock_DDSProtocol, Finalize()).WillOnce(Return());
-    EXPECT_CALL(*Mock_DDSProtocol, GetProtocolType()).WillOnce(Return(MessageProtocolType::DDS));
+    // Prepare for the test - Two DDSProtocol instances are created (DDS and DDS_ROS)
+    EXPECT_CALL(*Mock_DDSProtocol, Initialize()).Times(2).WillRepeatedly(Return(true));
+    EXPECT_CALL(*Mock_DDSProtocol, Finalize()).Times(2).WillRepeatedly(Return());
+    EXPECT_CALL(*Mock_DDSProtocol, GetProtocolType()).Times(0); // Not called in Initialize
 
     EXPECT_TRUE(ins->Initialize());
 
@@ -149,9 +151,9 @@ TEST_F(MessageTransmitterTest, SubscribeMessage_TC001) {
 
 TEST_F(MessageTransmitterTest, SubscribeMessage_TC002_FailedSubscribe) {
     // Prepare for the test
-    EXPECT_CALL(*Mock_DDSProtocol, Initialize()).WillOnce(Return(true));
-    EXPECT_CALL(*Mock_DDSProtocol, Finalize()).WillOnce(Return());
-    EXPECT_CALL(*Mock_DDSProtocol, GetProtocolType()).WillOnce(Return(MessageProtocolType::DDS));
+    EXPECT_CALL(*Mock_DDSProtocol, Initialize()).Times(2).WillRepeatedly(Return(true));
+    EXPECT_CALL(*Mock_DDSProtocol, Finalize()).Times(2).WillRepeatedly(Return());
+    EXPECT_CALL(*Mock_DDSProtocol, GetProtocolType()).Times(0);
 
     EXPECT_TRUE(ins->Initialize());
 
@@ -179,9 +181,9 @@ TEST_F(MessageTransmitterTest, SubscribeMessage_TC002_FailedSubscribe) {
 
 TEST_F(MessageTransmitterTest, UnsubscribeMessage_TC001) {
     // Prepare for the test
-    EXPECT_CALL(*Mock_DDSProtocol, Initialize()).WillOnce(Return(true));
-    EXPECT_CALL(*Mock_DDSProtocol, Finalize()).WillOnce(Return());
-    EXPECT_CALL(*Mock_DDSProtocol, GetProtocolType()).WillOnce(Return(MessageProtocolType::DDS));
+    EXPECT_CALL(*Mock_DDSProtocol, Initialize()).Times(2).WillRepeatedly(Return(true));
+    EXPECT_CALL(*Mock_DDSProtocol, Finalize()).Times(2).WillRepeatedly(Return());
+    EXPECT_CALL(*Mock_DDSProtocol, GetProtocolType()).Times(0);
 
     EXPECT_TRUE(ins->Initialize());
 
@@ -241,9 +243,9 @@ TEST_F(MessageTransmitterTest, GetSubscribeMessageNum_TC001) {
 
 TEST_F(MessageTransmitterTest, ForwardDeliveredMessage_TC001) {
     // Prepare for the test
-    EXPECT_CALL(*Mock_DDSProtocol, Initialize()).WillOnce(Return(true));
-    EXPECT_CALL(*Mock_DDSProtocol, Finalize()).WillOnce(Return());
-    EXPECT_CALL(*Mock_DDSProtocol, GetProtocolType()).WillOnce(Return(MessageProtocolType::DDS));
+    EXPECT_CALL(*Mock_DDSProtocol, Initialize()).Times(2).WillRepeatedly(Return(true));
+    EXPECT_CALL(*Mock_DDSProtocol, Finalize()).Times(2).WillRepeatedly(Return());
+    EXPECT_CALL(*Mock_DDSProtocol, GetProtocolType()).Times(0);
 
     EXPECT_TRUE(ins->Initialize());
 
@@ -387,9 +389,9 @@ TEST_F(MessageTransmitterTest, SubscribeMessage_TC003_UnsupportedProtocol) {
 
 // Test SubscribeMessage with unregistered subscriber
 TEST_F(MessageTransmitterTest, SubscribeMessage_TC004_UnregisteredSubscriber) {
-    EXPECT_CALL(*Mock_DDSProtocol, Initialize()).WillOnce(Return(true));
-    EXPECT_CALL(*Mock_DDSProtocol, Finalize()).WillOnce(Return());
-    EXPECT_CALL(*Mock_DDSProtocol, GetProtocolType()).WillOnce(Return(MessageProtocolType::DDS));
+    EXPECT_CALL(*Mock_DDSProtocol, Initialize()).Times(2).WillRepeatedly(Return(true));
+    EXPECT_CALL(*Mock_DDSProtocol, Finalize()).Times(2).WillRepeatedly(Return());
+    EXPECT_CALL(*Mock_DDSProtocol, GetProtocolType()).Times(0);
 
     EXPECT_TRUE(ins->Initialize());
 
@@ -417,9 +419,9 @@ TEST_F(MessageTransmitterTest, UnsubscribeMessage_TC002_UnsupportedProtocol) {
 
 // Test UnsubscribeMessage with unregistered subscriber
 TEST_F(MessageTransmitterTest, UnsubscribeMessage_TC003_UnregisteredSubscriber) {
-    EXPECT_CALL(*Mock_DDSProtocol, Initialize()).WillOnce(Return(true));
-    EXPECT_CALL(*Mock_DDSProtocol, Finalize()).WillOnce(Return());
-    EXPECT_CALL(*Mock_DDSProtocol, GetProtocolType()).WillOnce(Return(MessageProtocolType::DDS));
+    EXPECT_CALL(*Mock_DDSProtocol, Initialize()).Times(2).WillRepeatedly(Return(true));
+    EXPECT_CALL(*Mock_DDSProtocol, Finalize()).Times(2).WillRepeatedly(Return());
+    EXPECT_CALL(*Mock_DDSProtocol, GetProtocolType()).Times(0);
 
     EXPECT_TRUE(ins->Initialize());
 
@@ -533,9 +535,9 @@ TEST_F(MessageTransmitterTest, SubscribeMessage_TC005_AllowRosTrue) {
     // This test requires modification to DDSProtocol_mock to support multiple protocols
     // For now, we test what's possible with current infrastructure
     
-    EXPECT_CALL(*Mock_DDSProtocol, Initialize()).WillOnce(Return(true));
-    EXPECT_CALL(*Mock_DDSProtocol, Finalize()).WillOnce(Return());
-    EXPECT_CALL(*Mock_DDSProtocol, GetProtocolType()).WillOnce(Return(MessageProtocolType::DDS));
+    EXPECT_CALL(*Mock_DDSProtocol, Initialize()).Times(2).WillRepeatedly(Return(true));
+    EXPECT_CALL(*Mock_DDSProtocol, Finalize()).Times(2).WillRepeatedly(Return());
+    EXPECT_CALL(*Mock_DDSProtocol, GetProtocolType()).Times(0);
 
     EXPECT_TRUE(ins->Initialize());
 
@@ -648,8 +650,8 @@ TEST_F(MessageTransmitterTest, MultiThreadTest_TC001) {
     std::atomic<uint64_t> called_count(0U);
 
     // Prepare for the test
-    EXPECT_CALL(*Mock_DDSProtocol, Initialize()).WillOnce(Return(true));
-    EXPECT_CALL(*Mock_DDSProtocol, Finalize()).WillOnce(Return());
+    EXPECT_CALL(*Mock_DDSProtocol, Initialize()).Times(2).WillRepeatedly(Return(true));
+    EXPECT_CALL(*Mock_DDSProtocol, Finalize()).Times(2).WillRepeatedly(Return());
     EXPECT_CALL(*Mock_DDSProtocol, GetProtocolType()).WillRepeatedly(Return(MessageProtocolType::DDS));
 
     EXPECT_TRUE(ins->Initialize());
