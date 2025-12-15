@@ -15,10 +15,10 @@ using namespace eprosima::fastdds::dds;
 
 class SecurityDetectionPublisher
 {
-private:
-
+public:
     security::DetectionReport data_;
 
+private:
     DomainParticipant* participant_;
 
     Publisher* publisher_;
@@ -181,10 +181,11 @@ int main(
         std::string client_id;
         std::cout << "Enter Security Client ID: ";
         std::cin >> client_id;
-        mypub->data_.client_id(client_id);
+        
+        snprintf(mypub->data_.client_id().data(), mypub->data_.client_id().size(), "%s", client_id.c_str());
+        snprintf(mypub->data_.dds_topic().data(), mypub->data_.dds_topic().size(), "rt/DoorUnlockLockIndicator");
+        snprintf(mypub->data_.rule().data(), mypub->data_.rule().size(), "custom rule anomaly detection");
 
-        mypub->data_.dds_topic("rt/DoorUnlockLockIndicator");
-        mypub->data_.rule("custom rule anomaly detection");
         mypub->data_.timestamp_ms(
             std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::system_clock::now().time_since_epoch()
@@ -192,9 +193,9 @@ int main(
         );
 
         // Show result
-        std::cout << "[SecurityDetectionReport] client_id: " << mypub->data_.client_id()
-          << ", dds_topic: " << mypub->data_.dds_topic()
-          << ", rule: " << mypub->data_.rule()
+        std::cout << "[SecurityDetectionReport] client_id: " << mypub->data_.client_id().data()
+          << ", dds_topic: " << mypub->data_.dds_topic().data()
+          << ", rule: " << mypub->data_.rule().data()
           << ", timestamp_ms: " << mypub->data_.timestamp_ms() << std::endl;
 
         mypub->publish();

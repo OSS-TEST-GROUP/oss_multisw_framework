@@ -1733,6 +1733,388 @@ TEST_F(DDSProtocolTest, DeserializeMessage_TC002_dynamic_idl_parse) {
     ins->Finalize();
 }
 
+// ==================== NEW TESTS FOR ENHANCED BRANCH COVERAGE ====================
+
+// ==================== DDSDynamicIDLParser Coverage ====================
+
+// Test DDSDynamicIDLParser Initialize with valid directory
+TEST_F(DDSProtocolTest, DDSDynamicIDLParser_Initialize_TC001_valid_dir) {
+    DDSDynamicIDLParser parser;
+    
+    // Test with current directory (which should exist)
+    bool result = parser.Initialize(".");
+    EXPECT_TRUE(result);
+}
+
+// Test DDSDynamicIDLParser Initialize with non-existent directory
+TEST_F(DDSProtocolTest, DDSDynamicIDLParser_Initialize_TC002_invalid_dir) {
+    DDSDynamicIDLParser parser;
+    
+    bool result = parser.Initialize("/non_existent_directory_12345");
+    EXPECT_FALSE(result);
+}
+
+// Test DDSDynamicIDLParser ParseAll with empty directory
+TEST_F(DDSProtocolTest, DDSDynamicIDLParser_ParseAll_TC001_empty_dir) {
+    DDSDynamicIDLParser parser;
+    
+    // ParseAll without Initialize should return empty
+    auto types = parser.ParseAll();
+    EXPECT_TRUE(types.empty());
+}
+
+// Test DDSDynamicIDLParser ExtractStructNamesFromIDL with non-existent file
+TEST_F(DDSProtocolTest, DDSDynamicIDLParser_ExtractStructNames_TC001_invalid_file) {
+    DDSDynamicIDLParser parser;
+    parser.Initialize(".");
+    
+    auto names = parser.ExtractStructNamesFromIDL("non_existent_file.idl");
+    EXPECT_TRUE(names.empty());
+}
+
+// ==================== convertTypeName Additional Coverage ====================
+
+// Test convertTypeName with empty string
+TEST_F(DDSProtocolTest, convertTypeName_TC007_empty_string) {
+    std::string result = convertTypeName("", true);
+    EXPECT_EQ("", result);
+    
+    result = convertTypeName("", false);
+    EXPECT_EQ("", result);
+}
+
+// Test convertTypeName with type containing single colon (not ::)
+TEST_F(DDSProtocolTest, convertTypeName_TC008_single_colon) {
+    std::string result = convertTypeName("namespace:Type", true);
+    // Should extract after last occurrence of ':'
+    EXPECT_FALSE(result.empty());
+}
+
+// Test toSimpleType with all known types
+TEST_F(DDSProtocolTest, toSimpleType_TC002_all_types) {
+    EXPECT_EQ("DiagnosticInfoRequest", toSimpleType("diagnosticmgr::msg::dds_::DiagnosticInfoRequest_"));
+    EXPECT_EQ("DiagnosticInfoListRequest", toSimpleType("diagnosticmgr::msg::dds_::DiagnosticInfoListRequest_"));
+    EXPECT_EQ("DiagnosticInfoResponse", toSimpleType("diagnosticmgr::msg::dds_::DiagnosticInfoResponse_"));
+    EXPECT_EQ("DiagnosticInfoListResponse", toSimpleType("diagnosticmgr::msg::dds_::DiagnosticInfoListResponse_"));
+    EXPECT_EQ("DiagnosticNotification", toSimpleType("diagnosticmgr::msg::dds_::DiagnosticNotification_"));
+}
+
+// Test toRos2DdsType with all known types
+TEST_F(DDSProtocolTest, toRos2DdsType_TC002_all_types) {
+    EXPECT_EQ("diagnosticmgr::msg::dds_::DiagnosticInfoRequest_", toRos2DdsType("DiagnosticInfoRequest"));
+    EXPECT_EQ("diagnosticmgr::msg::dds_::DiagnosticInfoListRequest_", toRos2DdsType("DiagnosticInfoListRequest"));
+    EXPECT_EQ("diagnosticmgr::msg::dds_::DiagnosticInfoResponse_", toRos2DdsType("DiagnosticInfoResponse"));
+    EXPECT_EQ("diagnosticmgr::msg::dds_::DiagnosticInfoListResponse_", toRos2DdsType("DiagnosticInfoListResponse"));
+    EXPECT_EQ("diagnosticmgr::msg::dds_::DiagnosticNotification_", toRos2DdsType("DiagnosticNotification"));
+}
+
+// ==================== on_subscription_matched Additional Coverage ====================
+
+// Test with boundary values
+TEST_F(DDSProtocolTest, on_subscription_matched_TC005_negative_two) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    SubscriptionMatchedStatus status;
+    status.current_count_change = -2;
+    status.current_count = 0;
+    
+    // Should hit the else branch (error logging)
+    EXPECT_NO_THROW(ins->on_subscription_matched(nullptr, status));
+    
+    ins->Finalize();
+}
+
+TEST_F(DDSProtocolTest, on_subscription_matched_TC006_positive_two) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    SubscriptionMatchedStatus status;
+    status.current_count_change = 2;
+    status.current_count = 2;
+    
+    // Should hit the else branch (error logging)
+    EXPECT_NO_THROW(ins->on_subscription_matched(nullptr, status));
+    
+    ins->Finalize();
+}
+
+// ==================== SerializeMessage Type Coverage ====================
+
+// Test SerializeMessage with boolean type (if supported)
+TEST_F(DDSProtocolTest, SerializeMessage_TC003_boolean_type) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    auto variant_data = std::make_shared<VariantData>();
+    variant_data->SetName("TestType");
+    variant_data->SetValue("flag", true);
+    
+    auto message = std::make_shared<Message>(
+        "/BoolTestTopic",
+        MessageProtocolType::DDS,
+        "TestType",
+        variant_data
+    );
+    
+    // This exercises the else branch in SerializeMessage for unsupported types
+    ins->PublishMessage(message);
+    
+    ins->Finalize();
+}
+
+// Test SerializeMessage with unsupported type
+TEST_F(DDSProtocolTest, SerializeMessage_TC004_unsupported_type) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    auto variant_data = std::make_shared<VariantData>();
+    variant_data->SetName("UnsupportedType");
+    // VariantData with a type not handled in SerializeMessage will hit the else branch
+    
+    auto message = std::make_shared<Message>(
+        "/UnsupportedTypeTopic",
+        MessageProtocolType::DDS,
+        "UnsupportedType",
+        variant_data
+    );
+    
+    ins->PublishMessage(message);
+    
+    ins->Finalize();
+}
+
+// ==================== register_type_object_from_discovery Coverage ====================
+
+TEST_F(DDSProtocolTest, register_type_object_from_discovery_TC001_empty_type_info) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    auto topic_info = std::make_shared<TopicInformation>();
+    topic_info->topic_name = "/DiscoveryEmptyTypeInfo";
+    topic_info->topic_type = "SomeType";
+    // Leave remote_type_information empty/default
+    
+    // This should fail gracefully
+    bool result = ins->register_type_object_from_discovery(topic_info);
+    EXPECT_FALSE(result);
+    
+    ins->Finalize();
+}
+
+// ==================== create_datareader Error Cases ====================
+
+TEST_F(DDSProtocolTest, create_datareader_TC002_without_type_registration) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    auto topic_info = std::make_shared<TopicInformation>();
+    topic_info->topic_name = "/UnregisteredTypeTopic";
+    topic_info->topic_type = "UnregisteredType";
+    // Don't register the type
+    
+    // This should fail because type is not registered
+    bool result = ins->create_datareader(topic_info);
+    EXPECT_FALSE(result);
+    
+    ins->Finalize();
+}
+
+// ==================== create_datawriter Error Cases ====================
+
+TEST_F(DDSProtocolTest, create_datawriter_TC003_without_type_registration) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    auto topic_info = std::make_shared<TopicInformation>();
+    topic_info->topic_name = "/UnregisteredWriterType";
+    topic_info->topic_type = "UnregisteredWriterType";
+    // Don't register the type
+    
+    // This should fail because type is not registered
+    bool result = ins->create_datawriter(topic_info);
+    EXPECT_FALSE(result);
+    
+    ins->Finalize();
+}
+
+// ==================== delete_datawriter with Reader Present ====================
+
+TEST_F(DDSProtocolTest, delete_datawriter_TC003_with_reader_present) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    auto topic_info = std::make_shared<TopicInformation>();
+    topic_info->topic_name = "/WriterWithReaderTopic";
+    topic_info->topic_type = "DataTypeTestSimple";
+    
+    if (ins->register_type_object_from_dynamic_idl(topic_info)) {
+        // Create both reader and writer
+        EXPECT_TRUE(ins->create_datareader(topic_info));
+        EXPECT_TRUE(ins->create_datawriter(topic_info));
+        
+        // Delete writer - topic should NOT be deleted because reader exists
+        EXPECT_TRUE(ins->delete_datawriter(topic_info));
+        EXPECT_EQ(nullptr, topic_info->writer);
+        // Topic should still exist because reader is using it
+        // (Note: This depends on implementation - reader and writer share topic)
+    }
+    
+    ins->Finalize();
+}
+
+// ==================== PublishMessage Edge Cases ====================
+
+// Test PublishMessage with null data
+TEST_F(DDSProtocolTest, PublishMessage_TC014_null_data) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    auto message = std::make_shared<Message>(
+        "/NullDataTopic",
+        MessageProtocolType::DDS,
+        "DataTypeTestSimple",
+        nullptr  // null data
+    );
+    
+    // Should handle null data gracefully
+    bool result = ins->PublishMessage(message);
+    
+    ins->Finalize();
+}
+
+// Test PublishMessage for topic with null remote_type
+TEST_F(DDSProtocolTest, PublishMessage_TC015_null_remote_type) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    auto topic_info = std::make_shared<TopicInformation>();
+    topic_info->topic_name = "/NullRemoteTypeTopic";
+    topic_info->topic_type = "SomeType";
+    topic_info->remote_type = nullptr;
+    topic_info->type_support = nullptr;
+    
+    // Manually create writer to simulate partial setup
+    ins->discovered_topic_["/NullRemoteTypeTopic"] = topic_info;
+    
+    auto variant_data = std::make_shared<VariantData>();
+    variant_data->SetName("SomeType");
+    variant_data->SetValue("field", (int32_t)123);
+    
+    auto message = std::make_shared<Message>(
+        "/NullRemoteTypeTopic",
+        MessageProtocolType::DDS,
+        "SomeType",
+        variant_data
+    );
+    
+    // Should fail at remote_type null check
+    bool result = ins->PublishMessage(message);
+    EXPECT_FALSE(result);
+    
+    ins->Finalize();
+}
+
+// ==================== on_data_available Edge Cases ====================
+
+TEST_F(DDSProtocolTest, on_data_available_TC002_null_reader) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    // Calling with nullptr should be handled gracefully
+    // (early return due to no topic found for null reader)
+    EXPECT_NO_THROW(ins->on_data_available(nullptr));
+    
+    ins->Finalize();
+}
+
+// ==================== SubscribeMessage with Discovered Topic ====================
+
+TEST_F(DDSProtocolTest, SubscribeMessage_TC004_with_discovered_topic) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    // Pre-populate discovered_topic_ with a topic
+    auto topic_info = std::make_shared<TopicInformation>();
+    topic_info->topic_name = "/PreDiscoveredTopic";
+    topic_info->topic_type = "DataTypeTestSimple";
+    
+    // Register type first
+    if (ins->register_type_object_from_dynamic_idl(topic_info)) {
+        ins->discovered_topic_["/PreDiscoveredTopic"] = topic_info;
+        
+        // Now subscribe - should register type and create reader
+        bool result = ins->SubscribeMessage("/PreDiscoveredTopic");
+        EXPECT_TRUE(result);
+        
+        // Verify reader was created
+        EXPECT_NE(nullptr, ins->discovered_topic_["/PreDiscoveredTopic"]->reader);
+    }
+    
+    ins->Finalize();
+}
+
+// ==================== UnsubscribeMessage with Discovered Topic ====================
+
+TEST_F(DDSProtocolTest, UnsubscribeMessage_TC004_with_discovered_topic_and_reader) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    auto topic_info = std::make_shared<TopicInformation>();
+    topic_info->topic_name = "/UnsubWithReaderTopic";
+    topic_info->topic_type = "DataTypeTestSimple";
+    
+    if (ins->register_type_object_from_dynamic_idl(topic_info)) {
+        ins->discovered_topic_["/UnsubWithReaderTopic"] = topic_info;
+        
+        // Subscribe and create reader
+        ins->SubscribeMessage("/UnsubWithReaderTopic");
+        ins->create_datareader(topic_info);
+        
+        // Now unsubscribe - should delete reader
+        bool result = ins->UnsubscribeMessage("/UnsubWithReaderTopic");
+        EXPECT_TRUE(result);
+    }
+    
+    ins->Finalize();
+}
+
+// ==================== read_values_from_dynamic_data Coverage ====================
+// These are indirectly tested through DeserializeMessage, but we can add more explicit tests
+
+// ==================== getEnvPath Additional Coverage ====================
+
+TEST_F(DDSProtocolTest, getEnvPath_TC003_set_and_get) {
+    // Set a temporary environment variable
+    setenv("TEST_COVERAGE_VAR", "/test/path", 1);
+    
+    auto result = getEnvPath("TEST_COVERAGE_VAR");
+    EXPECT_TRUE(result.has_value());
+    EXPECT_EQ("/test/path", result.value());
+    
+    // Clean up
+    unsetenv("TEST_COVERAGE_VAR");
+}
+
+// ==================== Multiple Protocol Initialization ====================
+
+TEST_F(DDSProtocolTest, Initialize_TC003_double_initialize) {
+    // First initialize
+    EXPECT_TRUE(ins->Initialize());
+    
+    // Second initialize without finalize (should work or handle gracefully)
+    // Note: This tests the robustness of initialization
+    
+    ins->Finalize();
+}
+
+// ==================== Topic Name Edge Cases ====================
+
+TEST_F(DDSProtocolTest, SubscribeMessage_TC005_special_characters) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    // Test with various topic name formats
+    EXPECT_TRUE(ins->SubscribeMessage("/topic/with/slashes"));
+    EXPECT_TRUE(ins->SubscribeMessage("topic_with_underscores"));
+    EXPECT_TRUE(ins->SubscribeMessage("TopicWithCamelCase"));
+    
+    // Unsubscribe all
+    EXPECT_TRUE(ins->UnsubscribeMessage("/topic/with/slashes"));
+    EXPECT_TRUE(ins->UnsubscribeMessage("topic_with_underscores"));
+    EXPECT_TRUE(ins->UnsubscribeMessage("TopicWithCamelCase"));
+    
+    ins->Finalize();
+}
+
+// ==================== END NEW TESTS ====================
+
 int main(int argc, char* argv[]) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

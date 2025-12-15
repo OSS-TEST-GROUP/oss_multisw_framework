@@ -1,6 +1,8 @@
 #include "VariantData.hpp"
 #include "logger/Log.hpp"
 
+#include <algorithm>
+
 namespace diagnostic_manager {
 
 void VariantData::SetName(const std::string& name) {
@@ -150,6 +152,11 @@ bool VariantData::GetString(const std::string& key, std::string& out) {
     return std::visit([&](auto&& val) -> bool {
         if constexpr (std::is_same_v<std::decay_t<decltype(val)>, std::string>) {
             out = val;
+            return true;
+        } else if constexpr (std::is_same_v<std::decay_t<decltype(val)>, std::vector<char>>) {
+            // Convert char array to string (handle null-terminated or full length)
+            auto null_pos = std::find(val.begin(), val.end(), '\0');
+            out = std::string(val.begin(), null_pos);
             return true;
         }
         return false;

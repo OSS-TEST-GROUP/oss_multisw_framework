@@ -458,6 +458,13 @@ bool DDSProtocol::DeserializeMessage(DynamicData::_ref_type dds_data, std::share
                 dds_data->return_loaned_value(loan_data);
                 break;
             }
+            case TK_ARRAY: {
+                // Handle array types by delegating to read_values_from_dynamic_data
+                if (!read_values_from_dynamic_data(dds_data, member, type, variant_data)) {
+                    LOG_ERROR("Failed to read array values for member: " << name);
+                }
+                break;
+            }
             case TK_ENUM:
             default: {
                 LOG_ERROR("Type of kind[" << (int32_t)type << "] is not supported yet.");
@@ -949,7 +956,60 @@ bool DDSProtocol::read_values_from_dynamic_data(DynamicData::_ref_type dds_data,
             variant_data->SetValue(member->get_name().c_str(), std::move(value));
             break;
         }
-        case TK_STRUCTURE:
+        case TK_ARRAY: {
+            // For array types, get the element type from the MemberDescriptor
+            MemberDescriptor::_ref_type arr_member_desc = {traits<MemberDescriptor>::make_shared()};
+            if (member->get_descriptor(arr_member_desc) == RETCODE_OK && arr_member_desc->type() != nullptr) {
+                TypeDescriptor::_ref_type arr_type_desc = {traits<TypeDescriptor>::make_shared()};
+                if (arr_member_desc->type()->get_descriptor(arr_type_desc) == RETCODE_OK && 
+                    arr_type_desc->element_type() != nullptr) {
+                    auto arr_elem_kind = arr_type_desc->element_type()->get_kind();
+                    if (arr_elem_kind == TK_CHAR8) {
+                        std::vector<char> value;
+                        dds_data->get_char8_values(value, member->get_id());
+                        variant_data->SetValue(member->get_name().c_str(), std::move(value));
+                        break;
+                    } else if (arr_elem_kind == TK_UINT8 || arr_elem_kind == TK_BYTE) {
+                        std::vector<uint8_t> value;
+                        dds_data->get_uint8_values(value, member->get_id());
+                        variant_data->SetValue(member->get_name().c_str(), std::move(value));
+                        break;
+                    } else if (arr_elem_kind == TK_INT8) {
+                        std::vector<int8_t> value;
+                        dds_data->get_int8_values(value, member->get_id());
+                        variant_data->SetValue(member->get_name().c_str(), std::move(value));
+                        break;
+                    } else if (arr_elem_kind == TK_INT32) {
+                        std::vector<int32_t> value;
+                        dds_data->get_int32_values(value, member->get_id());
+                        variant_data->SetValue(member->get_name().c_str(), std::move(value));
+                        break;
+                    } else if (arr_elem_kind == TK_UINT32) {
+                        std::vector<uint32_t> value;
+                        dds_data->get_uint32_values(value, member->get_id());
+                        variant_data->SetValue(member->get_name().c_str(), std::move(value));
+                        break;
+                    } else if (arr_elem_kind == TK_FLOAT32) {
+                        std::vector<float> value;
+                        dds_data->get_float32_values(value, member->get_id());
+                        variant_data->SetValue(member->get_name().c_str(), std::move(value));
+                        break;
+                    } else if (arr_elem_kind == TK_FLOAT64) {
+                        std::vector<double> value;
+                        dds_data->get_float64_values(value, member->get_id());
+                        variant_data->SetValue(member->get_name().c_str(), std::move(value));
+                        break;
+                    }
+                }
+            }
+            // Fallback: try to read as char8 values (most common for char arrays)
+            LOG_DEBUG("TK_ARRAY fallback: reading as char8 values for member: " << member->get_name());
+            std::vector<char> value;
+            dds_data->get_char8_values(value, member->get_id());
+            variant_data->SetValue(member->get_name().c_str(), std::move(value));
+            break;
+        }
+        case TK_STRUCTURE : 
         default: {
             return false;
         }

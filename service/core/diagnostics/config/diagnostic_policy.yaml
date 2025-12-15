@@ -76,7 +76,4 @@ refer_messages:
     protocol : dds
   - name : DetectionReport
     message : security/DetectionReport
-    protocol : dds
-  - name : DetectionReport
-    message : DetectionReport
     protocol : dds  
