@@ -150,8 +150,11 @@ add_executable ( DiagnosticInfoTestClient test/DiagnosticInfoTestClient.cpp ${GE
 target_include_directories ( DiagnosticInfoTestClient PUBLIC ${GENERATED_DIR} )
 add_executable ( SecurityDetectionPublisher test/SecurityDetectionPublisher.cpp ${GENERATED_DDS_FILES} )
 target_include_directories ( SecurityDetectionPublisher PUBLIC ${GENERATED_DIR} )
+add_executable ( SecurityDetectionSubscriber test/SecurityDetectionSubscriber.cpp ${GENERATED_DDS_FILES} )
+target_include_directories ( SecurityDetectionSubscriber PUBLIC ${GENERATED_DIR} )
 
-install ( TARGETS HelloWorldPublisher HelloWorldPublisherNoDynamic LifecycleDiagReportPublisher DiagnosticNotificationReceiver DiagnosticInfoTestClient SecurityDetectionPublisher
+install ( TARGETS HelloWorldPublisher HelloWorldPublisherNoDynamic LifecycleDiagReportPublisher DiagnosticNotificationReceiver DiagnosticInfoTestClient
+    SecurityDetectionPublisher SecurityDetectionSubscriber
     RUNTIME DESTINATION bin/unittest/diagnostics/test
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
