@@ -27,6 +27,7 @@ using ::testing::Args;
 using ::testing::AllOf;
 using ::testing::AtLeast;
 using ::testing::Combine;
+using ::testing::NiceMock;
 
 using namespace ros2::adsw_manager;
 
@@ -314,6 +315,212 @@ TEST_F(ROSServiceControllerTest, DoubleFinalizeTest) {
     controller->Finalize();
     EXPECT_NO_THROW(controller->Finalize());
 }
+
+// =====================================================
+// Additional tests for improved coverage
+// =====================================================
+
+// Test with service that returns non-empty GetPID (0) when calling StopService
+TEST_F(ROSServiceControllerTest, StopServiceWithMockService_InitialPIDZero_GetPIDCalled) {
+    auto mock_service = std::make_shared<MockService>("test_service");
+    Mock_Service = mock_service.get();
+    
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("test_service"));
+    ON_CALL(*Mock_Service, GetPackage()).WillByDefault(Return("test_package"));
+    // First call returns 0, so GetPID will be called
+    ON_CALL(*Mock_Service, GetPID()).WillByDefault(Return(0));
+    
+    // Should return false as PID will still be 0 after GetPID call
+    EXPECT_FALSE(controller->StopService(mock_service));
+}
+
+// Test StartService with launch file containing path
+TEST_F(ROSServiceControllerTest, StartServiceWithMockService_LaunchFileWithPath) {
+    auto mock_service = std::make_shared<MockService>("test_service");
+    Mock_Service = mock_service.get();
+    
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("test_service"));
+    ON_CALL(*Mock_Service, GetPackage()).WillByDefault(Return("test_package"));
+    ON_CALL(*Mock_Service, GetLaunchFile()).WillByDefault(Return("launch/test.launch.py"));
+    ON_CALL(*Mock_Service, GetPID()).WillByDefault(Return(0));
+    
+    EXPECT_NO_THROW(controller->StartService(mock_service));
+}
+
+// Test multiple StartGroup calls
+TEST_F(ROSServiceControllerTest, StartGroup_MultipleCalls) {
+    EXPECT_FALSE(controller->StartGroup("group1"));
+    EXPECT_FALSE(controller->StartGroup("group2"));
+    EXPECT_FALSE(controller->StartGroup("group3"));
+}
+
+// Test multiple StopGroup calls
+TEST_F(ROSServiceControllerTest, StopGroup_MultipleCalls) {
+    EXPECT_FALSE(controller->StopGroup("group1"));
+    EXPECT_FALSE(controller->StopGroup("group2"));
+    EXPECT_FALSE(controller->StopGroup("group3"));
+}
+
+// Test GetNodeLists with various package names
+TEST_F(ROSServiceControllerTest, GetNodeListsWithMockService_VariousPackages) {
+    auto mock_service = std::make_shared<MockService>("test_service");
+    Mock_Service = mock_service.get();
+    
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("test_service"));
+    
+    std::vector<std::string> packages = {"pkg1", "pkg2", "my_ros2_package", ""};
+    
+    for (const auto& pkg : packages) {
+        ON_CALL(*Mock_Service, GetPackage()).WillByDefault(Return(pkg));
+        EXPECT_NO_THROW(controller->GetNodeLists(mock_service));
+    }
+}
+
+// Test Initialize-Finalize cycles
+TEST_F(ROSServiceControllerTest, InitializeFinalize_MultipleCycles) {
+    auto test_controller = std::make_shared<ROSServiceController>();
+    
+    for (int i = 0; i < 3; i++) {
+        EXPECT_TRUE(test_controller->Initialize());
+        test_controller->Finalize();
+    }
+}
+
+// Test with different package names for StartService
+TEST_F(ROSServiceControllerTest, StartService_VariousPackageNames) {
+    std::vector<std::string> package_names = {
+        "my_package",
+        "my-package",
+        "my_package_123",
+        "ros2_pkg",
+        ""
+    };
+    
+    for (const auto& pkg : package_names) {
+        auto mock_service = std::make_shared<MockService>("test_service");
+        Mock_Service = mock_service.get();
+        
+        ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("test_service"));
+        ON_CALL(*Mock_Service, GetPackage()).WillByDefault(Return(pkg));
+        ON_CALL(*Mock_Service, GetLaunchFile()).WillByDefault(Return(""));
+        ON_CALL(*Mock_Service, GetPID()).WillByDefault(Return(0));
+        
+        EXPECT_NO_THROW(controller->StartService(mock_service));
+    }
+}
+
+// Test with different launch file names  
+TEST_F(ROSServiceControllerTest, StartService_VariousLaunchFiles) {
+    std::vector<std::string> launch_files = {
+        "launch.py",
+        "bringup.launch.py",
+        "my_launch.launch.xml",
+        "launch/sub/test.launch.py",
+        ""
+    };
+    
+    for (const auto& launch_file : launch_files) {
+        auto mock_service = std::make_shared<MockService>("test_service");
+        Mock_Service = mock_service.get();
+        
+        ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("test_service"));
+        ON_CALL(*Mock_Service, GetPackage()).WillByDefault(Return("test_pkg"));
+        ON_CALL(*Mock_Service, GetLaunchFile()).WillByDefault(Return(launch_file));
+        ON_CALL(*Mock_Service, GetPID()).WillByDefault(Return(0));
+        
+        EXPECT_NO_THROW(controller->StartService(mock_service));
+    }
+}
+
+// Test StopService with various PIDs
+TEST_F(ROSServiceControllerTest, StopService_VariousPIDs) {
+    std::vector<uint64_t> pids = {1, 100, 10000, 65535, 0};
+    
+    for (const auto& pid : pids) {
+        auto mock_service = std::make_shared<MockService>("test_service");
+        Mock_Service = mock_service.get();
+        
+        ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("test_service"));
+        ON_CALL(*Mock_Service, GetPackage()).WillByDefault(Return("test_pkg"));
+        ON_CALL(*Mock_Service, GetPID()).WillByDefault(Return(pid));
+        
+        // Should either succeed or fail but not crash
+        EXPECT_NO_THROW(controller->StopService(mock_service));
+    }
+}
+
+// Test GetPID with various packages
+TEST_F(ROSServiceControllerTest, GetPID_VariousPackages) {
+    std::vector<std::string> packages = {"pkg1", "my_ros2_pkg", "test", ""};
+    
+    for (const auto& pkg : packages) {
+        auto mock_service = std::make_shared<MockService>("test_service");
+        Mock_Service = mock_service.get();
+        
+        ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("test_service"));
+        ON_CALL(*Mock_Service, GetPackage()).WillByDefault(Return(pkg));
+        
+        EXPECT_NO_THROW(controller->GetPID(mock_service));
+    }
+}
+
+// Test GetContainer returns same instance
+TEST_F(ROSServiceControllerTest, GetContainer_ReturnsConsistentInstance) {
+    auto container1 = controller->GetContainer();
+    auto container2 = controller->GetContainer();
+    
+    EXPECT_NE(container1, nullptr);
+    EXPECT_NE(container2, nullptr);
+    EXPECT_EQ(container1.get(), container2.get());
+}
+
+// Test StartService then StopService with same service
+TEST_F(ROSServiceControllerTest, StartThenStopService) {
+    auto mock_service = std::make_shared<MockService>("test_service");
+    Mock_Service = mock_service.get();
+    
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("test_service"));
+    ON_CALL(*Mock_Service, GetPackage()).WillByDefault(Return("test_pkg"));
+    ON_CALL(*Mock_Service, GetLaunchFile()).WillByDefault(Return(""));
+    ON_CALL(*Mock_Service, GetPID()).WillByDefault(Return(0));
+    
+    // Start service
+    EXPECT_NO_THROW(controller->StartService(mock_service));
+    
+    // Stop service (PID is 0, so should return false)
+    EXPECT_FALSE(controller->StopService(mock_service));
+}
+
+// Test StopService by name
+TEST_F(ROSServiceControllerTest, StopServiceByName_VariousNames) {
+    std::vector<std::string> names = {"service1", "my-service", "ros2_svc", ""};
+    
+    for (const auto& name : names) {
+        EXPECT_NO_THROW(controller->StopService(name));
+    }
+}
+
+// Test StartService by name
+TEST_F(ROSServiceControllerTest, StartServiceByName_VariousNames) {
+    std::vector<std::string> names = {"service1", "my-service", "ros2_svc"};
+    
+    for (const auto& name : names) {
+        EXPECT_NO_THROW(controller->StartService(name));
+    }
+}
+
+// Test with whitespace in names
+TEST_F(ROSServiceControllerTest, StartService_WhitespaceInName) {
+    auto mock_service = std::make_shared<MockService>("test service");
+    Mock_Service = mock_service.get();
+    
+    ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("test service"));
+    ON_CALL(*Mock_Service, GetPackage()).WillByDefault(Return("test_pkg"));
+    ON_CALL(*Mock_Service, GetLaunchFile()).WillByDefault(Return(""));
+    
+    EXPECT_NO_THROW(controller->StartService(mock_service));
+}
+
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
