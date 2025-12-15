@@ -31,6 +31,10 @@ class MockService : public Service {
     MOCK_METHOD(int32_t, GetMaxNodes, (), ());
     MOCK_METHOD(void, SetPID, (uint64_t pid), ());
     MOCK_METHOD(uint64_t, GetPID, (), ());
+    
+    // Public fields for test data storage
+    ServiceState service_state_ = ServiceState::NOT_RUNNING;
+    int32_t running_nodes_ = 0;
 };    
 
 MockService* Mock_Service;

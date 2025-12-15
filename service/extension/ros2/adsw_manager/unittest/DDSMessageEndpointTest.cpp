@@ -179,6 +179,270 @@ TEST_F(DDSMessageEndpointTest, on_data_available_Callback) {
     EXPECT_TRUE(endpoint_->WasOnDataAvailableCalled());
 }
 
+// ============================================================================
+// Additional Coverage Tests for Uncovered Code Paths
+// ============================================================================
+
+TEST_F(DDSMessageEndpointTest, Initialize_NullTypeSupport_ReturnsFalse) {
+    // Mock DDS objects
+    DomainParticipant* mock_participant = reinterpret_cast<DomainParticipant*>(0x1000);
+    Publisher* mock_publisher = reinterpret_cast<Publisher*>(0x2000);
+    Subscriber* mock_subscriber = reinterpret_cast<Subscriber*>(0x3000);
+    
+    // Set type support to nullptr
+    endpoint_->SetTypeSupport(nullptr);
+    
+    // Initialize should fail and return false when type_support is null
+    bool result = endpoint_->Initialize(mock_participant, mock_publisher, mock_subscriber);
+    
+    EXPECT_FALSE(result);
+}
+
+TEST_F(DDSMessageEndpointTest, Read_NullDataReader_ReturnsFalse) {
+    // Test the Read template function with null data_reader_
+    struct DummyMessage {
+        int value;
+    };
+    
+    DummyMessage msg;
+    
+    // Read should return false when data_reader_ is null
+    bool result = endpoint_->Read(msg);
+    
+    EXPECT_FALSE(result);
+}
+
+TEST_F(DDSMessageEndpointTest, Read_MultipleCalls_AllReturnFalse) {
+    // Test multiple calls to Read with null reader
+    struct TestData {
+        int id;
+        std::string name;
+    };
+    
+    TestData data1, data2, data3;
+    
+    EXPECT_FALSE(endpoint_->Read(data1));
+    EXPECT_FALSE(endpoint_->Read(data2));
+    EXPECT_FALSE(endpoint_->Read(data3));
+}
+
+TEST_F(DDSMessageEndpointTest, Write_BeforeInitialization_ReturnsFalse) {
+    // Write should fail before initialization
+    int test_value = 123;
+    
+    EXPECT_FALSE(endpoint_->Write(&test_value));
+}
+
+TEST_F(DDSMessageEndpointTest, Write_NullValue_ReturnsFalse) {
+    // Write with null value should return false
+    EXPECT_FALSE(endpoint_->Write(nullptr));
+}
+
+TEST_F(DDSMessageEndpointTest, GetPendingReadData_MultipleCallsBeforeInit) {
+    // Multiple calls should consistently return 0
+    EXPECT_EQ(endpoint_->GetPendingReadData(), 0);
+    EXPECT_EQ(endpoint_->GetPendingReadData(), 0);
+    EXPECT_EQ(endpoint_->GetPendingReadData(), 0);
+}
+
+TEST_F(DDSMessageEndpointTest, GetPendingWriteData_MultipleCallsBeforeInit) {
+    // Multiple calls should consistently return 0
+    EXPECT_EQ(endpoint_->GetPendingWriteData(), 0);
+    EXPECT_EQ(endpoint_->GetPendingWriteData(), 0);
+    EXPECT_EQ(endpoint_->GetPendingWriteData(), 0);
+}
+
+TEST_F(DDSMessageEndpointTest, OnPublicationMatched_MultipleIncrements) {
+    // Test multiple increments
+    PublicationMatchedStatus status;
+    
+    status.current_count_change = 1;
+    status.current_count = 1;
+    EXPECT_NO_THROW(endpoint_->on_publication_matched(nullptr, status));
+    
+    status.current_count_change = 1;
+    status.current_count = 2;
+    EXPECT_NO_THROW(endpoint_->on_publication_matched(nullptr, status));
+    
+    status.current_count_change = 1;
+    status.current_count = 3;
+    EXPECT_NO_THROW(endpoint_->on_publication_matched(nullptr, status));
+}
+
+TEST_F(DDSMessageEndpointTest, OnSubscriptionMatched_MultipleDecrements) {
+    // Test multiple decrements
+    SubscriptionMatchedStatus status;
+    
+    status.current_count_change = -1;
+    status.current_count = 2;
+    EXPECT_NO_THROW(endpoint_->on_subscription_matched(nullptr, status));
+    
+    status.current_count_change = -1;
+    status.current_count = 1;
+    EXPECT_NO_THROW(endpoint_->on_subscription_matched(nullptr, status));
+    
+    status.current_count_change = -1;
+    status.current_count = 0;
+    EXPECT_NO_THROW(endpoint_->on_subscription_matched(nullptr, status));
+}
+
+TEST_F(DDSMessageEndpointTest, OnPublicationMatched_LargeCountChange) {
+    // Test with large count change values
+    PublicationMatchedStatus status;
+    status.current_count_change = 100;
+    status.current_count = 100;
+    
+    EXPECT_NO_THROW(endpoint_->on_publication_matched(nullptr, status));
+}
+
+TEST_F(DDSMessageEndpointTest, OnSubscriptionMatched_LargeNegativeCountChange) {
+    // Test with large negative count change
+    SubscriptionMatchedStatus status;
+    status.current_count_change = -100;
+    status.current_count = 0;
+    
+    EXPECT_NO_THROW(endpoint_->on_subscription_matched(nullptr, status));
+}
+
+TEST_F(DDSMessageEndpointTest, Finalize_MultipleCalls) {
+    // Multiple Finalize calls should be safe
+    EXPECT_NO_THROW(endpoint_->Finalize());
+    EXPECT_NO_THROW(endpoint_->Finalize());
+    EXPECT_NO_THROW(endpoint_->Finalize());
+}
+
+TEST_F(DDSMessageEndpointTest, Initialize_ThenFinalize_ThenUse) {
+    // Attempt to use endpoint after finalization
+    DomainParticipant* mock_participant = reinterpret_cast<DomainParticipant*>(0x1000);
+    
+    // Initialize with null type support (will fail)
+    endpoint_->SetTypeSupport(nullptr);
+    endpoint_->Initialize(mock_participant, nullptr, nullptr);
+    
+    // Finalize
+    endpoint_->Finalize();
+    
+    // Try to use after finalize
+    int data = 42;
+    EXPECT_FALSE(endpoint_->Write(&data));
+    EXPECT_EQ(endpoint_->GetPendingReadData(), 0);
+    EXPECT_EQ(endpoint_->GetPendingWriteData(), 0);
+}
+
+TEST_F(DDSMessageEndpointTest, SetAndGetTopic_EmptyString) {
+    endpoint_->SetTopic("");
+    EXPECT_EQ(endpoint_->GetTopic(), "");
+}
+
+TEST_F(DDSMessageEndpointTest, SetAndGetTypeName_EmptyString) {
+    endpoint_->SetTypeName("");
+    EXPECT_EQ(endpoint_->GetTypeName(), "");
+}
+
+TEST_F(DDSMessageEndpointTest, SetAndGetTopic_LongString) {
+    std::string long_topic(1000, 'a');
+    endpoint_->SetTopic(long_topic);
+    EXPECT_EQ(endpoint_->GetTopic(), long_topic);
+}
+
+TEST_F(DDSMessageEndpointTest, OnDataAvailable_MultipleCalls) {
+    // Test that OnDataAvailable can be called multiple times
+    EXPECT_FALSE(endpoint_->WasOnDataAvailableCalled());
+    
+    endpoint_->OnDataAvailable();
+    EXPECT_TRUE(endpoint_->WasOnDataAvailableCalled());
+    
+    endpoint_->OnDataAvailable();
+    EXPECT_TRUE(endpoint_->WasOnDataAvailableCalled());
+}
+
+TEST_F(DDSMessageEndpointTest, on_data_available_MultipleCallbacks) {
+    // Test multiple callbacks
+    endpoint_->on_data_available(nullptr);
+    EXPECT_TRUE(endpoint_->WasOnDataAvailableCalled());
+    
+    // Reset for next test (would need to modify test class)
+    // For now, just verify it doesn't crash
+    endpoint_->on_data_available(nullptr);
+    endpoint_->on_data_available(nullptr);
+}
+
+TEST_F(DDSMessageEndpointTest, Initialize_OnlyPublisher) {
+    // Initialize with only publisher (no subscriber)
+    DomainParticipant* mock_participant = reinterpret_cast<DomainParticipant*>(0x1000);
+    Publisher* mock_publisher = reinterpret_cast<Publisher*>(0x2000);
+    
+    endpoint_->SetTypeSupport(nullptr);
+    
+    bool result = endpoint_->Initialize(mock_participant, mock_publisher, nullptr);
+    
+    EXPECT_FALSE(result);  // Should fail due to null type support
+}
+
+TEST_F(DDSMessageEndpointTest, Initialize_OnlySubscriber) {
+    // Initialize with only subscriber (no publisher)
+    DomainParticipant* mock_participant = reinterpret_cast<DomainParticipant*>(0x1000);
+    Subscriber* mock_subscriber = reinterpret_cast<Subscriber*>(0x3000);
+    
+    endpoint_->SetTypeSupport(nullptr);
+    
+    bool result = endpoint_->Initialize(mock_participant, nullptr, mock_subscriber);
+    
+    EXPECT_FALSE(result);  // Should fail due to null type support
+}
+
+TEST_F(DDSMessageEndpointTest, Initialize_BothPublisherAndSubscriber) {
+    // Initialize with both publisher and subscriber
+    DomainParticipant* mock_participant = reinterpret_cast<DomainParticipant*>(0x1000);
+    Publisher* mock_publisher = reinterpret_cast<Publisher*>(0x2000);
+    Subscriber* mock_subscriber = reinterpret_cast<Subscriber*>(0x3000);
+    
+    endpoint_->SetTypeSupport(nullptr);
+    
+    bool result = endpoint_->Initialize(mock_participant, mock_publisher, mock_subscriber);
+    
+    EXPECT_FALSE(result);  // Should fail due to null type support
+}
+
+TEST_F(DDSMessageEndpointTest, GetTypeSupport_AfterSet) {
+    // Create a mock type support (just a pointer for testing)
+    auto mock_ts = std::make_shared<TypeSupport>();
+    endpoint_->SetTypeSupport(mock_ts);
+    
+    EXPECT_EQ(endpoint_->GetTypeSupport(), mock_ts);
+}
+
+TEST_F(DDSMessageEndpointTest, Read_DifferentMessageTypes) {
+    // Test Read with different message types
+    
+    struct MessageType1 {
+        int field1;
+        double field2;
+    };
+    
+    struct MessageType2 {
+        std::string text;
+        bool flag;
+    };
+    
+    MessageType1 msg1;
+    MessageType2 msg2;
+    
+    // Both should return false with null reader
+    EXPECT_FALSE(endpoint_->Read(msg1));
+    EXPECT_FALSE(endpoint_->Read(msg2));
+}
+
+TEST_F(DDSMessageEndpointTest, ConstructorSetsDefaultValues) {
+    // Verify constructor sets things up correctly
+    TestDDSMessageEndpoint ep;
+    
+    EXPECT_EQ(ep.GetTopic(), "test_topic");
+    EXPECT_EQ(ep.GetTypeName(), "test_type");
+    EXPECT_EQ(ep.GetTypeSupport(), nullptr);
+    EXPECT_FALSE(ep.WasOnDataAvailableCalled());
+}
+
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
