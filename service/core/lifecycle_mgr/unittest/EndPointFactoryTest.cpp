@@ -53,6 +53,7 @@ protected:
         Mock_DDSTransmitter = new MockDDSTransmitter();
         MockMessageEndPoint::Mock_MessageEndPoint = new MockMessageEndPoint("test_topic");
         Mock_DDSMessageEndPoint = new MockDDSMessageEndPoint("test_topic");
+        Mock_LifecycleFactory = new NiceMock<MockLifecycleFactory>();
     }
     virtual void TearDown(){
         delete Mock_Logger;
@@ -63,6 +64,8 @@ protected:
         MockMessageEndPoint::Mock_MessageEndPoint = nullptr;
         delete Mock_DDSMessageEndPoint;
         Mock_DDSMessageEndPoint = nullptr;
+        delete Mock_LifecycleFactory;
+        Mock_LifecycleFactory = nullptr;
     }
 };
 
@@ -746,6 +749,313 @@ TEST_F(EndPointFactoryTest, AllEndpoints_GetTypeName) {
     {
         LifecycleDiagReportEndPoint ep(MessageType::LIFECYCLE_DIAG_REPORT, "topic");
         EXPECT_FALSE(ep.GetTypeName().empty());
+    }
+}
+
+// ==================== OnDataAvailable Branch Coverage ====================
+
+// Test OnDataAvailable for StartServiceEndPoint
+TEST_F(EndPointFactoryTest, StartServiceEndPoint_OnDataAvailable_CallsMethod) {
+    StartServiceEndPoint endpoint(MessageType::START_SERVICE_RESPONSE, "test_topic");
+    // OnDataAvailable requires mocking the Read function and LifecycleFactory
+    // Since Read<T> is a template that depends on internal state, we just call it to 
+    // ensure it doesn't crash (even if Read returns false)
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+}
+
+// Test OnDataAvailable for StopServiceEndPoint
+TEST_F(EndPointFactoryTest, StopServiceEndPoint_OnDataAvailable_CallsMethod) {
+    StopServiceEndPoint endpoint(MessageType::STOP_SERVICE_RESPONSE, "test_topic");
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+}
+
+// Test OnDataAvailable for GetServiceStateEndPoint
+TEST_F(EndPointFactoryTest, GetServiceStateEndPoint_OnDataAvailable_CallsMethod) {
+    GetServiceStateEndPoint endpoint(MessageType::GET_SERVICE_STATE_RESPONSE, "test_topic");
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+}
+
+// Test OnDataAvailable for NotifyServiceStateEndPoint
+TEST_F(EndPointFactoryTest, NotifyServiceStateEndPoint_OnDataAvailable_CallsMethod) {
+    NotifyServiceStateEndPoint endpoint(MessageType::NOTIFY_SERVICE_STATE, "test_topic");
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+}
+
+// Test OnDataAvailable for SetServiceModeEndPoint
+TEST_F(EndPointFactoryTest, SetServiceModeEndPoint_OnDataAvailable_CallsMethod) {
+    SetServiceModeEndPoint endpoint(MessageType::SET_SERVICE_MODE_REQUST, "test_topic");
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+}
+
+// Test OnDataAvailable for UpdateServiceListEndPoint
+TEST_F(EndPointFactoryTest, UpdateServiceListEndPoint_OnDataAvailable_CallsMethod) {
+    UpdateServiceListEndPoint endpoint(MessageType::UPDATE_SERVICE_LIST_REQUEST, "test_topic");
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+}
+
+// Test OnDataAvailable for LifecycleDiagReportEndPoint
+TEST_F(EndPointFactoryTest, LifecycleDiagReportEndPoint_OnDataAvailable_CallsMethod) {
+    LifecycleDiagReportEndPoint endpoint(MessageType::LIFECYCLE_DIAG_REPORT, "test_topic");
+    EXPECT_NO_THROW(endpoint.OnDataAvailable());
+}
+
+// ==================== Additional Constructor Invalid Type Tests ====================
+
+// Test all endpoints with mismatched message types to hit the else branches
+
+TEST_F(EndPointFactoryTest, StartServiceEndPoint_WithStopType) {
+    // This should not set TypeSupport since the type doesn't match
+    StartServiceEndPoint endpoint(MessageType::STOP_SERVICE_REQUEST, "test_topic");
+    EXPECT_EQ(endpoint.GetTopic(), "test_topic");
+}
+
+TEST_F(EndPointFactoryTest, StopServiceEndPoint_WithStartType) {
+    StopServiceEndPoint endpoint(MessageType::START_SERVICE_REQUEST, "test_topic");
+    EXPECT_EQ(endpoint.GetTopic(), "test_topic");
+}
+
+TEST_F(EndPointFactoryTest, GetServiceStateEndPoint_WithNotifyType) {
+    GetServiceStateEndPoint endpoint(MessageType::NOTIFY_SERVICE_STATE, "test_topic");
+    EXPECT_EQ(endpoint.GetTopic(), "test_topic");
+}
+
+TEST_F(EndPointFactoryTest, SetServiceModeEndPoint_WithUpdateType) {
+    SetServiceModeEndPoint endpoint(MessageType::UPDATE_SERVICE_LIST_REQUEST, "test_topic");
+    EXPECT_EQ(endpoint.GetTopic(), "test_topic");
+}
+
+TEST_F(EndPointFactoryTest, UpdateServiceListEndPoint_WithSetModeType) {
+    UpdateServiceListEndPoint endpoint(MessageType::SET_SERVICE_MODE_REQUST, "test_topic");
+    EXPECT_EQ(endpoint.GetTopic(), "test_topic");
+}
+
+// ==================== Multiple Endpoint Instance Tests ====================
+
+TEST_F(EndPointFactoryTest, MultipleStartServiceEndPoints_RequestAndResponse) {
+    StartServiceEndPoint reqEndpoint(MessageType::START_SERVICE_REQUEST, "req_topic");
+    StartServiceEndPoint respEndpoint(MessageType::START_SERVICE_RESPONSE, "resp_topic");
+    
+    EXPECT_EQ(reqEndpoint.GetTopic(), "req_topic");
+    EXPECT_EQ(respEndpoint.GetTopic(), "resp_topic");
+    EXPECT_NE(reqEndpoint.GetTypeSupport(), nullptr);
+    EXPECT_NE(respEndpoint.GetTypeSupport(), nullptr);
+}
+
+TEST_F(EndPointFactoryTest, MultipleStopServiceEndPoints_RequestAndResponse) {
+    StopServiceEndPoint reqEndpoint(MessageType::STOP_SERVICE_REQUEST, "req_topic");
+    StopServiceEndPoint respEndpoint(MessageType::STOP_SERVICE_RESPONSE, "resp_topic");
+    
+    EXPECT_EQ(reqEndpoint.GetTopic(), "req_topic");
+    EXPECT_EQ(respEndpoint.GetTopic(), "resp_topic");
+    EXPECT_NE(reqEndpoint.GetTypeSupport(), nullptr);
+    EXPECT_NE(respEndpoint.GetTypeSupport(), nullptr);
+}
+
+TEST_F(EndPointFactoryTest, MultipleGetServiceStateEndPoints_RequestAndResponse) {
+    GetServiceStateEndPoint reqEndpoint(MessageType::GET_SERVICE_STATE_REQUEST, "req_topic");
+    GetServiceStateEndPoint respEndpoint(MessageType::GET_SERVICE_STATE_RESPONSE, "resp_topic");
+    
+    EXPECT_EQ(reqEndpoint.GetTopic(), "req_topic");
+    EXPECT_EQ(respEndpoint.GetTopic(), "resp_topic");
+    EXPECT_NE(reqEndpoint.GetTypeSupport(), nullptr);
+    EXPECT_NE(respEndpoint.GetTypeSupport(), nullptr);
+}
+
+TEST_F(EndPointFactoryTest, MultipleSetServiceModeEndPoints_RequestAndResponse) {
+    SetServiceModeEndPoint reqEndpoint(MessageType::SET_SERVICE_MODE_REQUST, "req_topic");
+    SetServiceModeEndPoint respEndpoint(MessageType::SET_SERVICE_MODE_RESPONSE, "resp_topic");
+    
+    EXPECT_EQ(reqEndpoint.GetTopic(), "req_topic");
+    EXPECT_EQ(respEndpoint.GetTopic(), "resp_topic");
+    EXPECT_NE(reqEndpoint.GetTypeSupport(), nullptr);
+    EXPECT_NE(respEndpoint.GetTypeSupport(), nullptr);
+}
+
+TEST_F(EndPointFactoryTest, MultipleUpdateServiceListEndPoints_RequestAndResponse) {
+    UpdateServiceListEndPoint reqEndpoint(MessageType::UPDATE_SERVICE_LIST_REQUEST, "req_topic");
+    UpdateServiceListEndPoint respEndpoint(MessageType::UPDATE_SERVICE_LIST_RESPONSE, "resp_topic");
+    
+    EXPECT_EQ(reqEndpoint.GetTopic(), "req_topic");
+    EXPECT_EQ(respEndpoint.GetTopic(), "resp_topic");
+    EXPECT_NE(reqEndpoint.GetTypeSupport(), nullptr);
+    EXPECT_NE(respEndpoint.GetTypeSupport(), nullptr);
+}
+
+// ==================== GetTopic Multiple Invalid Types ====================
+
+TEST_F(EndPointFactoryTest, GetTopic_MultipleInvalidTypes) {
+    EndPointFactory factory;
+    factory.Initialize();
+    
+    // Test multiple invalid message types
+    EXPECT_EQ(factory.GetTopic(static_cast<MessageType>(-1)), nullptr);
+    EXPECT_EQ(factory.GetTopic(static_cast<MessageType>(100)), nullptr);
+    EXPECT_EQ(factory.GetTopic(static_cast<MessageType>(999)), nullptr);
+}
+
+// ==================== Endpoint Empty Topic Tests ====================
+
+TEST_F(EndPointFactoryTest, StartServiceEndPoint_EmptyTopic) {
+    StartServiceEndPoint endpoint(MessageType::START_SERVICE_REQUEST, "");
+    EXPECT_EQ(endpoint.GetTopic(), "");
+    EXPECT_NE(endpoint.GetTypeSupport(), nullptr);
+}
+
+TEST_F(EndPointFactoryTest, StopServiceEndPoint_EmptyTopic) {
+    StopServiceEndPoint endpoint(MessageType::STOP_SERVICE_REQUEST, "");
+    EXPECT_EQ(endpoint.GetTopic(), "");
+    EXPECT_NE(endpoint.GetTypeSupport(), nullptr);
+}
+
+TEST_F(EndPointFactoryTest, GetServiceStateEndPoint_EmptyTopic) {
+    GetServiceStateEndPoint endpoint(MessageType::GET_SERVICE_STATE_REQUEST, "");
+    EXPECT_EQ(endpoint.GetTopic(), "");
+    EXPECT_NE(endpoint.GetTypeSupport(), nullptr);
+}
+
+TEST_F(EndPointFactoryTest, NotifyServiceStateEndPoint_EmptyTopic) {
+    NotifyServiceStateEndPoint endpoint(MessageType::NOTIFY_SERVICE_STATE, "");
+    EXPECT_EQ(endpoint.GetTopic(), "");
+    EXPECT_NE(endpoint.GetTypeSupport(), nullptr);
+}
+
+TEST_F(EndPointFactoryTest, SetServiceModeEndPoint_EmptyTopic) {
+    SetServiceModeEndPoint endpoint(MessageType::SET_SERVICE_MODE_REQUST, "");
+    EXPECT_EQ(endpoint.GetTopic(), "");
+    EXPECT_NE(endpoint.GetTypeSupport(), nullptr);
+}
+
+TEST_F(EndPointFactoryTest, UpdateServiceListEndPoint_EmptyTopic) {
+    UpdateServiceListEndPoint endpoint(MessageType::UPDATE_SERVICE_LIST_REQUEST, "");
+    EXPECT_EQ(endpoint.GetTopic(), "");
+    EXPECT_NE(endpoint.GetTypeSupport(), nullptr);
+}
+
+TEST_F(EndPointFactoryTest, LifecycleDiagReportEndPoint_EmptyTopic) {
+    LifecycleDiagReportEndPoint endpoint(MessageType::LIFECYCLE_DIAG_REPORT, "");
+    EXPECT_EQ(endpoint.GetTopic(), "");
+    EXPECT_NE(endpoint.GetTypeSupport(), nullptr);
+}
+
+// ==================== Endpoint Long Topic Tests ====================
+
+TEST_F(EndPointFactoryTest, AllEndpoints_LongTopic) {
+    std::string longTopic(1000, 'x');
+    
+    {
+        StartServiceEndPoint ep(MessageType::START_SERVICE_REQUEST, longTopic);
+        EXPECT_EQ(ep.GetTopic(), longTopic);
+    }
+    {
+        StopServiceEndPoint ep(MessageType::STOP_SERVICE_REQUEST, longTopic);
+        EXPECT_EQ(ep.GetTopic(), longTopic);
+    }
+    {
+        GetServiceStateEndPoint ep(MessageType::GET_SERVICE_STATE_REQUEST, longTopic);
+        EXPECT_EQ(ep.GetTopic(), longTopic);
+    }
+    {
+        NotifyServiceStateEndPoint ep(MessageType::NOTIFY_SERVICE_STATE, longTopic);
+        EXPECT_EQ(ep.GetTopic(), longTopic);
+    }
+    {
+        SetServiceModeEndPoint ep(MessageType::SET_SERVICE_MODE_REQUST, longTopic);
+        EXPECT_EQ(ep.GetTopic(), longTopic);
+    }
+    {
+        UpdateServiceListEndPoint ep(MessageType::UPDATE_SERVICE_LIST_REQUEST, longTopic);
+        EXPECT_EQ(ep.GetTopic(), longTopic);
+    }
+    {
+        LifecycleDiagReportEndPoint ep(MessageType::LIFECYCLE_DIAG_REPORT, longTopic);
+        EXPECT_EQ(ep.GetTopic(), longTopic);
+    }
+}
+
+// ==================== Multiple OnDataPublished Calls ====================
+
+TEST_F(EndPointFactoryTest, AllEndpoints_MultipleOnDataPublishedCalls) {
+    {
+        StartServiceEndPoint ep(MessageType::START_SERVICE_REQUEST, "topic");
+        EXPECT_NO_THROW(ep.OnDataPublished(true));
+        EXPECT_NO_THROW(ep.OnDataPublished(false));
+        EXPECT_NO_THROW(ep.OnDataPublished(true));
+    }
+    {
+        StopServiceEndPoint ep(MessageType::STOP_SERVICE_REQUEST, "topic");
+        EXPECT_NO_THROW(ep.OnDataPublished(true));
+        EXPECT_NO_THROW(ep.OnDataPublished(false));
+        EXPECT_NO_THROW(ep.OnDataPublished(true));
+    }
+    {
+        GetServiceStateEndPoint ep(MessageType::GET_SERVICE_STATE_REQUEST, "topic");
+        EXPECT_NO_THROW(ep.OnDataPublished(true));
+        EXPECT_NO_THROW(ep.OnDataPublished(false));
+        EXPECT_NO_THROW(ep.OnDataPublished(true));
+    }
+    {
+        NotifyServiceStateEndPoint ep(MessageType::NOTIFY_SERVICE_STATE, "topic");
+        EXPECT_NO_THROW(ep.OnDataPublished(true));
+        EXPECT_NO_THROW(ep.OnDataPublished(false));
+        EXPECT_NO_THROW(ep.OnDataPublished(true));
+    }
+    {
+        SetServiceModeEndPoint ep(MessageType::SET_SERVICE_MODE_REQUST, "topic");
+        EXPECT_NO_THROW(ep.OnDataPublished(true));
+        EXPECT_NO_THROW(ep.OnDataPublished(false));
+        EXPECT_NO_THROW(ep.OnDataPublished(true));
+    }
+    {
+        UpdateServiceListEndPoint ep(MessageType::UPDATE_SERVICE_LIST_REQUEST, "topic");
+        EXPECT_NO_THROW(ep.OnDataPublished(true));
+        EXPECT_NO_THROW(ep.OnDataPublished(false));
+        EXPECT_NO_THROW(ep.OnDataPublished(true));
+    }
+    {
+        LifecycleDiagReportEndPoint ep(MessageType::LIFECYCLE_DIAG_REPORT, "topic");
+        EXPECT_NO_THROW(ep.OnDataPublished(true));
+        EXPECT_NO_THROW(ep.OnDataPublished(false));
+        EXPECT_NO_THROW(ep.OnDataPublished(true));
+    }
+}
+
+// ==================== Multiple OnDataAvailable Calls ====================
+
+TEST_F(EndPointFactoryTest, AllEndpoints_MultipleOnDataAvailableCalls) {
+    {
+        StartServiceEndPoint ep(MessageType::START_SERVICE_RESPONSE, "topic");
+        EXPECT_NO_THROW(ep.OnDataAvailable());
+        EXPECT_NO_THROW(ep.OnDataAvailable());
+    }
+    {
+        StopServiceEndPoint ep(MessageType::STOP_SERVICE_RESPONSE, "topic");
+        EXPECT_NO_THROW(ep.OnDataAvailable());
+        EXPECT_NO_THROW(ep.OnDataAvailable());
+    }
+    {
+        GetServiceStateEndPoint ep(MessageType::GET_SERVICE_STATE_RESPONSE, "topic");
+        EXPECT_NO_THROW(ep.OnDataAvailable());
+        EXPECT_NO_THROW(ep.OnDataAvailable());
+    }
+    {
+        NotifyServiceStateEndPoint ep(MessageType::NOTIFY_SERVICE_STATE, "topic");
+        EXPECT_NO_THROW(ep.OnDataAvailable());
+        EXPECT_NO_THROW(ep.OnDataAvailable());
+    }
+    {
+        SetServiceModeEndPoint ep(MessageType::SET_SERVICE_MODE_REQUST, "topic");
+        EXPECT_NO_THROW(ep.OnDataAvailable());
+        EXPECT_NO_THROW(ep.OnDataAvailable());
+    }
+    {
+        UpdateServiceListEndPoint ep(MessageType::UPDATE_SERVICE_LIST_REQUEST, "topic");
+        EXPECT_NO_THROW(ep.OnDataAvailable());
+        EXPECT_NO_THROW(ep.OnDataAvailable());
+    }
+    {
+        LifecycleDiagReportEndPoint ep(MessageType::LIFECYCLE_DIAG_REPORT, "topic");
+        EXPECT_NO_THROW(ep.OnDataAvailable());
+        EXPECT_NO_THROW(ep.OnDataAvailable());
     }
 }
 

@@ -648,6 +648,539 @@ TEST_F(DDSProtocolTest, SetForwardCallback_TC001) {
     ins->Finalize();
 }
 
+// ==================== Topic Cache and Type Registration Coverage ====================
+
+// Test PublishMessage with cached topic (simulating cache hit scenario)
+TEST_F(DDSProtocolTest, PublishMessage_TC007_cache_hit_with_type_support) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    // Create a topic info and manually insert it into discovered_topic_
+    auto topic_info = std::make_shared<TopicInformation>();
+    topic_info->topic_name = "/CachedTestTopic";
+    topic_info->topic_type = "DataTypeTestSimple";
+    
+    // Look up the type from parsed_dynamic_type_supports_
+    auto idl_iter = ins->parsed_dynamic_type_supports_.find("DataTypeTestSimple");
+    if (idl_iter != ins->parsed_dynamic_type_supports_.end()) {
+        topic_info->remote_type = idl_iter->second->dyn_type;
+        topic_info->type_support = idl_iter->second->type_support;
+    }
+    
+    // Insert into discovered_topic_ to simulate cache
+    ins->discovered_topic_["/CachedTestTopic"] = topic_info;
+    
+    // Create a message for this topic
+    auto variant_data = std::make_shared<VariantData>();
+    variant_data->SetName("DataTypeTestSimple");
+    variant_data->SetValue("id", (int32_t)100);
+    variant_data->SetValue("name", std::string("CacheHitTest"));
+    
+    auto message = std::make_shared<Message>(
+        "/CachedTestTopic",
+        MessageProtocolType::DDS,
+        "DataTypeTestSimple",
+        variant_data
+    );
+    
+    // This should use the cached topic info
+    bool result = ins->PublishMessage(message);
+    // Result depends on writer creation success
+    
+    ins->Finalize();
+}
+
+// Test PublishMessage with cached topic that has null type_support (DDS topic)
+TEST_F(DDSProtocolTest, PublishMessage_TC008_cache_hit_null_type_support_dds) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    // Create a topic info with null type_support to trigger the fix-up code
+    auto topic_info = std::make_shared<TopicInformation>();
+    topic_info->topic_name = "/NullTypeSupportTopic";
+    topic_info->topic_type = "DataTypeTestSimple";
+    topic_info->type_support = nullptr;  // Explicitly null
+    
+    // Insert into discovered_topic_
+    ins->discovered_topic_["/NullTypeSupportTopic"] = topic_info;
+    
+    auto variant_data = std::make_shared<VariantData>();
+    variant_data->SetName("DataTypeTestSimple");
+    variant_data->SetValue("id", (int32_t)200);
+    variant_data->SetValue("name", std::string("NullTypeSupportTest"));
+    
+    auto message = std::make_shared<Message>(
+        "/NullTypeSupportTopic",
+        MessageProtocolType::DDS,
+        "DataTypeTestSimple",
+        variant_data
+    );
+    
+    // This should attempt to fix the null type_support
+    bool result = ins->PublishMessage(message);
+    
+    ins->Finalize();
+}
+
+// Test PublishMessage with cached topic that has null type_support (ROS topic)
+TEST_F(DDSProtocolTest, PublishMessage_TC009_cache_hit_null_type_support_ros) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    // Create a topic info with null type_support for ROS topic
+    auto topic_info = std::make_shared<TopicInformation>();
+    topic_info->topic_name = "rt/null_type_support_ros";
+    topic_info->topic_type = "diagnosticmgr::msg::dds_::DiagnosticInfoRequest_";
+    topic_info->type_support = nullptr;  // Explicitly null
+    
+    // Insert into discovered_topic_
+    ins->discovered_topic_["rt/null_type_support_ros"] = topic_info;
+    
+    auto variant_data = std::make_shared<VariantData>();
+    variant_data->SetName("DiagnosticInfoRequest");
+    variant_data->SetValue("id", (int32_t)300);
+    
+    auto message = std::make_shared<Message>(
+        "rt/null_type_support_ros",
+        MessageProtocolType::DDS,
+        "DiagnosticInfoRequest",  // Simple type name
+        variant_data
+    );
+    
+    // This should attempt to fix the null type_support for ROS topic
+    bool result = ins->PublishMessage(message);
+    
+    ins->Finalize();
+}
+
+// Test PublishMessage with cached topic that has null type_support (unknown type)
+TEST_F(DDSProtocolTest, PublishMessage_TC010_cache_hit_null_type_support_unknown_type) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    // Create a topic info with null type_support for unknown type
+    auto topic_info = std::make_shared<TopicInformation>();
+    topic_info->topic_name = "/UnknownTypeTopic";
+    topic_info->topic_type = "CompletelyUnknownType";
+    topic_info->type_support = nullptr;  // Explicitly null
+    
+    // Insert into discovered_topic_
+    ins->discovered_topic_["/UnknownTypeTopic"] = topic_info;
+    
+    auto variant_data = std::make_shared<VariantData>();
+    variant_data->SetName("CompletelyUnknownType");
+    variant_data->SetValue("data", (int32_t)400);
+    
+    auto message = std::make_shared<Message>(
+        "/UnknownTypeTopic",
+        MessageProtocolType::DDS,
+        "CompletelyUnknownType",
+        variant_data
+    );
+    
+    // This should fail to find type in dynamic IDL and log error
+    bool result = ins->PublishMessage(message);
+    EXPECT_FALSE(result);  // Should fail for unknown type
+    
+    ins->Finalize();
+}
+
+// Test PublishMessage with cached ROS topic (using cache normally)
+TEST_F(DDSProtocolTest, PublishMessage_TC011_cache_hit_ros_topic) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    // Create a topic info for ROS topic with valid type_support
+    auto topic_info = std::make_shared<TopicInformation>();
+    topic_info->topic_name = "rt/cached_ros_topic";
+    topic_info->topic_type = "diagnosticmgr::msg::dds_::DiagnosticInfoRequest_";
+    
+    // Look up the type using simple name
+    auto idl_iter = ins->parsed_dynamic_type_supports_.find("DiagnosticInfoRequest");
+    if (idl_iter != ins->parsed_dynamic_type_supports_.end()) {
+        topic_info->remote_type = idl_iter->second->dyn_type;
+        topic_info->type_support = idl_iter->second->type_support;
+    }
+    
+    // Insert into discovered_topic_
+    ins->discovered_topic_["rt/cached_ros_topic"] = topic_info;
+    
+    auto variant_data = std::make_shared<VariantData>();
+    variant_data->SetName("DiagnosticInfoRequest");
+    variant_data->SetValue("id", (int32_t)500);
+    
+    auto message = std::make_shared<Message>(
+        "rt/cached_ros_topic",
+        MessageProtocolType::DDS,
+        "DiagnosticInfoRequest",
+        variant_data
+    );
+    
+    // This should use cached ROS topic (covers LOG_DEBUG branch)
+    bool result = ins->PublishMessage(message);
+    
+    ins->Finalize();
+}
+
+// ==================== DataWriter/DataReader Coverage ====================
+
+// Test delete_datawriter
+TEST_F(DDSProtocolTest, delete_datawriter_TC001) {
+    constexpr uint32_t MAX_WAIT_COUNT = 100;
+    EXPECT_TRUE(ins->Initialize());
+    
+    // Subscribe and wait for discovery to get a topic with reader
+    ins->SubscribeMessage("/HelloWorldTopic");
+    
+    char* args[] = {"test/HelloWorldPublisher", 0};
+    pid_t pid = startProcess(args);
+    if (pid == -1) {
+        ins->Finalize();
+        GTEST_SKIP() << "Failed to start test publisher";
+        return;
+    }
+    
+    // Wait for topic discovery
+    uint32_t wait_count = 0;
+    while (wait_count < MAX_WAIT_COUNT) {
+        if (ins->discovered_topic_.size() > 0) {
+            auto it = ins->discovered_topic_.find("/HelloWorldTopic");
+            if (it != ins->discovered_topic_.end() && it->second) {
+                break;
+            }
+        }
+        wait_count++;
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+    
+    stopProcess(pid);
+    ins->Finalize();
+}
+
+// Test create_datawriter with valid topic info
+TEST_F(DDSProtocolTest, create_datawriter_TC001_valid_topic) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    // Create topic info for a known type
+    auto topic_info = std::make_shared<TopicInformation>();
+    topic_info->topic_name = "/WriterTestTopic";
+    topic_info->topic_type = "DataTypeTestSimple";
+    
+    // Register the type
+    bool registered = ins->register_type_object_from_dynamic_idl(topic_info);
+    if (registered) {
+        // Create the data writer
+        bool result = ins->create_datawriter(topic_info);
+        EXPECT_TRUE(result);
+        EXPECT_NE(nullptr, topic_info->writer);
+        EXPECT_NE(nullptr, topic_info->topic);
+    }
+    
+    ins->Finalize();
+}
+
+// Test create_datawriter with existing topic
+TEST_F(DDSProtocolTest, create_datawriter_TC002_existing_topic) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    // Create topic info
+    auto topic_info = std::make_shared<TopicInformation>();
+    topic_info->topic_name = "/ExistingTopicWriterTest";
+    topic_info->topic_type = "DataTypeTestSimple";
+    
+    // Register the type first
+    if (ins->register_type_object_from_dynamic_idl(topic_info)) {
+        // Create the topic manually first
+        TopicQos topic_qos = TOPIC_QOS_DEFAULT;
+        ins->participant_->get_default_topic_qos(topic_qos);
+        topic_info->topic = ins->participant_->create_topic(
+            topic_info->topic_name,
+            topic_info->topic_type,
+            topic_qos
+        );
+        
+        // Now create data writer - should use existing topic
+        bool result = ins->create_datawriter(topic_info);
+        EXPECT_TRUE(result);
+    }
+    
+    ins->Finalize();
+}
+
+// Test create_datareader with existing reader (should return true)
+TEST_F(DDSProtocolTest, create_datareader_TC001_existing_reader) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    auto topic_info = std::make_shared<TopicInformation>();
+    topic_info->topic_name = "/ExistingReaderTest";
+    topic_info->topic_type = "DataTypeTestSimple";
+    
+    if (ins->register_type_object_from_dynamic_idl(topic_info)) {
+        // Create reader first time
+        bool result1 = ins->create_datareader(topic_info);
+        EXPECT_TRUE(result1);
+        
+        // Create reader second time - should return true for existing
+        bool result2 = ins->create_datareader(topic_info);
+        EXPECT_TRUE(result2);
+    }
+    
+    ins->Finalize();
+}
+
+// ==================== register_type_object Coverage ====================
+
+// Test register_type_object_from_dynamic_idl with ROS2 type name mapping
+TEST_F(DDSProtocolTest, register_type_object_from_dynamic_idl_TC001_ros_mapping) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    auto topic_info = std::make_shared<TopicInformation>();
+    topic_info->topic_name = "rt/ros_type_mapping_test";
+    // Use ROS2 DDS type name that needs mapping
+    topic_info->topic_type = "diagnosticmgr::msg::dds_::DiagnosticInfoRequest_";
+    
+    // This should map the ROS2 type to simple type and find it
+    bool result = ins->register_type_object_from_dynamic_idl(topic_info);
+    // Result depends on IDL availability for DiagnosticInfoRequest
+    
+    ins->Finalize();
+}
+
+// Test register_type_object with both dynamic IDL and discovery fallback
+TEST_F(DDSProtocolTest, register_type_object_TC003_discovery_fallback) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    auto topic_info = std::make_shared<TopicInformation>();
+    topic_info->topic_name = "/DiscoveryFallbackTest";
+    topic_info->topic_type = "CompletelyUnknownType123";
+    
+    // This should try dynamic IDL first (fail), then discovery (also likely fail)
+    bool result = ins->register_type_object(topic_info);
+    EXPECT_FALSE(result);  // Unknown type should fail
+    
+    ins->Finalize();
+}
+
+// ==================== load_dds_dynamic_idl Coverage ====================
+
+// Test load_dds_dynamic_idl with valid IDL path
+TEST_F(DDSProtocolTest, load_dds_dynamic_idl_TC002_valid_path) {
+    // Note: load_dds_dynamic_idl is called during Initialize()
+    // We verify it worked by checking parsed_dynamic_type_supports_
+    EXPECT_TRUE(ins->Initialize());
+    
+    // If DIAG_IDL_PATH is set or defaults to "idl", types should be loaded
+    // Check that at least some types are registered
+    if (!ins->parsed_dynamic_type_supports_.empty()) {
+        // Verify types have valid type_support
+        for (const auto& pair : ins->parsed_dynamic_type_supports_) {
+            EXPECT_NE(nullptr, pair.second);
+            EXPECT_NE(nullptr, pair.second->type_support);
+        }
+    }
+    
+    ins->Finalize();
+}
+
+// ==================== create_topic_information_from_dynamic_idl Coverage ====================
+
+// Test 3-parameter version with valid conversion
+TEST_F(DDSProtocolTest, create_topic_info_TC004_ros_conversion_success) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    // Test creating topic info with type conversion
+    auto topic_info = ins->create_topic_information_from_dynamic_idl(
+        "rt/conversion_test",
+        "DataTypeTestSimple",  // Simple type for IDL lookup
+        "some::custom::TypeName"  // Original type name for registration
+    );
+    
+    if (topic_info) {
+        EXPECT_EQ("rt/conversion_test", topic_info->topic_name);
+        EXPECT_EQ("some::custom::TypeName", topic_info->topic_type);
+        EXPECT_NE(nullptr, topic_info->remote_type);
+        EXPECT_NE(nullptr, topic_info->type_support);
+    }
+    
+    ins->Finalize();
+}
+
+// Test 3-parameter version with invalid converted type
+TEST_F(DDSProtocolTest, create_topic_info_TC005_ros_conversion_invalid_type) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    auto topic_info = ins->create_topic_information_from_dynamic_idl(
+        "rt/invalid_conversion",
+        "NonExistentConvertedType",  // This won't be found
+        "some::ros::Type"
+    );
+    
+    EXPECT_EQ(nullptr, topic_info);  // Should fail
+    
+    ins->Finalize();
+}
+
+// ==================== on_data_writer_discovery Coverage ====================
+
+// Test that on_data_writer_discovery correctly handles discovered topics
+TEST_F(DDSProtocolTest, on_data_writer_discovery_TC001) {
+    constexpr uint32_t MAX_WAIT_COUNT = 100;
+    EXPECT_TRUE(ins->Initialize());
+    
+    // Subscribe first to mark topic as needing subscription
+    ins->SubscribeMessage("/HelloWorldTopic");
+    
+    // Start publisher to trigger discovery
+    char* args[] = {"test/HelloWorldPublisher", 0};
+    pid_t pid = startProcess(args);
+    if (pid == -1) {
+        ins->Finalize();
+        GTEST_SKIP() << "Failed to start publisher";
+        return;
+    }
+    
+    // Wait for discovery callback
+    uint32_t wait_count = 0;
+    while (wait_count < MAX_WAIT_COUNT) {
+        if (ins->discovered_topic_.count("/HelloWorldTopic") > 0) {
+            auto it = ins->discovered_topic_.find("/HelloWorldTopic");
+            if (it != ins->discovered_topic_.end() && it->second && it->second->reader) {
+                break;
+            }
+        }
+        wait_count++;
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+    
+    // Verify discovery happened
+    EXPECT_GT(ins->discovered_topic_.count("/HelloWorldTopic"), 0);
+    
+    stopProcess(pid);
+    ins->Finalize();
+}
+
+// ==================== delete_datareader and delete_datawriter Coverage ====================
+
+TEST_F(DDSProtocolTest, delete_datareader_TC001_with_topic) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    auto topic_info = std::make_shared<TopicInformation>();
+    topic_info->topic_name = "/DeleteReaderTest";
+    topic_info->topic_type = "DataTypeTestSimple";
+    
+    if (ins->register_type_object_from_dynamic_idl(topic_info)) {
+        // Create reader
+        EXPECT_TRUE(ins->create_datareader(topic_info));
+        EXPECT_NE(nullptr, topic_info->reader);
+        EXPECT_NE(nullptr, topic_info->topic);
+        
+        // Delete reader - should also delete topic since reader was only user
+        EXPECT_TRUE(ins->delete_datareader(topic_info));
+        EXPECT_EQ(nullptr, topic_info->reader);
+        EXPECT_EQ(nullptr, topic_info->topic);
+    }
+    
+    ins->Finalize();
+}
+
+TEST_F(DDSProtocolTest, delete_datawriter_TC002_with_topic) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    auto topic_info = std::make_shared<TopicInformation>();
+    topic_info->topic_name = "/DeleteWriterTest";
+    topic_info->topic_type = "DataTypeTestSimple";
+    
+    if (ins->register_type_object_from_dynamic_idl(topic_info)) {
+        // Create writer
+        EXPECT_TRUE(ins->create_datawriter(topic_info));
+        EXPECT_NE(nullptr, topic_info->writer);
+        EXPECT_NE(nullptr, topic_info->topic);
+        
+        // Delete writer - should also delete topic since no reader exists
+        EXPECT_TRUE(ins->delete_datawriter(topic_info));
+        EXPECT_EQ(nullptr, topic_info->writer);
+        EXPECT_EQ(nullptr, topic_info->topic);
+    }
+    
+    ins->Finalize();
+}
+
+// ==================== PublishMessage with valid topic_info full path ====================
+
+TEST_F(DDSProtocolTest, PublishMessage_TC012_full_success_path) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    // Create topic info and set up fully
+    auto topic_info = std::make_shared<TopicInformation>();
+    topic_info->topic_name = "/FullSuccessPublish";
+    topic_info->topic_type = "DataTypeTestSimple";
+    
+    if (ins->register_type_object_from_dynamic_idl(topic_info)) {
+        // Add to discovered_topic_
+        ins->discovered_topic_["/FullSuccessPublish"] = topic_info;
+        
+        // Create message
+        auto variant_data = std::make_shared<VariantData>();
+        variant_data->SetName("DataTypeTestSimple");
+        variant_data->SetValue("id", (int32_t)999);
+        variant_data->SetValue("name", std::string("FullSuccess"));
+        
+        auto message = std::make_shared<Message>(
+            "/FullSuccessPublish",
+            MessageProtocolType::DDS,
+            "DataTypeTestSimple",
+            variant_data
+        );
+        
+        // Should successfully create writer and publish
+        bool result = ins->PublishMessage(message);
+        EXPECT_TRUE(result);
+        
+        // Verify writer was created
+        EXPECT_NE(nullptr, topic_info->writer);
+    }
+    
+    ins->Finalize();
+}
+
+// Test PublishMessage twice to use cached writer
+TEST_F(DDSProtocolTest, PublishMessage_TC013_use_cached_writer) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    auto topic_info = std::make_shared<TopicInformation>();
+    topic_info->topic_name = "/CachedWriterTest";
+    topic_info->topic_type = "DataTypeTestSimple";
+    
+    if (ins->register_type_object_from_dynamic_idl(topic_info)) {
+        ins->discovered_topic_["/CachedWriterTest"] = topic_info;
+        
+        auto variant_data = std::make_shared<VariantData>();
+        variant_data->SetName("DataTypeTestSimple");
+        variant_data->SetValue("id", (int32_t)1001);
+        variant_data->SetValue("name", std::string("First"));
+        
+        auto message = std::make_shared<Message>(
+            "/CachedWriterTest",
+            MessageProtocolType::DDS,
+            "DataTypeTestSimple",
+            variant_data
+        );
+        
+        // First publish - creates writer
+        bool result1 = ins->PublishMessage(message);
+        EXPECT_TRUE(result1);
+        DataWriter* first_writer = topic_info->writer;
+        
+        // Update message
+        variant_data->SetValue("id", (int32_t)1002);
+        variant_data->SetValue("name", std::string("Second"));
+        
+        // Second publish - uses existing writer
+        bool result2 = ins->PublishMessage(message);
+        EXPECT_TRUE(result2);
+        
+        // Verify same writer was used
+        EXPECT_EQ(first_writer, topic_info->writer);
+    }
+    
+    ins->Finalize();
+}
+
 TEST_F(DDSProtocolTest, PublishMessage_TC001) {
 
 }

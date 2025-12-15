@@ -53,6 +53,9 @@ class DDSMessageEndPoint : public MessageEndPoint, public DataWriterListener , p
 
     template<typename T>
     bool Read(T &value) {
+        if (reader_ == nullptr) {
+            return false;
+        }
         SampleInfo info;
         if (reader_->take_next_sample(&value, &info) == eprosima::fastdds::dds::RETCODE_OK)
         {
@@ -65,6 +68,9 @@ class DDSMessageEndPoint : public MessageEndPoint, public DataWriterListener , p
 
     template<typename T>
     bool Read(std::vector<T>& value) {
+        if (reader_ == nullptr) {
+            return false;
+        }
         SampleInfo info;
         bool ret_flag = false;
         while (true) {

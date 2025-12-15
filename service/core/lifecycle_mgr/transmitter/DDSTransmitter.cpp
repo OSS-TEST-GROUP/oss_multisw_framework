@@ -6,7 +6,11 @@
 
 namespace lifecycle_manager {
 
-DDSTransmitter::DDSTransmitter() {}
+DDSTransmitter::DDSTransmitter()
+    : participant_(nullptr)
+    , publisher_(nullptr)
+    , subscriber_(nullptr)
+    , message_queue_(nullptr) {}
 DDSTransmitter::~DDSTransmitter() {}
 
 

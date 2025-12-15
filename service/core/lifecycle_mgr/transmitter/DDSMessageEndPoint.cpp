@@ -96,6 +96,11 @@ bool DDSMessageEndPoint::Write(const void* const data)
     bool ret = false;
     LOG_DEBUG("Write message. [" << GetTopic() << "]");
 
+    if (writer_ == nullptr) {
+        LOG_DEBUG("Write failed: writer is null. [" << GetTopic() << "]");
+        return false;
+    }
+
 #if 0
     // Wait for the data endpoints discovery
     std::unique_lock<std::mutex> matched_lock(mutex_);
