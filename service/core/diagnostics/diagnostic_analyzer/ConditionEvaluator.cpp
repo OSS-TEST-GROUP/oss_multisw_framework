@@ -260,6 +260,12 @@ ConditionOperandType ConditionEvaluator::ConvertTypeIndexToOperandType(std::type
         return ConditionOperandType::STRING;
     }
 
+    // Char array types (treated as STRING for comparison)
+    if (type == typeid(std::vector<char>) ||
+        type == typeid(std::vector<wchar_t>)) {
+        return ConditionOperandType::STRING;
+    }
+
     // Fallback
     return ConditionOperandType::UNKNOWN;
 }
