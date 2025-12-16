@@ -131,12 +131,12 @@ int32_t ServiceMonitor::NodeStarted(std::string service, std::string node){
 
 int32_t ServiceMonitor::NodeStopped(std::string service, std::string node){
 
-    std::vector<std::string> vlist = ros_service_node_list_[service];
+    auto& vlist = ros_service_node_list_[service];
 
     auto it = find(vlist.begin(), vlist.end(), node);
 
     if (it != vlist.end()){
-        ros_service_node_list_[service].erase(it);
+        vlist.erase(it);
         LOG_VERBOSE("ServiceMonitor::NodeStopped  " << service << "::" << node);
     }
 

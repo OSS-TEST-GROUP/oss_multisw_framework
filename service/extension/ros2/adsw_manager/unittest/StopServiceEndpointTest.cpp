@@ -41,7 +41,7 @@ protected:
         Mock_ROSServiceController = new NiceMock<MockROSServiceController>();
         ADSWManager::SetShared(std::shared_ptr<ADSWManager>(Mock_ADSWManager));
 
-        ON_CALL(*Mock_ADSWManager, Get()).WillByDefault(::testing::Return(Mock_ADSWManager));
+        // Note: Get() is not mocked - it returns shared_instance_.get() directly
         ON_CALL(*Mock_ADSWManager, GetTopic(::testing::_)).WillByDefault(::testing::Return("mock_topic"));
         ON_CALL(*Mock_ADSWManager, GetTransmitter()).WillByDefault(::testing::Return(std::make_shared<MockDDSTransmitter>()));
         ON_CALL(*Mock_ADSWManager, GetServiceController()).WillByDefault(::testing::Return(

@@ -33,68 +33,18 @@ namespace adsw_manager {
         MOCK_METHOD(void, SetState, (ros2::adsw_manager::AdswState state), ());
         MOCK_METHOD(ros2::adsw_manager::AdswState, GetState, (), ());
 
-        MOCK_METHOD(ADSWManager*, Get, (), ());
+        // Note: Get() is not mocked - it directly returns shared_instance_.get()
     
     public:
 
     };
 
-    MockADSWManager* Mock_ADSWManager;
+    extern MockADSWManager* Mock_ADSWManager;
 
-    std::shared_ptr<ADSWManager> shared_instance_;
+    // Declare the shared instance (defined in MockADSWManager.cpp)
+    extern std::shared_ptr<ADSWManager> shared_instance_;
 
-    ADSWManager::ADSWManager() {
-    }
-    
-    ADSWManager::~ADSWManager() {
-    }
-    bool ADSWManager::Initialize() {
-        return Mock_ADSWManager->Initialize();
-    }
-
-    bool ADSWManager::Start() {
-        return Mock_ADSWManager->Start();
-    }
-    void ADSWManager::Stop() {
-        Mock_ADSWManager->Stop();
-    }
-    void ADSWManager::Process() {
-        Mock_ADSWManager->Process();
-    }
-
-    std::shared_ptr<DDSTransmitter> ADSWManager::GetTransmitter() {
-        return Mock_ADSWManager->GetTransmitter();
-    }
-    std::shared_ptr<ServiceRegistry> ADSWManager::GetServiceRegistry() {
-        return Mock_ADSWManager->GetServiceRegistry();
-    }
-    std::shared_ptr<ServiceMonitor> ADSWManager::GetServiceMonitor() {
-        return Mock_ADSWManager->GetServiceMonitor();
-    }
-    std::shared_ptr<ROSServiceController> ADSWManager::GetServiceController() {
-        return Mock_ADSWManager->GetServiceController();
-    }
-    std::shared_ptr<ROSServiceDiscovery> ADSWManager::GetServiceDiscovery() {
-        return Mock_ADSWManager->GetServiceDiscovery();
-    }
-    const char* ADSWManager::GetTopic(MessageType topic) {
-        return Mock_ADSWManager->GetTopic(topic);
-    }
-    void ADSWManager::SetState(AdswState state) {
-        Mock_ADSWManager->SetState(state);
-    }
-    AdswState ADSWManager::GetState() {
-        return Mock_ADSWManager->GetState();
-    }
-
-    ADSWManager* ADSWManager::Get() {
-        return shared_instance_.get();
-    }
-
-    void ADSWManager::SetShared(std::shared_ptr<ADSWManager> instance) {
-        shared_instance_ = instance;
-    }
-}
-}
+} // namespace adsw_manager
+} // namespace ros2
 
 #endif

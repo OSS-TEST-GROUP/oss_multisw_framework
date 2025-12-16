@@ -47,9 +47,11 @@ protected:
         Mock_DDSMessageEndpoint = new NiceMock<MockDDSMessageEndpoint>();
         Mock_ROSServiceDiscovery = new NiceMock<MockROSServiceDiscovery>(nullptr);
         
-        ADSWManager::SetShared(std::shared_ptr<ADSWManager>(Mock_ADSWManager));
+        testing::Mock::AllowLeak(Mock_ROSServiceDiscovery);  // Wrapped in shared_ptr with empty deleter
+        // Use empty deleter for Mock_ADSWManager so shared_ptr doesn't delete it
+        ADSWManager::SetShared(std::shared_ptr<ADSWManager>(Mock_ADSWManager, [](ADSWManager*){}));
         
-        ON_CALL(*Mock_ADSWManager, Get()).WillByDefault(::testing::Return(Mock_ADSWManager));
+        // Note: Get() is not mocked - it returns shared_instance_.get() directly
         ON_CALL(*Mock_ADSWManager, GetServiceDiscovery()).WillByDefault(::testing::Return(
             std::shared_ptr<ROSServiceDiscovery>(Mock_ROSServiceDiscovery, [](ROSServiceDiscovery*){})));
         
@@ -66,7 +68,9 @@ protected:
         
         delete Mock_DDSMessageEndpoint;
         Mock_DDSMessageEndpoint = nullptr;
+        delete Mock_ADSWManager;  // Now we delete it since shared_ptr has empty deleter
         Mock_ADSWManager = nullptr;
+        delete Mock_ROSServiceDiscovery;  // Also delete this since it has empty deleter
         Mock_ROSServiceDiscovery = nullptr;
         
         delete Mock_Logger;

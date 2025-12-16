@@ -42,7 +42,7 @@ protected:
         controller->Initialize();
 
         Mock_ADSWManager = new MockADSWManager();
-        ON_CALL(*Mock_ADSWManager, Get()).WillByDefault(Return(Mock_ADSWManager));
+        // Note: Get() is not mocked - it returns shared_instance_.get() directly
 
         Mock_ServiceRegistry = new MockServiceRegistry();
         ON_CALL(*Mock_ADSWManager, GetServiceRegistry()).WillByDefault(Return(

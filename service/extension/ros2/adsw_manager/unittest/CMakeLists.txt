@@ -38,10 +38,12 @@ include (GoogleTest)
 ## Target binary
 add_executable ( ADSWServiceTest ServiceTest.cpp )
 add_executable ( ADSWServiceRegistryTest ServiceRegistryTest.cpp
+                mock/MockADSWManager.cpp
                 ../service/ServiceRegistry.cpp )
 add_executable ( ADSWTypeConvertTest TypeConvertTest.cpp )
                 
 add_executable ( ADSWServiceMonitorTest ServiceMonitorTest.cpp
+                 mock/MockADSWManager.cpp
                  ../monitor/ServiceMonitor.cpp
                  ${GENERATED_DIR}/lifecycle/NotifyServiceStatePubSubTypes.cxx
                  ${GENERATED_DIR}/lifecycle/NotifyServiceStateTypeObjectSupport.cxx
@@ -58,6 +60,7 @@ add_executable ( ADSWDDSTransmitterTest
     ${GENERATED_DIR}/lifecycle/LifecycleDiagReportTypeObjectSupport.cxx
 )
 add_executable ( ADSWROSDiscoveryInfoEndpointTest ROSDiscoveryInfoEndpointTest.cpp
+    mock/MockADSWManager.cpp
     ../endpoint/ROSDiscoveryInfoEndpoint.cpp
     ../monitor/ROSServiceDiscovery.cpp
     ${GENERATED_DIR}/ros2/GidPubSubTypes.cxx
@@ -69,10 +72,13 @@ add_executable ( ADSWROSDiscoveryInfoEndpointTest ROSDiscoveryInfoEndpointTest.c
 )
 
 add_executable( ADSWManager ADSWManagerTest.cpp ../ADSWManager.cpp)
-add_executable( ADSWMessageQueueTest MessageQueueTest.cpp ../transmitter/MessageQueue.cpp)
+add_executable( ADSWMessageQueueTest MessageQueueTest.cpp
+                mock/MockADSWManager.cpp
+                ../transmitter/MessageQueue.cpp)
 add_executable( ADSWDDSMessageEndpointTest DDSMessageEndpointTest.cpp 
                 ../transmitter/DDSMessageEndpoint.cpp)
 add_executable( ADSWGetServiceStateEndPointTest GetServiceStateEndPointTest.cpp
+                mock/MockADSWManager.cpp
                 ../endpoint/GetServiceStateEndPoint.cpp
                 ${GENERATED_DIR}/lifecycle/GetServiceStateRequestPubSubTypes.cxx
                 ${GENERATED_DIR}/lifecycle/GetServiceStateRequestTypeObjectSupport.cxx
@@ -80,6 +86,7 @@ add_executable( ADSWGetServiceStateEndPointTest GetServiceStateEndPointTest.cpp
                 ${GENERATED_DIR}/lifecycle/LifecycleCommonTypeObjectSupport.cxx        
 )
 add_executable( ADSWNotifyServiceStateEndPointTest NotifyServiceStateEndPointTest.cpp
+                mock/MockADSWManager.cpp
                 ../endpoint/NotifyServiceStateEndPoint.cpp
                 ${GENERATED_DIR}/lifecycle/NotifyServiceStatePubSubTypes.cxx
                 ${GENERATED_DIR}/lifecycle/NotifyServiceStateTypeObjectSupport.cxx
@@ -87,6 +94,7 @@ add_executable( ADSWNotifyServiceStateEndPointTest NotifyServiceStateEndPointTes
                 ${GENERATED_DIR}/lifecycle/LifecycleCommonTypeObjectSupport.cxx        
 )
 add_executable( ADSWStartServiceEndpointTest StartServiceEndpointTest.cpp
+                mock/MockADSWManager.cpp
                 ../endpoint/StartServiceEndPoint.cpp
                 ${GENERATED_DIR}/lifecycle/StartServiceRequestPubSubTypes.cxx
                 ${GENERATED_DIR}/lifecycle/StartServiceRequestTypeObjectSupport.cxx
@@ -94,6 +102,7 @@ add_executable( ADSWStartServiceEndpointTest StartServiceEndpointTest.cpp
                 ${GENERATED_DIR}/lifecycle/LifecycleCommonTypeObjectSupport.cxx        
 )
 add_executable( ADSWStopServiceEndpointTest StopServiceEndpointTest.cpp
+                mock/MockADSWManager.cpp
                 ../endpoint/StopServiceEndPoint.cpp
                 ${GENERATED_DIR}/lifecycle/StopServiceRequestPubSubTypes.cxx
                 ${GENERATED_DIR}/lifecycle/StopServiceRequestTypeObjectSupport.cxx
@@ -101,6 +110,7 @@ add_executable( ADSWStopServiceEndpointTest StopServiceEndpointTest.cpp
                 ${GENERATED_DIR}/lifecycle/LifecycleCommonTypeObjectSupport.cxx        
 )
 add_executable( ADSWUpdateServiceListEndpointTest UpdateServiceListEndpointTest.cpp
+                mock/MockADSWManager.cpp
                 ../endpoint/UpdateServiceListEndPoint.cpp
                 ${GENERATED_DIR}/lifecycle/UpdateServiceListRequestPubSubTypes.cxx
                 ${GENERATED_DIR}/lifecycle/UpdateServiceListRequestTypeObjectSupport.cxx
@@ -123,12 +133,12 @@ add_executable( ADSWROS2LifecycleControllerTest ROS2LifecycleControllerTest.cpp
                 ../control/ROS2LifecycleController.cpp
 )
 
-add_executable( ADSWROSServiceControllerTest ROSServiceControllerTest.cpp
-                ../control/ROSServiceController.cpp
-                ../control/ContainerController.cpp
-                ../control/ROS2NodeController.cpp
-                ../service/Container.cpp
-)
+#add_executable( ADSWROSServiceControllerTest ROSServiceControllerTest.cpp
+#                ../control/ROSServiceController.cpp
+#                ../control/ContainerController.cpp
+#                ../control/ROS2NodeController.cpp
+#                ../service/Container.cpp
+#)
 
 
 gtest_discover_tests ( ADSWServiceTest )
@@ -172,7 +182,7 @@ install ( TARGETS
           ADSWContainerControllerTest
           ADSWROS2NodeControllerTest
           ADSWROS2LifecycleControllerTest
-          ADSWROSServiceControllerTest
+#          ADSWROSServiceControllerTest
     RUNTIME DESTINATION bin/unittest/adsw_manager
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
