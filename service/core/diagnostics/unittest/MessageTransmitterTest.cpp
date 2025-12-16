@@ -643,6 +643,170 @@ TEST_F(MessageTransmitterTest, CleanSubscriptionID_TC001_MultipleProtocols) {
 // END NEW TESTS
 // ======================================================================
 
+// ======================================================================
+// ROS FORWARDING TESTS - to cover untested branches (lines 119-128, 171-175)
+// ======================================================================
+
+// Test SubscribeMessage with ROS forwarding enabled
+TEST_F(MessageTransmitterTest, SubscribeMessage_WithROSForwarding_TC001) {
+    // Initialize with both DDS and DDS_ROS protocols
+    EXPECT_CALL(*Mock_DDSProtocol, Initialize()).Times(2).WillRepeatedly(Return(true));
+    EXPECT_CALL(*Mock_DDSProtocol, Finalize()).Times(2).WillRepeatedly(Return());
+    EXPECT_CALL(*Mock_DDSProtocol, GetProtocolType())
+        .WillOnce(Return(MessageProtocolType::DDS))
+        .WillOnce(Return(MessageProtocolType::DDS_ROS));
+
+    EXPECT_TRUE(ins->Initialize());
+
+    auto receive_func = [](std::shared_ptr<RequestBase> request) {};
+    auto message_creator = []() -> std::shared_ptr<IncomingMessageBase> {
+        return std::make_shared<IncomingMessageBase>();
+    };
+
+    EXPECT_CALL(*Mock_ServiceExecutorMock, AddTask("ROSSubscriber", _, _)).WillOnce(Return(1234));
+    
+    int64_t subscriber_id = ins->AddSubscriber("ROSSubscriber", receive_func, message_creator);
+    EXPECT_TRUE(subscriber_id > 0);
+
+    // Test subscription with ROS forwarding enabled
+    EXPECT_CALL(*Mock_DDSProtocol, SubscribeMessage("HelloTopic")).WillOnce(Return(true));
+    EXPECT_CALL(*Mock_DDSProtocol, SubscribeMessage("rt/HelloTopic")).WillOnce(Return(true));
+
+    // The key: pass true for ros_forwarding_allowed parameter
+    EXPECT_TRUE(ins->SubscribeMessage(subscriber_id, "HelloTopic", MessageProtocolType::DDS, true));
+    
+    // Verify both DDS and DDS_ROS subscriptions were added
+    EXPECT_TRUE(ins->HasSubscriptionID("HelloTopic", subscriber_id, MessageProtocolType::DDS));
+    EXPECT_TRUE(ins->HasSubscriptionID("rt/HelloTopic", subscriber_id, MessageProtocolType::DDS_ROS));
+
+    ins->Finalize();
+}
+
+// Test UnsubscribeMessage with ROS forwarding - removes DDS_ROS subscription
+TEST_F(MessageTransmitterTest, UnsubscribeMessage_WithROSForwarding_TC001) {
+    // Initialize
+    EXPECT_CALL(*Mock_DDSProtocol, Initialize()).Times(2).WillRepeatedly(Return(true));
+    EXPECT_CALL(*Mock_DDSProtocol, Finalize()).Times(2).WillRepeatedly(Return());
+    EXPECT_CALL(*Mock_DDSProtocol, GetProtocolType())
+        .WillOnce(Return(MessageProtocolType::DDS))
+        .WillOnce(Return(MessageProtocolType::DDS_ROS));
+
+    EXPECT_TRUE(ins->Initialize());
+
+    auto receive_func = [](std::shared_ptr<RequestBase> request) {};
+    auto message_creator = []() -> std::shared_ptr<IncomingMessageBase> {
+        return std::make_shared<IncomingMessageBase>();
+    };
+
+    EXPECT_CALL(*Mock_ServiceExecutorMock, AddTask("ROSSubscriber", _, _)).WillOnce(Return(1234));
+    
+    int64_t subscriber_id = ins->AddSubscriber("ROSSubscriber", receive_func, message_creator);
+
+    // Subscribe with ROS forwarding
+    EXPECT_CALL(*Mock_DDSProtocol, SubscribeMessage("TestTopic")).WillOnce(Return(true));
+    EXPECT_CALL(*Mock_DDSProtocol, SubscribeMessage("rt/TestTopic")).WillOnce(Return(true));
+    EXPECT_TRUE(ins->SubscribeMessage(subscriber_id, "TestTopic", MessageProtocolType::DDS, true));
+
+    // Now unsubscribe - should automatically remove both DDS and DDS_ROS
+    EXPECT_CALL(*Mock_DDSProtocol, UnsubscribeMessage("TestTopic")).WillOnce(Return(true));
+    EXPECT_CALL(*Mock_DDSProtocol, UnsubscribeMessage("rt/TestTopic")).WillOnce(Return(true));
+    
+    EXPECT_TRUE(ins->UnsubscribeMessage(subscriber_id, "TestTopic", MessageProtocolType::DDS));
+    
+    // Verify both subscriptions were removed
+    EXPECT_FALSE(ins->HasSubscriptionID("TestTopic", subscriber_id, MessageProtocolType::DDS));
+    EXPECT_FALSE(ins->HasSubscriptionID("rt/TestTopic", subscriber_id, MessageProtocolType::DDS_ROS));
+
+    ins->Finalize();
+}
+
+// Test multiple subscribers with ROS forwarding - covers HasAnySubscriptionID branch
+TEST_F(MessageTransmitterTest, SubscribeMessage_MultipleROSSubscribers_TC001) {
+    EXPECT_CALL(*Mock_DDSProtocol, Initialize()).Times(2).WillRepeatedly(Return(true));
+    EXPECT_CALL(*Mock_DDSProtocol, Finalize()).Times(2).WillRepeatedly(Return());
+    EXPECT_CALL(*Mock_DDSProtocol, GetProtocolType())
+        .WillOnce(Return(MessageProtocolType::DDS))
+        .WillOnce(Return(MessageProtocolType::DDS_ROS));
+
+    EXPECT_TRUE(ins->Initialize());
+
+    auto receive_func = [](std::shared_ptr<RequestBase> request) {};
+    auto message_creator = []() -> std::shared_ptr<IncomingMessageBase> {
+        return std::make_shared<IncomingMessageBase>();
+    };
+
+    // Add first subscriber with ROS forwarding
+    EXPECT_CALL(*Mock_ServiceExecutorMock, AddTask("Subscriber1", _, _)).WillOnce(Return(1001));
+    int64_t sub1 = ins->AddSubscriber("Subscriber1", receive_func, message_creator);
+
+    EXPECT_CALL(*Mock_DDSProtocol, SubscribeMessage("SharedTopic")).WillOnce(Return(true));
+    EXPECT_CALL(*Mock_DDSProtocol, SubscribeMessage("rt/SharedTopic")).WillOnce(Return(true));
+    EXPECT_TRUE(ins->SubscribeMessage(sub1, "SharedTopic", MessageProtocolType::DDS, true));
+
+    // Add second subscriber to same topic with ROS forwarding
+    // This should NOT create a new ROS subscription (HasAnySubscriptionID returns true)
+    EXPECT_CALL(*Mock_ServiceExecutorMock, AddTask("Subscriber2", _, _)).WillOnce(Return(1002));
+    int64_t sub2 = ins->AddSubscriber("Subscriber2", receive_func, message_creator);
+
+    EXPECT_CALL(*Mock_DDSProtocol, SubscribeMessage("SharedTopic")).WillOnce(Return(true));
+    // Note: No second call to SubscribeMessage for "rt/SharedTopic" because it already exists
+    EXPECT_TRUE(ins->SubscribeMessage(sub2, "SharedTopic", MessageProtocolType::DDS, true));
+
+    // Verify both subscribers are registered
+    EXPECT_TRUE(ins->HasSubscriptionID("SharedTopic", sub1, MessageProtocolType::DDS));
+    EXPECT_TRUE(ins->HasSubscriptionID("SharedTopic", sub2, MessageProtocolType::DDS));
+    EXPECT_TRUE(ins->HasSubscriptionID("rt/SharedTopic", sub1, MessageProtocolType::DDS_ROS));
+    EXPECT_TRUE(ins->HasSubscriptionID("rt/SharedTopic", sub2, MessageProtocolType::DDS_ROS));
+
+    ins->Finalize();
+}
+
+// Test Unsubscribe with multiple ROS subscribers - last one removes the ROS subscription
+TEST_F(MessageTransmitterTest, UnsubscribeMessage_LastROSSubscriber_TC001) {
+    EXPECT_CALL(*Mock_DDSProtocol, Initialize()).Times(2).WillRepeatedly(Return(true));
+    EXPECT_CALL(*Mock_DDSProtocol, Finalize()).Times(2).WillRepeatedly(Return());
+    EXPECT_CALL(*Mock_DDSProtocol, GetProtocolType())
+        .WillOnce(Return(MessageProtocolType::DDS))
+        .WillOnce(Return(MessageProtocolType::DDS_ROS));
+
+    EXPECT_TRUE(ins->Initialize());
+
+    auto receive_func = [](std::shared_ptr<RequestBase> request) {};
+    auto message_creator = []() -> std::shared_ptr<IncomingMessageBase> {
+        return std::make_shared<IncomingMessageBase>();
+    };
+
+    // Add two subscribers
+    EXPECT_CALL(*Mock_ServiceExecutorMock, AddTask("Sub1", _, _)).WillOnce(Return(2001));
+    EXPECT_CALL(*Mock_ServiceExecutorMock, AddTask("Sub2", _, _)).WillOnce(Return(2002));
+    int64_t sub1 = ins->AddSubscriber("Sub1", receive_func, message_creator);
+    int64_t sub2 = ins->AddSubscriber("Sub2", receive_func, message_creator);
+
+    // Both subscribe with ROS forwarding
+    EXPECT_CALL(*Mock_DDSProtocol, SubscribeMessage("Topic")).Times(2).WillRepeatedly(Return(true));
+    EXPECT_CALL(*Mock_DDSProtocol, SubscribeMessage("rt/Topic")).WillOnce(Return(true));
+    EXPECT_TRUE(ins->SubscribeMessage(sub1, "Topic", MessageProtocolType::DDS, true));
+    EXPECT_TRUE(ins->SubscribeMessage(sub2, "Topic", MessageProtocolType::DDS, true));
+
+    // First unsubscribe - should NOT remove ROS subscription (still has sub2)
+    EXPECT_CALL(*Mock_DDSProtocol, UnsubscribeMessage("Topic")).WillOnce(Return(true));
+    // No call to UnsubscribeMessage for "rt/Topic" because sub2 is still subscribed
+    EXPECT_TRUE(ins->UnsubscribeMessage(sub1, "Topic", MessageProtocolType::DDS));
+    EXPECT_TRUE(ins->HasSubscriptionID("rt/Topic", sub2, MessageProtocolType::DDS_ROS));
+
+    // Second unsubscribe - SHOULD remove ROS subscription (last subscriber)
+    EXPECT_CALL(*Mock_DDSProtocol, UnsubscribeMessage("Topic")).WillOnce(Return(true));
+    EXPECT_CALL(*Mock_DDSProtocol, UnsubscribeMessage("rt/Topic")).WillOnce(Return(true));
+    EXPECT_TRUE(ins->UnsubscribeMessage(sub2, "Topic", MessageProtocolType::DDS));
+    EXPECT_FALSE(ins->HasAnySubscriptionID("rt/Topic", MessageProtocolType::DDS_ROS));
+
+    ins->Finalize();
+}
+
+// ======================================================================
+// END ROS FORWARDING TESTS
+// ======================================================================
+
 TEST_F(MessageTransmitterTest, MultiThreadTest_TC001) {
     constexpr uint32_t TEST_THREAD = 20;
     constexpr uint32_t TEST_COUNT = 1000;

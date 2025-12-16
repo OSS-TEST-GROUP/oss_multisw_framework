@@ -25,8 +25,10 @@ class MockROSServiceController : public ROSServiceController {
     MOCK_METHOD(bool, StartService, (std::shared_ptr<Service> service), (override));
     MOCK_METHOD(bool, StopService, (std::shared_ptr<Service> service), (override));
 
-    MOCK_METHOD(bool, ProcessStartServiceRequest, (lifecyclemgr::StartServiceRequest* message), ());
-    MOCK_METHOD(bool, ProcessStopServiceRequest, (lifecyclemgr::StopServiceRequest* message), ());
+    MOCK_METHOD(bool, ProcessServiceStartRequest, (lifecyclemgr::StartServiceRequest* message), ());
+    MOCK_METHOD(bool, ProcessServiceStopRequest, (lifecyclemgr::StopServiceRequest* message), ());
+    MOCK_METHOD(bool, GetNodeLists, (std::shared_ptr<Service> service), ());
+    MOCK_METHOD(uint64_t, GetPID, (std::shared_ptr<Service> service), ());
 
 };
 

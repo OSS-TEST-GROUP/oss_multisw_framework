@@ -29,16 +29,31 @@ inline MockDDSMessageEndPoint* Mock_DDSMessageEndPoint = nullptr;
 
 
 
-DDSMessageEndPoint::DDSMessageEndPoint(std::string topic) : MessageEndPoint(topic) {
+DDSMessageEndPoint::DDSMessageEndPoint(std::string topic) 
+    : MessageEndPoint(topic),
+      participant_(nullptr),
+      publisher_(nullptr),
+      subscriber_(nullptr),
+      dds_topic_(nullptr),
+      writer_(nullptr),
+      reader_(nullptr),
+      stop_(false),
+      matched_(0) {
 }
 DDSMessageEndPoint::~DDSMessageEndPoint() {
     Mock_DDSMessageEndPoint = nullptr;
 }
 bool DDSMessageEndPoint::Initialize(DomainParticipant* participant, Publisher* publisher, Subscriber* subscriber) {
-    return Mock_DDSMessageEndPoint->Initialize(participant, publisher, subscriber);
+    if (Mock_DDSMessageEndPoint != nullptr) {
+        return Mock_DDSMessageEndPoint->Initialize(participant, publisher, subscriber);
+    }
+    // Fallback: Call real implementation or return false
+    return false;  // Safe default when mock is not set
 }
 void DDSMessageEndPoint::Finalize() {
-    Mock_DDSMessageEndPoint->Finalize();    
+    if (Mock_DDSMessageEndPoint != nullptr) {
+        Mock_DDSMessageEndPoint->Finalize();
+    }
 }
 #if 0
 std::string DDSMessageEndPoint::GetTopic() {

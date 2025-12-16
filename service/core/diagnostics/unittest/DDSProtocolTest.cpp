@@ -38,9 +38,15 @@ protected:
     virtual void TearDown(){
         stopAllProcess();
         process_list.clear();
-        delete ins;
+        if (ins) {
+            ins->Finalize();
+            delete ins;
+            ins = nullptr;
+        }
         delete Mock_Logger;
         Mock_Logger = nullptr;
+        // Small delay to allow FastDDS participant cleanup to complete
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
 
     pid_t startProcess(char* args[]) {

@@ -288,6 +288,208 @@ TEST_F(DDSTransmitterTest, GettersAfterFinalize) {
     });
 }
 
+// ============================================================================
+// Enhanced Coverage Tests - Error Paths and Edge Cases
+// ============================================================================
+
+TEST_F(DDSTransmitterTest, AddMessageEndpoint_DuplicateTopic_TC001) {
+    auto endpoint1 = std::make_shared<NiceMock<MockDDSMessageEndPoint>>("SameTopic");
+    auto endpoint2 = std::make_shared<NiceMock<MockDDSMessageEndPoint>>("SameTopic");
+    
+    // Both endpoints have same topic
+    ON_CALL(*endpoint1, GetTopic()).WillByDefault(Return("SameTopic"));
+    ON_CALL(*endpoint2, GetTopic()).WillByDefault(Return("SameTopic"));
+    
+    Mock_DDSMessageEndPoint = endpoint1.get();
+    ins->AddMessageEndpoint(endpoint1);
+    
+    // Adding second endpoint with same topic should overwrite
+    Mock_DDSMessageEndPoint = endpoint2.get();
+    ins->AddMessageEndpoint(endpoint2);
+    
+    ins->Initialize();
+    
+    // Should get the second endpoint
+    auto ret = ins->GetMessageEndPoint("SameTopic");
+    EXPECT_EQ(ret, endpoint2);
+    
+    ins->Finalize();
+}
+
+TEST_F(DDSTransmitterTest, Initialize_ThenAddEndpoint_TC002) {
+    // Initialize transmitter first
+    EXPECT_TRUE(ins->Initialize());
+    
+    // Then add endpoint
+    auto endpoint = std::make_shared<NiceMock<MockDDSMessageEndPoint>>("LateAddedTopic");
+    ON_CALL(*endpoint, GetTopic()).WillByDefault(Return("LateAddedTopic"));
+    Mock_DDSMessageEndPoint = endpoint.get();
+    
+    ins->AddMessageEndpoint(endpoint);
+    
+    // Should be able to retrieve it
+    auto ret = ins->GetMessageEndPoint("LateAddedTopic");
+    EXPECT_EQ(ret, endpoint);
+    
+    ins->Finalize();
+}
+
+TEST_F(DDSTransmitterTest, Finalize_WithMultipleEndpoints_TC003) {
+    // Add multiple endpoints
+    auto endpoint1 = std::make_shared<NiceMock<MockDDSMessageEndPoint>>("Topic1");
+    auto endpoint2 = std::make_shared<NiceMock<MockDDSMessageEndPoint>>("Topic2");
+    auto endpoint3 = std::make_shared<NiceMock<MockDDSMessageEndPoint>>("Topic3");
+    
+    ON_CALL(*endpoint1, GetTopic()).WillByDefault(Return("Topic1"));
+    ON_CALL(*endpoint2, GetTopic()).WillByDefault(Return("Topic2"));
+    ON_CALL(*endpoint3, GetTopic()).WillByDefault(Return("Topic3"));
+    
+    ON_CALL(*endpoint1, Finalize()).WillByDefault(Return());
+    ON_CALL(*endpoint2, Finalize()).WillByDefault(Return());
+    ON_CALL(*endpoint3, Finalize()).WillByDefault(Return());
+    
+    Mock_DDSMessageEndPoint = endpoint1.get();
+    ins->AddMessageEndpoint(endpoint1);
+    
+    Mock_DDSMessageEndPoint = endpoint2.get();
+    ins->AddMessageEndpoint(endpoint2);
+    
+    Mock_DDSMessageEndPoint = endpoint3.get();
+    ins->AddMessageEndpoint(endpoint3);
+    
+    ins->Initialize();
+    
+    // Finalize should call Finalize on all endpoints
+    EXPECT_CALL(*endpoint1, Finalize()).Times(testing::AtLeast(1));
+    EXPECT_CALL(*endpoint2, Finalize()).Times(testing::AtLeast(1));
+    EXPECT_CALL(*endpoint3, Finalize()).Times(testing::AtLeast(1));
+    
+    ins->Finalize();
+}
+
+TEST_F(DDSTransmitterTest, SendMessage_AllTypesInSequence_TC004) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    int data1 = 1, data2 = 2, data3 = 3;
+    
+    EXPECT_CALL(*Mock_MessageQueue, SendMessage(_)).Times(3);
+    
+    // Send different message types in sequence
+    EXPECT_TRUE(ins->SendMessage(MessageType::LIFECYCLE_DIAG_REPORT, &data1));
+    EXPECT_TRUE(ins->SendMessage(MessageType::START_SERVICE_REQUEST, &data2));
+    EXPECT_TRUE(ins->SendMessage(MessageType::STOP_SERVICE_REQUEST, &data3));
+    
+    ins->Finalize();
+}
+
+TEST_F(DDSTransmitterTest, SendMessage_RapidFire_TC005) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    EXPECT_CALL(*Mock_MessageQueue, SendMessage(_)).Times(100);
+    
+    // Send many messages rapidly
+    for (int i = 0; i < 100; ++i) {
+        EXPECT_TRUE(ins->SendMessage(
+            MessageType::LIFECYCLE_DIAG_REPORT, 
+            reinterpret_cast<void*>(static_cast<uintptr_t>(i))
+        ));
+    }
+    
+    ins->Finalize();
+}
+
+TEST_F(DDSTransmitterTest, MultipleEndpoints_Retrieval_TC006) {
+    // Test adding endpoints and verifying map storage
+    auto endpoint1 = std::make_shared<NiceMock<MockDDSMessageEndPoint>>("Topic_A");
+    auto endpoint2 = std::make_shared<NiceMock<MockDDSMessageEndPoint>>("Topic_B");
+    auto endpoint3 = std::make_shared<NiceMock<MockDDSMessageEndPoint>>("Topic_C");
+    
+    ON_CALL(*endpoint1, GetTopic()).WillByDefault(Return("Topic_A"));
+    ON_CALL(*endpoint2, GetTopic()).WillByDefault(Return("Topic_B"));
+    ON_CALL(*endpoint3, GetTopic()).WillByDefault(Return("Topic_C"));
+    
+    Mock_DDSMessageEndPoint = endpoint1.get();
+    ins->AddMessageEndpoint(endpoint1);
+    
+    Mock_DDSMessageEndPoint = endpoint2.get();
+    ins->AddMessageEndpoint(endpoint2);
+    
+    Mock_DDSMessageEndPoint = endpoint3.get();
+    ins->AddMessageEndpoint(endpoint3);
+    
+    ins->Initialize();
+    
+    // Verify all can be retrieved
+    EXPECT_EQ(ins->GetMessageEndPoint("Topic_A"), endpoint1);
+    EXPECT_EQ(ins->GetMessageEndPoint("Topic_B"), endpoint2);
+    EXPECT_EQ(ins->GetMessageEndPoint("Topic_C"), endpoint3);
+    
+    // Verify non-existent returns nullptr
+    EXPECT_EQ(ins->GetMessageEndPoint("Topic_D"), nullptr);
+    
+    ins->Finalize();
+}
+
+TEST_F(DDSTransmitterTest, GettersBeforeInitialize_TC007) {
+    // Before initialization, getters should return nullptr
+    EXPECT_TRUE(ins->GetDomain() == nullptr);
+    EXPECT_TRUE(ins->GetPublisher() == nullptr);
+    EXPECT_TRUE(ins->GetSubscriber() == nullptr);
+}
+
+TEST_F(DDSTransmitterTest, InitializeAfterFinalize_TC008) {
+    ins->Initialize();
+    ins->Finalize();
+    
+    // Should be able to re-initialize
+    EXPECT_TRUE(ins->Initialize());
+    EXPECT_NE(ins->GetDomain(), nullptr);
+    EXPECT_NE(ins->GetPublisher(), nullptr);
+    EXPECT_NE(ins->GetSubscriber(), nullptr);
+    
+    ins->Finalize();
+}
+
+TEST_F(DDSTransmitterTest, FinalizeBeforeInitialize_TC009) {
+    // Finalize without initialization should not crash
+    EXPECT_NO_THROW(ins->Finalize());
+}
+
+TEST_F(DDSTransmitterTest, SendMessage_WithNullPtr_TC010) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    EXPECT_CALL(*Mock_MessageQueue, SendMessage(_)).Times(1);
+    
+    // SendMessage with nullptr should still work (queue handles it)
+    EXPECT_TRUE(ins->SendMessage(MessageType::LIFECYCLE_DIAG_REPORT, nullptr));
+    
+    ins->Finalize();
+}
+
+TEST_F(DDSTransmitterTest, AddMessageEndpoint_EmptyTopicName_TC011) {
+    auto endpoint = std::make_shared<NiceMock<MockDDSMessageEndPoint>>("");
+    
+    ON_CALL(*endpoint, GetTopic()).WillByDefault(Return(""));
+    Mock_DDSMessageEndPoint = endpoint.get();
+    
+    // Should handle empty topic name
+    ins->AddMessageEndpoint(endpoint);
+    
+    auto ret = ins->GetMessageEndPoint("");
+    EXPECT_EQ(ret, endpoint);
+}
+
+TEST_F(DDSTransmitterTest, GetMessageEndPoint_BeforeAddingAny_TC012) {
+    // Before adding any endpoints, all lookups should return nullptr
+    EXPECT_EQ(ins->GetMessageEndPoint("AnyTopic"), nullptr);
+    EXPECT_EQ(ins->GetMessageEndPoint(""), nullptr);
+    EXPECT_EQ(ins->GetMessageEndPoint("test_topic"), nullptr);
+}
+
+// ============================================================================
+// END Enhanced Coverage Tests
+// ============================================================================
+
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);

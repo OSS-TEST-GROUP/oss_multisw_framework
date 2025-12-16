@@ -603,6 +603,377 @@ TEST_F(ServiceRegistryTest, LoadServiceSaved_WithValidFile_TC045) {
     }
 }
 
+// ============================================================================
+// NEW TESTS TO IMPROVE SERVICEREG ISTRY COVERAGE - YAML PARSING
+// Target: Lines 61-102 in ServiceRegistry.cpp (currently 0% covered)
+// ============================================================================
+
+TEST_F(ServiceRegistryTest, LoadServiceList_ValidYAMLWithSingleContainer_TC046) {
+    // Create a valid YAML file with proper structure
+    auto service = MakeService("MyService");
+    const std::string testFile = "/tmp/test_valid_yaml_tc046.yaml";
+    std::ofstream ofs(testFile);
+    ofs << "spec:\n"
+        << "  containers:\n"
+        << "    - name: test_container\n"
+        << "      command: [\"/bin/bash\", \"-c\"]\n"
+        << "      args:\n"
+        << "        - \"ros2 launch test_pkg test_launch.py\"\n";
+    ofs.close();
+
+    bool result = registry->LoadServiceList(testFile);
+    
+    EXPECT_TRUE(result);
+    EXPECT_EQ(registry->GetServicesNum(), 1);
+    EXPECT_TRUE(registry->GetService("test_pkg") != nullptr);
+    
+    // Cleanup
+    std::remove(testFile.c_str());
+}
+
+TEST_F(ServiceRegistryTest, LoadServiceList_ValidYAMLWithMultipleContainers_TC047) {
+    // Create YAML with multiple containers
+    auto service = MakeService("MyService");
+    const std::string testFile = "/tmp/test_multi_containers_tc047.yaml";
+    std::ofstream ofs(testFile);
+    ofs << "spec:\n"
+        << "  containers:\n"
+        << "    - name: container1\n"
+        << "      command: [\"/bin/bash\", \"-c\"]\n"
+        << "      args:\n"
+        << "        - \"ros2 launch pkg1 launch1.py\"\n"
+        << "    - name: container2\n"
+        << "      command: [\"/bin/bash\", \"-c\"]\n"
+        << "      args:\n"
+        << "        - \"ros2 launch pkg2 launch2.py\"\n";
+    ofs.close();
+
+    bool result = registry->LoadServiceList(testFile);
+    
+    EXPECT_TRUE(result);
+    EXPECT_EQ(registry->GetServicesNum(), 2);
+    EXPECT_TRUE(registry->GetService("pkg1") != nullptr);
+    EXPECT_TRUE(registry->GetService("pkg2") != nullptr);
+    
+    std::remove(testFile.c_str());
+}
+
+TEST_F(ServiceRegistryTest, LoadServiceList_ValidYAMLWithMultipleArgsPerContainer_TC048) {
+    // Test container with multiple args (multiple ros2 launch commands)
+    auto service = MakeService("MyService");
+    const std::string testFile = "/tmp/test_multi_args_tc048.yaml";
+    std::ofstream ofs(testFile);
+    ofs << "spec:\n"
+        << "  containers:\n"
+        << "    - name: multi_arg_container\n"
+        << "      command: [\"/bin/bash\", \"-c\"]\n"
+        << "      args:\n"
+        << "        - \"ros2 launch pkg1 launch1.py\"\n"
+        << "        - \"ros2 launch pkg2 launch2.py\"\n"
+        << "        - \"ros2 launch pkg3 launch3.py\"\n";
+    ofs.close();
+
+    bool result = registry->LoadServiceList(testFile);
+    
+    EXPECT_TRUE(result);
+    EXPECT_EQ(registry->GetServicesNum(), 3);
+    
+    std::remove(testFile.c_str());
+}
+
+TEST_F(ServiceRegistryTest, LoadServiceList_ContainerWithoutArgs_TC049) {
+    // Test container that has no args field
+    auto service = MakeService("MyService");
+    const std::string testFile = "/tmp/test_no_args_tc049.yaml";
+    std::ofstream ofs(testFile);
+    ofs << "spec:\n"
+        << "  containers:\n"
+        << "    - name: no_args_container\n"
+        << "      command: [\"/bin/bash\", \"-c\"]\n";
+    ofs.close();
+
+    bool result = registry->LoadServiceList(testFile);
+    
+    // Should succeed but not add any services (no args to parse)
+    EXPECT_TRUE(result);
+    EXPECT_EQ(registry->GetServicesNum(), 0);
+    
+    std::remove(testFile.c_str());
+}
+
+TEST_F(ServiceRegistryTest, LoadServiceList_ContainerWithEmptyArgs_TC050) {
+    // Test container with args field but empty sequence
+    auto service = MakeService("MyService");
+    const std::string testFile = "/tmp/test_empty_args_tc050.yaml";
+    std::ofstream ofs(testFile);
+    ofs << "spec:\n"
+        << "  containers:\n"
+        << "    - name: empty_args_container\n"
+        << "      command: [\"/bin/bash\", \"-c\"]\n"
+        << "      args: []\n";
+    ofs.close();
+
+    bool result = registry->LoadServiceList(testFile);
+    
+    EXPECT_TRUE(result);
+    EXPECT_EQ(registry->GetServicesNum(), 0);
+    
+    std::remove(testFile.c_str());
+}
+
+TEST_F(ServiceRegistryTest, LoadServiceList_ValidYAMLWithRunAndLaunchCommands_TC051) {
+    // Test with mix of ros2 run and ros2 launch commands
+    auto service = MakeService("MyService");
+    const std::string testFile = "/tmp/test_run_and_launch_tc051.yaml";
+    std::ofstream ofs(testFile);
+    ofs << "spec:\n"
+        << "  containers:\n"
+        << "    - name: mixed_container\n"
+        << "      command: [\"/bin/bash\", \"-c\"]\n"
+        << "      args:\n"
+        << "        - \"ros2 launch pkg1 launch1.py && ros2 run pkg2 node2\"\n";
+    ofs.close();
+
+    bool result = registry->LoadServiceList(testFile);
+    
+    EXPECT_TRUE(result);
+    // Should extract the launch command
+    EXPECT_GE(registry->GetServicesNum(), 1);
+    
+    std::remove(testFile.c_str());
+}
+
+TEST_F(ServiceRegistryTest, LoadServiceList_ArgsWithMultipleRos2LaunchInSingleString_TC052) {
+    // Test arg that contains multiple ros2 launch commands separated by &&
+    auto service = MakeService("MyService");
+    const std::string testFile = "/tmp/test_multi_launch_single_arg_tc052.yaml";
+    std::ofstream ofs(testFile);
+    ofs << "spec:\n"
+        << "  containers:\n"
+        << "    - name: chain_container\n"
+        << "      command: [\"/bin/bash\", \"-c\"]\n"
+        << "      args:\n"
+        << "        - \"ros2 launch pkg1 launch1.py && ros2 launch pkg2 launch2.py\"\n";
+    ofs.close();
+
+    bool result = registry->LoadServiceList(testFile);
+    
+    EXPECT_TRUE(result);
+    // Should extract both launch commands
+    EXPECT_EQ(registry->GetServicesNum(), 2);
+    
+    std::remove(testFile.c_str());
+}
+
+TEST_F(ServiceRegistryTest, LoadServiceList_ContainerWithLaunchFileAndExtraArgs_TC053) {
+    // Test launch command with additional arguments
+    auto mock_svc = MakeService("MyService");
+    const std::string testFile = "/tmp/test_launch_with_args_tc053.yaml";
+    std::ofstream ofs(testFile);
+    ofs << "spec:\n"
+        << "  containers:\n"
+        << "    - name: args_container\n"
+        << "      command: [\"/bin/bash\", \"-c\"]\n"
+        << "      args:\n"
+        << "        - \"ros2 launch test_pkg test_launch.py param:=value\"\n";
+    ofs.close();
+
+    bool result = registry->LoadServiceList(testFile);
+    
+    EXPECT_TRUE(result);
+    EXPECT_EQ(registry->GetServicesNum(), 1);
+    auto service = registry->GetService("test_pkg");
+    ASSERT_NE(service, nullptr);
+    EXPECT_EQ(service->GetLaunchFile(), "test_launch.py");
+    
+    std::remove(testFile.c_str());
+}
+
+TEST_F(ServiceRegistryTest, LoadServiceList_ContainerArgsWithNonRos2Commands_TC054) {
+    // Test args that don't contain any ros2 launch commands
+    auto mock_svc = MakeService("MyService");
+    const std::string testFile = "/tmp/test_non_ros2_args_tc054.yaml";
+    std::ofstream ofs(testFile);
+    ofs << "spec:\n"
+        << "  containers:\n"
+        << "    - name: non_ros_container\n"
+        << "      command: [\"/bin/bash\", \"-c\"]\n"
+        << "      args:\n"
+        << "        - \"echo 'Hello World'\"\n"
+        << "        - \"sleep 10\"\n";
+    ofs.close();
+
+    bool result = registry->LoadServiceList(testFile);
+    
+    // Should succeed but not extract any services
+    EXPECT_TRUE(result);
+    EXPECT_EQ(registry->GetServicesNum(), 0);
+    
+    std::remove(testFile.c_str());
+}
+
+TEST_F(ServiceRegistryTest, LoadServiceList_VerifyServiceProperties_TC055) {
+    // Verify that loaded services have correct properties
+    auto mock_svc = MakeService("MyService");
+    const std::string testFile = "/tmp/test_service_properties_tc055.yaml";
+    std::ofstream ofs(testFile);
+    ofs << "spec:\n"
+        << "  containers:\n"
+        << "    - name: property_test_container\n"
+        << "      command: [\"/bin/bash\", \"-c\"]\n"
+        << "      args:\n"
+        << "        - \"ros2 launch test_package test_launch.py\"\n";
+    ofs.close();
+
+    bool result = registry->LoadServiceList(testFile);
+    
+    EXPECT_TRUE(result);
+    
+    auto service = registry->GetService("test_package");
+    ASSERT_NE(service, nullptr);
+    
+    // Verify service was created with correct defaults
+    EXPECT_EQ(service->GetName(), "test_package");
+    EXPECT_EQ(service->GetLaunchFile(), "test_launch.py");
+    EXPECT_EQ(service->GetServiceType(), ServiceType::NORMAL);
+    EXPECT_EQ(service->GetRecoveryPolicy(), RecoveryPolicy::ALWAYS);
+    EXPECT_TRUE(service->IsEnabled());
+    
+    std::remove(testFile.c_str());
+}
+
+TEST_F(ServiceRegistryTest, LoadServiceList_VerifyGroupCreation_TC056) {
+    // Verify that groups are created from package names
+    auto mock_svc = MakeService("MyService");
+    const std::string testFile = "/tmp/test_group_creation_tc056.yaml";
+    std::ofstream ofs(testFile);
+    ofs << "spec:\n"
+        << "  containers:\n"
+        << "    - name: group_test_container\n"
+        << "      command: [\"/bin/bash\", \"-c\"]\n"
+        << "      args:\n"
+        << "        - \"ros2 launch group_pkg1 launch1.py\"\n"
+        << "        - \"ros2 launch group_pkg2 launch2.py\"\n";
+    ofs.close();
+
+    bool result = registry->LoadServiceList(testFile);
+    
+    EXPECT_TRUE(result);
+    
+    // Verify groups were created
+    auto services1 = registry->GetServicesByGroup("group_pkg1");
+    auto services2 = registry->GetServicesByGroup("group_pkg2");
+    
+    EXPECT_EQ(services1.size(), 1);
+    EXPECT_EQ(services2.size(), 1);
+    
+    std::remove(testFile.c_str());
+}
+
+TEST_F(ServiceRegistryTest, LoadServiceList_ArgsIsNotSequence_TC057) {
+    // Test when args is not a sequence (edge case - should be handled gracefully)
+    auto mock_svc = MakeService("MyService");
+    const std::string testFile = "/tmp/test_args_not_sequence_tc057.yaml";
+    std::ofstream ofs(testFile);
+    ofs << "spec:\n"
+        << "  containers:\n"
+        << "    - name: scalar_args_container\n"
+        << "      command: [\"/bin/bash\", \"-c\"]\n"
+        << "      args: \"this is a string, not a sequence\"\n";
+    ofs.close();
+
+    bool result = registry->LoadServiceList(testFile);
+    
+    // Should handle gracefully (args check: if (args && args.IsSequence()))
+    EXPECT_TRUE(result);
+    EXPECT_EQ(registry->GetServicesNum(), 0);
+    
+    std::remove(testFile.c_str());
+}
+
+TEST_F(ServiceRegistryTest, LoadServiceList_ComplexRealWorldYAML_TC058) {
+    // Simulate a more complex real-world YAML structure
+    auto mock_svc = MakeService("MyService");
+    const std::string testFile = "/tmp/test_complex_yaml_tc058.yaml";
+    std::ofstream ofs(testFile);
+    ofs << "spec:\n"
+        << "  containers:\n"
+        << "    - name: perception_container\n"
+        << "      command: [\"/bin/bash\", \"-c\"]\n"
+        << "      args:\n"
+        << "        - \"ros2 launch perception_pkg camera_launch.py camera_type:=stereo\"\n"
+        << "        - \"ros2 launch perception_pkg lidar_launch.py frequency:=10\"\n"
+        << "    - name: planning_container\n"
+        << "      command: [\"/bin/bash\", \"-c\"]\n"
+        << "      args:\n"
+        << "        - \"ros2 launch planning_pkg planner_launch.py\"\n"
+        << "    - name: control_container\n"
+        << "      command: [\"/bin/bash\", \"-c\"]\n"
+        << "      args:\n"
+        << "        - \"ros2 launch control_pkg controller_launch.py mode:=auto\"\n";
+    ofs.close();
+
+    bool result = registry->LoadServiceList(testFile);
+    
+    EXPECT_TRUE(result);
+    EXPECT_EQ(registry->GetServicesNum(), 4);  // 2 perception + 1 planning + 1 control
+    
+    // Verify individual services
+    EXPECT_NE(registry->GetService("perception_pkg"), nullptr);
+    EXPECT_NE(registry->GetService("planning_pkg"), nullptr);
+    EXPECT_NE(registry->GetService("control_pkg"), nullptr);
+    
+    std::remove(testFile.c_str());
+}
+
+TEST_F(ServiceRegistryTest, LoadServiceList_ContainerNamePrinting_TC059) {
+    // Ensure that container name is being processed (line 62-67 in ServiceRegistry.cpp)
+    auto mock_svc = MakeService("MyService");
+    const std::string testFile = "/tmp/test_container_name_tc059.yaml";
+    std::ofstream ofs(testFile);
+    ofs << "spec:\n"
+        << "  containers:\n"
+        << "    - name: my_special_container_name\n"
+        << "      command: [\"/bin/sh\"]\n"
+        << "      args:\n"
+        << "        - \"ros2 launch test_pkg test.py\"\n";
+    ofs.close();
+
+    // This test verifies that the code path for printing container name/command is covered
+    bool result = registry->LoadServiceList(testFile);
+    
+    EXPECT_TRUE(result);
+    EXPECT_EQ(registry->GetServicesNum(), 1);
+    
+    std::remove(testFile.c_str());
+}
+
+TEST_F(ServiceRegistryTest, LoadServiceList_DuplicatePackageNames_TC060) {
+    // Test behavior when same package appears multiple times
+    auto mock_svc = MakeService("MyService");
+    const std::string testFile = "/tmp/test_duplicate_pkg_tc060.yaml";
+    std::ofstream ofs(testFile);
+    ofs << "spec:\n"
+        << "  containers:\n"
+        << "    - name: container1\n"
+        << "      command: [\"/bin/bash\", \"-c\"]\n"
+        << "      args:\n"
+        << "        - \"ros2 launch same_pkg launch1.py\"\n"
+        << "    - name: container2\n"
+        << "      command: [\"/bin/bash\", \"-c\"]\n"
+        << "      args:\n"
+        << "        - \"ros2 launch same_pkg launch2.py\"\n";
+    ofs.close();
+
+    bool result = registry->LoadServiceList(testFile);
+    
+    EXPECT_TRUE(result);
+    // Second service with same name should not be added (duplicate)
+    EXPECT_EQ(registry->GetServicesNum(), 1);
+    
+    std::remove(testFile.c_str());
+}
+
 int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
