@@ -54,21 +54,21 @@ protected:
     }
     
     void TearDown() override {
-        // Clear the singleton shared instance first
+        // Clear the singleton shared instance first to release all shared_ptrs
         ADSWManager::SetShared(nullptr);
         
-        // Clear the shared instance first to release all shared_ptrs
-        ADSWManager::SetShared(nullptr);
-        
-        // Now clear the global pointers (they'll be deleted by shared_ptr)
-        Mock_ADSWManager = nullptr;
-        Mock_ROSServiceController = nullptr;
-        
-        // Delete objects not wrapped in shared_ptr
+        // Delete the mock objects that were created with new
         delete Mock_Logger;
         Mock_Logger = nullptr;
         delete Mock_DDSMessageEndpoint;
         Mock_DDSMessageEndpoint = nullptr;
+        
+        // Delete Mock_ROSServiceController - it has a no-op deleter in shared_ptr
+        delete Mock_ROSServiceController;
+        Mock_ROSServiceController = nullptr;
+        
+        // Mock_ADSWManager will be deleted by the shared_ptr when it goes out of scope
+        Mock_ADSWManager = nullptr;
     }
 };
 
@@ -308,7 +308,7 @@ TEST_F(StartServiceEndPointTest, Testable_OnDataAvailable_ReadSucceeds_ManagerVa
     TestableStartServiceEndPoint endpoint(MessageType::START_SERVICE_REQUEST, "test_topic");
     endpoint.SetMockReadResult(true);
     
-    ON_CALL(*Mock_ROSServiceController, ProcessStartServiceRequest(_)).WillByDefault(Return(true));
+    ON_CALL(*Mock_ROSServiceController, ProcessServiceStartRequest(_)).WillByDefault(Return(true));
     
     EXPECT_NO_THROW(endpoint.OnDataAvailable());
     EXPECT_FALSE(endpoint.WasProcessFailed());
@@ -319,7 +319,7 @@ TEST_F(StartServiceEndPointTest, Testable_OnDataAvailable_ReadSucceeds_ManagerVa
     TestableStartServiceEndPoint endpoint(MessageType::START_SERVICE_REQUEST, "test_topic");
     endpoint.SetMockReadResult(true);
     
-    ON_CALL(*Mock_ROSServiceController, ProcessStartServiceRequest(_)).WillByDefault(Return(false));
+    ON_CALL(*Mock_ROSServiceController, ProcessServiceStartRequest(_)).WillByDefault(Return(false));
     
     EXPECT_NO_THROW(endpoint.OnDataAvailable());
     EXPECT_TRUE(endpoint.WasProcessFailed());
@@ -345,7 +345,7 @@ TEST_F(StartServiceEndPointTest, Testable_OnDataAvailable_MultipleCalls) {
     
     // Second call with Read succeeding
     endpoint.SetMockReadResult(true);
-    ON_CALL(*Mock_ROSServiceController, ProcessStartServiceRequest(_)).WillByDefault(Return(true));
+    ON_CALL(*Mock_ROSServiceController, ProcessServiceStartRequest(_)).WillByDefault(Return(true));
     EXPECT_NO_THROW(endpoint.OnDataAvailable());
 }
 

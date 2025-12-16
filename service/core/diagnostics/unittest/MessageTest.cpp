@@ -1,7 +1,8 @@
 #include <gtest/gtest.h>
 
 #include "transmitter/Message.cpp"
-#include "mock/VariantData_mock.hpp"
+#include "diagnostic/VariantData.cpp"
+#include "mock/MockLogger.hpp"
 
 using namespace diagnostic_manager;
 using namespace std::chrono_literals;
@@ -10,9 +11,12 @@ class MessageTest : public ::testing::Test {
 protected:
     virtual void SetUp(){
         ins = new Message();
+        Mock_Logger = new MockLogger();
     }
     virtual void TearDown(){
         delete ins;
+        delete Mock_Logger;
+        Mock_Logger = nullptr;
     }
 
     Message* ins;

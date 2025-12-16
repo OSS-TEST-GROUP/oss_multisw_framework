@@ -41,6 +41,18 @@ bool DDSMessageEndPoint::Initialize(DomainParticipant* participant, Publisher* p
     participant_ = participant;
     publisher_ = publisher;
     subscriber_ = subscriber;
+    
+    // Validate required parameters
+    if (participant_ == nullptr) {
+        LOG_ERROR("Initialize failed: participant is null");
+        return false;
+    }
+    
+    // Validate TypeSupport is set
+    if (GetTypeSupport() == nullptr) {
+        LOG_ERROR("Initialize failed: TypeSupport is null");
+        return false;
+    }
         
     // Register the Type
     GetTypeSupport()->register_type(participant_);

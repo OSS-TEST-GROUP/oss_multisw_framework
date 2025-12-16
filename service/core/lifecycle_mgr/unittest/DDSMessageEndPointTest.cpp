@@ -586,11 +586,9 @@ TEST_F(DDSMessageEndPointTest, Read_MultipleCallsWithNullReader) {
 // ==================== Initialize Tests ====================
 
 TEST_F(DDSMessageEndPointTest, Initialize_WithAllNullParameters) {
-    // Initialize with all null parameters
-    // This will depend on mock behavior
-    EXPECT_NO_THROW({
-        endpoint_->Initialize(nullptr, nullptr, nullptr);
-    });
+    // Initialize with all null parameters - should return false
+    bool result = endpoint_->Initialize(nullptr, nullptr, nullptr);
+    EXPECT_FALSE(result);
 }
 
 TEST_F(DDSMessageEndPointTest, Initialize_AndFinalize_Sequence) {
@@ -644,22 +642,15 @@ protected:
 
 TEST_F(DDSMessageEndPointIntegrationTest, Initialize_WithRealDDS_NoTypeSupport) {
     // Test Initialize with real DDS but no TypeSupport set
-    // This will fail at register_type since GetTypeSupport() returns nullptr
+    // This should return false since GetTypeSupport() returns nullptr
     if (participant_ == nullptr) {
         GTEST_SKIP() << "DDS participant creation failed, skipping integration test";
     }
     
     TestDDSMessageEndPoint endpoint("test_topic_no_type");
-    // Without TypeSupport, Initialize will likely fail or throw
-    // This tests the code path up to the register_type call
-    EXPECT_NO_THROW({
-        // Initialize with null TypeSupport - covers early Initialize code paths
-        try {
-            endpoint.Initialize(participant_, publisher_, subscriber_);
-        } catch (...) {
-            // Expected - no TypeSupport
-        }
-    });
+    // Without TypeSupport, Initialize should return false
+    bool result = endpoint.Initialize(participant_, publisher_, subscriber_);
+    EXPECT_FALSE(result);
 }
 
 TEST_F(DDSMessageEndPointIntegrationTest, Initialize_WithPublisherOnly) {
@@ -668,14 +659,9 @@ TEST_F(DDSMessageEndPointIntegrationTest, Initialize_WithPublisherOnly) {
     }
     
     TestDDSMessageEndPoint endpoint("test_topic_pub_only");
-    // Test with publisher only (subscriber is null)
-    EXPECT_NO_THROW({
-        try {
-            endpoint.Initialize(participant_, publisher_, nullptr);
-        } catch (...) {
-            // Expected - no TypeSupport
-        }
-    });
+    // Test with publisher only (subscriber is null) - should fail due to no TypeSupport
+    bool result = endpoint.Initialize(participant_, publisher_, nullptr);
+    EXPECT_FALSE(result);
 }
 
 TEST_F(DDSMessageEndPointIntegrationTest, Initialize_WithSubscriberOnly) {
@@ -684,14 +670,9 @@ TEST_F(DDSMessageEndPointIntegrationTest, Initialize_WithSubscriberOnly) {
     }
     
     TestDDSMessageEndPoint endpoint("test_topic_sub_only");
-    // Test with subscriber only (publisher is null)
-    EXPECT_NO_THROW({
-        try {
-            endpoint.Initialize(participant_, nullptr, subscriber_);
-        } catch (...) {
-            // Expected - no TypeSupport
-        }
-    });
+    // Test with subscriber only (publisher is null) - should fail due to no TypeSupport
+    bool result = endpoint.Initialize(participant_, nullptr, subscriber_);
+    EXPECT_FALSE(result);
 }
 
 TEST_F(DDSMessageEndPointIntegrationTest, Initialize_WithBothPubSub) {
@@ -700,14 +681,9 @@ TEST_F(DDSMessageEndPointIntegrationTest, Initialize_WithBothPubSub) {
     }
     
     TestDDSMessageEndPoint endpoint("test_topic_both");
-    // Test with both publisher and subscriber
-    EXPECT_NO_THROW({
-        try {
-            endpoint.Initialize(participant_, publisher_, subscriber_);
-        } catch (...) {
-            // Expected - no TypeSupport
-        }
-    });
+    // Test with both publisher and subscriber - should fail due to no TypeSupport
+    bool result = endpoint.Initialize(participant_, publisher_, subscriber_);
+    EXPECT_FALSE(result);
     endpoint.Finalize();
 }
 
@@ -734,14 +710,9 @@ TEST_F(DDSMessageEndPointIntegrationTest, FullLifecycle_CreateInitFinalize) {
     // Test full lifecycle
     {
         TestDDSMessageEndPoint endpoint("test_topic_lifecycle");
-        EXPECT_NO_THROW({
-            try {
-                endpoint.Initialize(participant_, publisher_, subscriber_);
-            } catch (...) {
-                // Expected - no TypeSupport
-            }
-            endpoint.Finalize();
-        });
+        bool result = endpoint.Initialize(participant_, publisher_, subscriber_);
+        EXPECT_FALSE(result);  // Should fail due to no TypeSupport
+        endpoint.Finalize();
     }
     // Endpoint destroyed without issues
     SUCCEED();

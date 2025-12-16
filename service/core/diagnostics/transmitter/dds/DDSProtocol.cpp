@@ -69,7 +69,10 @@ DDSProtocol::DDSProtocol() : participant_(nullptr), subscriber_(nullptr) {
     eprosima::fastdds::dds::Log::SetVerbosity(eprosima::fastdds::dds::Log::Info);
     eprosima::fastdds::dds::Log::SetCategoryFilter(std::regex(""));
 }
-DDSProtocol::~DDSProtocol() {}
+DDSProtocol::~DDSProtocol() {
+    // Ensure cleanup is performed even if Finalize() wasn't called explicitly
+    Finalize();
+}
 
 bool DDSProtocol::Initialize() {
     auto factory = DomainParticipantFactory::get_instance();
@@ -112,6 +115,9 @@ void DDSProtocol::Finalize() {
         if (factory->delete_participant(participant_) != RETCODE_OK) {
             LOG_ERROR("Failed to delete the participant.");
         }
+        participant_ = nullptr;
+        subscriber_ = nullptr;
+        publisher_ = nullptr;
     }
 }
 
@@ -498,6 +504,11 @@ void DDSProtocol::load_dds_dynamic_idl(const std::string& path) {
 
 // FastDDS override method
 void DDSProtocol::on_data_available(DataReader* reader) {
+    if (reader == nullptr) {
+        LOG_DEBUG("on_data_available called with null reader");
+        return;
+    }
+
     std::shared_ptr<TopicInformation> topic_info;
 
     {

@@ -38,17 +38,18 @@ protected:
     ros2::adsw_manager::ADSWManager manager;
 
     void SetUp() override {
-        Mock_DDSTransmitter = new MockDDSTransmitter();
-        Mock_ServiceRegistry = new MockServiceRegistry();
-        Mock_ServiceMonitor = new MockServiceMonitor();
-        Mock_ROSServiceController = new MockROSServiceController();
-        Mock_EndPointFactory = new MockEndPointFactory();
+        Mock_DDSTransmitter = new NiceMock<MockDDSTransmitter>();
+        Mock_ServiceRegistry = new NiceMock<MockServiceRegistry>();
+        Mock_ServiceMonitor = new NiceMock<MockServiceMonitor>();
+        Mock_ROSServiceController = new NiceMock<MockROSServiceController>();
+        Mock_EndPointFactory = new NiceMock<MockEndPointFactory>();
 
-        manager.dds_transmitter_ = std::shared_ptr<MockDDSTransmitter>(Mock_DDSTransmitter);
-        manager.service_registry_ = std::shared_ptr<MockServiceRegistry>(Mock_ServiceRegistry);
-        manager.service_monitor_ = std::shared_ptr<MockServiceMonitor>(Mock_ServiceMonitor);
-        manager.service_controller_ = std::shared_ptr<MockROSServiceController>(Mock_ROSServiceController);
-        manager.endpoint_factory_ = std::shared_ptr<MockEndPointFactory>(Mock_EndPointFactory);
+        // Wrap mocks in shared_ptr with no-op deleters (we manage lifetime in TearDown)
+        manager.dds_transmitter_ = std::shared_ptr<MockDDSTransmitter>(Mock_DDSTransmitter, [](MockDDSTransmitter*){});
+        manager.service_registry_ = std::shared_ptr<MockServiceRegistry>(Mock_ServiceRegistry, [](MockServiceRegistry*){});
+        manager.service_monitor_ = std::shared_ptr<MockServiceMonitor>(Mock_ServiceMonitor, [](MockServiceMonitor*){});
+        manager.service_controller_ = std::shared_ptr<MockROSServiceController>(Mock_ROSServiceController, [](MockROSServiceController*){});
+        manager.endpoint_factory_ = std::shared_ptr<MockEndPointFactory>(Mock_EndPointFactory, [](MockEndPointFactory*){});
 
         Mock_Logger = new MockLogger();
         
@@ -58,21 +59,26 @@ protected:
     }
 
     void TearDown() override {
-        // Reset the manager's shared_ptrs first
+        // Reset the manager's shared_ptrs first to release references
         manager.dds_transmitter_ = nullptr;
         manager.service_registry_ = nullptr;
         manager.service_monitor_ = nullptr;
         manager.service_controller_ = nullptr;
         manager.endpoint_factory_ = nullptr;
         
-        // Clear the shared instance first to release all shared_ptrs
+        // Clear the singleton instance
         ADSWManager::SetShared(nullptr);
         
-        // Clear the global raw pointers (they've already been deleted by shared_ptr)
+        // Delete the mock objects (they have no-op deleters in shared_ptr)
+        delete Mock_DDSTransmitter;
         Mock_DDSTransmitter = nullptr;
+        delete Mock_ServiceRegistry;
         Mock_ServiceRegistry = nullptr;
+        delete Mock_ServiceMonitor;
         Mock_ServiceMonitor = nullptr;
+        delete Mock_ROSServiceController;
         Mock_ROSServiceController = nullptr;
+        delete Mock_EndPointFactory;
         Mock_EndPointFactory = nullptr;
         
         delete Mock_Logger;
