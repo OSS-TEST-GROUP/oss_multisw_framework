@@ -43,10 +43,12 @@ protected:
         // Set up ADSWManager mock - create instance and set both global pointer and shared instance
         auto adsw_manager_instance = new NiceMock<MockADSWManager>();
         Mock_ADSWManager = adsw_manager_instance;  // Set global mock pointer for stub methods
-        ADSWManager::SetShared(std::shared_ptr<ADSWManager>(adsw_manager_instance));
+        // Use empty deleter so shared_ptr doesn't delete it - we'll delete manually in TearDown
+        ADSWManager::SetShared(std::shared_ptr<ADSWManager>(adsw_manager_instance, [](ADSWManager*){}));
         
         // Create mock registry and transmitter
         mock_registry_ = new NiceMock<MockServiceRegistry>();
+        testing::Mock::AllowLeak(mock_registry_);  // Wrapped in shared_ptr with empty deleter
         mock_transmitter_ = std::make_shared<NiceMock<MockDDSTransmitter>>();
         mock_endpoint_ = std::make_shared<NiceMock<MockDDSMessageEndpoint>>();
         
@@ -58,12 +60,12 @@ protected:
         Mock_DDSMessageEndpoint = mock_endpoint_.get();
         
         // Configure ADSWManager mock to return our mocks
-        ON_CALL(*Mock_ADSWManager, Get()).WillByDefault(Return(Mock_ADSWManager));
+        // Note: Get() is not mocked - it returns shared_instance_.get() directly
         ON_CALL(*Mock_ADSWManager, GetServiceRegistry()).WillByDefault(Return(
             std::shared_ptr<ServiceRegistry>(mock_registry_, [](ServiceRegistry*){})));
         ON_CALL(*Mock_ADSWManager, GetTransmitter()).WillByDefault(Return(mock_transmitter_));
         ON_CALL(*Mock_ADSWManager, GetTopic(_)).WillByDefault(Return("mock_topic"));
-        
+
         // Configure transmitter to return endpoint
         ON_CALL(*mock_transmitter_, GetMessageEndpoint(_)).WillByDefault(Return(mock_endpoint_));
         ON_CALL(*mock_endpoint_, Write(_)).WillByDefault(Return(true));
@@ -102,8 +104,9 @@ protected:
         delete mock_registry_;
         mock_registry_ = nullptr;
         
-        // Reset the static shared_ptr - this will delete Mock_ADSWManager
+        // Reset the static shared_ptr and delete Mock_ADSWManager manually (we used empty deleter)
         ADSWManager::SetShared(nullptr);
+        delete Mock_ADSWManager;
         Mock_ADSWManager = nullptr;
         
         // Delete Mock_ROSServiceDiscovery - it was wrapped in shared_ptr with no-op deleter

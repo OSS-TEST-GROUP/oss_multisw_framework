@@ -86,9 +86,11 @@ protected:
         Mock_Logger = new MockLogger();
         Mock_ADSWManager = new NiceMock<MockADSWManager>();
         Mock_ServiceRegistry = new NiceMock<MockServiceRegistry>();
-        ADSWManager::SetShared(std::shared_ptr<ADSWManager>(Mock_ADSWManager));
+        testing::Mock::AllowLeak(Mock_ServiceRegistry);  // Wrapped in shared_ptr with empty deleter
+        // Use empty deleter for Mock_ADSWManager so shared_ptr doesn't delete it
+        ADSWManager::SetShared(std::shared_ptr<ADSWManager>(Mock_ADSWManager, [](ADSWManager*){}));
 
-        ON_CALL(*Mock_ADSWManager, Get()).WillByDefault(::testing::Return(Mock_ADSWManager));
+        // Note: Get() is not mocked - it returns shared_instance_.get() directly
         ON_CALL(*Mock_ADSWManager, GetTopic(::testing::_)).WillByDefault(::testing::Return("mock_topic"));
         ON_CALL(*Mock_ADSWManager, GetTransmitter()).WillByDefault(::testing::Return(std::make_shared<MockDDSTransmitter>()));
         ON_CALL(*Mock_ADSWManager, GetServiceRegistry()).WillByDefault(::testing::Return(
@@ -105,7 +107,9 @@ protected:
         Mock_Logger = nullptr;
         delete Mock_DDSMessageEndpoint;
         Mock_DDSMessageEndpoint = nullptr;
+        delete Mock_ADSWManager;  // Now we delete it since shared_ptr has empty deleter
         Mock_ADSWManager = nullptr;
+        delete Mock_ServiceRegistry;  // Also delete this since it has empty deleter
         Mock_ServiceRegistry = nullptr;
     }
 };

@@ -144,6 +144,7 @@ TEST_F(EndPointFactoryTest, CreateEndPointsReturnsCorrectSize) {
         [](MessageType type, const std::string& topic) {
             auto mock = new MockDDSMessageEndPoint(topic);
             Mock_DDSMessageEndPoint = mock; // set the global pointer
+            testing::Mock::AllowLeak(mock);  // Intentionally not deleting - managed by shared_ptr
             return std::shared_ptr<MockDDSMessageEndPoint>(mock);
     }   );
 
