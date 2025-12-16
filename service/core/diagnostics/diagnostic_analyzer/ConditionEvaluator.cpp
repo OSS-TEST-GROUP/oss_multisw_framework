@@ -131,21 +131,37 @@ ConditionOperandType ConditionEvaluator::EvaluateOperandType(ConditionExpression
     if (!IsConstantValue(cond_expression.lh)) {
         VariantValue value;
         data_manager_->FetchValueAsVariant(ResolveMessageName(cond_expression.lh), value);
-        operand_types.insert(ConvertTypeIndexToOperandType(value.type));
+        auto lh_type = ConvertTypeIndexToOperandType(value.type);
+        LOG_DEBUG("Left operand type from DataManager: " << static_cast<int>(lh_type) << " for: " << cond_expression.lh);
+        operand_types.insert(lh_type);
     } else {
-        operand_types.insert(EvaluateOperandTypeFromConstantValue(cond_expression.lh));
+        auto lh_type = EvaluateOperandTypeFromConstantValue(cond_expression.lh);
+        LOG_DEBUG("Left operand type from constant: " << static_cast<int>(lh_type) << " for: " << cond_expression.lh);
+        operand_types.insert(lh_type);
     }
 
     if (!IsConstantValue(cond_expression.rh)) {
         VariantValue value;
         data_manager_->FetchValueAsVariant(ResolveMessageName(cond_expression.rh), value);
-        operand_types.insert(ConvertTypeIndexToOperandType(value.type));
+        auto rh_type = ConvertTypeIndexToOperandType(value.type);
+        LOG_DEBUG("Right operand type from DataManager: " << static_cast<int>(rh_type) << " for: " << cond_expression.rh);
+        operand_types.insert(rh_type);
     } else {
-        operand_types.insert(EvaluateOperandTypeFromConstantValue(cond_expression.rh));
+        auto rh_type = EvaluateOperandTypeFromConstantValue(cond_expression.rh);
+        LOG_DEBUG("Right operand type from constant: " << static_cast<int>(rh_type) << " for: " << cond_expression.rh);
+        operand_types.insert(rh_type);
     }
 
     if (operand_types.size() == 1) {
         return *operand_types.begin();
+    }
+
+    // If one operand is UNKNOWN and the other is a known type, use the known type
+    if (operand_types.size() == 2 && operand_types.count(ConditionOperandType::UNKNOWN) > 0) {
+        operand_types.erase(ConditionOperandType::UNKNOWN);
+        if (operand_types.size() == 1) {
+            return *operand_types.begin();
+        }
     }
 
     if (operand_types.count(ConditionOperandType::INTEGER) > 0 && operand_types.count(ConditionOperandType::FLOATING)) {
