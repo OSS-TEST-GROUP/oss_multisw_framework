@@ -76,6 +76,7 @@ add_executable ( StateManagerTest StateManagerTest.cpp ../state/StateManager.cpp
 add_executable ( StateMonitorTest StateMonitorTest.cpp ../state/StateMonitor.cpp)
 add_executable ( ArgumentConfigTest ArgumentConfigTest.cpp ../service/ArgumentConfig.cpp )
 add_executable ( MWServiceTest MWServiceTest.cpp ../service/MWService.cpp ../service/ArgumentConfig.cpp )
+add_executable ( HelperTest HelperTest.cpp )
 
 gtest_discover_tests ( LifecycleManagerTest )
 gtest_discover_tests ( DDSTransmitterTest )
@@ -89,6 +90,7 @@ gtest_discover_tests ( StateManagerTest )
 gtest_discover_tests ( StateMonitorTest )
 gtest_discover_tests ( ArgumentConfigTest )
 gtest_discover_tests ( MWServiceTest )
+gtest_discover_tests ( HelperTest )
 
 
 ## Install
@@ -105,6 +107,7 @@ install ( TARGETS
                 EndPointFactoryTest
                 LifecycleManagerTest
                 ServiceRegistryTest
+                HelperTest
     RUNTIME DESTINATION bin/unittest/lifecycle_mgr
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib

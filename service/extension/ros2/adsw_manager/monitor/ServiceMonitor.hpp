@@ -19,7 +19,7 @@ class ServiceMonitor {
     bool Initialize();
     void Finalize();
     
-    void UpdateServiceState(UpdateServiceInfo info);
+    void UpdateServiceState(UpdateServiceInfo& info);
 
     void NotifyServiceState();
     void NotifyAdswStatus(int32_t status_code, std::string status_msg);
