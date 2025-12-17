@@ -77,36 +77,53 @@ VssSubscriptionManager::Subscription::Subscription(
       m_active(true),
       m_data_store(std::move(data_store)),
       m_response_pool(std::move(response_pool)) {
+
+    if (!m_originalRequest) {
+        throw std::runtime_error("Subscription request is null.");
+    }
+    if (!m_originalRequest->responseChan) {
+        throw std::runtime_error("Response channel in subscription request is null.");
+    }
     
     const auto& req_doc = *m_originalRequest->request_doc;
-    std::string path_str = req_doc.HasMember("path") ? req_doc["path"].GetString() : "";
+
+    if (!req_doc.HasMember("path")) {
+        throw std::runtime_error("No 'path' key");
+    }
+
+    std::string path_str = req_doc["path"].GetString();
     m_watchedPaths = vss_tree->getPaths(path_str, &req_doc);
 
-    if (!m_watchedPaths.empty()) {
-        m_triggerSignalPath = m_watchedPaths[0];
+    if (m_watchedPaths.empty()) {
+        throw std::runtime_error("No valid paths found for the subscription.");
     }
+
+    m_triggerSignalPath = m_watchedPaths[0];
 
     if (req_doc.HasMember("filter")) {
         m_filters = parseFilters(req_doc["filter"]);
+        if (m_filters.empty()) {
+            throw std::runtime_error("Failed to parse any valid filters from the request.");
+        }
     }
     LOG_INFO << "Created Subscription ID: " << m_subscriptionId << " for trigger path: " << m_triggerSignalPath;
 }
 
 VssSubscriptionManager::Subscription::~Subscription() {
-    if (m_originalRequest && m_originalRequest->responseChan) {
-        LOG_INFO << "Sending termination signal for subscription ID: " << m_subscriptionId;
-        try {
-            auto termination_signal = m_response_pool->acquire();
-            termination_signal->SetObject();
-            rapidjson::Document::AllocatorType& allocator = termination_signal->GetAllocator();
-            termination_signal->AddMember("action", "subscription", allocator);
-            termination_signal->AddMember("subscriptionId", rapidjson::Value(m_subscriptionId.c_str(), allocator), allocator);
-            termination_signal->AddMember("status", "terminated", allocator);
-            m_originalRequest->responseChan->push(termination_signal);
-        } catch (const std::exception& e) {
-            LOG_ERROR << "Exception in Subscription destructor for ID " << m_subscriptionId << ": " << e.what();
-        }
+    
+    LOG_INFO << "Sending termination signal for subscription ID: " << m_subscriptionId;
+    try {
+        auto termination_signal = m_response_pool->acquire();
+        termination_signal->SetObject();
+        rapidjson::Document::AllocatorType& allocator = termination_signal->GetAllocator();
+        termination_signal->AddMember("action", "subscription", allocator);
+        termination_signal->AddMember("subscriptionId", rapidjson::Value(m_subscriptionId.c_str(), allocator), allocator);
+        termination_signal->AddMember("status", "terminated", allocator);
+        m_originalRequest->responseChan->push(termination_signal);
+    } catch (const std::exception& e) {
+        LOG_ERROR << "Exception in Subscription destructor for ID " << m_subscriptionId << ": " << e.what();
     }
+    
     LOG_INFO << "Destroyed Subscription ID: " << m_subscriptionId;
 }
 
@@ -181,10 +198,8 @@ void VssSubscriptionManager::Subscription::process() {
         }
         
         notification->AddMember("ts", rapidjson::Value(getCurrentTimestamp().c_str(), allocator), allocator);
-
-        if (m_originalRequest && m_originalRequest->responseChan) {
-            m_originalRequest->responseChan->push(notification);
-        }
+        m_originalRequest->responseChan->push(notification);
+        
     }
 }
 
@@ -209,7 +224,7 @@ std::vector<std::shared_ptr<viss::IFilter>> VssSubscriptionManager::Subscription
     const rapidjson::Value* expressions = &filter_json;
 
     for (const auto& exp : expressions->GetArray()) {
-        if (!exp.IsObject() || !exp.HasMember("variant") || !exp["variant"].IsString()) {
+        if (!exp.HasMember("variant") || !exp["variant"].IsString()) {
             LOG_WARN << "Skipping invalid filter expression object.";
             continue;
         }
@@ -259,10 +274,11 @@ std::string VssSubscriptionManager::addSubscription(std::shared_ptr<RequestData>
     std::lock_guard<std::mutex> lock(mtx);
     std::string subscriptionId = std::to_string(nextSubscriptionId++);
     
-    auto sub = std::make_shared<Subscription>(subscriptionId, request, vss_tree_, data_store, response_pool_);
-
-    if (sub->getTriggerPath().empty()) {
-        LOG_WARN << "Could not create subscription. No valid paths found for request: " << request->requestId;
+    std::shared_ptr<Subscription> sub;
+    try {
+        sub = std::make_shared<Subscription>(subscriptionId, request, vss_tree_, data_store, response_pool_);
+    } catch (const std::exception& e) {
+        LOG_ERROR << "Failed to create subscription: " << e.what();
         return "";
     }
     

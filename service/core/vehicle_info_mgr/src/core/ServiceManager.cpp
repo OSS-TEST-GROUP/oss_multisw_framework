@@ -126,24 +126,22 @@ void ServiceManager::processRequest(std::shared_ptr<RequestData> request) {
 
             if (req_doc.HasMember("filter")) {
                 const auto& filter_val = req_doc["filter"];
-                if (filter_val.IsArray()) {
-                    for (const auto& filter_item : filter_val.GetArray()) {
-                        if (filter_item.IsObject() && filter_item.HasMember("variant") && filter_item["variant"].IsString()) {
-                            auto variant = filter_item["variant"].GetString();
-                            if (strcmp(variant, "metadata") == 0) {
-                                is_get_metadata = true;
-                                if (filter_item.HasMember("parameter") && filter_item["parameter"].IsArray() && !filter_item["parameter"].Empty() && filter_item["parameter"][0].IsString()) {
-                                    try {
-                                        depth = std::stoi(filter_item["parameter"][0].GetString());
-                                    } catch (const std::invalid_argument& ia) {
-                                        LOG_ERROR << "Invalid argument for depth: " << filter_item["parameter"][0].GetString();
-                                        depth = 0; // Default to 0 on error
-                                    }
+                for (const auto& filter_item : filter_val.GetArray()) {
+                    if (filter_item.IsObject() && filter_item.HasMember("variant") && filter_item["variant"].IsString()) {
+                        auto variant = filter_item["variant"].GetString();
+                        if (strcmp(variant, "metadata") == 0) {
+                            is_get_metadata = true;
+                            if (filter_item.HasMember("parameter") && filter_item["parameter"].IsArray() && !filter_item["parameter"].Empty() && filter_item["parameter"][0].IsString()) {
+                                try {
+                                    depth = std::stoi(filter_item["parameter"][0].GetString());
+                                } catch (const std::invalid_argument& ia) {
+                                    LOG_ERROR << "Invalid argument for depth: " << filter_item["parameter"][0].GetString();
+                                    depth = 0; // Default to 0 on error
                                 }
-                            } else if (strcmp(variant, "history") == 0) {
-                                if (filter_item.HasMember("parameter") && filter_item["parameter"].IsArray() && !filter_item["parameter"].Empty() && filter_item["parameter"][0].IsString()) {
-                                    timePeriod = filter_item["parameter"][0].GetString();
-                                }
+                            }
+                        } else if (strcmp(variant, "history") == 0) {
+                            if (filter_item.HasMember("parameter") && filter_item["parameter"].IsArray() && !filter_item["parameter"].Empty() && filter_item["parameter"][0].IsString()) {
+                                timePeriod = filter_item["parameter"][0].GetString();
                             }
                         }
                     }
@@ -164,9 +162,7 @@ void ServiceManager::processRequest(std::shared_ptr<RequestData> request) {
                     }
                 }
 
-                if (metadata_array.Size() == 0) {
-                    response_doc->AddMember("error", StatusCodes::NOT_FOUND("Metadata not available for the given path(s).").Move(), allocator);
-                } else if (metadata_array.Size() == 1 && paths.size() == 1) {
+                if (metadata_array.Size() == 1) {
                     response_doc->AddMember("metadata", metadata_array[0], allocator);
                 } else {
                     response_doc->AddMember("metadata", metadata_array, allocator);
@@ -196,9 +192,7 @@ void ServiceManager::processRequest(std::shared_ptr<RequestData> request) {
                 data_array.PushBack(data_obj, allocator);
             }
 
-            if (data_array.Size() == 0) {
-                 response_doc->AddMember("error", StatusCodes::NOT_FOUND("Value not available.").Move(), allocator);
-            } else if (data_array.Size() == 1) {
+            if (data_array.Size() == 1) {
                 response_doc->AddMember("data", data_array[0], allocator);
             } else {
                 response_doc->AddMember("data", data_array, allocator);
@@ -211,7 +205,11 @@ void ServiceManager::processRequest(std::shared_ptr<RequestData> request) {
             response_doc->AddMember("error", StatusCodes::NOT_FOUND("The path is not available in the VSS tree. " + path).Move(), allocator);
         } else {
             std::string subscriptionId = subscription_manager->addSubscription(request);
-            response_doc->AddMember("subscriptionId", rapidjson::Value(subscriptionId.c_str(), allocator), allocator);
+            if(subscriptionId.empty()) {
+                response_doc->AddMember("error", StatusCodes::BAD_REQUEST("The request is malformed or invalid. ").Move(), allocator);
+            } else {
+                response_doc->AddMember("subscriptionId", rapidjson::Value(subscriptionId.c_str(), allocator), allocator);
+            }
         }
     } else if (action == "set") {
         std::string path = req_doc["path"].GetString();
@@ -221,11 +219,14 @@ void ServiceManager::processRequest(std::shared_ptr<RequestData> request) {
         } else if (node->NodeType != viss::NodeTypes::ACTUATOR) {
             response_doc->AddMember("error", StatusCodes::INVALID_DATA("Update of a " + node->getTypeAsString() + " is not supported.").Move(), allocator);
         } else {
+            /*
             const auto& value_node = req_doc["value"];
             rapidjson::StringBuffer buffer;
             rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
             value_node.Accept(writer);
             std::string value_str = buffer.GetString();
+            */
+            std::string value_str = req_doc["value"].GetString();
 
             VehicleData data;
             data.path = path;

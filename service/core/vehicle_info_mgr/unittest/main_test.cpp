@@ -142,7 +142,7 @@ TEST_F(MainFunctionTest, MainCallWithoutHimfile) {
         //(char*)"--grpc-provider-addr",
         //(char*)"127.0.0.1:50052"
     };
-    int argc = 2;
+    int argc = sizeof(argv) / sizeof(char*);
 
     // The main function should call the VissServerApp constructor with the invalid path.
     // The VissServerApp constructor is expected to call exit(1) when the file is invalid.
@@ -164,7 +164,29 @@ TEST_F(MainFunctionTest, MainCallWithoutSchemafile) {
         //(char*)"--grpc-provider-addr",
         //(char*)"127.0.0.1:50052"
     };
-    int argc = 2;
+    int argc = sizeof(argv) / sizeof(char*);
+
+    // The main function should call the VissServerApp constructor with the invalid path.
+    // The VissServerApp constructor is expected to call exit(1) when the file is invalid.
+    // EXPECT_EXIT checks if the statement inside it calls exit() with the specified code.
+    EXPECT_EXIT(
+        main_test_entry(argc, argv),
+        testing::ExitedWithCode(1),
+        ".*" // Match any output to stderr
+    );
+}
+
+TEST_F(MainFunctionTest, MainCallWithoutProviderAddr) {
+    char* argv[] = {
+        (char*)"viss-server",
+        //(char*)"--him",
+        //(char*)"../non_existent_file.him",
+        //(char*)"--schema",
+        //const_cast<char*>(schemaPath.c_str()),
+        (char*)"--grpc-provider-addr",
+        //(char*)"127.0.0.1:50052"
+    };
+    int argc = sizeof(argv) / sizeof(char*);
 
     // The main function should call the VissServerApp constructor with the invalid path.
     // The VissServerApp constructor is expected to call exit(1) when the file is invalid.

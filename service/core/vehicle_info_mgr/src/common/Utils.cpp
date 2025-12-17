@@ -52,11 +52,6 @@ bool any_value_changed(const std::any& a, const std::any& b) {
     if (type == typeid(float)) return std::any_cast<float>(a) != std::any_cast<float>(b);
     if (type == typeid(double)) return std::any_cast<double>(a) != std::any_cast<double>(b);
 
-    if (type == typeid(rapidjson::Document)) {
-        std::string str_a = any_to_string(a);
-        std::string str_b = any_to_string(b);
-        return str_a != str_b;
-    }
     if (type == typeid(std::shared_ptr<rapidjson::Document>)) {
         std::string str_a = any_to_string(a);
         std::string str_b = any_to_string(b);
@@ -98,13 +93,7 @@ std::string any_to_string(const std::any& val) {
         d.Accept(writer);
         return buffer.GetString();
     }
-    if (type == typeid(rapidjson::Document)) {
-        const auto& doc = std::any_cast<const rapidjson::Document&>(val);
-        rapidjson::StringBuffer buffer;
-        rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-        doc.Accept(writer);
-        return buffer.GetString();
-    }
+
     if (type == typeid(std::shared_ptr<rapidjson::Document>)) {
         const auto& doc_ptr = std::any_cast<std::shared_ptr<rapidjson::Document>>(val);
         if (doc_ptr) {
@@ -176,9 +165,6 @@ rapidjson::Value any_to_json_value(const std::any& val, rapidjson::Document::All
         v.SetFloat(std::any_cast<float>(val));
     } else if (type == typeid(double)) {
         v.SetDouble(std::any_cast<double>(val));
-    } else if (type == typeid(rapidjson::Document)) {
-        const auto& doc = std::any_cast<const rapidjson::Document&>(val);
-        v.CopyFrom(doc, allocator);
     } else if (type == typeid(std::shared_ptr<rapidjson::Document>)) {
         const auto& doc_ptr = std::any_cast<std::shared_ptr<rapidjson::Document>>(val);
         if (doc_ptr) {

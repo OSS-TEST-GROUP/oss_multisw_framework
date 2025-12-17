@@ -68,6 +68,56 @@ TEST_F(VssSubscriptionManagerTest, AddAndRemoveSubscription) {
     EXPECT_FALSE(removed_again);
 }
 
+TEST_F(VssSubscriptionManagerTest, AddSubscriptionWithNullRequest) {
+    std::string sub_id = sub_manager->addSubscription(nullptr);
+    EXPECT_TRUE(sub_id.empty());
+}
+
+TEST_F(VssSubscriptionManagerTest, AddSubscriptionWithNullResponseChannel) {
+    auto request = std::make_shared<RequestData>();
+    request->responseChan = nullptr; // Set response channel to null
+    request->request_doc->Parse(R"({
+        "action": "subscribe",
+        "path": "Vehicle.Speed",
+        "requestId": "123"
+    })");
+
+    std::string sub_id = sub_manager->addSubscription(request);
+    EXPECT_TRUE(sub_id.empty());
+}
+
+TEST_F(VssSubscriptionManagerTest, SubscriptionWithoutFilter) {
+    sub_manager->run();
+
+    auto request = std::make_shared<RequestData>();
+    request->responseChan = std::make_shared<ThreadSafeQueue<std::shared_ptr<PooledResponseMap>>>();
+    request->request_doc->Parse(R"({
+        "action": "subscribe",
+        "path": "Vehicle.Speed",
+        "requestId": "test-time-filter"
+    })");
+
+    std::string sub_id = sub_manager->addSubscription(request);
+    ASSERT_FALSE(sub_id.empty());
+    
+    std::shared_ptr<PooledResponseMap> response;
+
+    // 1. Set a value, should trigger immediately.
+    SetStoreValue("Vehicle.Speed", "10");
+    EXPECT_TRUE(request->responseChan->wait_and_pop(response));
+
+    EXPECT_STREQ((*response)["subscriptionId"].GetString(), sub_id.c_str());
+
+    ASSERT_TRUE(response->HasMember("data"));
+    const auto& data = (*response)["data"];
+    ASSERT_TRUE(data.IsObject());
+    ASSERT_TRUE(data.HasMember("dp"));
+    const auto& dp = data["dp"];
+    ASSERT_TRUE(dp.IsObject());
+
+    sub_manager->removeSubscription(sub_id);
+}
+
 TEST_F(VssSubscriptionManagerTest, SubscriptionWithTimeFilter) {
     sub_manager->run();
 
@@ -101,6 +151,42 @@ TEST_F(VssSubscriptionManagerTest, SubscriptionWithTimeFilter) {
     SetStoreValue("Vehicle.Speed", "30");
     EXPECT_TRUE(request->responseChan->wait_and_pop(response));
 
+    sub_manager->removeSubscription(sub_id);
+}
+
+TEST_F(VssSubscriptionManagerTest, SubscriptionWithTimeFilterAndInvalidArgument) {
+    sub_manager->run();
+
+    auto request = std::make_shared<RequestData>();
+    request->responseChan = std::make_shared<ThreadSafeQueue<std::shared_ptr<PooledResponseMap>>>();
+    request->request_doc->Parse(R"({
+        "action": "subscribe",
+        "path": "Vehicle.Speed",
+        "filter": [{"variant": "timebased", "parameter": [{"period": "invalid_argument"}]}],
+        "requestId": "test-time-filter"
+    })");
+
+    std::string sub_id = sub_manager->addSubscription(request);
+    ASSERT_TRUE(sub_id.empty());
+    
+    sub_manager->removeSubscription(sub_id);
+}
+
+TEST_F(VssSubscriptionManagerTest, SubscriptionWithTimeFilterAndIntPeriod) {
+    sub_manager->run();
+
+    auto request = std::make_shared<RequestData>();
+    request->responseChan = std::make_shared<ThreadSafeQueue<std::shared_ptr<PooledResponseMap>>>();
+    request->request_doc->Parse(R"({
+        "action": "subscribe",
+        "path": "Vehicle.Speed",
+        "filter": [{"variant": "timebased", "parameter": [{"period": 200}]}],
+        "requestId": "test-time-filter"
+    })");
+
+    std::string sub_id = sub_manager->addSubscription(request);
+    ASSERT_TRUE(sub_id.empty());
+    
     sub_manager->removeSubscription(sub_id);
 }
 
@@ -138,5 +224,252 @@ TEST_F(VssSubscriptionManagerTest, SubscriptionWithChangeFilter) {
     EXPECT_TRUE(request->responseChan->wait_and_pop(response));
     EXPECT_STREQ((*response)["subscriptionId"].GetString(), sub_id.c_str());
 
+    sub_manager->removeSubscription(sub_id);
+}
+
+TEST_F(VssSubscriptionManagerTest, SubscriptionWithHistoryFilter) {
+    // Start the subscription manager's processing loop
+    sub_manager->run();
+
+    // 1. Subscribe with a "change" filter
+    auto request = std::make_shared<RequestData>();
+    request->responseChan = std::make_shared<ThreadSafeQueue<std::shared_ptr<PooledResponseMap>>>();
+    request->request_doc->Parse(R"({
+        "action": "subscribe",
+        "path": "Vehicle.Speed",
+        "filter": [{"variant": "history", "parameter":["P2DT12H"]}],
+        "requestId": "test-change-filter"
+    })");
+
+    SetStoreValue("Vehicle.Speed", "60");
+
+    std::string sub_id = sub_manager->addSubscription(request);
+    ASSERT_FALSE(sub_id.empty());
+
+    std::shared_ptr<PooledResponseMap> response;
+
+    // 2. Set initial value - should trigger a notification
+   
+    EXPECT_TRUE(request->responseChan->wait_and_pop(response));
+    EXPECT_STREQ((*response)["subscriptionId"].GetString(), sub_id.c_str());
+
+    ASSERT_TRUE(response->HasMember("data"));
+    const auto& data = (*response)["data"];
+    ASSERT_TRUE(data.IsObject());
+    ASSERT_TRUE(data.HasMember("dp"));
+    const auto& dp = data["dp"];
+    ASSERT_TRUE(dp.IsObject());
+    
+
+    sub_manager->removeSubscription(sub_id);
+    EXPECT_TRUE(request->responseChan->wait_and_pop(response));
+    EXPECT_STREQ((*response)["subscriptionId"].GetString(), sub_id.c_str());
+
+    ASSERT_TRUE(response->HasMember("status"));
+
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(11000));
+
+    // 3. Set the same value - should NOT trigger a notification
+    SetStoreValue("Vehicle.Speed", "61");
+
+    sub_id = sub_manager->addSubscription(request);
+    ASSERT_FALSE(sub_id.empty());
+
+
+    EXPECT_TRUE(request->responseChan->wait_and_pop(response));
+    EXPECT_STREQ((*response)["subscriptionId"].GetString(), sub_id.c_str());
+
+
+    ASSERT_TRUE(response->HasMember("data"));
+    const auto& data1 = (*response)["data"];
+    ASSERT_TRUE(data1.IsObject());
+    ASSERT_TRUE(data1.HasMember("dp"));
+    const auto& dp1 = data1["dp"];
+    ASSERT_TRUE(dp1.IsArray());
+
+    ASSERT_EQ(dp1.Size(),2);
+    
+
+    sub_manager->removeSubscription(sub_id);
+}
+
+TEST_F(VssSubscriptionManagerTest, SubscriptionWithHistoryFilterAndIntPeriod) {
+    // Start the subscription manager's processing loop
+    sub_manager->run();
+
+    // 1. Subscribe with a "change" filter
+    auto request = std::make_shared<RequestData>();
+    request->responseChan = std::make_shared<ThreadSafeQueue<std::shared_ptr<PooledResponseMap>>>();
+    request->request_doc->Parse(R"({
+        "action": "subscribe",
+        "path": "Vehicle.Speed",
+        "filter": [{"variant": "history", "parameter":[200]}],
+        "requestId": "test-change-filter"
+    })");
+
+    SetStoreValue("Vehicle.Speed", "60");
+
+    std::string sub_id = sub_manager->addSubscription(request);
+    ASSERT_TRUE(sub_id.empty());  
+
+    sub_manager->removeSubscription(sub_id);
+}
+
+TEST_F(VssSubscriptionManagerTest, SubscriptionWithPathsFilter) {
+    // Start the subscription manager's processing loop
+    sub_manager->run();
+
+    // 1. Subscribe with a "change" filter
+    auto request = std::make_shared<RequestData>();
+    request->responseChan = std::make_shared<ThreadSafeQueue<std::shared_ptr<PooledResponseMap>>>();
+    request->request_doc->Parse(R"({
+        "action": "subscribe",
+        "path": "Vehicle",
+        "filter": [{"variant": "paths", "parameter":["Speed", "Height"]}],
+        "requestId": "test-change-filter"
+    })");
+
+    SetStoreValue("Vehicle.Speed", "60");
+    SetStoreValue("Vehicle.Height", "123");
+
+    std::string sub_id = sub_manager->addSubscription(request);
+    ASSERT_FALSE(sub_id.empty());
+
+    std::shared_ptr<PooledResponseMap> response;
+
+    // 2. Set initial value - should trigger a notification
+   
+    EXPECT_TRUE(request->responseChan->wait_and_pop(response));
+    EXPECT_STREQ((*response)["subscriptionId"].GetString(), sub_id.c_str());
+
+    ASSERT_TRUE(response->HasMember("data"));
+    const auto& data = (*response)["data"];
+    ASSERT_TRUE(data.IsArray());
+    //ASSERT_TRUE(data.HasMember("dp"));
+    //const auto& dp = data["dp"];
+    //ASSERT_TRUE(dp.IsObject());
+       
+
+    sub_manager->removeSubscription(sub_id);
+}
+
+
+TEST_F(VssSubscriptionManagerTest, SubscriptionWithUnsupportFilter) {
+    // Start the subscription manager's processing loop
+    sub_manager->run();
+
+    // 1. Subscribe with a "change" filter
+    auto request = std::make_shared<RequestData>();
+    request->responseChan = std::make_shared<ThreadSafeQueue<std::shared_ptr<PooledResponseMap>>>();
+    request->request_doc->Parse(R"({
+        "action": "subscribe",
+        "path": "Vehicle.Speed",
+        "filter": [{"variant": "metadata", "parameter":["0"]}],
+        "requestId": "test-change-filter"
+    })");
+
+    std::string sub_id = sub_manager->addSubscription(request);
+    ASSERT_TRUE(sub_id.empty());
+    
+    sub_manager->removeSubscription(sub_id);
+}
+
+TEST_F(VssSubscriptionManagerTest, SubscriptionWithoutPath) {
+    // Start the subscription manager's processing loop
+    sub_manager->run();
+
+    // 1. Subscribe with a "change" filter
+    auto request = std::make_shared<RequestData>();
+    request->responseChan = std::make_shared<ThreadSafeQueue<std::shared_ptr<PooledResponseMap>>>();
+    request->request_doc->Parse(R"({
+        "action": "subscribe",
+        "filter": [{"variant": "metadata", "parameter":["0"]}],
+        "requestId": "test-change-filter"
+    })");
+
+    std::string sub_id = sub_manager->addSubscription(request);
+    ASSERT_TRUE(sub_id.empty());
+    
+    sub_manager->removeSubscription(sub_id);
+}
+
+TEST_F(VssSubscriptionManagerTest, SubscriptionWithInvalidPath) {
+    // Start the subscription manager's processing loop
+    sub_manager->run();
+
+    // 1. Subscribe with a "change" filter
+    auto request = std::make_shared<RequestData>();
+    request->responseChan = std::make_shared<ThreadSafeQueue<std::shared_ptr<PooledResponseMap>>>();
+    request->request_doc->Parse(R"({
+        "action": "subscribe",
+        "path": "Vehicle.Invalid.Path",
+        "filter": [{"variant": "metadata", "parameter":["0"]}],
+        "requestId": "test-change-filter"
+    })");
+
+    std::string sub_id = sub_manager->addSubscription(request);
+    ASSERT_TRUE(sub_id.empty());
+    
+    sub_manager->removeSubscription(sub_id);
+}
+
+TEST_F(VssSubscriptionManagerTest, SubscriptionWithIntVariant) {
+    // Start the subscription manager's processing loop
+    sub_manager->run();
+
+    // 1. Subscribe with a "change" filter
+    auto request = std::make_shared<RequestData>();
+    request->responseChan = std::make_shared<ThreadSafeQueue<std::shared_ptr<PooledResponseMap>>>();
+    request->request_doc->Parse(R"({
+        "action": "subscribe",
+        "path": "Vehicle.Speed",
+        "filter": [{"variant": 1, "parameter":["0"]}],
+        "requestId": "test-change-filter"
+    })");
+
+    std::string sub_id = sub_manager->addSubscription(request);
+    ASSERT_TRUE(sub_id.empty());
+    
+    sub_manager->removeSubscription(sub_id);
+}
+
+TEST_F(VssSubscriptionManagerTest, SubscriptionWithEmptyFilter) {
+    // Start the subscription manager's processing loop
+    sub_manager->run();
+
+    // 1. Subscribe with a "change" filter
+    auto request = std::make_shared<RequestData>();
+    request->responseChan = std::make_shared<ThreadSafeQueue<std::shared_ptr<PooledResponseMap>>>();
+    request->request_doc->Parse(R"({
+        "action": "subscribe",
+        "path": "Vehicle.Speed",
+        "filter": [],
+        "requestId": "test-change-filter"
+    })");
+
+    std::string sub_id = sub_manager->addSubscription(request);
+    ASSERT_TRUE(sub_id.empty());
+    
+    sub_manager->removeSubscription(sub_id);
+}
+
+TEST_F(VssSubscriptionManagerTest, SubscriptionWithoutVariant) {
+    // Start the subscription manager's processing loop
+    sub_manager->run();
+
+    // 1. Subscribe with a "change" filter
+    auto request = std::make_shared<RequestData>();
+    request->responseChan = std::make_shared<ThreadSafeQueue<std::shared_ptr<PooledResponseMap>>>();
+    request->request_doc->Parse(R"({
+        "action": "subscribe",
+        "path": "Vehicle.Speed",
+        "filter": [{"parameter":["0"]}],
+        "requestId": "test-change-filter"
+    })");
+
+    std::string sub_id = sub_manager->addSubscription(request);
+    ASSERT_TRUE(sub_id.empty());
+    
     sub_manager->removeSubscription(sub_id);
 }
