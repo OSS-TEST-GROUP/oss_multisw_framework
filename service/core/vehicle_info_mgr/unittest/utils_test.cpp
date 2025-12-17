@@ -60,6 +60,29 @@ TEST(UtilsTest, AnyValueChanged) {
     EXPECT_TRUE(any_value_changed(true, false));
     EXPECT_FALSE(any_value_changed(true, true));
     EXPECT_TRUE(any_value_changed(1, 1.0)); // Different types
+
+    // Test with shared_ptr<rapidjson::Document>
+    auto doc1 = std::make_shared<rapidjson::Document>();
+    doc1->Parse(R"({"key":"value"})");
+    
+    auto doc2 = std::make_shared<rapidjson::Document>();
+    doc2->Parse(R"({"key":"value"})");
+
+    auto doc3 = std::make_shared<rapidjson::Document>();
+    doc3->Parse(R"({"key":"different_value"})");
+
+    std::shared_ptr<rapidjson::Document> null_doc_ptr;
+
+    EXPECT_FALSE(any_value_changed(doc1, doc1)); // Same object
+    EXPECT_FALSE(any_value_changed(doc1, doc2)); // Different objects, same content
+    EXPECT_TRUE(any_value_changed(doc1, doc3)); // Different content
+    EXPECT_TRUE(any_value_changed(doc1, null_doc_ptr)); // One is null
+
+    // Test with unsupported type
+    struct UnsupportedType {};
+    UnsupportedType ut1, ut2;
+    EXPECT_FALSE(any_value_changed(ut1, ut2));
+
 }
 
 TEST(UtilsTest, AnyToString) {
@@ -99,6 +122,12 @@ TEST(UtilsTest, AnyToString) {
     std::vector<std::map<std::string, std::any>> test_vec;
     test_vec.push_back({{"x", 1.5}});
     EXPECT_EQ(any_to_string(test_vec), R"([{"x":1.5}])");
+
+    // Unsupported type
+    struct UnsupportedType {};
+    UnsupportedType ut;
+    // The exact name depends on the compiler, so we check for the prefix.
+    EXPECT_TRUE(any_to_string(ut).rfind("Unsupported type: ", 0) == 0);
 }
 
 TEST(UtilsTest, FormatTimestamp) {
@@ -187,6 +216,10 @@ TEST_F(AnyToJsonValueTest, HandlesIntegerTypes) {
     EXPECT_TRUE(v_i16.IsInt());
     EXPECT_EQ(v_i16.GetInt(), -100);
 
+    rapidjson::Value v_u32 = any_to_json_value((uint32_t)10, allocator);
+    EXPECT_TRUE(v_u32.IsUint());
+    EXPECT_EQ(v_u32.GetUint(), 10);
+
     rapidjson::Value v_i32 = any_to_json_value((int32_t)-100, allocator);
     EXPECT_TRUE(v_i32.IsInt());
     EXPECT_EQ(v_i32.GetInt(), -100);
@@ -195,9 +228,9 @@ TEST_F(AnyToJsonValueTest, HandlesIntegerTypes) {
     EXPECT_TRUE(v_u64.IsUint64());
     EXPECT_EQ(v_u64.GetUint64(), 1234567890123);
 
-    rapidjson::Value v_i64 = any_to_json_value((int64_t)1234567890123, allocator);
+    rapidjson::Value v_i64 = any_to_json_value((int64_t)-1234567890123, allocator);
     EXPECT_TRUE(v_i64.IsInt64());
-    EXPECT_EQ(v_i64.GetInt64(), 1234567890123);
+    EXPECT_EQ(v_i64.GetInt64(), -1234567890123);
 }
 
 TEST_F(AnyToJsonValueTest, HandlesFloatingPointTypes) {
@@ -261,4 +294,17 @@ TEST_F(AnyToJsonValueTest, HandlesRapidJsonDocument) {
     EXPECT_TRUE(v.IsObject());
     EXPECT_TRUE(v.HasMember("hello"));
     EXPECT_STREQ(v["hello"].GetString(), "world");
+}
+
+TEST_F(AnyToJsonValueTest, HandlesMapStringString) {
+    std::map<std::string, std::string> test_map;
+    test_map["key1"] = "value1";
+    test_map["key2"] = "value2";
+
+    rapidjson::Value v = any_to_json_value(test_map, allocator);
+    EXPECT_TRUE(v.IsObject());
+    EXPECT_TRUE(v.HasMember("key1"));
+    EXPECT_STREQ(v["key1"].GetString(), "value1");
+    EXPECT_TRUE(v.HasMember("key2"));
+    EXPECT_STREQ(v["key2"].GetString(), "value2");
 }
