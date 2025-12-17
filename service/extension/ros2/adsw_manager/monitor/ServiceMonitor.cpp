@@ -32,7 +32,7 @@ void ServiceMonitor::Finalize() {
     ros_service_node_list_.clear();
 }
 
-void ServiceMonitor::UpdateServiceState(UpdateServiceInfo info) {
+void ServiceMonitor::UpdateServiceState(UpdateServiceInfo& info) {
     LOG_DEBUG("ServiceMonitor::UpdateServiceState start ");
     
     std::shared_ptr<ServiceRegistry> registry = ADSWManager::Get()->GetServiceRegistry();

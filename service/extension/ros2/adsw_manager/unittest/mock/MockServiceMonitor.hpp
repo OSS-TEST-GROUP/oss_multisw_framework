@@ -42,7 +42,7 @@ bool ServiceMonitor::Initialize() {
 void ServiceMonitor::Finalize() {
     Mock_ServiceMonitor->Finalize();
 }
-void ServiceMonitor::UpdateServiceState(UpdateServiceInfo info) {
+void ServiceMonitor::UpdateServiceState(UpdateServiceInfo& info) {
     Mock_ServiceMonitor->UpdateServiceState(info);
 }
 void ServiceMonitor::NotifyServiceState() {

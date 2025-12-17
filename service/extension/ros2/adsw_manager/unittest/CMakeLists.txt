@@ -45,6 +45,7 @@ add_executable ( ADSWTypeConvertTest TypeConvertTest.cpp )
 add_executable ( ADSWServiceMonitorTest ServiceMonitorTest.cpp
                  mock/MockADSWManager.cpp
                  ../monitor/ServiceMonitor.cpp
+                 ../monitor/UpdateServiceInfo.cpp
                  ${GENERATED_DIR}/lifecycle/NotifyServiceStatePubSubTypes.cxx
                  ${GENERATED_DIR}/lifecycle/NotifyServiceStateTypeObjectSupport.cxx
                  ${GENERATED_DIR}/lifecycle/LifecycleCommonPubSubTypes.cxx
