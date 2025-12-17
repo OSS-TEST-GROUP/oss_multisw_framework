@@ -271,6 +271,9 @@ TEST_F(DDSMessageEndpointReadTest, ReadNotifyServiceState_Success) {
     // Wait for message to arrive
     WaitForDiscovery(100);
     
+    // Trigger OnDataAvailable() to exercise the concrete endpoint's implementation
+    reader_endpoint->OnDataAvailable();
+    
     // Read message from the reader endpoint
     lifecyclemgr::NotifyServiceState recv_msg;
     bool read_result = reader_endpoint->ReadMessage(recv_msg);
@@ -309,6 +312,11 @@ TEST_F(DDSMessageEndpointReadTest, ReadNotifyServiceState_MultipleMessages) {
         msg.service_state_list().push_back(lifecyclemgr::ServiceState::RUNNING);
         ASSERT_TRUE(writer_endpoint->Write(&msg));
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+    
+    // Trigger OnDataAvailable() for each message
+    for (int i = 0; i < 3; ++i) {
+        reader_endpoint->OnDataAvailable();
     }
     
     // Try to read all messages
@@ -352,6 +360,9 @@ TEST_F(DDSMessageEndpointReadTest, ReadStartServiceRequest_Success) {
     ASSERT_TRUE(writer_endpoint->Write(&send_msg));
     WaitForDiscovery(100);
     
+    // Trigger OnDataAvailable() to exercise the concrete endpoint's implementation
+    reader_endpoint->OnDataAvailable();
+    
     // Read message
     lifecyclemgr::StartServiceRequest recv_msg;
     bool read_result = reader_endpoint->ReadMessage(recv_msg);
@@ -388,6 +399,9 @@ TEST_F(DDSMessageEndpointReadTest, ReadStartServiceRequest_EmptyServiceName) {
     ASSERT_TRUE(writer_endpoint->Write(&send_msg));
     WaitForDiscovery(100);
     
+    // Trigger OnDataAvailable()
+    reader_endpoint->OnDataAvailable();
+    
     lifecyclemgr::StartServiceRequest recv_msg;
     bool read_result = reader_endpoint->ReadMessage(recv_msg);
     
@@ -423,6 +437,9 @@ TEST_F(DDSMessageEndpointReadTest, ReadStopServiceRequest_Success) {
     ASSERT_TRUE(writer_endpoint->Write(&send_msg));
     WaitForDiscovery(100);
 
+    // Trigger OnDataAvailable()
+    reader_endpoint->OnDataAvailable();
+
     lifecyclemgr::StopServiceRequest recv_msg;
     bool read_result = reader_endpoint->ReadMessage(recv_msg);
     
@@ -456,6 +473,9 @@ TEST_F(DDSMessageEndpointReadTest, ReadStopServiceRequest_LongServiceName) {
     
     ASSERT_TRUE(writer_endpoint->Write(&send_msg));
     WaitForDiscovery(100);
+
+    // Trigger OnDataAvailable()
+    reader_endpoint->OnDataAvailable();
 
     lifecyclemgr::StopServiceRequest recv_msg;
     if (reader_endpoint->ReadMessage(recv_msg)) {
@@ -491,6 +511,9 @@ TEST_F(DDSMessageEndpointReadTest, ReadGetServiceStateRequest_Success) {
     ASSERT_TRUE(writer_endpoint->Write(&send_msg));
     WaitForDiscovery(100);
 
+    // Trigger OnDataAvailable()
+    reader_endpoint->OnDataAvailable();
+
     lifecyclemgr::GetServiceStateRequest recv_msg;
     bool read_result = reader_endpoint->ReadMessage(recv_msg);
     
@@ -524,6 +547,9 @@ TEST_F(DDSMessageEndpointReadTest, ReadGetServiceStateRequest_SpecialCharacters)
     ASSERT_TRUE(writer_endpoint->Write(&send_msg));
     WaitForDiscovery(100);
 
+    // Trigger OnDataAvailable()
+    reader_endpoint->OnDataAvailable();
+
     lifecyclemgr::GetServiceStateRequest recv_msg;
     if (reader_endpoint->ReadMessage(recv_msg)) {
         if (!recv_msg.service_list().empty()) {
@@ -555,6 +581,9 @@ TEST_F(DDSMessageEndpointReadTest, ReadUpdateServiceListRequest_Success) {
     
     ASSERT_TRUE(writer_endpoint->Write(&send_msg));
     WaitForDiscovery(100);
+
+    // Trigger OnDataAvailable()
+    reader_endpoint->OnDataAvailable();
 
     lifecyclemgr::UpdateServiceListRequest recv_msg;
     bool read_result = reader_endpoint->ReadMessage(recv_msg);
@@ -602,6 +631,9 @@ TEST_F(DDSMessageEndpointReadTest, ReadUpdateServiceListRequest_WithServiceList)
     ASSERT_TRUE(writer_endpoint->Write(&send_msg));
     WaitForDiscovery(100);
 
+    // Trigger OnDataAvailable()
+    reader_endpoint->OnDataAvailable();
+
     lifecyclemgr::UpdateServiceListRequest recv_msg;
     if (reader_endpoint->ReadMessage(recv_msg)) {
         EXPECT_EQ(recv_msg.service_list().size(), 2);
@@ -637,6 +669,9 @@ TEST_F(DDSMessageEndpointReadTest, ReadAdswServiceStatus_Success) {
     ASSERT_TRUE(writer_endpoint->Write(&send_msg));
     WaitForDiscovery(100);
     
+    // Trigger OnDataAvailable()
+    reader_endpoint->OnDataAvailable();
+    
     adswmgr::AdswServiceStatus recv_msg;
     bool read_result = reader_endpoint->ReadMessage(recv_msg);
     
@@ -666,6 +701,9 @@ TEST_F(DDSMessageEndpointReadTest, ReadAdswServiceStatus_MultipleServices) {
     
     ASSERT_TRUE(writer_endpoint->Write(&send_msg));
     WaitForDiscovery(100);
+    
+    // Trigger OnDataAvailable()
+    reader_endpoint->OnDataAvailable();
     
     adswmgr::AdswServiceStatus recv_msg;
     if (reader_endpoint->ReadMessage(recv_msg)) {
