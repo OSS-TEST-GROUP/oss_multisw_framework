@@ -443,6 +443,211 @@ TEST_F(DDSMessageEndpointTest, ConstructorSetsDefaultValues) {
     EXPECT_FALSE(ep.WasOnDataAvailableCalled());
 }
 
+// ============================================================================
+// Enhanced Coverage Tests for Error Branches and Edge Cases
+// ============================================================================
+// Note: Due to the tight coupling with Fast DDS, we cannot easily mock the
+// DDS infrastructure to test error branches in Initialize(). However, we can
+// still improve coverage by testing edge cases in the methods we can control.
+// ============================================================================
+
+TEST_F(DDSMessageEndpointTest, GetPendingWriteData_AlwaysReturnsZero) {
+    // Test that GetPendingWriteData always returns 0 (as per implementation)
+    EXPECT_EQ(endpoint_->GetPendingWriteData(), 0);
+    
+    // Even after attempts to initialize (which will fail without proper DDS setup)
+    endpoint_->Initialize(nullptr, nullptr, nullptr);
+    EXPECT_EQ(endpoint_->GetPendingWriteData(), 0);
+}
+
+TEST_F(DDSMessageEndpointTest, Read_Template_WithDifferentTypes) {
+    // Test the Read template function with various types to ensure template
+    // instantiation works correctly
+    
+    struct SimpleStruct {
+        int id;
+    };
+    
+    struct ComplexStruct {
+        int id;
+        double value;
+        std::string name;
+    };
+    
+    SimpleStruct simple;
+    ComplexStruct complex;
+    int primitive;
+    
+    // All should return false without a valid data_reader_
+    EXPECT_FALSE(endpoint_->Read(simple));
+    EXPECT_FALSE(endpoint_->Read(complex));
+    EXPECT_FALSE(endpoint_->Read(primitive));
+}
+
+TEST_F(DDSMessageEndpointTest, OnPublicationMatched_BoundaryValues) {
+    // Test with boundary values for current_count
+    PublicationMatchedStatus status;
+    
+    // Max value
+    status.current_count_change = 1;
+    status.current_count = INT32_MAX;
+    EXPECT_NO_THROW(endpoint_->on_publication_matched(nullptr, status));
+    
+    // Min value after decrement
+    status.current_count_change = -1;
+    status.current_count = 0;
+    EXPECT_NO_THROW(endpoint_->on_publication_matched(nullptr, status));
+}
+
+TEST_F(DDSMessageEndpointTest, OnSubscriptionMatched_BoundaryValues) {
+    // Test with boundary values for current_count
+    SubscriptionMatchedStatus status;
+    
+    // Max value
+    status.current_count_change = 1;
+    status.current_count = INT32_MAX;
+    EXPECT_NO_THROW(endpoint_->on_subscription_matched(nullptr, status));
+    
+    // Min value
+    status.current_count_change = -1;
+    status.current_count = 0;
+    EXPECT_NO_THROW(endpoint_->on_subscription_matched(nullptr, status));
+}
+
+TEST_F(DDSMessageEndpointTest, OnPublicationMatched_NegativeValues) {
+    // Test with large negative count change values
+    PublicationMatchedStatus status;
+    status.current_count_change = -1000;
+    status.current_count = 0;
+    
+    EXPECT_NO_THROW(endpoint_->on_publication_matched(nullptr, status));
+}
+
+TEST_F(DDSMessageEndpointTest, OnSubscriptionMatched_LargePositiveValues) {
+    // Test with large positive count change values
+    SubscriptionMatchedStatus status;
+    status.current_count_change = 1000;
+    status.current_count = 1000;
+    
+    EXPECT_NO_THROW(endpoint_->on_subscription_matched(nullptr, status));
+}
+
+TEST_F(DDSMessageEndpointTest, GetPendingReadData_Consistency) {
+    // Verify that GetPendingReadData returns 0 consistently without initialization
+    for (int i = 0; i < 10; ++i) {
+        EXPECT_EQ(endpoint_->GetPendingReadData(), 0);
+    }
+}
+
+TEST_F(DDSMessageEndpointTest, Write_RepeatedCalls) {
+    // Test Write with repeated calls (all should return false without initialization)
+    int data1 = 1, data2 = 2, data3 = 3;
+    
+    EXPECT_FALSE(endpoint_->Write(&data1));
+    EXPECT_FALSE(endpoint_->Write(&data2));
+    EXPECT_FALSE(endpoint_->Write(&data3));
+}
+
+TEST_F(DDSMessageEndpointTest, Finalize_IdempotencyTest) {
+    // Test that Finalize can be called multiple times safely (idempotency)
+    for (int i = 0; i < 5; ++i) {
+        EXPECT_NO_THROW(endpoint_->Finalize());
+    }
+}
+
+TEST_F(DDSMessageEndpointTest, OnDataAvailable_WithNonNullReader) {
+    // Test on_data_available with non-null reader (though we can't use it)
+    // This exercises the code path that leads to OnDataAvailable()
+    DomainParticipant* fake_participant = reinterpret_cast<DomainParticipant*>(0x1234);
+    DataReader* fake_reader = reinterpret_cast<DataReader*>(0x5678);
+    
+    EXPECT_FALSE(endpoint_->WasOnDataAvailableCalled());
+    endpoint_->on_data_available(fake_reader);
+    EXPECT_TRUE(endpoint_->WasOnDataAvailableCalled());
+}
+
+TEST_F(DDSMessageEndpointTest, OnPublicationMatched_SequenceOfEvents) {
+    // Test a realistic sequence of publication matched events
+    PublicationMatchedStatus status;
+    
+    // First subscriber connects
+    status.current_count_change = 1;
+    status.current_count = 1;
+    EXPECT_NO_THROW(endpoint_->on_publication_matched(nullptr, status));
+    
+    // Second subscriber connects
+    status.current_count_change = 1;
+    status.current_count = 2;
+    EXPECT_NO_THROW(endpoint_->on_publication_matched(nullptr, status));
+    
+    // First subscriber disconnects
+    status.current_count_change = -1;
+    status.current_count = 1;
+    EXPECT_NO_THROW(endpoint_->on_publication_matched(nullptr, status));
+    
+    // Second subscriber disconnects
+    status.current_count_change = -1;
+    status.current_count = 0;
+    EXPECT_NO_THROW(endpoint_->on_publication_matched(nullptr, status));
+}
+
+TEST_F(DDSMessageEndpointTest, OnSubscriptionMatched_SequenceOfEvents) {
+    // Test a realistic sequence of subscription matched events
+    SubscriptionMatchedStatus status;
+    
+    // Publisher connects
+    status.current_count_change = 1;
+    status.current_count = 1;
+    EXPECT_NO_THROW(endpoint_->on_subscription_matched(nullptr, status));
+    
+    // Publisher disconnects
+    status.current_count_change = -1;
+    status.current_count = 0;
+    EXPECT_NO_THROW(endpoint_->on_subscription_matched(nullptr, status));
+    
+    // Publisher reconnects
+    status.current_count_change = 1;
+    status.current_count = 1;
+    EXPECT_NO_THROW(endpoint_->on_subscription_matched(nullptr, status));
+}
+
+TEST_F(DDSMessageEndpointTest, SetTopic_SpecialCharacters) {
+    // Test topic names with special characters
+    endpoint_->SetTopic("/test/topic/with/slashes");
+    EXPECT_EQ(endpoint_->GetTopic(), "/test/topic/with/slashes");
+    
+    endpoint_->SetTopic("topic_with_underscores");
+    EXPECT_EQ(endpoint_->GetTopic(), "topic_with_underscores");
+    
+    endpoint_->SetTopic("topic-with-dashes");
+    EXPECT_EQ(endpoint_->GetTopic(), "topic-with-dashes");
+}
+
+TEST_F(DDSMessageEndpointTest, SetTypeName_SpecialCharacters) {
+    // Test type names with special characters
+    endpoint_->SetTypeName("namespace::TypeName");
+    EXPECT_EQ(endpoint_->GetTypeName(), "namespace::TypeName");
+    
+    endpoint_->SetTypeName("Type_With_Underscores");
+    EXPECT_EQ(endpoint_->GetTypeName(), "Type_With_Underscores");
+}
+
+TEST_F(DDSMessageEndpointTest, GetTypeSupport_SetAndClear) {
+    // Test setting and clearing type support
+    auto ts1 = std::make_shared<TypeSupport>();
+    endpoint_->SetTypeSupport(ts1);
+    EXPECT_EQ(endpoint_->GetTypeSupport(), ts1);
+    
+    // Clear by setting to nullptr
+    endpoint_->SetTypeSupport(nullptr);
+    EXPECT_EQ(endpoint_->GetTypeSupport(), nullptr);
+    
+    // Set again
+    auto ts2 = std::make_shared<TypeSupport>();
+    endpoint_->SetTypeSupport(ts2);
+    EXPECT_EQ(endpoint_->GetTypeSupport(), ts2);
+}
+
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);

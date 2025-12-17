@@ -76,9 +76,13 @@ bool DDSMessageEndpoint::Write(void* value) {
     LOG_DEBUG("write message. " << GetTopic() );
 
     if (data_writer_) {
-        bool ret = data_writer_->write(value);
-        LOG_DEBUG("write message. " << GetTopic() << ", return = " << ret );
-        return ret;
+        auto ret = data_writer_->write(value);
+        if (ret != eprosima::fastdds::dds::RETCODE_OK)
+        {
+            LOG_DEBUG("Failed to write message: " << GetTopic() << ", return = " << ret  );
+            return false;
+        }
+        return true;
     }
     return false;
 }
