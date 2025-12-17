@@ -136,6 +136,30 @@ add_executable( ADSWUpdateServiceListEndpointTest UpdateServiceListEndpointTest.
                 ${GENERATED_DIR}/lifecycle/LifecycleCommonTypeObjectSupport.cxx        
 )
 
+add_executable( ADSWConcreteEndpointIntegrationTest ConcreteEndpointIntegrationTest.cpp
+                mock/MockADSWManager.cpp
+                ../endpoint/StartServiceEndPoint.cpp
+                ../endpoint/StopServiceEndPoint.cpp
+                ../endpoint/GetServiceStateEndPoint.cpp
+                ../endpoint/NotifyServiceStateEndPoint.cpp
+                ../endpoint/UpdateServiceListEndPoint.cpp
+                ../endpoint/AdswServiceStatusEndPoint.cpp
+                ../transmitter/DDSMessageEndpoint.cpp
+                ${GENERATED_DIR}/lifecycle/StartServiceRequestPubSubTypes.cxx
+                ${GENERATED_DIR}/lifecycle/StartServiceRequestTypeObjectSupport.cxx
+                ${GENERATED_DIR}/lifecycle/StopServiceRequestPubSubTypes.cxx
+                ${GENERATED_DIR}/lifecycle/StopServiceRequestTypeObjectSupport.cxx
+                ${GENERATED_DIR}/lifecycle/GetServiceStateRequestPubSubTypes.cxx
+                ${GENERATED_DIR}/lifecycle/GetServiceStateRequestTypeObjectSupport.cxx
+                ${GENERATED_DIR}/lifecycle/NotifyServiceStatePubSubTypes.cxx
+                ${GENERATED_DIR}/lifecycle/NotifyServiceStateTypeObjectSupport.cxx
+                ${GENERATED_DIR}/lifecycle/UpdateServiceListRequestPubSubTypes.cxx
+                ${GENERATED_DIR}/lifecycle/UpdateServiceListRequestTypeObjectSupport.cxx
+                ${GENERATED_DIR}/lifecycle/LifecycleCommonPubSubTypes.cxx
+                ${GENERATED_DIR}/lifecycle/LifecycleCommonTypeObjectSupport.cxx
+                ${GENERATED_DIR}/ros2/AdswServiceStatusPubSubTypes.cxx
+                ${GENERATED_DIR}/ros2/AdswServiceStatusTypeObjectSupport.cxx
+)
 
 # Control directory tests
 add_executable( ADSWContainerControllerTest ContinerControllerTest.cpp
@@ -175,6 +199,7 @@ gtest_discover_tests ( ADSWNotifyServiceStateEndPointTest )
 gtest_discover_tests ( ADSWStartServiceEndpointTest )   
 gtest_discover_tests ( ADSWStopServiceEndpointTest )
 gtest_discover_tests ( ADSWUpdateServiceListEndpointTest )
+gtest_discover_tests ( ADSWConcreteEndpointIntegrationTest )
 gtest_discover_tests ( ADSWContainerControllerTest )
 gtest_discover_tests ( ADSWROS2NodeControllerTest )
 gtest_discover_tests ( ADSWROS2LifecycleControllerTest )
@@ -199,6 +224,7 @@ install ( TARGETS
           ADSWStartServiceEndpointTest
           ADSWStopServiceEndpointTest
           ADSWUpdateServiceListEndpointTest
+          ADSWConcreteEndpointIntegrationTest
           ADSWContainerControllerTest
           ADSWROS2NodeControllerTest
           ADSWROS2LifecycleControllerTest
