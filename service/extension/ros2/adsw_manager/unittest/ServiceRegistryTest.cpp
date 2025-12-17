@@ -974,6 +974,327 @@ TEST_F(ServiceRegistryTest, LoadServiceList_DuplicatePackageNames_TC060) {
     std::remove(testFile.c_str());
 }
 
+// ============================================================================
+// ProcessGetServiceStateRequest Tests
+// ============================================================================
+
+TEST_F(ServiceRegistryTest, ProcessGetServiceStateRequest_NullMessage_TC061) {
+    // Test with null message pointer
+    bool result = registry->ProcessGetServiceStateRequest(nullptr);
+    EXPECT_FALSE(result);
+}
+
+TEST_F(ServiceRegistryTest, ProcessGetServiceStateRequest_ValidRequest_TC062) {
+    // Setup: Add a service to registry
+    auto service = MakeService("TestService");
+    EXPECT_CALL(*dynamic_cast<MockService*>(service.get()), GetServiceState())
+        .WillOnce(Return(ServiceState::RUNNING));
+    
+    registry->AddService(service, "GroupA");
+    
+    // Create mock transmitter and manager
+    auto mockTransmitter = std::make_shared<MockDDSTransmitter>();
+    auto mockManager = std::make_shared<MockADSWManager>();
+
+    // Setup expectations - IMPORTANT: Set expectation on the actual object
+    EXPECT_CALL(*mockTransmitter, SendMessage(MessageType::GET_SERVICE_STATE_RESPONSE, _))
+        .WillOnce(Return(true));
+    EXPECT_CALL(*mockManager, GetTransmitter())
+        .WillOnce(Return(mockTransmitter));
+    
+    // Temporarily set the mock manager
+    Mock_ADSWManager = mockManager.get();
+    Mock_DDSTransmitter = mockTransmitter.get();
+  
+    // Create request message
+    lifecyclemgr::GetServiceStateRequest request;
+    request.os_type(lifecyclemgr::OsType::ROS2);
+    request.service_list().push_back("TestService");
+    request.is_all_service(false);
+    
+    // Execute
+    bool result = registry->ProcessGetServiceStateRequest(&request);
+    
+    // Verify
+    EXPECT_TRUE(result);
+    
+    // Cleanup
+    Mock_ADSWManager = nullptr;
+    Mock_DDSTransmitter = nullptr;
+}
+
+TEST_F(ServiceRegistryTest, ProcessGetServiceStateRequest_ServiceNotFound_TC063) {
+    // Setup mock transmitter and manager
+    auto mockTransmitter = std::make_shared<MockDDSTransmitter>();
+    auto mockManager = std::make_shared<MockADSWManager>();
+    
+    EXPECT_CALL(*mockTransmitter, SendMessage(MessageType::GET_SERVICE_STATE_RESPONSE, _))
+        .WillOnce(Return(true));
+    EXPECT_CALL(*mockManager, GetTransmitter())
+        .WillOnce(Return(mockTransmitter));
+    
+    Mock_ADSWManager = mockManager.get();
+    Mock_DDSTransmitter = mockTransmitter.get();
+  
+    // Create request for non-existent service
+    lifecyclemgr::GetServiceStateRequest request;
+    request.os_type(lifecyclemgr::OsType::ROS2);
+    request.service_list().push_back("NonExistentService");
+    request.is_all_service(false);
+    
+    // Execute
+    bool result = registry->ProcessGetServiceStateRequest(&request);
+    
+    // Verify - should still return true even if service not found
+    EXPECT_TRUE(result);
+    
+    Mock_ADSWManager = nullptr;
+    Mock_DDSTransmitter = nullptr;
+}
+
+TEST_F(ServiceRegistryTest, ProcessGetServiceStateRequest_MultipleServices_TC064) {
+    // Add multiple services
+    auto service1 = MakeService("Service1");
+    auto service2 = MakeService("Service2");
+    
+    EXPECT_CALL(*dynamic_cast<MockService*>(service1.get()), GetServiceState())
+        .WillOnce(Return(ServiceState::RUNNING));
+    EXPECT_CALL(*dynamic_cast<MockService*>(service2.get()), GetServiceState())
+        .WillOnce(Return(ServiceState::NOT_RUNNING));
+    
+    registry->AddService(service1, "GroupA");
+    registry->AddService(service2, "GroupB");
+    
+    // Setup mocks
+    auto mockTransmitter = std::make_shared<MockDDSTransmitter>();
+    auto mockManager = std::make_shared<MockADSWManager>();
+    
+    EXPECT_CALL(*mockTransmitter, SendMessage(MessageType::GET_SERVICE_STATE_RESPONSE, _))
+        .WillOnce(Return(true));
+    EXPECT_CALL(*mockManager, GetTransmitter())
+        .WillOnce(Return(mockTransmitter));
+    
+    Mock_ADSWManager = mockManager.get();
+    Mock_DDSTransmitter = mockTransmitter.get();
+
+    // Create request for multiple services
+    lifecyclemgr::GetServiceStateRequest request;
+    request.os_type(lifecyclemgr::OsType::ROS2);
+    request.service_list().push_back("Service1");
+    request.service_list().push_back("Service2");
+    request.is_all_service(false);
+    
+    // Execute
+    bool result = registry->ProcessGetServiceStateRequest(&request);
+    
+    EXPECT_TRUE(result);
+    
+    Mock_ADSWManager = nullptr;
+    Mock_DDSTransmitter = nullptr;
+}
+
+TEST_F(ServiceRegistryTest, ProcessGetServiceStateRequest_NonROS2OsType_TC065) {
+    // Test with non-ROS2 OS type
+    lifecyclemgr::GetServiceStateRequest request;
+    request.os_type(lifecyclemgr::OsType::AGL);  // Not ROS2
+    request.service_list().push_back("TestService");
+    
+    // Execute - should return true without processing
+    bool result = registry->ProcessGetServiceStateRequest(&request);
+    
+    EXPECT_TRUE(result);
+}
+
+// ============================================================================
+// ProcessUpdateServiceListRequest Tests  
+// ============================================================================
+
+TEST_F(ServiceRegistryTest, ProcessUpdateServiceListRequest_ServiceListNotReady_TC066) {
+    // By default, ready_service_list_ should be false
+    // Setup mocks
+    auto mockTransmitter = std::make_shared<MockDDSTransmitter>();
+    auto mockManager = std::make_shared<MockADSWManager>();
+
+    ON_CALL(*mockTransmitter, SendMessage(MessageType::GET_SERVICE_STATE_RESPONSE, _)).WillByDefault(Return(true));
+    EXPECT_CALL(*mockManager, GetTransmitter())
+        .WillOnce(Return(mockTransmitter));
+    
+    Mock_ADSWManager = mockManager.get();
+    Mock_DDSTransmitter = mockTransmitter.get();
+
+    bool result = registry->ProcessUpdateServiceListRequest();
+    EXPECT_FALSE(result);
+    
+    Mock_ADSWManager = nullptr;
+    Mock_DDSTransmitter = nullptr;
+}
+
+TEST_F(ServiceRegistryTest, ProcessUpdateServiceListRequest_Success_TC067) {
+    // Add a service
+    auto service = MakeService("TestService");
+    
+    EXPECT_CALL(*dynamic_cast<MockService*>(service.get()), GetName())
+        .WillRepeatedly(Return("TestService"));
+    EXPECT_CALL(*dynamic_cast<MockService*>(service.get()), GetServiceType())
+        .WillOnce(Return(ServiceType::NORMAL));
+    EXPECT_CALL(*dynamic_cast<MockService*>(service.get()), GetRecoveryPolicy())
+        .WillOnce(Return(RecoveryPolicy::ALWAYS));
+    EXPECT_CALL(*dynamic_cast<MockService*>(service.get()), IsEnabled())
+        .WillOnce(Return(true));
+    
+    // Setup mocks
+    auto mockEndpoint = std::make_shared<MockDDSMessageEndpoint>();
+    auto mockTransmitter = std::make_shared<MockDDSTransmitter>();
+    auto mockManager = std::make_shared<MockADSWManager>();
+    
+    EXPECT_CALL(*mockEndpoint, Write(_))
+        .WillOnce(Return(true));
+    EXPECT_CALL(*mockTransmitter, GetMessageEndpoint(_))
+        .WillOnce(Return(mockEndpoint));
+    EXPECT_CALL(*mockManager, GetTopic(MessageType::UPDATE_SERVICE_LIST_REQUEST))
+        .WillOnce(Return("update_service_list_topic"));
+    EXPECT_CALL(*mockManager, GetTransmitter())
+        .WillOnce(Return(mockTransmitter));
+    
+    Mock_ADSWManager = mockManager.get();
+    Mock_DDSTransmitter = mockTransmitter.get();
+    Mock_DDSMessageEndpoint = mockEndpoint.get();
+
+    registry->AddService(service, "GroupA");
+    
+    // Load service list to set ready flag
+    const std::string testFile = "/tmp/test_update_list_tc067.yaml";
+    std::ofstream ofs(testFile);
+    ofs << "spec:\n"
+        << "  containers:\n"
+        << "    - name: container1\n"
+        << "      command: [\"/bin/bash\", \"-c\"]\n"
+        << "      args:\n"
+        << "        - \"ros2 launch pkg1 launch1.py\"\n";
+    ofs.close();
+    
+    registry->LoadServiceList(testFile);
+
+    // Execute
+    bool result = registry->ProcessUpdateServiceListRequest();
+    
+    EXPECT_TRUE(result);
+    
+    std::remove(testFile.c_str());
+    Mock_ADSWManager = nullptr;
+    Mock_DDSTransmitter = nullptr;
+    Mock_DDSMessageEndpoint = nullptr;
+}
+
+TEST_F(ServiceRegistryTest, ProcessUpdateServiceListRequest_EndpointNull_TC068) {
+    // Load service list to set ready flag
+    const std::string testFile = "/tmp/test_update_list_tc068.yaml";
+    std::ofstream ofs(testFile);
+    ofs << "spec:\n"
+        << "  containers:\n"
+        << "    - name: container1\n"
+        << "      command: [\"/bin/bash\", \"-c\"]\n"
+        << "      args:\n"
+        << "        - \"ros2 launch pkg1 launch1.py\"\n";
+    ofs.close();
+
+    // Setup mocks to return null endpoint
+    auto mockTransmitter = std::make_shared<MockDDSTransmitter>();
+    auto mockManager = std::make_shared<MockADSWManager>();
+    
+    EXPECT_CALL(*mockTransmitter, GetMessageEndpoint(_))
+        .WillOnce(Return(nullptr));  // Return null endpoint
+    EXPECT_CALL(*mockManager, GetTopic(MessageType::UPDATE_SERVICE_LIST_REQUEST))
+        .WillOnce(Return("update_service_list_topic"));
+    EXPECT_CALL(*mockManager, GetTransmitter())
+        .WillOnce(Return(mockTransmitter));
+
+    Mock_ADSWManager = mockManager.get();
+    Mock_DDSTransmitter = mockTransmitter.get();
+    Mock_Service = new MockService("test");
+
+    registry->LoadServiceList(testFile);
+    
+    // Execute
+    bool result = registry->ProcessUpdateServiceListRequest();
+    
+    EXPECT_FALSE(result);
+    
+    std::remove(testFile.c_str());
+    Mock_ADSWManager = nullptr;
+    Mock_DDSTransmitter = nullptr;
+    Mock_Service = nullptr;
+}
+
+TEST_F(ServiceRegistryTest, ProcessUpdateServiceListRequest_MultipleServices_TC069) {
+    // Add multiple services
+    auto service1 = MakeService("Service1");
+    auto service2 = MakeService("Service2");
+    
+    EXPECT_CALL(*dynamic_cast<MockService*>(service1.get()), GetName())
+        .WillRepeatedly(Return("Service1"));
+    EXPECT_CALL(*dynamic_cast<MockService*>(service1.get()), GetServiceType())
+        .WillOnce(Return(ServiceType::NORMAL));
+    EXPECT_CALL(*dynamic_cast<MockService*>(service1.get()), GetRecoveryPolicy())
+        .WillOnce(Return(RecoveryPolicy::ALWAYS));
+    EXPECT_CALL(*dynamic_cast<MockService*>(service1.get()), IsEnabled())
+        .WillOnce(Return(true));
+    
+    EXPECT_CALL(*dynamic_cast<MockService*>(service2.get()), GetName())
+        .WillRepeatedly(Return("Service2"));
+    EXPECT_CALL(*dynamic_cast<MockService*>(service2.get()), GetServiceType())
+        .WillOnce(Return(ServiceType::ONESHOT));
+    EXPECT_CALL(*dynamic_cast<MockService*>(service2.get()), GetRecoveryPolicy())
+        .WillOnce(Return(RecoveryPolicy::ON_FAILURE));
+    EXPECT_CALL(*dynamic_cast<MockService*>(service2.get()), IsEnabled())
+        .WillOnce(Return(false));
+    
+    registry->AddService(service1, "GroupA");
+    registry->AddService(service2, "GroupB");
+    
+    // Load service list
+    const std::string testFile = "/tmp/test_update_list_tc069.yaml";
+    std::ofstream ofs(testFile);
+    ofs << "spec:\n"
+        << "  containers:\n"
+        << "    - name: container1\n"
+        << "      command: [\"/bin/bash\", \"-c\"]\n"
+        << "      args:\n"
+        << "        - \"ros2 launch pkg1 launch1.py\"\n";
+    ofs.close();
+    
+
+    // Setup mocks
+    auto mockEndpoint = std::make_shared<MockDDSMessageEndpoint>();
+    auto mockTransmitter = std::make_shared<MockDDSTransmitter>();
+    auto mockManager = std::make_shared<MockADSWManager>();
+    
+    EXPECT_CALL(*mockEndpoint, Write(_))
+        .WillOnce(Return(true));
+    EXPECT_CALL(*mockTransmitter, GetMessageEndpoint(_))
+        .WillOnce(Return(mockEndpoint));
+    EXPECT_CALL(*mockManager, GetTopic(MessageType::UPDATE_SERVICE_LIST_REQUEST))
+        .WillOnce(Return("update_service_list_topic"));
+    EXPECT_CALL(*mockManager, GetTransmitter())
+        .WillOnce(Return(mockTransmitter));
+    
+    Mock_ADSWManager = mockManager.get();
+    Mock_DDSTransmitter = mockTransmitter.get();
+    Mock_DDSMessageEndpoint = mockEndpoint.get();
+
+    registry->LoadServiceList(testFile);
+    
+    // Execute
+    bool result = registry->ProcessUpdateServiceListRequest();
+    
+    EXPECT_TRUE(result);
+    
+    std::remove(testFile.c_str());
+    Mock_ADSWManager = nullptr;
+    Mock_DDSTransmitter = nullptr;
+    Mock_DDSMessageEndpoint = nullptr;
+}
+
 int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
