@@ -78,6 +78,23 @@ add_executable( ADSWMessageQueueTest MessageQueueTest.cpp
                 ../transmitter/MessageQueue.cpp)
 add_executable( ADSWDDSMessageEndpointTest DDSMessageEndpointTest.cpp 
                 ../transmitter/DDSMessageEndpoint.cpp)
+add_executable( ADSWDDSMessageEndpointReadTest DDSMessageEndpointReadTest.cpp 
+                ../transmitter/DDSMessageEndpoint.cpp
+                ${GENERATED_DIR}/lifecycle/NotifyServiceStatePubSubTypes.cxx
+                ${GENERATED_DIR}/lifecycle/NotifyServiceStateTypeObjectSupport.cxx
+                ${GENERATED_DIR}/lifecycle/StartServiceRequestPubSubTypes.cxx
+                ${GENERATED_DIR}/lifecycle/StartServiceRequestTypeObjectSupport.cxx
+                ${GENERATED_DIR}/lifecycle/StopServiceRequestPubSubTypes.cxx
+                ${GENERATED_DIR}/lifecycle/StopServiceRequestTypeObjectSupport.cxx
+                ${GENERATED_DIR}/lifecycle/GetServiceStateRequestPubSubTypes.cxx
+                ${GENERATED_DIR}/lifecycle/GetServiceStateRequestTypeObjectSupport.cxx
+                ${GENERATED_DIR}/lifecycle/UpdateServiceListRequestPubSubTypes.cxx
+                ${GENERATED_DIR}/lifecycle/UpdateServiceListRequestTypeObjectSupport.cxx
+                ${GENERATED_DIR}/lifecycle/LifecycleCommonPubSubTypes.cxx
+                ${GENERATED_DIR}/lifecycle/LifecycleCommonTypeObjectSupport.cxx
+                ${GENERATED_DIR}/ros2/AdswServiceStatusPubSubTypes.cxx
+                ${GENERATED_DIR}/ros2/AdswServiceStatusTypeObjectSupport.cxx
+)
 add_executable( ADSWGetServiceStateEndPointTest GetServiceStateEndPointTest.cpp
                 mock/MockADSWManager.cpp
                 ../endpoint/GetServiceStateEndPoint.cpp
@@ -152,6 +169,7 @@ gtest_discover_tests ( ADSWROSDiscoveryInfoEndpointTest )
 gtest_discover_tests ( ADSWManager )
 gtest_discover_tests ( ADSWMessageQueueTest )
 gtest_discover_tests ( ADSWDDSMessageEndpointTest )
+gtest_discover_tests ( ADSWDDSMessageEndpointReadTest )
 gtest_discover_tests ( ADSWGetServiceStateEndPointTest )
 gtest_discover_tests ( ADSWNotifyServiceStateEndPointTest )
 gtest_discover_tests ( ADSWStartServiceEndpointTest )   
@@ -175,6 +193,7 @@ install ( TARGETS
           ADSWManager
           ADSWMessageQueueTest
           ADSWDDSMessageEndpointTest
+          ADSWDDSMessageEndpointReadTest
           ADSWGetServiceStateEndPointTest
           ADSWNotifyServiceStateEndPointTest
           ADSWStartServiceEndpointTest
