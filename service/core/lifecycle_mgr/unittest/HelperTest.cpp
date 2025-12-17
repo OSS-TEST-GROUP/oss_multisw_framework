@@ -2,9 +2,11 @@
 #include <gtest/gtest.h>
 
 #include "include/Helper.hpp"
-//#include "include/TypeConvert.hpp"
-//#include "lifecycle/LifecycleCommon.hpp"
 
+
+#include "mock/mock_service.hpp"
+
+#include "include/TypeConvert.hpp"
 
 using namespace lifecycle_manager;
 
@@ -162,7 +164,7 @@ TEST_F(HelperTest, ManagerStateStr_Terminate) {
 }
 
 // ===== TypeConvert Tests =====
-#if 0
+
 // Test ToServiceState (used in real code: StateMonitor.cpp, ServiceRegistry.cpp)
 TEST_F(HelperTest, TypeConvert_ToServiceState_NotRunning) {
     // This conversion works because it's called with the fully qualified lifecyclemgr:: type
@@ -258,7 +260,7 @@ TEST_F(HelperTest, TypeConvert_ToOsType_AUTOSAR) {
     auto result = TypeConvert::ToOsType(lifecyclemgr::OsType::AUTOSAR);
     EXPECT_EQ(result, lifecycle_manager::OsType::AUTOSAR);
 }
-#endif
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
