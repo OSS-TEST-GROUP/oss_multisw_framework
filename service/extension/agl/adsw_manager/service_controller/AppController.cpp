@@ -11,6 +11,21 @@
 
 namespace {
 
+    using ForkFn   = pid_t(*)();
+    using ExecvpFn = int(*)(const char*, char* const*);
+    using WaitpidFn= pid_t(*)(pid_t, int*, int);
+    using ExitFn   = void(*)(int);
+
+    ForkFn   g_fork   = ::fork;
+    ExecvpFn g_execvp = ::execvp;
+    WaitpidFn g_waitpid = ::waitpid;
+    ExitFn   g_exit   = ::_exit;
+
+    pid_t Fork() { return g_fork(); }
+    int   Execvp(const char* f, char* const* a) { return g_execvp(f, a); }
+    pid_t Waitpid(pid_t p, int* s, int o) { return g_waitpid(p, s, o); }
+    void  ExitNow(int c) { g_exit(c); }
+
     inline std::string ToServiceUnit(const std::string& app_name) {
         if (app_name.size() >= 8 && app_name.rfind(".service") == app_name.size() - 8)
             return app_name;
@@ -33,20 +48,20 @@ namespace {
         }
         argv.push_back(nullptr);
 
-        pid_t pid = fork();
+        pid_t pid = Fork();
         if (pid < 0) {
             std::cerr << "[systemctl] fork failed: " << strerror(errno) << std::endl;
             return -1;
         }
         if (pid == 0) {
             // child
-            execvp("systemctl", argv.data());
+            Execvp("systemctl", argv.data());
             // exec 실패 시
             std::perror("[systemctl] execvp failed");
-            _exit(127);
+            ExitNow(127);
         }
         int status = 0;
-        if (waitpid(pid, &status, 0) < 0) {
+        if (Waitpid(pid, &status, 0) < 0) {
             std::cerr << "[systemctl] waitpid failed: " << strerror(errno) << std::endl;
             return -1;
         }
@@ -121,6 +136,16 @@ namespace {
 
 
 }
+
+#ifdef UNIT_TEST
+namespace adsw_manager::agl::testhook {
+  void SetFork(ForkFn f) { g_fork = f; }
+  void SetExecvp(ExecvpFn f) { g_execvp = f; }
+  void SetWaitpid(WaitpidFn f) { g_waitpid = f; }
+  void SetExit(ExitFn f) { g_exit = f; }
+  void ResetAll() { g_fork=::fork; g_execvp=::execvp; g_waitpid=::waitpid; g_exit=::_exit; }
+}
+#endif
 
 namespace adsw_manager::agl {
 

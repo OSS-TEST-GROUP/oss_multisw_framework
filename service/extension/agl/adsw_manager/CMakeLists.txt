@@ -59,6 +59,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE agl_adsw_core)
 
 option(BUILD_UNITTEST "Build unit tests" OFF)
 if (BUILD_UNITTEST)
+  target_compile_definitions(agl_adsw_core PRIVATE UNIT_TEST)
   add_subdirectory(unittest)
 endif()
 
