@@ -10,6 +10,7 @@
 #include <cstring>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <cerrno>
 
 using namespace adsw_manager::agl;
 
@@ -32,7 +33,6 @@ static std::string DirnameOf(const char* file_macro) {
     return (pos == std::string::npos) ? std::string(".") : p.substr(0, pos);
 }
 
-// 파일 전체 읽기
 static std::string ReadAll(const std::string& p) {
     std::ifstream ifs(p);
     std::ostringstream oss;
@@ -40,7 +40,6 @@ static std::string ReadAll(const std::string& p) {
     return oss.str();
 }
 
-// 파일 비우기
 static void Truncate(const std::string& p) {
     std::ofstream ofs(p, std::ios::trunc);
     (void)ofs;
@@ -49,42 +48,42 @@ static void Truncate(const std::string& p) {
 static void EnsureExecutable(const std::string& path) {
     struct stat st{};
     if (stat(path.c_str(), &st) == 0) {
-        // 소유자 실행권한 없으면 추가
         if (!(st.st_mode & S_IXUSR)) {
             chmod(path.c_str(), st.st_mode | S_IXUSR);
         }
     }
 }
 
-} // namespace
+struct ExitCalled {
+    int code;
+};
 
-// -------------------- 테스트 픽스처 --------------------
+struct ScopedSysHooks {
+    ScopedSysHooks() = default;
+    ~ScopedSysHooks() {
+#ifdef UNIT_TEST
+        adsw_manager::agl::testhook::ResetAll();
+#endif
+    }
+};
+
+}
+
 class AppControllerTest : public ::testing::Test {
 protected:
     static void SetUpTestSuite() {
-        // helpers 절대경로: <이 파일>/helpers
         g_helpers_dir = DirnameOf(__FILE__) + "/helpers";
         const std::string shim = g_helpers_dir + "/systemctl";
 
-        // 실행권한 보정(깃 권한이 안 먹힌 환경 대비)
         EnsureExecutable(shim);
 
-        // 로그는 빌드/실행 디렉토리에 생성
         g_log_path = "sysctl.log";
         setenv("ADSW_TEST_SYSCTL_LOG", g_log_path.c_str(), 1);
 
-        // PATH 앞에 helpers 추가
         const char *cur = getenv("PATH");
         g_old_path = cur ? cur : "";
         std::string new_path = g_helpers_dir + ":" + g_old_path;
         setenv("PATH", new_path.c_str(), 1);
-
-        // ::setenv("ADSW_TEST_SYSCTL_LOG", MOCK_SYSCTL_LOG, 1);
-
-        // const char* cur = ::getenv("PATH");
-        // g_old_path = cur ? cur : "";
-        // std::string new_path = std::string(MOCK_SYSCTL_DIR) + ":" + g_old_path;
-        // ::setenv("PATH", new_path.c_str(), 1);
     }
 
     static void TearDownTestSuite() {
@@ -96,14 +95,30 @@ protected:
         ::unsetenv("ADSW_TEST_EXIT_CODE");
         ::unsetenv("ADSW_TEST_LOAD_STATE");
         ::unsetenv("ADSW_TEST_ACTIVE_STATE");
+#ifdef UNIT_TEST
+        adsw_manager::agl::testhook::ResetAll();
+#endif
+    }
+
+    void TearDown() override {
+#ifdef UNIT_TEST
+        adsw_manager::agl::testhook::ResetAll();
+#endif
     }
 };
+
+// ----------------------------- Initialize -----------------------------
+
+TEST_F(AppControllerTest, Initialize_true) {
+    AppController c;
+    EXPECT_TRUE(c.Initialize());
+}
 
 // ----------------------------- LaunchApp -----------------------------
 
 TEST_F(AppControllerTest, Launch_BuildsSystemctlStartWithServiceSuffix) {
     AppController c;
-    ::setenv("ADSW_TEST_EXIT_CODE", "0", 1); // 성공
+    ::setenv("ADSW_TEST_EXIT_CODE", "0", 1);
 
     ASSERT_TRUE(c.LaunchApp("adsw-monitor"));
 
@@ -125,7 +140,7 @@ TEST_F(AppControllerTest, Launch_KeepsDotServiceIfAlreadyGiven) {
 
 TEST_F(AppControllerTest, Launch_ReturnsFalse_OnChildNonZeroButCommandStillCorrect) {
     AppController c;
-    ::setenv("ADSW_TEST_EXIT_CODE", "3", 1); // 실패로 처리
+    ::setenv("ADSW_TEST_EXIT_CODE", "3", 1);
 
     EXPECT_FALSE(c.LaunchApp("adsw-monitor"));
 
@@ -176,3 +191,93 @@ TEST_F(AppControllerTest, IsAppRunning_AppNameWithoutSuffix_StillQueriesServiceN
     ASSERT_NE(log.find("systemctl show speedometer.service -p ActiveState --value"), std::string::npos)
         << "LOG:\n" << log;
 }
+
+TEST_F(AppControllerTest, IsAppRunning_ReturnsFalse_WhenUnitNotLoaded) {
+    AppController c;
+    ::setenv("ADSW_TEST_LOAD_STATE", "not-found", 1);
+
+    EXPECT_FALSE(c.IsAppRunning("adsw-monitor"));
+
+    const std::string log = ReadAll(g_log_path);
+    ASSERT_NE(log.find("systemctl show adsw-monitor.service -p LoadState --value"), std::string::npos)
+        << "LOG:\n" << log;
+    ASSERT_EQ(log.find("systemctl show adsw-monitor.service -p ActiveState --value"), std::string::npos)
+        << "LOG:\n" << log;
+}
+
+#ifdef UNIT_TEST
+
+TEST_F(AppControllerTest, RunSystemctl_ForkFails_pidLessThan0Branch) {
+    ScopedSysHooks _;
+
+    AppController c;
+
+    adsw_manager::agl::testhook::SetFork([]() -> pid_t {
+        errno = EAGAIN;
+        return -1; // pid < 0
+    });
+
+    EXPECT_FALSE(c.LaunchApp("adsw-monitor"));
+}
+
+TEST_F(AppControllerTest, RunSystemctl_ChildBranch_ExecvpFails_Exit127Covered) {
+    ScopedSysHooks _;
+
+    AppController c;
+
+    adsw_manager::agl::testhook::SetFork([]() -> pid_t {
+        return 0; // pid == 0
+    });
+
+    adsw_manager::agl::testhook::SetExecvp([](const char*, char* const*) -> int {
+        errno = ENOENT;
+        return -1;
+    });
+
+    adsw_manager::agl::testhook::SetExit([](int code) {
+        throw ExitCalled{code};
+    });
+
+    try {
+        (void)c.LaunchApp("adsw-monitor");
+        FAIL() << "Expected ExitCalled";
+    } catch (const ExitCalled& e) {
+        EXPECT_EQ(e.code, 127);
+    }
+}
+
+TEST_F(AppControllerTest, RunSystemctl_WaitpidFails_waitpidErrorBranch) {
+    ScopedSysHooks _;
+
+    AppController c;
+
+    adsw_manager::agl::testhook::SetFork([]() -> pid_t {
+        return 1234;
+    });
+
+    adsw_manager::agl::testhook::SetWaitpid([](pid_t, int*, int) -> pid_t {
+        errno = ECHILD;
+        return -1;
+    });
+
+    EXPECT_FALSE(c.LaunchApp("adsw-monitor"));
+}
+
+TEST_F(AppControllerTest, RunSystemctl_ParentSuccess_StatusExit0Branch) {
+    ScopedSysHooks _;
+
+    AppController c;
+
+    adsw_manager::agl::testhook::SetFork([]() -> pid_t {
+        return 1234;
+    });
+
+    adsw_manager::agl::testhook::SetWaitpid([](pid_t pid, int* status, int) -> pid_t {
+        *status = 0;
+        return pid;
+    });
+
+    EXPECT_TRUE(c.LaunchApp("adsw-monitor"));
+}
+
+#endif  // UNIT_TEST
