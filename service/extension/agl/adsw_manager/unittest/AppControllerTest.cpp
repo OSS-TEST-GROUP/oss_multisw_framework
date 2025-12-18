@@ -95,6 +95,8 @@ protected:
         ::unsetenv("ADSW_TEST_EXIT_CODE");
         ::unsetenv("ADSW_TEST_LOAD_STATE");
         ::unsetenv("ADSW_TEST_ACTIVE_STATE");
+        ::unsetenv("ADSW_TEST_FAIL_LOADSTATE");
+        ::unsetenv("ADSW_TEST_FAIL_ACTIVESTATE");
 #ifdef UNIT_TEST
         adsw_manager::agl::testhook::ResetAll();
 #endif
@@ -162,6 +164,28 @@ TEST_F(AppControllerTest, Terminate_BuildsSystemctlStop) {
         << "LOG:\n" << log;
 }
 
+TEST_F(AppControllerTest, Terminate_ReturnsFalse_WhenSystemctlStopExitNonZero) {
+    AppController c;
+    ::setenv("ADSW_TEST_EXIT_CODE", "5", 1);
+
+    EXPECT_FALSE(c.TerminateApp("adsw-monitor"));
+
+    const std::string log = ReadAll(g_log_path);
+    ASSERT_NE(log.find("systemctl stop adsw-monitor.service"), std::string::npos)
+        << "LOG:\n" << log;
+}
+
+TEST_F(AppControllerTest, Terminate_ReturnsFalse_WhenStopExitNonZero_StopUnitSystemFailBranch) {
+    AppController c;
+    ::setenv("ADSW_TEST_EXIT_CODE", "7", 1);
+
+    EXPECT_FALSE(c.TerminateApp("adsw-monitor"));
+
+    const std::string log = ReadAll(g_log_path);
+    ASSERT_NE(log.find("systemctl stop adsw-monitor.service"), std::string::npos)
+        << "LOG:\n" << log;
+}
+
 // ----------------------------- IsAppRunning -----------------------------
 
 TEST_F(AppControllerTest, IsAppRunning_BuildsTwoShowQueriesWithValue) {
@@ -192,6 +216,34 @@ TEST_F(AppControllerTest, IsAppRunning_AppNameWithoutSuffix_StillQueriesServiceN
         << "LOG:\n" << log;
 }
 
+TEST_F(AppControllerTest, IsAppRunning_ReturnsTrue_WhenActiveStateActivating) {
+    AppController c;
+    ::setenv("ADSW_TEST_LOAD_STATE", "loaded", 1);
+    ::setenv("ADSW_TEST_ACTIVE_STATE", "activating", 1);
+
+    EXPECT_TRUE(c.IsAppRunning("adsw-monitor"));
+
+    const std::string log = ReadAll(g_log_path);
+    ASSERT_NE(log.find("systemctl show adsw-monitor.service -p LoadState --value"), std::string::npos)
+        << "LOG:\n" << log;
+    ASSERT_NE(log.find("systemctl show adsw-monitor.service -p ActiveState --value"), std::string::npos)
+        << "LOG:\n" << log;
+}
+
+TEST_F(AppControllerTest, IsAppRunning_ReturnsFalse_WhenActiveStateFailed) {
+    AppController c;
+    ::setenv("ADSW_TEST_LOAD_STATE", "loaded", 1);
+    ::setenv("ADSW_TEST_ACTIVE_STATE", "failed", 1);
+
+    EXPECT_FALSE(c.IsAppRunning("adsw-monitor"));
+
+    const std::string log = ReadAll(g_log_path);
+    ASSERT_NE(log.find("systemctl show adsw-monitor.service -p LoadState --value"), std::string::npos)
+        << "LOG:\n" << log;
+    ASSERT_NE(log.find("systemctl show adsw-monitor.service -p ActiveState --value"), std::string::npos)
+        << "LOG:\n" << log;
+}
+
 TEST_F(AppControllerTest, IsAppRunning_ReturnsFalse_WhenUnitNotLoaded) {
     AppController c;
     ::setenv("ADSW_TEST_LOAD_STATE", "not-found", 1);
@@ -202,6 +254,35 @@ TEST_F(AppControllerTest, IsAppRunning_ReturnsFalse_WhenUnitNotLoaded) {
     ASSERT_NE(log.find("systemctl show adsw-monitor.service -p LoadState --value"), std::string::npos)
         << "LOG:\n" << log;
     ASSERT_EQ(log.find("systemctl show adsw-monitor.service -p ActiveState --value"), std::string::npos)
+        << "LOG:\n" << log;
+}
+
+TEST_F(AppControllerTest, IsAppRunning_ReturnsFalse_WhenLoadStateQueryFails_RunAndCaptureFalse) {
+    AppController c;
+
+    ::setenv("ADSW_TEST_FAIL_LOADSTATE", "1", 1);
+
+    EXPECT_FALSE(c.IsAppRunning("adsw-monitor"));
+
+    const std::string log = ReadAll(g_log_path);
+    ASSERT_NE(log.find("systemctl show adsw-monitor.service -p LoadState --value"), std::string::npos)
+        << "LOG:\n" << log;
+    ASSERT_EQ(log.find("systemctl show adsw-monitor.service -p ActiveState --value"), std::string::npos)
+        << "LOG:\n" << log;
+}
+
+TEST_F(AppControllerTest, IsAppRunning_ReturnsFalse_WhenActiveStateQueryFails_RunAndCaptureFalse) {
+    AppController c;
+
+    ::setenv("ADSW_TEST_LOAD_STATE", "loaded", 1);
+    ::setenv("ADSW_TEST_FAIL_ACTIVESTATE", "1", 1);
+
+    EXPECT_FALSE(c.IsAppRunning("adsw-monitor"));
+
+    const std::string log = ReadAll(g_log_path);
+    ASSERT_NE(log.find("systemctl show adsw-monitor.service -p LoadState --value"), std::string::npos)
+        << "LOG:\n" << log;
+    ASSERT_NE(log.find("systemctl show adsw-monitor.service -p ActiveState --value"), std::string::npos)
         << "LOG:\n" << log;
 }
 

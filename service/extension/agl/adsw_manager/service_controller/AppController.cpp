@@ -77,8 +77,9 @@ namespace {
             out.append(buf);
         }
         int rc = pclose(pipe);
-        (void)rc;
-        return true;
+        if (rc == -1) return false;
+        if (WIFEXITED(rc)) return (WEXITSTATUS(rc) == 0);
+        return false;
     }
 
     bool StartUnitSystem(const std::string& unit) {
