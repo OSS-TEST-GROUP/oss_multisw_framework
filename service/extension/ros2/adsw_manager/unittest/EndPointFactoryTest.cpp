@@ -27,6 +27,8 @@ class EndPointFactoryTest : public ::testing::Test {
 protected:
     void SetUp() override {
         Mock_Logger = new MockLogger();
+        ON_CALL(*Mock_Logger, Get()).WillByDefault(Return(Mock_Logger));
+           
         factory = std::make_shared<ros2::adsw_manager::EndPointFactory>();
         factory->Initialize();
     }

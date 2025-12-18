@@ -8,11 +8,15 @@
 #include "mock/MockLogger.hpp"
 
 using namespace ros2::adsw_manager;
+using ::testing::Return;
+using ::testing::_;
 
 class TypeConvertTest : public ::testing::Test {
 protected:
     void SetUp() override {
         Mock_Logger = new MockLogger();
+        ON_CALL(*Mock_Logger, Get()).WillByDefault(Return(Mock_Logger));
+           
     }
 
     void TearDown() override {
