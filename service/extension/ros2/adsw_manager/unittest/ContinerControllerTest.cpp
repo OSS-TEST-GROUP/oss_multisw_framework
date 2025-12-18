@@ -82,7 +82,13 @@ TEST_F(ContainerControllerTest, AddContainer_ValidContainer) {
     controller->Initialize();
     auto container = std::make_shared<ros2::adsw_manager::Container>(
         "test-container", "test-image", "/path/to/deploy.yaml", "default");
+        
     EXPECT_TRUE(controller->AddContainer(container));
+
+    EXPECT_EQ(container->GetName(), "test-container");
+    EXPECT_EQ(container->GetImage(), "test-image");
+    EXPECT_EQ(container->GetDeployFile(), "/path/to/deploy.yaml");
+    EXPECT_EQ(container->GetNamespace(), "default");
 }
 
 // Test AddContainer with duplicate container

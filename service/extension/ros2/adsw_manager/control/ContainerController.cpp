@@ -36,7 +36,7 @@ bool ContainerController::StartContainer(const std::string& container_name){
     std::shared_ptr<Container> container = GetContainer(container_name);
 
     if (container != nullptr){
-
+#ifdef ADSW_K3S_CONTAINER_SUPPORT
         std::string command = "kubectl apply -f " + container->GetDeployFile();
         int result = system(command.c_str());
 
@@ -49,6 +49,7 @@ bool ContainerController::StartContainer(const std::string& container_name){
         }
         LOG_DEBUG("ContainerController::StartContainer end " << container_name);
         return true;
+#endif
     }else{
         LOG_ERROR("ContainerController::StartContainer not k3s support " << container_name);
     }
@@ -65,6 +66,7 @@ bool ContainerController::StopContainer(const std::string& container_name){
     std::shared_ptr<Container> container = GetContainer(container_name);
 
     if (container != nullptr){
+#ifdef ADSW_K3S_CONTAINER_SUPPORT
         std::string command = "kubectl delete pod " + container_name;
         int result = system(command.c_str());
 
@@ -77,6 +79,7 @@ bool ContainerController::StopContainer(const std::string& container_name){
         }
         LOG_DEBUG("ContainerController::StopContainer end " << container_name);
         return true;
+#endif        
     }else{
         LOG_ERROR("ContainerController::StopContainer not k3s support " << container_name);
     }
@@ -88,6 +91,7 @@ bool ContainerController::GetContainerStatus(const std::string& container_name) 
     std::shared_ptr<Container> container = GetContainer(container_name);
 
     if (container != nullptr){
+#ifdef ADSW_K3S_CONTAINER_SUPPORT        
         std::string command = "kubectl get pod " + container->GetPodName() + " -n " + container->GetNamespace() + " -o jsonpath='{.status.containerStatuses[?(@.name==\"" + container_name + "\")].state}'";
 
         int result = system(command.c_str());
@@ -98,7 +102,8 @@ bool ContainerController::GetContainerStatus(const std::string& container_name) 
         } else {
             LOG_ERROR("ContainerController::GetContainerStatus failed " << container_name);
             return false;
-        }       
+        }      
+#endif
     }else{
         LOG_ERROR("ContainerController::GetContainerStatus not k3s support " << container_name);
     }
@@ -110,7 +115,7 @@ bool ContainerController::GetContainerLogs(const std::string& container_name) {
     std::shared_ptr<Container> container = GetContainer(container_name);
 
     if (container != nullptr){
-
+#ifdef ADSW_K3S_CONTAINER_SUPPORT
         std::string command = "kubectl logs " + container->GetPodName() + " -n " + container->GetNamespace() + " -c " + container_name;
 
         int result = system(command.c_str());
@@ -121,7 +126,8 @@ bool ContainerController::GetContainerLogs(const std::string& container_name) {
         } else {
             LOG_ERROR("ContainerController::GetContainerLogs failed " << container_name);
             return false;
-        }       
+        } 
+#endif      
     }else{
         LOG_ERROR("ContainerController::GetContainerLogs not k3s support " << container_name);
     }
@@ -134,12 +140,14 @@ std::shared_ptr<Container> ContainerController::GetContainer(const std::string& 
         LOG_ERROR("ContainerController::GetContainer not k3s support " << container_name);
         return nullptr;
     }
+ #ifdef ADSW_K3S_CONTAINER_SUPPORT   
     for (const auto& container : containers_) {
             
         if (container->GetName() == container_name) {
                 return container;
         }
     }
+#endif
     LOG_ERROR("ContainerController::GetContainer not found " << container_name);
     return nullptr; // Return nullptr if the container is not found
 }
@@ -176,9 +184,11 @@ std::string ContainerController::BaseCommand(const std::string& container_name) 
     std::shared_ptr<Container> container = GetContainer(container_name);
 
     if (container != nullptr){
+#ifdef ADSW_K3S_CONTAINER_SUPPORT        
         std::string command = "kubectl exec -n " + container->GetNamespace() + " " + container->GetPodName() + " -- ";
         LOG_DEBUG("Base command for container: " << command);
         return command;
+#endif        
     }
     return "";
 }
@@ -193,10 +203,12 @@ std::string ContainerController::BaseRos2Command(const std::string& container_na
     std::shared_ptr<Container> container = GetContainer(container_name);
 
     if (container != nullptr){
+#ifdef ADSW_K3S_CONTAINER_SUPPORT
         std::string command = "kubectl exec -n " + container->GetNamespace() + " " + container->GetPodName() + " -- ";
         command += "bash -c \"source /opt/ros/humble/setup.bash && ";
         LOG_DEBUG("Base command for container: " << command);
         return command;
+#endif
     }
     return "";
 }
