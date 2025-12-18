@@ -14,10 +14,16 @@ LOG="${ADSW_TEST_SYSCTL_LOG:-sysctl.log}"
 if [ "$1" = "show" ]; then
   for a in "$@"; do
     if [ "$a" = "LoadState" ]; then
+      if [ "${ADSW_TEST_FAIL_LOADSTATE:-0}" = "1" ]; then
+        exit 1
+      fi
       printf '%s\n' "${ADSW_TEST_LOAD_STATE:-loaded}"
       exit 0
     fi
     if [ "$a" = "ActiveState" ]; then
+      if [ "${ADSW_TEST_FAIL_ACTIVESTATE:-0}" = "1" ]; then
+        exit 1
+      fi
       printf '%s\n' "${ADSW_TEST_ACTIVE_STATE:-active}"
       exit 0
     fi
