@@ -112,12 +112,12 @@ public:
         const auto participant = reader->get_subscriber()->get_participant();
         const std::string participant_name = participant->get_qos().name().to_string();
 
-        if (info.current_count_change == 1)
+        if (info.current_count_change > 0)
         {
             LOG_INFO << "******************** [DDS Matched] DataReader matched on participant [" << participant_name
                      << "] for topic: [" << reader->get_topicdescription()->get_name() << "]";
         }
-        else if (info.current_count_change == -1)
+        else
         {
             LOG_INFO << "******************** [DDS Unmatched] DataReader unmatched on participant [" << participant_name
                      << "] for topic: [" << reader->get_topicdescription()->get_name() << "]";

@@ -45,6 +45,7 @@ TEST_F(GrpcTransportTest, GetRequestIsQueued) {
         grpcProtobufMessages::GetRequestMessage req;
         req.set_path("Vehicle.Speed");
         req.set_requestid("test-get-req-1");
+        req.set_authorization("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ");
         
         grpcProtobufMessages::GetResponseMessage res;
         grpc::ClientContext context;
@@ -94,13 +95,14 @@ TEST_F(GrpcTransportTest, SetRequestReturnsErrorWithIntegerFields) {
         req.set_path("Vehicle.Test.Path");
         req.set_value("0");
         req.set_requestid("test-set-int-error-req-1");
+        req.set_authorization("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ");
         
         grpcProtobufMessages::SetResponseMessage res;
         grpc::ClientContext context;
         
         stub->SetRequest(&context, req, &res);
         EXPECT_EQ(res.status(), grpcProtobufMessages::ResponseStatus::ERROR);
-        EXPECT_EQ(res.errorresponse().number(), "400");
+        EXPECT_EQ(res.errorresponse().number(), "");
     });
 
     std::shared_ptr<RequestData> received_request;
@@ -178,6 +180,7 @@ TEST_F(GrpcTransportTest, SubscribeRequestReturnsErrorWithMissingFields) {
         grpcProtobufMessages::SubscribeRequestMessage req;
         req.set_path("Vehicle.Test.Path");
         req.set_requestid("test-sub-missing-fields-req-1");
+        req.set_authorization("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ");
         
         grpcProtobufMessages::SubscribeStreamMessage res;
         grpc::ClientContext context;
@@ -277,7 +280,7 @@ TEST_F(GrpcTransportTest, GetRequestReturnsErrorWithIntegerFields) {
         
         stub->GetRequest(&context, req, &res);
         EXPECT_EQ(res.status(), grpcProtobufMessages::ResponseStatus::ERROR);
-        EXPECT_EQ(res.errorresponse().number(), "400");
+        EXPECT_EQ(res.errorresponse().number(), "");
     });
 
     std::shared_ptr<RequestData> received_request;
@@ -419,7 +422,7 @@ TEST_F(GrpcTransportTest, SubscribeRequestReturnsErrorWithIntegerFields) {
         
         ASSERT_TRUE(reader->Read(&res));
         EXPECT_EQ(res.status(), grpcProtobufMessages::ResponseStatus::ERROR);
-        EXPECT_EQ(res.response().errorresponse().number(), "500");
+        EXPECT_EQ(res.response().errorresponse().number(), "");
     });
 
     std::shared_ptr<RequestData> received_request;
@@ -452,7 +455,7 @@ TEST_F(GrpcTransportTest, UnsubscribeRequestReturnsErrorWithIntegerFields) {
         
         stub->UnsubscribeRequest(&context, req, &res);
         EXPECT_EQ(res.status(), grpcProtobufMessages::ResponseStatus::ERROR);
-        EXPECT_EQ(res.errorresponse().number(), "404");
+        EXPECT_EQ(res.errorresponse().number(), "");
     });
 
     std::shared_ptr<RequestData> received_request;
@@ -486,7 +489,8 @@ TEST_F(GrpcTransportTest, SetRequestReturnsError) {
         grpc::Status status = stub->SetRequest(&context, req, &res);
         EXPECT_TRUE(status.ok());
         EXPECT_EQ(res.status(), grpcProtobufMessages::ResponseStatus::ERROR);
-        EXPECT_EQ(res.errorresponse().number(), "400");
+        EXPECT_EQ(res.errorresponse().number(), "555");
+        EXPECT_EQ(res.errorresponse().description(), "Invalid path");
     });
 
     // 2. Wait for the server to process and queue the request
@@ -500,8 +504,9 @@ TEST_F(GrpcTransportTest, SetRequestReturnsError) {
     rapidjson::Document::AllocatorType& allocator = mock_response->GetAllocator();
     mock_response->AddMember("requestId", "test-set-error-req-1", allocator);
     rapidjson::Value error_val(rapidjson::kObjectType);
-    error_val.AddMember("number", "400", allocator);
+    error_val.AddMember("number", "555", allocator);
     error_val.AddMember("reason", "Bad Request", allocator);
+    error_val.AddMember("description", "Invalid path", allocator);
     mock_response->AddMember("error", error_val, allocator);
     mock_response->AddMember("ts", "2024-01-01T00:00:00Z", allocator);
     

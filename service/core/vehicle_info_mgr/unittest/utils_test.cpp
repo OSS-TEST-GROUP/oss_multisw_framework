@@ -164,6 +164,21 @@ TEST(UtilsTest, ParseTimePeriod) {
     EXPECT_EQ(parseTimePeriod("PT10S1H"), 0); // Invalid order
     EXPECT_EQ(parseTimePeriod("P1M"), 0); // Invalid unit in date part
     EXPECT_EQ(parseTimePeriod("PT1D"), 0); // Invalid unit in time part
+    EXPECT_EQ(parseTimePeriod("PD"), 0);
+    EXPECT_EQ(parseTimePeriod("PADT"), 0);
+    EXPECT_EQ(parseTimePeriod("P30T"), 0);
+    EXPECT_EQ(parseTimePeriod("P3DTH"), 0);
+    EXPECT_EQ(parseTimePeriod("P3DTM"), 0);
+    EXPECT_EQ(parseTimePeriod("P3DTS"), 0);
+    EXPECT_EQ(parseTimePeriod("P3DT1234"), 0);
+    EXPECT_EQ(parseTimePeriod("P3DT1H2M3S4H"), 0);
+    EXPECT_EQ(parseTimePeriod("P3DT2M3S4H"), 0);
+    EXPECT_EQ(parseTimePeriod("P3DT3S4H"), 0);
+    EXPECT_EQ(parseTimePeriod("P3DT1H2M3S4M"), 0);
+    EXPECT_EQ(parseTimePeriod("P3DT3S4M"), 0);
+    EXPECT_EQ(parseTimePeriod("P3DT1H2M3S4S"), 0);
+
+
 }
 
 class AnyToJsonValueTest : public ::testing::Test {
