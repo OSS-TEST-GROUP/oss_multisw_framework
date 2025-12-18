@@ -144,7 +144,14 @@ add_executable( ADSWConcreteEndpointIntegrationTest ConcreteEndpointIntegrationT
                 ../endpoint/NotifyServiceStateEndPoint.cpp
                 ../endpoint/UpdateServiceListEndPoint.cpp
                 ../endpoint/AdswServiceStatusEndPoint.cpp
+                ../endpoint/ROSDiscoveryInfoEndpoint.cpp
+                ../monitor/ROSServiceDiscovery.cpp
+                ../monitor/ServiceMonitor.cpp
+                ../monitor/UpdateServiceInfo.cpp
                 ../transmitter/DDSMessageEndpoint.cpp
+                ../transmitter/DDSTransmitter.cpp
+                ../transmitter/MessageQueue.cpp
+                ../service/Service.cpp
                 ${GENERATED_DIR}/lifecycle/StartServiceRequestPubSubTypes.cxx
                 ${GENERATED_DIR}/lifecycle/StartServiceRequestTypeObjectSupport.cxx
                 ${GENERATED_DIR}/lifecycle/StopServiceRequestPubSubTypes.cxx
@@ -159,6 +166,12 @@ add_executable( ADSWConcreteEndpointIntegrationTest ConcreteEndpointIntegrationT
                 ${GENERATED_DIR}/lifecycle/LifecycleCommonTypeObjectSupport.cxx
                 ${GENERATED_DIR}/ros2/AdswServiceStatusPubSubTypes.cxx
                 ${GENERATED_DIR}/ros2/AdswServiceStatusTypeObjectSupport.cxx
+                ${GENERATED_DIR}/ros2/GidPubSubTypes.cxx
+                ${GENERATED_DIR}/ros2/GidTypeObjectSupport.cxx
+                ${GENERATED_DIR}/ros2/NodeEntitiesInfoPubSubTypes.cxx
+                ${GENERATED_DIR}/ros2/NodeEntitiesInfoTypeObjectSupport.cxx
+                ${GENERATED_DIR}/ros2/ParticipantEntitiesInfoPubSubTypes.cxx
+                ${GENERATED_DIR}/ros2/ParticipantEntitiesInfoTypeObjectSupport.cxx
 )
 
 # Control directory tests
@@ -228,7 +241,6 @@ install ( TARGETS
           ADSWContainerControllerTest
           ADSWROS2NodeControllerTest
           ADSWROS2LifecycleControllerTest
-#          ADSWROSServiceControllerTest
     RUNTIME DESTINATION bin/unittest/adsw_manager
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
@@ -240,7 +252,17 @@ add_executable ( ROSDiscoveryInfoSender test/ROSDiscoveryInfoSender.cpp
 )
 install ( TARGETS
           ROSDiscoveryInfoSender
-    RUNTIME DESTINATION bin/unittest/ros2/adsw_manager/test
+    RUNTIME DESTINATION bin/unittest/adsw_manager/test
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
     )
+
+
+# Test Diag config
+install(
+    DIRECTORY
+        config
+    DESTINATION
+        bin/unittest/adsw_manager
+    FILES_MATCHING PATTERN "*.yaml"
+)

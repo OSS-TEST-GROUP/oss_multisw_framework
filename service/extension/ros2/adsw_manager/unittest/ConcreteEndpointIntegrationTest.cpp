@@ -24,6 +24,7 @@
 #include "endpoint/NotifyServiceStateEndPoint.hpp"
 #include "endpoint/UpdateServiceListEndPoint.hpp"
 #include "endpoint/AdswServiceStatusEndPoint.hpp"
+#include "endpoint/ROSDiscoveryInfoEndpoint.hpp"
 #include "endpoint/MessageTypes.hpp"
 
 #include "lifecycle/StartServiceRequest.hpp"
@@ -32,6 +33,8 @@
 #include "lifecycle/NotifyServiceState.hpp"
 #include "lifecycle/UpdateServiceListRequest.hpp"
 #include "ros2/AdswServiceStatus.hpp"
+#include "ros2/ParticipantEntitiesInfo.hpp"
+#include "ros2/NodeEntitiesInfo.hpp"
 
 #include "mock/MockLogger.hpp"
 #include "mock/MockADSWManager.hpp"
@@ -179,6 +182,82 @@ TEST_F(ConcreteEndpointIntegrationTest, StartServiceEndPoint_OnDataAvailable) {
     writer_endpoint->Finalize();
 }
 
+TEST_F(ConcreteEndpointIntegrationTest, StartServiceEndPoint_OnDataAvailable_TC02) {
+    const std::string topic = "test_start_service_request";
+    
+    // Create writer endpoint (simple endpoint for writing)
+    auto writer_endpoint = std::make_unique<StartServiceEndPoint>(
+        MessageType::START_SERVICE_REQUEST, topic);
+    ASSERT_TRUE(writer_endpoint->Initialize(publisher_participant_, publisher_, nullptr));
+    
+    // Create REAL reader endpoint (the one we want to test)
+    auto reader_endpoint = std::make_unique<StartServiceEndPoint>(
+        MessageType::START_SERVICE_REQUEST, topic);
+    ASSERT_TRUE(reader_endpoint->Initialize(subscriber_participant_, nullptr, subscriber_));
+    
+    WaitForDiscovery();
+    
+    // Create and send a message
+    lifecyclemgr::StartServiceRequest message;
+    message.os_type(lifecyclemgr::OsType::ROS2);
+    message.service_list().push_back("test_service");
+    message.is_group(false);
+    
+    ASSERT_TRUE(writer_endpoint->Write(&message));
+    WaitForDiscovery(100);
+    
+    // Setup expectation for the service controller
+    ON_CALL(*mock_adsw_manager_, GetServiceController())
+            .WillByDefault(Return(nullptr));
+    
+    // Trigger OnDataAvailable() - this exercises the REAL endpoint code!
+    // StartServiceEndPoint::OnDataAvailable() will call Read<StartServiceRequest>()
+    // and then call ProcessServiceStartRequest()
+    reader_endpoint->OnDataAvailable();
+    
+    // Cleanup
+    reader_endpoint->Finalize();
+    writer_endpoint->Finalize();
+}
+
+TEST_F(ConcreteEndpointIntegrationTest, StartServiceEndPoint_OnDataAvailable_TC03) {
+    const std::string topic = "test_start_service_request";
+    
+    // Create writer endpoint (simple endpoint for writing)
+    auto writer_endpoint = std::make_unique<StartServiceEndPoint>(
+        MessageType::START_SERVICE_REQUEST, topic);
+    ASSERT_TRUE(writer_endpoint->Initialize(publisher_participant_, publisher_, nullptr));
+    
+    // Create REAL reader endpoint (the one we want to test)
+    auto reader_endpoint = std::make_unique<StartServiceEndPoint>(
+        MessageType::START_SERVICE_REQUEST, topic);
+    ASSERT_TRUE(reader_endpoint->Initialize(subscriber_participant_, nullptr, subscriber_));
+    
+    WaitForDiscovery();
+    
+    // Create and send a message
+    lifecyclemgr::StartServiceRequest message;
+    message.os_type(lifecyclemgr::OsType::ROS2);
+    message.service_list().push_back("test_service");
+    message.is_group(false);
+    
+    ASSERT_TRUE(writer_endpoint->Write(&message));
+    WaitForDiscovery(100);
+    
+    // Setup expectation for the service controller
+    EXPECT_CALL(*mock_service_controller_, ProcessServiceStartRequest(_))
+        .WillOnce(Return(false));
+    
+    // Trigger OnDataAvailable() - this exercises the REAL endpoint code!
+    // StartServiceEndPoint::OnDataAvailable() will call Read<StartServiceRequest>()
+    // and then call ProcessServiceStartRequest()
+    reader_endpoint->OnDataAvailable();
+    
+    // Cleanup
+    reader_endpoint->Finalize();
+    writer_endpoint->Finalize();
+}
+
 /**
  * @brief Test StopServiceEndPoint OnDataAvailable() method
  */
@@ -206,6 +285,69 @@ TEST_F(ConcreteEndpointIntegrationTest, StopServiceEndPoint_OnDataAvailable) {
     // Setup expectation
     EXPECT_CALL(*mock_service_controller_, ProcessServiceStopRequest(_))
         .WillOnce(Return(true));
+    
+    // Trigger OnDataAvailable() on the REAL endpoint
+    reader_endpoint->OnDataAvailable();
+    
+    reader_endpoint->Finalize();
+    writer_endpoint->Finalize();
+}
+TEST_F(ConcreteEndpointIntegrationTest, StopServiceEndPoint_OnDataAvailable_TC02) {
+    const std::string topic = "test_stop_service_request";
+    
+    auto writer_endpoint = std::make_unique<StopServiceEndPoint>(
+        MessageType::STOP_SERVICE_REQUEST, topic);
+    ASSERT_TRUE(writer_endpoint->Initialize(publisher_participant_, publisher_, nullptr));
+    
+    auto reader_endpoint = std::make_unique<StopServiceEndPoint>(
+        MessageType::STOP_SERVICE_REQUEST, topic);
+    ASSERT_TRUE(reader_endpoint->Initialize(subscriber_participant_, nullptr, subscriber_));
+    
+    WaitForDiscovery();
+    
+    lifecyclemgr::StopServiceRequest message;
+    message.os_type(lifecyclemgr::OsType::ROS2);
+    message.service_list().push_back("test_service");
+    message.is_group(false);
+    
+    ASSERT_TRUE(writer_endpoint->Write(&message));
+    WaitForDiscovery(100);
+    
+    // Setup expectation for the service controller
+    ON_CALL(*mock_adsw_manager_, GetServiceController())
+            .WillByDefault(Return(nullptr));
+    
+    // Trigger OnDataAvailable() on the REAL endpoint
+    reader_endpoint->OnDataAvailable();
+    
+    reader_endpoint->Finalize();
+    writer_endpoint->Finalize();
+}
+
+TEST_F(ConcreteEndpointIntegrationTest, StopServiceEndPoint_OnDataAvailable_TC03) {
+    const std::string topic = "test_stop_service_request";
+    
+    auto writer_endpoint = std::make_unique<StopServiceEndPoint>(
+        MessageType::STOP_SERVICE_REQUEST, topic);
+    ASSERT_TRUE(writer_endpoint->Initialize(publisher_participant_, publisher_, nullptr));
+    
+    auto reader_endpoint = std::make_unique<StopServiceEndPoint>(
+        MessageType::STOP_SERVICE_REQUEST, topic);
+    ASSERT_TRUE(reader_endpoint->Initialize(subscriber_participant_, nullptr, subscriber_));
+    
+    WaitForDiscovery();
+    
+    lifecyclemgr::StopServiceRequest message;
+    message.os_type(lifecyclemgr::OsType::ROS2);
+    message.service_list().push_back("test_service");
+    message.is_group(false);
+    
+    ASSERT_TRUE(writer_endpoint->Write(&message));
+    WaitForDiscovery(100);
+    
+    // Setup expectation
+    EXPECT_CALL(*mock_service_controller_, ProcessServiceStopRequest(_))
+        .WillOnce(Return(false));
     
     // Trigger OnDataAvailable() on the REAL endpoint
     reader_endpoint->OnDataAvailable();
@@ -241,6 +383,68 @@ TEST_F(ConcreteEndpointIntegrationTest, GetServiceStateEndPoint_OnDataAvailable)
     // Setup expectation
     EXPECT_CALL(*mock_service_registry_, ProcessGetServiceStateRequest(_))
         .WillOnce(Return(true));
+    
+    // Trigger OnDataAvailable() on the REAL endpoint
+    reader_endpoint->OnDataAvailable();
+    
+    reader_endpoint->Finalize();
+    writer_endpoint->Finalize();
+}
+TEST_F(ConcreteEndpointIntegrationTest, GetServiceStateEndPoint_OnDataAvailable_TC02) {
+    const std::string topic = "test_get_service_state_request";
+    
+    auto writer_endpoint = std::make_unique<GetServiceStateEndPoint>(
+        MessageType::GET_SERVICE_STATE_REQUEST, topic);
+    ASSERT_TRUE(writer_endpoint->Initialize(publisher_participant_, publisher_, nullptr));
+    
+    auto reader_endpoint = std::make_unique<GetServiceStateEndPoint>(
+        MessageType::GET_SERVICE_STATE_REQUEST, topic);
+    ASSERT_TRUE(reader_endpoint->Initialize(subscriber_participant_, nullptr, subscriber_));
+    
+    WaitForDiscovery();
+    
+    lifecyclemgr::GetServiceStateRequest message;
+    message.os_type(lifecyclemgr::OsType::ROS2);
+    message.service_list().push_back("test_service");
+    message.is_all_service(false);
+    
+    ASSERT_TRUE(writer_endpoint->Write(&message));
+    WaitForDiscovery(100);
+    
+    // Setup expectation
+    ON_CALL(*mock_adsw_manager_, GetServiceController())
+            .WillByDefault(Return(nullptr));
+    
+    // Trigger OnDataAvailable() on the REAL endpoint
+    reader_endpoint->OnDataAvailable();
+    
+    reader_endpoint->Finalize();
+    writer_endpoint->Finalize();
+}
+TEST_F(ConcreteEndpointIntegrationTest, GetServiceStateEndPoint_OnDataAvailable_TC03) {
+    const std::string topic = "test_get_service_state_request";
+    
+    auto writer_endpoint = std::make_unique<GetServiceStateEndPoint>(
+        MessageType::GET_SERVICE_STATE_REQUEST, topic);
+    ASSERT_TRUE(writer_endpoint->Initialize(publisher_participant_, publisher_, nullptr));
+    
+    auto reader_endpoint = std::make_unique<GetServiceStateEndPoint>(
+        MessageType::GET_SERVICE_STATE_REQUEST, topic);
+    ASSERT_TRUE(reader_endpoint->Initialize(subscriber_participant_, nullptr, subscriber_));
+    
+    WaitForDiscovery();
+    
+    lifecyclemgr::GetServiceStateRequest message;
+    message.os_type(lifecyclemgr::OsType::ROS2);
+    message.service_list().push_back("test_service");
+    message.is_all_service(false);
+    
+    ASSERT_TRUE(writer_endpoint->Write(&message));
+    WaitForDiscovery(100);
+    
+    // Setup expectation
+    EXPECT_CALL(*mock_service_registry_, ProcessGetServiceStateRequest(_))
+        .WillOnce(Return(false));
     
     // Trigger OnDataAvailable() on the REAL endpoint
     reader_endpoint->OnDataAvailable();
@@ -336,6 +540,44 @@ TEST_F(ConcreteEndpointIntegrationTest, AdswServiceStatusEndPoint_OnDataAvailabl
     WaitForDiscovery(100);
     
     // Trigger OnDataAvailable() - exercises the logging code
+    reader_endpoint->OnDataAvailable();
+    
+    reader_endpoint->Finalize();
+    writer_endpoint->Finalize();
+}
+
+/**
+ * @brief Test ROSDiscoveryInfoEndpoint OnDataAvailable() method
+ * This endpoint processes ParticipantEntitiesInfo messages from ROS2 discovery
+ */
+TEST_F(ConcreteEndpointIntegrationTest, ROSDiscoveryInfoEndpoint_OnDataAvailable) {
+    const std::string topic = "test_ros_discovery_info";
+    
+    auto writer_endpoint = std::make_unique<ROSDiscoveryInfoEndpoint>(
+        MessageType::ROS2_DISCOVREY_INFO, topic);
+    ASSERT_TRUE(writer_endpoint->Initialize(publisher_participant_, publisher_, nullptr));
+    
+    auto reader_endpoint = std::make_unique<ROSDiscoveryInfoEndpoint>(
+        MessageType::ROS2_DISCOVREY_INFO, topic);
+    ASSERT_TRUE(reader_endpoint->Initialize(subscriber_participant_, nullptr, subscriber_));
+    
+    WaitForDiscovery();
+    
+    // Create a ParticipantEntitiesInfo message
+    rmw_dds_common::msg::ParticipantEntitiesInfo message;
+    
+    // Set up a node entity
+    rmw_dds_common::msg::NodeEntitiesInfo node_info;
+    node_info.node_namespace("/test_namespace");
+    node_info.node_name("test_node");
+    
+    // Add to participant entities
+    message.node_entities_info_seq().push_back(node_info);
+    
+    ASSERT_TRUE(writer_endpoint->Write(&message));
+    WaitForDiscovery(100);
+    
+    // Trigger OnDataAvailable() - exercises the ROS discovery processing code
     reader_endpoint->OnDataAvailable();
     
     reader_endpoint->Finalize();
