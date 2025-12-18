@@ -33,6 +33,8 @@ class ROS2NodeControllerTest : public ::testing::Test {
 protected:
     void SetUp() override {
         Mock_Logger = new MockLogger();
+        ON_CALL(*Mock_Logger, Get()).WillByDefault(Return(Mock_Logger));
+           
         system_stub_result = 0;
         last_system_command = "";
     }

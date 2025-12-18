@@ -32,6 +32,8 @@ protected:
     void SetUp() override {
         ins = std::make_unique<DDSTransmitter>();
         Mock_Logger = new MockLogger();
+        ON_CALL(*Mock_Logger, Get()).WillByDefault(Return(Mock_Logger));
+           
         Mock_MessageQueue = new MockMessageQueue();
         // Initialize the global mock pointer to prevent null pointer dereference
         default_mock_endpoint_ = new NiceMock<MockDDSMessageEndpoint>();

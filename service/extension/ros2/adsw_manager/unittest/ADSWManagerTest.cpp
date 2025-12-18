@@ -52,7 +52,8 @@ protected:
         manager.endpoint_factory_ = std::shared_ptr<MockEndPointFactory>(Mock_EndPointFactory, [](MockEndPointFactory*){});
 
         Mock_Logger = new MockLogger();
-        
+        ON_CALL(*Mock_Logger, Get()).WillByDefault(Return(Mock_Logger));
+           
         // Setup default mock expectations
         ON_CALL(*Mock_EndPointFactory, GetTopic(_)).WillByDefault(Return("mock_topic"));
         ON_CALL(*Mock_ServiceRegistry, LoadServiceList()).WillByDefault(Return(true));

@@ -40,7 +40,8 @@ protected:
     void SetUp() override {
         registry = std::make_unique<ServiceRegistry>();
         Mock_Logger = new MockLogger();
-
+        ON_CALL(*Mock_Logger, Get()).WillByDefault(Return(Mock_Logger));
+           
         mock_adsw_manager_ = std::make_shared<MockADSWManager>();
         mock_service_controller_ = std::make_shared<MockROSServiceController>();
         mock_container_controller_ = std::make_shared<MockContainerController>();

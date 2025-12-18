@@ -32,6 +32,8 @@ class ROSServiceDiscoveryTest : public ::testing::Test {
 protected:
     void SetUp() override {
         Mock_Logger = new MockLogger();
+        ON_CALL(*Mock_Logger, Get()).WillByDefault(Return(Mock_Logger));
+           
         mock_monitor_ = new NiceMock<MockServiceMonitor>();
         
         // Set global mock pointer for static mock implementation
