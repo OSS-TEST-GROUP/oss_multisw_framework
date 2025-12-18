@@ -110,7 +110,6 @@ VssSubscriptionManager::Subscription::Subscription(
 }
 
 VssSubscriptionManager::Subscription::~Subscription() {
-    
     LOG_INFO << "Sending termination signal for subscription ID: " << m_subscriptionId;
     try {
         auto termination_signal = m_response_pool->acquire();
@@ -123,7 +122,6 @@ VssSubscriptionManager::Subscription::~Subscription() {
     } catch (const std::exception& e) {
         LOG_ERROR << "Exception in Subscription destructor for ID " << m_subscriptionId << ": " << e.what();
     }
-    
     LOG_INFO << "Destroyed Subscription ID: " << m_subscriptionId;
 }
 
@@ -198,8 +196,8 @@ void VssSubscriptionManager::Subscription::process() {
         }
         
         notification->AddMember("ts", rapidjson::Value(getCurrentTimestamp().c_str(), allocator), allocator);
+
         m_originalRequest->responseChan->push(notification);
-        
     }
 }
 

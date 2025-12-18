@@ -263,6 +263,65 @@ TEST_F(DDSProviderIntegrationTest, ReceivesVehicleDataTopic) {
     EXPECT_EQ(std::any_cast<std::string>(received_data.value), "123.45");
 }
 
+TEST_F(DDSProviderIntegrationTest, UnmatchAndRematchWithPartitionQos) {
+    // 1. Initially, everything is matched. Send and receive data.
+    {
+        VehicleDataTopic sample;
+        sample.path("Vehicle.Speed");
+        sample.value("100");
+        ASSERT_EQ(vehicle_data_writer->write(&sample), RETCODE_OK);
+        VehicleData received_data;
+        ASSERT_TRUE(data_channel->wait_and_pop(received_data));
+        EXPECT_EQ(std::any_cast<std::string>(received_data.value), "100");
+    }
+
+    // 2. Change the publisher's partition to cause an unmatch.
+    PublisherQos pqos;
+    publisher->get_qos(pqos);
+    eprosima::fastdds::dds::PartitionQosPolicy partition_qos;
+    std::vector<std::string> partition_names;
+    partition_names.push_back("B");
+    partition_qos.names(partition_names);
+    pqos.partition(partition_qos);
+    ASSERT_EQ(publisher->set_qos(pqos), RETCODE_OK);
+
+    // Allow time for the unmatch to be processed
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+    // 3. Send data on the new partition. It should not be received.
+    {
+        VehicleDataTopic sample;
+        sample.path("Vehicle.Speed");
+        sample.value("200");
+        ASSERT_EQ(vehicle_data_writer->write(&sample), RETCODE_OK);
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        ASSERT_TRUE(data_channel->empty());
+    }
+
+    // 4. Change the publisher's partition back to the original to cause a rematch.
+    publisher->get_qos(pqos);
+    partition_names.clear();
+    partition_qos.names(partition_names);
+    pqos.partition(partition_qos);
+    // The provider's reader has no specific partition, so it matches the default.
+    // An empty partition name "" is the default.
+    ASSERT_EQ(publisher->set_qos(pqos), RETCODE_OK);
+    
+    // Allow time for the rematch to be processed
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+    // 5. Send data again. It should be received now.
+    {
+        VehicleDataTopic sample;
+        sample.path("Vehicle.Speed");
+        sample.value("300");
+        ASSERT_EQ(vehicle_data_writer->write(&sample), RETCODE_OK);
+        VehicleData received_data;
+        ASSERT_TRUE(data_channel->wait_and_pop(received_data));
+        EXPECT_EQ(std::any_cast<std::string>(received_data.value), "300");
+    }
+}
+
 TEST_F(DDSProviderIntegrationTest, VehicleDataTopicNullDataChannel) {
     // 1. Reset the provider and start it without a data channel
     provider.reset();
@@ -382,6 +441,55 @@ TEST_F(DDSProviderIntegrationTest, SetValuePublishesToVehicleDataTopic) {
     // 3. Verify the received data
     EXPECT_EQ(test_listener.sample.path(), path);
     EXPECT_EQ(test_listener.sample.value(), value);
+}
+
+TEST_F(DDSProviderIntegrationTest, ReaderUnmatchAndRematchWithPartitionQos) {
+    // 1. Initially, everything is matched. The provider sets a value, and the test reader receives it.
+    {
+        provider->setValue("Vehicle.Cabin.Light.IsOn", "true");
+        std::unique_lock<std::mutex> lock(test_listener.mtx);
+        ASSERT_TRUE(test_listener.cv.wait_for(lock, std::chrono::seconds(2), [&]{ return test_listener.received.load(); }));
+        EXPECT_EQ(test_listener.sample.value(), "true");
+        test_listener.received = false; // Reset for next check
+    }
+
+    // 2. Change the subscriber's partition to cause an unmatch.
+    SubscriberQos sqos;
+    subscriber->get_qos(sqos);
+    eprosima::fastdds::dds::PartitionQosPolicy partition_qos;
+    std::vector<std::string> partition_names;
+    partition_names.push_back("B");
+    partition_qos.names(partition_names);
+    sqos.partition(partition_qos);
+    ASSERT_EQ(subscriber->set_qos(sqos), RETCODE_OK);
+
+    // Allow time for the unmatch to be processed
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+    // 3. The provider sets a value. It should not be received.
+    {
+        provider->setValue("Vehicle.Cabin.Light.IsOn", "false");
+        std::unique_lock<std::mutex> lock(test_listener.mtx);
+        ASSERT_FALSE(test_listener.cv.wait_for(lock, std::chrono::milliseconds(200), [&]{ return test_listener.received.load(); }));
+    }
+
+    // 4. Change the subscriber's partition back to the original to cause a rematch.
+    subscriber->get_qos(sqos);
+    partition_names.clear();
+    partition_qos.names(partition_names);
+    sqos.partition(partition_qos);
+    ASSERT_EQ(subscriber->set_qos(sqos), RETCODE_OK);
+    
+    // Allow time for the rematch to be processed
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+    // 5. The provider sets a value again. It should be received now.
+    {
+        provider->setValue("Vehicle.Cabin.Light.IsOn", "true");
+        std::unique_lock<std::mutex> lock(test_listener.mtx);
+        ASSERT_TRUE(test_listener.cv.wait_for(lock, std::chrono::seconds(2), [&]{ return test_listener.received.load(); }));
+        EXPECT_EQ(test_listener.sample.value(), "true");
+    }
 }
 
 class DDSProviderDomainIdTest : public ::testing::Test {

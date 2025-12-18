@@ -6,6 +6,30 @@
 #include "Utils.h"
 #include "JsonSchemaValidator.h"
 
+// Helper function to populate an ErrorMessage from a JSON object
+void populateErrorResponse(const rapidjson::Value& error_val, grpcProtobufMessages::ErrorResponseMessage* error_resp) {
+    const rapidjson::Value* error_obj_ptr = nullptr;
+
+    if (error_val.IsObject()) {
+        error_obj_ptr = &error_val;
+    } else if (error_val.IsArray() && !error_val.Empty()) {
+        error_obj_ptr = &error_val[0];
+    }
+
+    if (error_obj_ptr) {
+        const auto& error_obj = *error_obj_ptr;
+        if (error_obj.HasMember("number") && error_obj["number"].IsString()) {
+            error_resp->set_number(error_obj["number"].GetString());
+        }
+        if (error_obj.HasMember("reason") && error_obj["reason"].IsString()) {
+            error_resp->set_reason(error_obj["reason"].GetString());
+        }
+        if (error_obj.HasMember("description") && error_obj["description"].IsString()) {
+            error_resp->set_description(error_obj["description"].GetString());
+        }
+    }
+}
+
 // Helper function to populate a DataPackage from a JSON object
 void populateDataPackage(const rapidjson::Value& data_item, grpcProtobufMessages::DataPackages::DataPackage* data_package) {
     if (!data_item.IsObject()) return;
@@ -161,19 +185,9 @@ grpc::Status VISSServiceImpl::GetRequest(grpc::ServerContext* context, const grp
     if (response_doc->HasMember("requestId") && (*response_doc)["requestId"].IsString()) {
         response->set_requestid((*response_doc)["requestId"].GetString());
     }
-    if (response_doc->HasMember("error") && (*response_doc)["error"].IsObject()) {
+    if (response_doc->HasMember("error")) {
         response->set_status(grpcProtobufMessages::ResponseStatus::ERROR);
-        const auto& error_obj = (*response_doc)["error"];
-        auto error_resp = response->mutable_errorresponse();
-        if (error_obj.HasMember("number") && error_obj["number"].IsString()) {
-             error_resp->set_number(error_obj["number"].GetString());
-        }
-        if (error_obj.HasMember("reason") && error_obj["reason"].IsString()) {
-             error_resp->set_reason(error_obj["reason"].GetString());
-        }
-        if (error_obj.HasMember("description") && error_obj["description"].IsString()) {
-             error_resp->set_description(error_obj["description"].GetString());
-        }
+        populateErrorResponse((*response_doc)["error"], response->mutable_errorresponse());
     } else if (response_doc->HasMember("data")) {
         response->set_status(grpcProtobufMessages::ResponseStatus::SUCCESS);
         auto success_resp = response->mutable_successresponse();
@@ -245,19 +259,9 @@ grpc::Status VISSServiceImpl::SetRequest(grpc::ServerContext* context, const grp
     if (response_doc->HasMember("requestId") && (*response_doc)["requestId"].IsString()) {
         response->set_requestid((*response_doc)["requestId"].GetString());
     }
-    if (response_doc->HasMember("error") && (*response_doc)["error"].IsObject()) {
+    if (response_doc->HasMember("error")) {
         response->set_status(grpcProtobufMessages::ResponseStatus::ERROR);
-        const auto& error_obj = (*response_doc)["error"];
-        auto error_resp = response->mutable_errorresponse();
-        if (error_obj.HasMember("number") && error_obj["number"].IsString()) {
-             error_resp->set_number(error_obj["number"].GetString());
-        }
-        if (error_obj.HasMember("reason") && error_obj["reason"].IsString()) {
-             error_resp->set_reason(error_obj["reason"].GetString());
-        }
-        if (error_obj.HasMember("description") && error_obj["description"].IsString()) {
-             error_resp->set_description(error_obj["description"].GetString());
-        }
+        populateErrorResponse((*response_doc)["error"], response->mutable_errorresponse());
     } else {
         response->set_status(grpcProtobufMessages::ResponseStatus::SUCCESS);
     }
@@ -324,28 +328,7 @@ grpc::Status VISSServiceImpl::SubscribeRequest(grpc::ServerContext* context, con
 
     if (initial_response_doc->HasMember("error")) {
         initial_response.set_status(grpcProtobufMessages::ResponseStatus::ERROR);
-        const auto& error_val = (*initial_response_doc)["error"];
-        const rapidjson::Value* error_obj_ptr = nullptr;
-
-        if (error_val.IsObject()) {
-            error_obj_ptr = &error_val;
-        } else if (error_val.IsArray() && !error_val.Empty() /*&& error_val[0].IsObject()*/) {
-            error_obj_ptr = &error_val[0];
-        }
-
-        if (error_obj_ptr) {
-            const auto& error_obj = *error_obj_ptr;
-            auto error_resp = resp_msg->mutable_errorresponse();
-            if (error_obj.HasMember("number") && error_obj["number"].IsString()) {
-                error_resp->set_number(error_obj["number"].GetString());
-            }
-            if (error_obj.HasMember("reason") && error_obj["reason"].IsString()) {
-                error_resp->set_reason(error_obj["reason"].GetString());
-            }
-            if (error_obj.HasMember("description") && error_obj["description"].IsString()) {
-                error_resp->set_description(error_obj["description"].GetString());
-            }
-        }
+        populateErrorResponse((*initial_response_doc)["error"], resp_msg->mutable_errorresponse());
         
         writer->Write(initial_response);
         return grpc::Status::OK;
@@ -425,19 +408,9 @@ grpc::Status VISSServiceImpl::UnsubscribeRequest(grpc::ServerContext* context, c
     
     // Set the requestId in the final response
     response->set_requestid(request->requestid());
-    if (response_doc->HasMember("error") && (*response_doc)["error"].IsObject()) {
+    if (response_doc->HasMember("error")) {
         response->set_status(grpcProtobufMessages::ResponseStatus::ERROR);
-        const auto& error_obj = (*response_doc)["error"];
-        auto error_resp = response->mutable_errorresponse();
-        if (error_obj.HasMember("number") && error_obj["number"].IsString()) {
-             error_resp->set_number(error_obj["number"].GetString());
-        }
-        if (error_obj.HasMember("reason") && error_obj["reason"].IsString()) {
-             error_resp->set_reason(error_obj["reason"].GetString());
-        }
-        if (error_obj.HasMember("description") && error_obj["description"].IsString()) {
-             error_resp->set_description(error_obj["description"].GetString());
-        }
+        populateErrorResponse((*response_doc)["error"], response->mutable_errorresponse());
     } else {
         response->set_status(grpcProtobufMessages::ResponseStatus::SUCCESS);
     }
