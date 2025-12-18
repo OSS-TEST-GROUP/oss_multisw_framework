@@ -1,364 +1,279 @@
 #include <gtest/gtest.h>
+
+#define private public
 #include "AppController.hpp"
-#include "TestPrinter.hpp"
+#undef private
 
-#include <fstream>
-#include <sstream>
-#include <string>
-#include <vector>
 #include <cstdlib>
+#include <cstdio>
 #include <cstring>
-#include <unistd.h>
+#include <string>
+#include <fstream>
 #include <sys/stat.h>
-#include <cerrno>
-
-using namespace adsw_manager::agl;
-
-#ifndef MOCK_SYSCTL_DIR
-#define MOCK_SYSCTL_DIR "unittest/helpers"
-#endif
-
-#ifndef MOCK_SYSCTL_LOG
-#define MOCK_SYSCTL_LOG "sysctl.log"
-#endif
+#include <unistd.h>
 
 namespace {
-std::string g_helpers_dir;
-std::string g_log_path;
-std::string g_old_path;
 
-static std::string DirnameOf(const char* file_macro) {
-    std::string p = file_macro ? file_macro : "";
-    auto pos = p.find_last_of("/\\");
-    return (pos == std::string::npos) ? std::string(".") : p.substr(0, pos);
+static std::string g_helpers_dir;
+static std::string g_old_path;
+static std::string g_log_path;
+static std::string g_state_dir;
+
+std::string DirnameOf(const std::string& path)
+{
+    auto pos = path.find_last_of("/\\");
+    if (pos == std::string::npos) return ".";
+    return path.substr(0, pos);
 }
 
-static std::string ReadAll(const std::string& p) {
-    std::ifstream ifs(p);
-    std::ostringstream oss;
-    oss << ifs.rdbuf();
-    return oss.str();
+void EnsureExecutable(const std::string& path)
+{
+    // chmod +x
+    ::chmod(path.c_str(), 0755);
 }
 
-static void Truncate(const std::string& p) {
-    std::ofstream ofs(p, std::ios::trunc);
-    (void)ofs;
+void TruncateFile(const std::string& path)
+{
+    std::ofstream ofs(path, std::ios::trunc);
 }
 
-static void EnsureExecutable(const std::string& path) {
-    struct stat st{};
-    if (stat(path.c_str(), &st) == 0) {
-        if (!(st.st_mode & S_IXUSR)) {
-            chmod(path.c_str(), st.st_mode | S_IXUSR);
-        }
+void RmRf(const std::string& path)
+{
+    std::string cmd = "rm -rf '" + path + "' >/dev/null 2>&1";
+    std::system(cmd.c_str());
+}
+
+void MkdirP(const std::string& path)
+{
+    std::string cmd = "mkdir -p '" + path + "' >/dev/null 2>&1";
+    std::system(cmd.c_str());
+}
+
+void Touch(const std::string& path)
+{
+    std::ofstream ofs(path, std::ios::app);
+}
+
+std::string ExistsFile(const std::string& name)   { return g_state_dir + "/exists_" + name; }
+std::string RunningFile(const std::string& name)  { return g_state_dir + "/running_" + name; }
+
+void SetFail(const std::string& what)
+{
+    // ADSW_TEST_DOCKER_FAIL="start|run|stop|inspect|container_inspect|version"
+    if (what.empty()) {
+        ::unsetenv("ADSW_TEST_DOCKER_FAIL");
+    } else {
+        ::setenv("ADSW_TEST_DOCKER_FAIL", what.c_str(), 1);
     }
 }
 
-struct ExitCalled {
-    int code;
-};
+} // namespace
 
-struct ScopedSysHooks {
-    ScopedSysHooks() = default;
-    ~ScopedSysHooks() {
-#ifdef UNIT_TEST
-        adsw_manager::agl::testhook::ResetAll();
-#endif
-    }
-};
-
-}
+namespace adsw_manager::agl {
 
 class AppControllerTest : public ::testing::Test {
 protected:
     static void SetUpTestSuite() {
         g_helpers_dir = DirnameOf(__FILE__) + "/helpers";
-        const std::string shim = g_helpers_dir + "/systemctl";
-
-        EnsureExecutable(shim);
-
-        g_log_path = "sysctl.log";
-        setenv("ADSW_TEST_SYSCTL_LOG", g_log_path.c_str(), 1);
-
-        const char *cur = getenv("PATH");
-        g_old_path = cur ? cur : "";
-        std::string new_path = g_helpers_dir + ":" + g_old_path;
-        setenv("PATH", new_path.c_str(), 1);
-    }
-
-    static void TearDownTestSuite() {
-        if (!g_old_path.empty()) ::setenv("PATH", g_old_path.c_str(), 1);
+        EnsureExecutable(g_helpers_dir + "/docker");
     }
 
     void SetUp() override {
-        Truncate(g_log_path);
-        ::unsetenv("ADSW_TEST_EXIT_CODE");
-        ::unsetenv("ADSW_TEST_LOAD_STATE");
-        ::unsetenv("ADSW_TEST_ACTIVE_STATE");
-        ::unsetenv("ADSW_TEST_FAIL_LOADSTATE");
-        ::unsetenv("ADSW_TEST_FAIL_ACTIVESTATE");
-#ifdef UNIT_TEST
-        adsw_manager::agl::testhook::ResetAll();
-#endif
+        // 원래 PATH 저장
+        const char* cur = ::getenv("PATH");
+        saved_path_ = cur ? cur : "";
+
+        std::string new_path = g_helpers_dir + ":" + saved_path_;
+        ::setenv("PATH", new_path.c_str(), 1);
+
+        g_log_path = "docker_stub.log";
+        g_state_dir = "docker_stub_state";
+        ::setenv("ADSW_TEST_DOCKER_LOG", g_log_path.c_str(), 1);
+        ::setenv("ADSW_TEST_DOCKER_STATE_DIR", g_state_dir.c_str(), 1);
+
+        TruncateFile(g_log_path);
+        RmRf(g_state_dir);
+        MkdirP(g_state_dir);
+
+        ::unsetenv("ADSW_TEST_DOCKER_FAIL");
     }
 
     void TearDown() override {
-#ifdef UNIT_TEST
-        adsw_manager::agl::testhook::ResetAll();
-#endif
+        // env 정리
+        ::unsetenv("ADSW_TEST_DOCKER_FAIL");
+        ::unsetenv("ADSW_TEST_DOCKER_LOG");
+        ::unsetenv("ADSW_TEST_DOCKER_STATE_DIR");
+
+        // PATH 원복
+        ::setenv("PATH", saved_path_.c_str(), 1);
     }
+
+private:
+    std::string saved_path_;
 };
 
-// ----------------------------- Initialize -----------------------------
-
-TEST_F(AppControllerTest, Initialize_true) {
+TEST_F(AppControllerTest, Initialize_Called)
+{
     AppController c;
     EXPECT_TRUE(c.Initialize());
 }
 
-// ----------------------------- LaunchApp -----------------------------
-
-TEST_F(AppControllerTest, Launch_BuildsSystemctlStartWithServiceSuffix) {
-    AppController c;
-    ::setenv("ADSW_TEST_EXIT_CODE", "0", 1);
-
-    ASSERT_TRUE(c.LaunchApp("adsw-monitor"));
-
-    const std::string log = ReadAll(g_log_path);
-    ASSERT_NE(log.find("systemctl start adsw-monitor.service"), std::string::npos)
-        << "LOG:\n" << log;
-}
-
-TEST_F(AppControllerTest, Launch_KeepsDotServiceIfAlreadyGiven) {
-    AppController c;
-    ::setenv("ADSW_TEST_EXIT_CODE", "0", 1);
-
-    ASSERT_TRUE(c.LaunchApp("speedometer.service"));
-
-    const std::string log = ReadAll(g_log_path);
-    ASSERT_NE(log.find("systemctl start speedometer.service"), std::string::npos)
-        << "LOG:\n" << log;
-}
-
-TEST_F(AppControllerTest, Launch_ReturnsFalse_OnChildNonZeroButCommandStillCorrect) {
-    AppController c;
-    ::setenv("ADSW_TEST_EXIT_CODE", "3", 1);
-
-    EXPECT_FALSE(c.LaunchApp("adsw-monitor"));
-
-    const std::string log = ReadAll(g_log_path);
-    ASSERT_NE(log.find("systemctl start adsw-monitor.service"), std::string::npos)
-        << "LOG:\n" << log;
-}
-
-// ----------------------------- TerminateApp -----------------------------
-
-TEST_F(AppControllerTest, Terminate_BuildsSystemctlStop) {
-    AppController c;
-    ::setenv("ADSW_TEST_EXIT_CODE", "0", 1);
-
-    ASSERT_TRUE(c.TerminateApp("adsw-monitor"));
-
-    const std::string log = ReadAll(g_log_path);
-    ASSERT_NE(log.find("systemctl stop adsw-monitor.service"), std::string::npos)
-        << "LOG:\n" << log;
-}
-
-TEST_F(AppControllerTest, Terminate_ReturnsFalse_WhenSystemctlStopExitNonZero) {
-    AppController c;
-    ::setenv("ADSW_TEST_EXIT_CODE", "5", 1);
-
-    EXPECT_FALSE(c.TerminateApp("adsw-monitor"));
-
-    const std::string log = ReadAll(g_log_path);
-    ASSERT_NE(log.find("systemctl stop adsw-monitor.service"), std::string::npos)
-        << "LOG:\n" << log;
-}
-
-TEST_F(AppControllerTest, Terminate_ReturnsFalse_WhenStopExitNonZero_StopUnitSystemFailBranch) {
-    AppController c;
-    ::setenv("ADSW_TEST_EXIT_CODE", "7", 1);
-
-    EXPECT_FALSE(c.TerminateApp("adsw-monitor"));
-
-    const std::string log = ReadAll(g_log_path);
-    ASSERT_NE(log.find("systemctl stop adsw-monitor.service"), std::string::npos)
-        << "LOG:\n" << log;
-}
-
-// ----------------------------- IsAppRunning -----------------------------
-
-TEST_F(AppControllerTest, IsAppRunning_BuildsTwoShowQueriesWithValue) {
-    AppController c;
-    ::setenv("ADSW_TEST_LOAD_STATE", "loaded", 1);
-    ::setenv("ADSW_TEST_ACTIVE_STATE", "active", 1);
-
-    EXPECT_TRUE(c.IsAppRunning("adsw-monitor"));
-
-    const std::string log = ReadAll(g_log_path);
-    ASSERT_NE(log.find("systemctl show adsw-monitor.service -p LoadState --value"), std::string::npos)
-        << "LOG:\n" << log;
-    ASSERT_NE(log.find("systemctl show adsw-monitor.service -p ActiveState --value"), std::string::npos)
-        << "LOG:\n" << log;
-}
-
-TEST_F(AppControllerTest, IsAppRunning_AppNameWithoutSuffix_StillQueriesServiceName) {
-    AppController c;
-    ::setenv("ADSW_TEST_LOAD_STATE", "loaded", 1);
-    ::setenv("ADSW_TEST_ACTIVE_STATE", "inactive", 1);
-
-    EXPECT_FALSE(c.IsAppRunning("speedometer"));
-
-    const std::string log = ReadAll(g_log_path);
-    ASSERT_NE(log.find("systemctl show speedometer.service -p LoadState --value"), std::string::npos)
-        << "LOG:\n" << log;
-    ASSERT_NE(log.find("systemctl show speedometer.service -p ActiveState --value"), std::string::npos)
-        << "LOG:\n" << log;
-}
-
-TEST_F(AppControllerTest, IsAppRunning_ReturnsTrue_WhenActiveStateActivating) {
-    AppController c;
-    ::setenv("ADSW_TEST_LOAD_STATE", "loaded", 1);
-    ::setenv("ADSW_TEST_ACTIVE_STATE", "activating", 1);
-
-    EXPECT_TRUE(c.IsAppRunning("adsw-monitor"));
-
-    const std::string log = ReadAll(g_log_path);
-    ASSERT_NE(log.find("systemctl show adsw-monitor.service -p LoadState --value"), std::string::npos)
-        << "LOG:\n" << log;
-    ASSERT_NE(log.find("systemctl show adsw-monitor.service -p ActiveState --value"), std::string::npos)
-        << "LOG:\n" << log;
-}
-
-TEST_F(AppControllerTest, IsAppRunning_ReturnsFalse_WhenActiveStateFailed) {
-    AppController c;
-    ::setenv("ADSW_TEST_LOAD_STATE", "loaded", 1);
-    ::setenv("ADSW_TEST_ACTIVE_STATE", "failed", 1);
-
-    EXPECT_FALSE(c.IsAppRunning("adsw-monitor"));
-
-    const std::string log = ReadAll(g_log_path);
-    ASSERT_NE(log.find("systemctl show adsw-monitor.service -p LoadState --value"), std::string::npos)
-        << "LOG:\n" << log;
-    ASSERT_NE(log.find("systemctl show adsw-monitor.service -p ActiveState --value"), std::string::npos)
-        << "LOG:\n" << log;
-}
-
-TEST_F(AppControllerTest, IsAppRunning_ReturnsFalse_WhenUnitNotLoaded) {
-    AppController c;
-    ::setenv("ADSW_TEST_LOAD_STATE", "not-found", 1);
-
-    EXPECT_FALSE(c.IsAppRunning("adsw-monitor"));
-
-    const std::string log = ReadAll(g_log_path);
-    ASSERT_NE(log.find("systemctl show adsw-monitor.service -p LoadState --value"), std::string::npos)
-        << "LOG:\n" << log;
-    ASSERT_EQ(log.find("systemctl show adsw-monitor.service -p ActiveState --value"), std::string::npos)
-        << "LOG:\n" << log;
-}
-
-TEST_F(AppControllerTest, IsAppRunning_ReturnsFalse_WhenLoadStateQueryFails_RunAndCaptureFalse) {
+TEST_F(AppControllerTest, RunDocker_VersionSuccessAndFail)
+{
     AppController c;
 
-    ::setenv("ADSW_TEST_FAIL_LOADSTATE", "1", 1);
+    int st_ok = c.RunDocker({"--version"});
+    ASSERT_GE(st_ok, 0);
+    ASSERT_TRUE(WIFEXITED(st_ok));
+    EXPECT_EQ(WEXITSTATUS(st_ok), 0);
 
-    EXPECT_FALSE(c.IsAppRunning("adsw-monitor"));
-
-    const std::string log = ReadAll(g_log_path);
-    ASSERT_NE(log.find("systemctl show adsw-monitor.service -p LoadState --value"), std::string::npos)
-        << "LOG:\n" << log;
-    ASSERT_EQ(log.find("systemctl show adsw-monitor.service -p ActiveState --value"), std::string::npos)
-        << "LOG:\n" << log;
+    SetFail("version");
+    int st_fail = c.RunDocker({"--version"});
+    ASSERT_GE(st_fail, 0);
+    ASSERT_TRUE(WIFEXITED(st_fail));
+    EXPECT_NE(WEXITSTATUS(st_fail), 0);
 }
 
-TEST_F(AppControllerTest, IsAppRunning_ReturnsFalse_WhenActiveStateQueryFails_RunAndCaptureFalse) {
+TEST_F(AppControllerTest, ReadDockerOutput_CapturesStdout)
+{
     AppController c;
+    std::string out;
 
-    ::setenv("ADSW_TEST_LOAD_STATE", "loaded", 1);
-    ::setenv("ADSW_TEST_FAIL_ACTIVESTATE", "1", 1);
-
-    EXPECT_FALSE(c.IsAppRunning("adsw-monitor"));
-
-    const std::string log = ReadAll(g_log_path);
-    ASSERT_NE(log.find("systemctl show adsw-monitor.service -p LoadState --value"), std::string::npos)
-        << "LOG:\n" << log;
-    ASSERT_NE(log.find("systemctl show adsw-monitor.service -p ActiveState --value"), std::string::npos)
-        << "LOG:\n" << log;
+    EXPECT_TRUE(c.ReadDockerOutput("docker --version 2>/dev/null", out));
+    EXPECT_NE(out.find("Docker version"), std::string::npos);
 }
 
-#ifdef UNIT_TEST
-
-TEST_F(AppControllerTest, RunSystemctl_ForkFails_pidLessThan0Branch) {
-    ScopedSysHooks _;
-
+TEST_F(AppControllerTest, IsAppRunning_TrueWhenExistsAndRunningFilePresent)
+{
     AppController c;
+    const std::string name = "app_run_true";
 
-    adsw_manager::agl::testhook::SetFork([]() -> pid_t {
-        errno = EAGAIN;
-        return -1; // pid < 0
-    });
+    Touch(ExistsFile(name));
+    Touch(RunningFile(name));
 
-    EXPECT_FALSE(c.LaunchApp("adsw-monitor"));
+    EXPECT_TRUE(c.IsAppRunning(name));
 }
 
-TEST_F(AppControllerTest, RunSystemctl_ChildBranch_ExecvpFails_Exit127Covered) {
-    ScopedSysHooks _;
-
+TEST_F(AppControllerTest, IsAppRunning_FalseWhenExistsButNotRunning)
+{
     AppController c;
+    const std::string name = "app_run_false";
 
-    adsw_manager::agl::testhook::SetFork([]() -> pid_t {
-        return 0; // pid == 0
-    });
+    Touch(ExistsFile(name));
 
-    adsw_manager::agl::testhook::SetExecvp([](const char*, char* const*) -> int {
-        errno = ENOENT;
-        return -1;
-    });
-
-    adsw_manager::agl::testhook::SetExit([](int code) {
-        throw ExitCalled{code};
-    });
-
-    try {
-        (void)c.LaunchApp("adsw-monitor");
-        FAIL() << "Expected ExitCalled";
-    } catch (const ExitCalled& e) {
-        EXPECT_EQ(e.code, 127);
-    }
+    EXPECT_FALSE(c.IsAppRunning(name));
 }
 
-TEST_F(AppControllerTest, RunSystemctl_WaitpidFails_waitpidErrorBranch) {
-    ScopedSysHooks _;
-
+TEST_F(AppControllerTest, IsAppRunning_FalseWhenInspectFails)
+{
     AppController c;
+    const std::string name = "app_inspect_fail";
 
-    adsw_manager::agl::testhook::SetFork([]() -> pid_t {
-        return 1234;
-    });
+    Touch(ExistsFile(name));
+    Touch(RunningFile(name));
 
-    adsw_manager::agl::testhook::SetWaitpid([](pid_t, int*, int) -> pid_t {
-        errno = ECHILD;
-        return -1;
-    });
+    SetFail("inspect");
 
-    EXPECT_FALSE(c.LaunchApp("adsw-monitor"));
+    EXPECT_FALSE(c.IsAppRunning(name));
 }
 
-TEST_F(AppControllerTest, RunSystemctl_ParentSuccess_StatusExit0Branch) {
-    ScopedSysHooks _;
-
+TEST_F(AppControllerTest, LaunchApp_WhenNotExists_RunSuccess_CreatesStateAndRunning)
+{
     AppController c;
+    const std::string name = "app_launch_run_ok";
 
-    adsw_manager::agl::testhook::SetFork([]() -> pid_t {
-        return 1234;
-    });
+    EXPECT_TRUE(c.LaunchApp(name));
 
-    adsw_manager::agl::testhook::SetWaitpid([](pid_t pid, int* status, int) -> pid_t {
-        *status = 0;
-        return pid;
-    });
+    std::ifstream f1(ExistsFile(name));
+    std::ifstream f2(RunningFile(name));
+    EXPECT_TRUE(f1.good());
+    EXPECT_TRUE(f2.good());
 
-    EXPECT_TRUE(c.LaunchApp("adsw-monitor"));
+    EXPECT_TRUE(c.IsAppRunning(name));
 }
 
-#endif  // UNIT_TEST
+TEST_F(AppControllerTest, LaunchApp_WhenExists_StartSuccess_SetsRunning)
+{
+    AppController c;
+    const std::string name = "app_launch_start_ok";
+
+    Touch(ExistsFile(name));
+
+    EXPECT_TRUE(c.LaunchApp(name));
+
+    std::ifstream f2(RunningFile(name));
+    EXPECT_TRUE(f2.good());
+    EXPECT_TRUE(c.IsAppRunning(name));
+}
+
+TEST_F(AppControllerTest, LaunchApp_WhenExists_StartFail_ReturnsFalse)
+{
+    AppController c;
+    const std::string name = "app_launch_start_fail";
+
+    Touch(ExistsFile(name));
+    SetFail("start");
+
+    EXPECT_FALSE(c.LaunchApp(name));
+}
+
+TEST_F(AppControllerTest, LaunchApp_WhenNotExists_RunFail_ReturnsFalse)
+{
+    AppController c;
+    const std::string name = "app_launch_run_fail";
+
+    SetFail("run");
+
+    EXPECT_FALSE(c.LaunchApp(name));
+}
+
+TEST_F(AppControllerTest, LaunchApp_WhenContainerInspectFails_FallsBackToRun)
+{
+    AppController c;
+    const std::string name = "app_inspect_fail_fallback_run";
+
+    SetFail("container_inspect");
+
+    EXPECT_TRUE(c.LaunchApp(name));
+
+    std::ifstream f1(ExistsFile(name));
+    std::ifstream f2(RunningFile(name));
+    EXPECT_TRUE(f1.good());
+    EXPECT_TRUE(f2.good());
+}
+
+TEST_F(AppControllerTest, TerminateApp_StopSuccessAndFail)
+{
+    AppController c;
+    const std::string name = "app_stop_ok_then_missing";
+
+    Touch(ExistsFile(name));
+    Touch(RunningFile(name));
+
+    EXPECT_TRUE(c.TerminateApp(name));
+    std::ifstream f2(RunningFile(name));
+    EXPECT_FALSE(f2.good());
+
+}
+
+TEST_F(AppControllerTest, TerminateApp_StopFail_WhenNotExists)
+{
+    AppController c;
+    const std::string name = "app_stop_missing";
+
+    EXPECT_FALSE(c.TerminateApp(name));
+}
+
+TEST_F(AppControllerTest, TerminateApp_StopFail_ByEnv)
+{
+    AppController c;
+    const std::string name = "app_stop_env_fail";
+
+    Touch(ExistsFile(name));
+    Touch(RunningFile(name));
+
+    SetFail("stop");
+    EXPECT_FALSE(c.TerminateApp(name));
+}
+
+} // namespace adsw_manager::agl
