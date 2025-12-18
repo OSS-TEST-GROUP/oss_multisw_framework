@@ -156,14 +156,14 @@ TEST_F(ServiceRegistryTest, ServiceCounts_TC007) {
 TEST_F(ServiceRegistryTest, LoadServiceList_TC009) {
     // Load from actual YAML file in config directory
     // The path is relative to where the test is executed
-    bool result = registry->LoadServiceList("service/extension/ros2/adsw_manager/config/ros2-sample-speclist.yaml");
+    auto service = MakeService("Temp");  // Dummy to avoid null pointer
+    bool result = registry->LoadServiceList("../../config/ros2-sample-speclist.yaml");
     
     // If file exists and is valid, should load successfully
     // The sample file has ros2 launch commands that will be parsed
     if (result) {
         EXPECT_GT(registry->GetServicesNum(), 0);
     }
-    // If file doesn't exist in test environment, test still passes
 }
 TEST_F(ServiceRegistryTest, SaveAndLoadServiceList_TC010) {
     // Test Save and LoadServiceSaved with actual path
@@ -172,12 +172,16 @@ TEST_F(ServiceRegistryTest, SaveAndLoadServiceList_TC010) {
     auto service2 = MakeService("TestService2");
     registry->AddService(service1, "TestGroup");
     registry->AddService(service2, "TestGroup");
-    
+
+    setenv("SAVED_REGISTRY_BACKUP", "/tmp/test_config", 1);
+        
     // Save should work (may fail if path is not writable, but should not crash)
     bool saveResult = registry->Save();
     
     // Try to load saved file
-    bool loadResult = registry->LoadServiceSaved("service/extension/ros2/adsw_manager/config/saved-service-list.yaml");
+    bool loadResult = registry->LoadServiceSaved("/tmp/test_config/saved-service-list.yaml");
+  
+    unsetenv("SAVED_REGISTRY_BACKUP");
     
     // Just verify the functions execute without crashing
     EXPECT_TRUE(saveResult || !saveResult);
@@ -186,11 +190,18 @@ TEST_F(ServiceRegistryTest, SaveAndLoadServiceList_TC010) {
 
 TEST_F(ServiceRegistryTest, LoadServiceSaved_TC011) {
     // Try to load from actual saved service list YAML file
-    bool result = registry->LoadServiceSaved("service/extension/ros2/adsw_manager/config/saved-service-list.yaml");
+
+    auto service = MakeService("Temp");  // Dummy to avoid null pointer   
     
+    auto mockManager = std::make_shared<MockADSWManager>();
+    Mock_ADSWManager = mockManager.get();
+    bool result = registry->LoadServiceSaved("../../config/saved-service-list.yaml");
+
     // The file may or may not exist depending on test environment
     // Just verify the function executes without crashing
     EXPECT_TRUE(result || !result);
+    Mock_ADSWManager = nullptr;
+    mockManager.reset();    
 }
 TEST_F(ServiceRegistryTest, ExtractRos2LaunchCommands_TC012) {
     std::string script = "ros2 launch my_package my_launch_file.launch.py";
@@ -423,7 +434,8 @@ TEST_F(ServiceRegistryTest, ExtractRos2LaunchCommands_EmptyScript_TC033) {
 TEST_F(ServiceRegistryTest, LoadServiceList_WithValidYAML_TC034) {
     // Test loading from the actual sample YAML file
     // This should trigger the YAML parsing code (lines 61-100+ in ServiceRegistry.cpp)
-    bool result = registry->LoadServiceList("service/extension/ros2/adsw_manager/config/ros2-sample-speclist.yaml");
+    auto service = MakeService("ValidYaml");  // Dummy to avoid null pointer
+    bool result = registry->LoadServiceList("../../config/ros2-sample-speclist.yaml");
     
     if (result) {
         // If loaded successfully, verify services were created from the YAML
@@ -588,7 +600,10 @@ TEST_F(ServiceRegistryTest, LoadServiceSaved_WithValidFile_TC045) {
     // Note: Service properties are set via constructor, not setters
     
     // Try to load from the actual config path
-    bool loadResult = registry->LoadServiceSaved("service/extension/ros2/adsw_manager/config/saved-service-list.yaml");
+    auto service = MakeService("ValidYaml"); 
+    auto mockManager = std::make_shared<MockADSWManager>();
+    Mock_ADSWManager = mockManager.get();
+    bool loadResult = registry->LoadServiceSaved("../../config/saved-service-list.yaml");
     
     // Function should execute without crashing
     // Result depends on whether the file exists and is valid
@@ -601,10 +616,13 @@ TEST_F(ServiceRegistryTest, LoadServiceSaved_WithValidFile_TC045) {
         // The file may or may not have services, just verify it didn't crash
         EXPECT_GE(numServices, 0);
     }
+
+    Mock_ADSWManager = nullptr;
+    mockManager.reset();
 }
 
 // ============================================================================
-// NEW TESTS TO IMPROVE SERVICEREG ISTRY COVERAGE - YAML PARSING
+// NEW TESTS TO IMPROVE SERVICE REGISTRY COVERAGE - YAML PARSING
 // Target: Lines 61-102 in ServiceRegistry.cpp (currently 0% covered)
 // ============================================================================
 
