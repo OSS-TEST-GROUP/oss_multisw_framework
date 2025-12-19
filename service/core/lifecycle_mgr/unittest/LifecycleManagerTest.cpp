@@ -64,6 +64,8 @@ protected:
     TestableLifecycleManager mgr;
 };
 
+
+
 TEST_F(LifecycleManagerTest, Start_AllDependenciesSucceed_ReturnsTrue) {
     auto state_manager = std::make_shared<MockStateManager>(mgr);
     auto policy_manager = std::make_shared<MockPolicyManager>();
@@ -349,6 +351,262 @@ TEST_F(LifecycleManagerTest, Start_MultipleCalls) {
 
     EXPECT_TRUE(mgr.Start());
     EXPECT_TRUE(mgr.Start()); // Second call should also succeed
+}
+
+// ============================================================================
+// Initialize Method Coverage Tests
+// ============================================================================
+
+TEST_F(LifecycleManagerTest, Initialize_Success_ReturnsTrue) {
+    // Create mock objects
+    auto dds_transmitter = std::make_shared<MockDDSTransmitter>();
+    auto endpoint_factory = new MockEndPointFactory();
+    auto mw_service_manager = std::make_shared<MockMWServiceManager>();
+    
+    // Set global pointers for forwarding
+    Mock_DDSTransmitter = dds_transmitter.get();
+    Mock_EndPointFactory = endpoint_factory;
+    Mock_MWServiceManager = mw_service_manager.get();
+    
+    // Allow leak for endpoint_factory since it's managed by LifecycleManager after Initialize
+    testing::Mock::AllowLeak(endpoint_factory);
+    
+    // Set expectations for Initialize
+    EXPECT_CALL(*mw_service_manager, Initialize()).WillOnce(Return(true));
+    EXPECT_CALL(*dds_transmitter, Initialize()).WillOnce(Return(true));
+    EXPECT_CALL(*endpoint_factory, Initialize()).WillOnce(Return(0));
+    EXPECT_CALL(*endpoint_factory, CreateEndPoints(_)).WillOnce(Return(0));
+    
+    // Call Initialize on a fresh LifecycleManager
+    TestableLifecycleManager fresh_mgr;
+    bool result = fresh_mgr.Initialize();
+    
+    EXPECT_TRUE(result);
+    
+    // Verify that components were created
+    EXPECT_NE(nullptr, fresh_mgr.GetStateMgr());
+    EXPECT_NE(nullptr, fresh_mgr.GetPolicy());
+    EXPECT_NE(nullptr, fresh_mgr.GetMWService());
+    EXPECT_NE(nullptr, fresh_mgr.GetMonitor());
+    EXPECT_NE(nullptr, fresh_mgr.GetRegistry());
+    EXPECT_NE(nullptr, fresh_mgr.GetTransmitter());
+    EXPECT_NE(nullptr, fresh_mgr.GetEndpointFactory());
+    
+    // Clean up
+    Mock_DDSTransmitter = nullptr;
+    Mock_EndPointFactory = nullptr;
+    Mock_MWServiceManager = nullptr;
+}
+
+TEST_F(LifecycleManagerTest, Initialize_CreatesAllComponents) {
+    // Create mock objects
+    auto dds_transmitter = std::make_shared<MockDDSTransmitter>();
+    auto endpoint_factory = new MockEndPointFactory();
+    auto mw_service_manager = std::make_shared<MockMWServiceManager>();
+    
+    // Set global pointers for forwarding
+    Mock_DDSTransmitter = dds_transmitter.get();
+    Mock_EndPointFactory = endpoint_factory;
+    Mock_MWServiceManager = mw_service_manager.get();
+    
+    // Allow leak for endpoint_factory since it's managed by LifecycleManager after Initialize
+    testing::Mock::AllowLeak(endpoint_factory);
+    
+    // Set expectations - Initialize always returns true even if components fail internally
+    EXPECT_CALL(*mw_service_manager, Initialize()).WillOnce(Return(true));
+    EXPECT_CALL(*dds_transmitter, Initialize()).WillOnce(Return(true));
+    EXPECT_CALL(*endpoint_factory, Initialize()).WillOnce(Return(0));
+    EXPECT_CALL(*endpoint_factory, CreateEndPoints(_)).WillOnce(Return(0));
+    
+    TestableLifecycleManager fresh_mgr;
+    EXPECT_TRUE(fresh_mgr.Initialize());
+    
+    // Verify state is set to MANAGER_INIT
+    // Note: We can't directly check state, but we can verify components exist
+    EXPECT_NE(nullptr, fresh_mgr.GetRegistry());
+    
+    // Clean up
+    Mock_DDSTransmitter = nullptr;
+    Mock_EndPointFactory = nullptr;
+    Mock_MWServiceManager = nullptr;
+}
+
+TEST_F(LifecycleManagerTest, Initialize_ThenStart_FullLifecycle) {
+    // Create mock objects for Initialize
+    auto dds_transmitter = std::make_shared<MockDDSTransmitter>();
+    auto endpoint_factory = new MockEndPointFactory();
+    auto mw_service_manager = std::make_shared<MockMWServiceManager>();
+    
+    // Set global pointers for forwarding
+    Mock_DDSTransmitter = dds_transmitter.get();
+    Mock_EndPointFactory = endpoint_factory;
+    Mock_MWServiceManager = mw_service_manager.get();
+    
+    // Allow leak for endpoint_factory since it's managed by LifecycleManager after Initialize
+    testing::Mock::AllowLeak(endpoint_factory);
+    
+    // Set expectations for Initialize
+    EXPECT_CALL(*mw_service_manager, Initialize()).WillOnce(Return(true));
+    EXPECT_CALL(*dds_transmitter, Initialize()).WillOnce(Return(true));
+    EXPECT_CALL(*endpoint_factory, Initialize()).WillOnce(Return(0));
+    EXPECT_CALL(*endpoint_factory, CreateEndPoints(_)).WillOnce(Return(0));
+    
+    // Create fresh manager and initialize
+    TestableLifecycleManager fresh_mgr;
+    EXPECT_TRUE(fresh_mgr.Initialize());
+    
+    // Now set up mocks for the components created by Initialize
+    // We need to set the global pointers for StateManager, PolicyManager, StateMonitor
+    auto state_manager = std::dynamic_pointer_cast<MockStateManager>(fresh_mgr.GetStateMgr());
+    auto policy_manager = std::dynamic_pointer_cast<MockPolicyManager>(fresh_mgr.GetPolicy());
+    auto state_monitor = std::dynamic_pointer_cast<MockStateMonitor>(fresh_mgr.GetMonitor());
+    
+    // Note: The real Initialize creates real objects, not mocks
+    // So we need to inject mocks after Initialize for Start to work with mocks
+    auto mock_state_manager = std::make_shared<MockStateManager>(fresh_mgr);
+    auto mock_policy_manager = std::make_shared<MockPolicyManager>();
+    auto mock_state_monitor = std::make_shared<MockStateMonitor>(fresh_mgr);
+    
+    Mock_StateManager = mock_state_manager.get();
+    Mock_PolicyManager = mock_policy_manager.get();
+    Mock_StateMonitor = mock_state_monitor.get();
+    
+    EXPECT_CALL(*mock_state_manager, Start()).WillOnce(Return(true));
+    EXPECT_CALL(*mock_policy_manager, Start()).WillOnce(Return(true));
+    EXPECT_CALL(*mw_service_manager, Start()).WillOnce(Return(true));
+    EXPECT_CALL(*mock_state_monitor, Start()).WillOnce(Return(true));
+    
+    fresh_mgr.SetStateManager(mock_state_manager);
+    fresh_mgr.SetPolicyManager(mock_policy_manager);
+    fresh_mgr.SetStateMonitor(mock_state_monitor);
+    
+    EXPECT_TRUE(fresh_mgr.Start());
+    
+    // Clean up
+    Mock_DDSTransmitter = nullptr;
+    Mock_EndPointFactory = nullptr;
+    Mock_MWServiceManager = nullptr;
+    Mock_StateManager = nullptr;
+    Mock_PolicyManager = nullptr;
+    Mock_StateMonitor = nullptr;
+}
+
+TEST_F(LifecycleManagerTest, Initialize_MWServiceManagerInitializeFails_StillReturnsTrue) {
+    // Create mock objects
+    auto dds_transmitter = std::make_shared<MockDDSTransmitter>();
+    auto endpoint_factory = new MockEndPointFactory();
+    auto mw_service_manager = std::make_shared<MockMWServiceManager>();
+    
+    // Set global pointers for forwarding
+    Mock_DDSTransmitter = dds_transmitter.get();
+    Mock_EndPointFactory = endpoint_factory;
+    Mock_MWServiceManager = mw_service_manager.get();
+    
+    // Allow leak for endpoint_factory since it's managed by LifecycleManager after Initialize
+    testing::Mock::AllowLeak(endpoint_factory);
+    
+    // MWServiceManager::Initialize fails but Initialize still returns true
+    // (current implementation doesn't check return values)
+    EXPECT_CALL(*mw_service_manager, Initialize()).WillOnce(Return(false));
+    EXPECT_CALL(*dds_transmitter, Initialize()).WillOnce(Return(true));
+    EXPECT_CALL(*endpoint_factory, Initialize()).WillOnce(Return(0));
+    EXPECT_CALL(*endpoint_factory, CreateEndPoints(_)).WillOnce(Return(0));
+    
+    TestableLifecycleManager fresh_mgr;
+    // Initialize always returns true in current implementation
+    EXPECT_TRUE(fresh_mgr.Initialize());
+    
+    // Clean up
+    Mock_DDSTransmitter = nullptr;
+    Mock_EndPointFactory = nullptr;
+    Mock_MWServiceManager = nullptr;
+}
+
+TEST_F(LifecycleManagerTest, Initialize_DDSTransmitterInitializeFails_StillReturnsTrue) {
+    // Create mock objects
+    auto dds_transmitter = std::make_shared<MockDDSTransmitter>();
+    auto endpoint_factory = new MockEndPointFactory();
+    auto mw_service_manager = std::make_shared<MockMWServiceManager>();
+    
+    // Set global pointers for forwarding
+    Mock_DDSTransmitter = dds_transmitter.get();
+    Mock_EndPointFactory = endpoint_factory;
+    Mock_MWServiceManager = mw_service_manager.get();
+    
+    // Allow leak for endpoint_factory since it's managed by LifecycleManager after Initialize
+    testing::Mock::AllowLeak(endpoint_factory);
+    
+    // DDSTransmitter::Initialize fails but Initialize still returns true
+    EXPECT_CALL(*mw_service_manager, Initialize()).WillOnce(Return(true));
+    EXPECT_CALL(*dds_transmitter, Initialize()).WillOnce(Return(false));
+    EXPECT_CALL(*endpoint_factory, Initialize()).WillOnce(Return(0));
+    EXPECT_CALL(*endpoint_factory, CreateEndPoints(_)).WillOnce(Return(0));
+    
+    TestableLifecycleManager fresh_mgr;
+    EXPECT_TRUE(fresh_mgr.Initialize());
+    
+    // Clean up
+    Mock_DDSTransmitter = nullptr;
+    Mock_EndPointFactory = nullptr;
+    Mock_MWServiceManager = nullptr;
+}
+
+TEST_F(LifecycleManagerTest, Initialize_EndPointFactoryInitializeFails_StillReturnsTrue) {
+    // Create mock objects
+    auto dds_transmitter = std::make_shared<MockDDSTransmitter>();
+    auto endpoint_factory = new MockEndPointFactory();
+    auto mw_service_manager = std::make_shared<MockMWServiceManager>();
+    
+    // Set global pointers for forwarding
+    Mock_DDSTransmitter = dds_transmitter.get();
+    Mock_EndPointFactory = endpoint_factory;
+    Mock_MWServiceManager = mw_service_manager.get();
+    
+    // Allow leak for endpoint_factory since it's managed by LifecycleManager after Initialize
+    testing::Mock::AllowLeak(endpoint_factory);
+    
+    // EndPointFactory::Initialize fails (returns non-zero)
+    EXPECT_CALL(*mw_service_manager, Initialize()).WillOnce(Return(true));
+    EXPECT_CALL(*dds_transmitter, Initialize()).WillOnce(Return(true));
+    EXPECT_CALL(*endpoint_factory, Initialize()).WillOnce(Return(-1));
+    EXPECT_CALL(*endpoint_factory, CreateEndPoints(_)).WillOnce(Return(0));
+    
+    TestableLifecycleManager fresh_mgr;
+    EXPECT_TRUE(fresh_mgr.Initialize());
+    
+    // Clean up
+    Mock_DDSTransmitter = nullptr;
+    Mock_EndPointFactory = nullptr;
+    Mock_MWServiceManager = nullptr;
+}
+
+TEST_F(LifecycleManagerTest, Initialize_CreateEndPointsFails_StillReturnsTrue) {
+    // Create mock objects
+    auto dds_transmitter = std::make_shared<MockDDSTransmitter>();
+    auto endpoint_factory = new MockEndPointFactory();
+    auto mw_service_manager = std::make_shared<MockMWServiceManager>();
+    
+    // Set global pointers for forwarding
+    Mock_DDSTransmitter = dds_transmitter.get();
+    Mock_EndPointFactory = endpoint_factory;
+    Mock_MWServiceManager = mw_service_manager.get();
+    
+    // Allow leak for endpoint_factory since it's managed by LifecycleManager after Initialize
+    testing::Mock::AllowLeak(endpoint_factory);
+    
+    // CreateEndPoints fails (returns non-zero)
+    EXPECT_CALL(*mw_service_manager, Initialize()).WillOnce(Return(true));
+    EXPECT_CALL(*dds_transmitter, Initialize()).WillOnce(Return(true));
+    EXPECT_CALL(*endpoint_factory, Initialize()).WillOnce(Return(0));
+    EXPECT_CALL(*endpoint_factory, CreateEndPoints(_)).WillOnce(Return(-1));
+    
+    TestableLifecycleManager fresh_mgr;
+    EXPECT_TRUE(fresh_mgr.Initialize());
+    
+    // Clean up
+    Mock_DDSTransmitter = nullptr;
+    Mock_EndPointFactory = nullptr;
+    Mock_MWServiceManager = nullptr;
 }
 
 int main(int argc, char** argv) {

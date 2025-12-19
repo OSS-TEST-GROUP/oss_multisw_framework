@@ -33,8 +33,7 @@ class ServiceExecutor {
 
     TaskID AddTask(const std::string& name, ExecutorFunctionType function, const RequestBase& request);
     TaskID AddTaskInterval(const std::string& name, ExecutorFunctionType function, TaskInterval interval);
-    TaskID AddTaskOnce(const std::string& name, ExecutorFunctionType function, TaskDelay delay);
-
+  
     void RemoveTask(TaskID task_id);
     void RemoveTask(const std::string& name);
 

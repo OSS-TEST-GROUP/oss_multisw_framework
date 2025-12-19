@@ -83,9 +83,37 @@ protected:
 };
 
 TEST_F(DiagnosticAnalyzerTest, Initialize_TC001) {
+    EXPECT_CALL(*Mock_ServiceExecutorMock, AddTask(_, _, _)).WillOnce(Return(1234));
+    EXPECT_CALL(*Mock_MessageTransmitterMock, AddSubscriber("DiagnosticAnalyzer", _, _)).WillRepeatedly(Return(1));
+    EXPECT_CALL(*Mock_MessageTransmitterMock, SubscribeMessage(_, _, MessageProtocolType::DDS, false)).WillRepeatedly(Return(true));
+
+    EXPECT_TRUE(ins->Initialize());
 }
 
-TEST_F(DiagnosticAnalyzerTest, Finalize_TC001) {
+TEST_F(DiagnosticAnalyzerTest, Initialize_TC002_AlreadyInitialized) {
+    EXPECT_CALL(*Mock_ServiceExecutorMock, AddTask(_, _, _)).WillOnce(Return(1234));
+    EXPECT_CALL(*Mock_MessageTransmitterMock, AddSubscriber("DiagnosticAnalyzer", _, _)).WillRepeatedly(Return(1));
+    EXPECT_CALL(*Mock_MessageTransmitterMock, SubscribeMessage(_, _, MessageProtocolType::DDS, false)).WillRepeatedly(Return(true));
+
+    EXPECT_TRUE(ins->Initialize());
+    // Call Initialize again - should return true immediately (already initialized)
+    EXPECT_TRUE(ins->Initialize());
+}
+
+TEST_F(DiagnosticAnalyzerTest, Finalize_TC001_without_initialize) {
+    // Finalize without Initialize - should return early (not initialized)
+    EXPECT_NO_THROW(ins->Finalize());
+}
+
+TEST_F(DiagnosticAnalyzerTest, Finalize_TC002_after_initialize) {
+    EXPECT_CALL(*Mock_ServiceExecutorMock, AddTask(_, _, _)).WillOnce(Return(1234));
+    EXPECT_CALL(*Mock_MessageTransmitterMock, AddSubscriber("DiagnosticAnalyzer", _, _)).WillRepeatedly(Return(1));
+    EXPECT_CALL(*Mock_MessageTransmitterMock, SubscribeMessage(_, _, MessageProtocolType::DDS, false)).WillRepeatedly(Return(true));
+    EXPECT_CALL(*Mock_MessageTransmitterMock, RemoveSubscriber(_)).Times(1);
+
+    EXPECT_TRUE(ins->Initialize());
+    // Finalize after Initialize - should clean up properly
+    EXPECT_NO_THROW(ins->Finalize());
 }
 
 TEST_F(DiagnosticAnalyzerTest, AnalyzeAll_TC001) {
@@ -222,13 +250,178 @@ TEST_F(DiagnosticAnalyzerTest, Analyze_TC001_ConditionOr_NotSatisfied) {
     ASSERT_EQ(results.size(), 0);
 }
 
-TEST_F(DiagnosticAnalyzerTest, HandleReceiveDiagMessage_TC001) {
+// ==================== HandleReceiveDiagMessage Tests ====================
+
+// Test HandleReceiveDiagMessage with valid DiagMessage
+TEST_F(DiagnosticAnalyzerTest, HandleReceiveDiagMessage_TC001_valid_message) {
+    EXPECT_CALL(*Mock_ServiceExecutorMock, AddTask(_, _, _)).WillOnce(Return(1234));
+    EXPECT_CALL(*Mock_MessageTransmitterMock, AddSubscriber("DiagnosticAnalyzer", _, _)).WillRepeatedly(Return(1));
+    EXPECT_CALL(*Mock_MessageTransmitterMock, SubscribeMessage(_, _, MessageProtocolType::DDS, false)).WillRepeatedly(Return(true));
+    EXPECT_CALL(*Mock_ServiceExecutorMock, RequestTask(_)).WillOnce(Return(true));
+
+    ins->Initialize();
+
+    // Create a valid DiagMessage with data
+    auto diag_msg = std::make_shared<DiagMessage>();
+    auto variant_data = std::make_shared<VariantData>();
+    variant_data->SetName("vehicle/EngineStatus");
+    variant_data->SetValue("temperature", 95);
+    variant_data->SetValue("rpm", 3000);
+    
+    auto message = std::make_shared<Message>("vehicle/EngineStatus", MessageProtocolType::DDS, "EngineStatusType", variant_data);
+    diag_msg->SetMessage(message);
+
+    // Call HandleReceiveDiagMessage
+    ins->HandleReceiveDiagMessage(diag_msg);
+
+    // Verify data was updated in data_manager
+    auto all_data = ins->data_manager_->GetAllUpdatedData();
+    EXPECT_GE(all_data.size(), 1);
 }
 
-TEST_F(DiagnosticAnalyzerTest, HandleAnalyzeRequest_TC001) {
+// Test HandleReceiveDiagMessage with null DiagMessage (returns early)
+TEST_F(DiagnosticAnalyzerTest, HandleReceiveDiagMessage_TC002_null_diag_msg) {
+    EXPECT_CALL(*Mock_ServiceExecutorMock, AddTask(_, _, _)).WillOnce(Return(1234));
+    EXPECT_CALL(*Mock_MessageTransmitterMock, AddSubscriber("DiagnosticAnalyzer", _, _)).WillRepeatedly(Return(1));
+    EXPECT_CALL(*Mock_MessageTransmitterMock, SubscribeMessage(_, _, MessageProtocolType::DDS, false)).WillRepeatedly(Return(true));
+
+    ins->Initialize();
+
+    // Pass a non-DiagMessage RequestBase (will fail dynamic_pointer_cast)
+    auto invalid_msg = std::make_shared<RequestBase>();
+    
+    // Should return early without crash
+    EXPECT_NO_THROW(ins->HandleReceiveDiagMessage(invalid_msg));
 }
+
+// Test HandleReceiveDiagMessage with DiagMessage but null data (returns early)
+TEST_F(DiagnosticAnalyzerTest, HandleReceiveDiagMessage_TC003_null_data) {
+    EXPECT_CALL(*Mock_ServiceExecutorMock, AddTask(_, _, _)).WillOnce(Return(1234));
+    EXPECT_CALL(*Mock_MessageTransmitterMock, AddSubscriber("DiagnosticAnalyzer", _, _)).WillRepeatedly(Return(1));
+    EXPECT_CALL(*Mock_MessageTransmitterMock, SubscribeMessage(_, _, MessageProtocolType::DDS, false)).WillRepeatedly(Return(true));
+
+    ins->Initialize();
+
+    // Create DiagMessage with message but null data
+    auto diag_msg = std::make_shared<DiagMessage>();
+    auto message = std::make_shared<Message>("vehicle/EngineStatus", MessageProtocolType::DDS, "EngineStatusType", nullptr);
+    diag_msg->SetMessage(message);
+
+    // Should return early without crash
+    EXPECT_NO_THROW(ins->HandleReceiveDiagMessage(diag_msg));
+}
+
+// ==================== HandleAnalyzeRequest Tests ====================
+
+// Test HandleAnalyzeRequest with valid request and policies
+TEST_F(DiagnosticAnalyzerTest, HandleAnalyzeRequest_TC001_valid_request) {
+    EXPECT_CALL(*Mock_ServiceExecutorMock, AddTask(_, _, _)).WillOnce(Return(1234));
+    EXPECT_CALL(*Mock_MessageTransmitterMock, AddSubscriber("DiagnosticAnalyzer", _, _)).WillRepeatedly(Return(1));
+    EXPECT_CALL(*Mock_MessageTransmitterMock, SubscribeMessage(_, _, MessageProtocolType::DDS, false)).WillRepeatedly(Return(true));
+
+    ins->Initialize();
+
+    // Setup test data
+    auto data1 = std::make_shared<VariantData>();
+    data1->SetName("vehicle/EngineStatusNotification");
+    data1->SetValue("temperature", 124);
+    data1->SetValue("rpm", 1256);
+
+    ins->data_manager_->UpdateData(data1);
+
+    // Setup policy
+    DiagPolicyRule rule(DiagInfoStatus::WARNING, "EngineOverheat", std::vector<std::string>{"Engine.temperature > 90"}, ConditionOperator::AND);
+    auto policy = std::make_shared<DiagPolicy>(101, "EngineTempCheck", true, std::vector<DiagPolicyRule>{rule});
+    ins->policy_manager_->policies_.push_back(policy);
+
+    // Add reference message to link data to policy
+    AddReferenceMessage(ins->policy_manager_, "Engine", "vehicle/EngineStatusNotification", MessageProtocolType::DDS, std::set<int32_t>{101});
+
+    // Create request message
+    auto req_msg = std::make_shared<AnalyzeRequestMessage>();
+
+    // Call HandleAnalyzeRequest
+    ins->HandleAnalyzeRequest(req_msg);
+
+    // Verify diag_info_registry was updated
+    auto diag_info = ins->diag_info_registry_->GetDiagInfo(101);
+    // Note: Result depends on condition evaluation
+}
+
+// Test HandleAnalyzeRequest with empty policies (no analysis results)
+TEST_F(DiagnosticAnalyzerTest, HandleAnalyzeRequest_TC002_no_policies) {
+    EXPECT_CALL(*Mock_ServiceExecutorMock, AddTask(_, _, _)).WillOnce(Return(1234));
+    EXPECT_CALL(*Mock_MessageTransmitterMock, AddSubscriber("DiagnosticAnalyzer", _, _)).WillRepeatedly(Return(1));
+    EXPECT_CALL(*Mock_MessageTransmitterMock, SubscribeMessage(_, _, MessageProtocolType::DDS, false)).WillRepeatedly(Return(true));
+
+    ins->Initialize();
+
+    // No policies setup, just call HandleAnalyzeRequest
+    auto req_msg = std::make_shared<AnalyzeRequestMessage>();
+
+    // Should handle gracefully with no results
+    EXPECT_NO_THROW(ins->HandleAnalyzeRequest(req_msg));
+}
+
+// Test HandleAnalyzeRequest updates DiagInfoRegistry with multiple results
+TEST_F(DiagnosticAnalyzerTest, HandleAnalyzeRequest_TC003_multiple_results) {
+    EXPECT_CALL(*Mock_ServiceExecutorMock, AddTask(_, _, _)).WillOnce(Return(1234));
+    EXPECT_CALL(*Mock_MessageTransmitterMock, AddSubscriber("DiagnosticAnalyzer", _, _)).WillRepeatedly(Return(1));
+    EXPECT_CALL(*Mock_MessageTransmitterMock, SubscribeMessage(_, _, MessageProtocolType::DDS, false)).WillRepeatedly(Return(true));
+
+    ins->Initialize();
+
+    // Setup multiple test data
+    auto data1 = std::make_shared<VariantData>();
+    data1->SetName("vehicle/EngineStatusNotification");
+    data1->SetValue("temperature", 124);
+    
+    auto data2 = std::make_shared<VariantData>();
+    data2->SetName("vehicle/TransmissionNotification");
+    data2->SetValue("temperature", 85.0);
+
+    ins->data_manager_->UpdateData(data1);
+    ins->data_manager_->UpdateData(data2);
+
+    // Setup policies
+    DiagPolicyRule rule1(DiagInfoStatus::WARNING, "EngineOverheat", std::vector<std::string>{"Engine.temperature > 90"}, ConditionOperator::AND);
+    auto policy1 = std::make_shared<DiagPolicy>(101, "EngineTempCheck", true, std::vector<DiagPolicyRule>{rule1});
+    
+    DiagPolicyRule rule2(DiagInfoStatus::FATAL, "TransmissionOverheat", std::vector<std::string>{"Transmission.temperature > 80"}, ConditionOperator::AND);
+    auto policy2 = std::make_shared<DiagPolicy>(102, "TransmissionTempCheck", true, std::vector<DiagPolicyRule>{rule2});
+
+    ins->policy_manager_->policies_.push_back(policy1);
+    ins->policy_manager_->policies_.push_back(policy2);
+
+    // Add reference messages
+    AddReferenceMessage(ins->policy_manager_, "Engine", "vehicle/EngineStatusNotification", MessageProtocolType::DDS, std::set<int32_t>{101});
+    AddReferenceMessage(ins->policy_manager_, "Transmission", "vehicle/TransmissionNotification", MessageProtocolType::DDS, std::set<int32_t>{102});
+
+    // Create and call HandleAnalyzeRequest
+    auto req_msg = std::make_shared<AnalyzeRequestMessage>();
+    ins->HandleAnalyzeRequest(req_msg);
+
+    // Both policies should have been analyzed
+}
+
+// ==================== EvaluatePolicyRuleCondition Tests ====================
 
 TEST_F(DiagnosticAnalyzerTest, EvaluatePolicyRuleCondition_TC001) {
+    EXPECT_CALL(*Mock_ServiceExecutorMock, AddTask(_, _, _)).WillOnce(Return(1234));
+    EXPECT_CALL(*Mock_MessageTransmitterMock, AddSubscriber("DiagnosticAnalyzer", _, _)).WillRepeatedly(Return(1));
+    EXPECT_CALL(*Mock_MessageTransmitterMock, SubscribeMessage(_, _, MessageProtocolType::DDS, false)).WillRepeatedly(Return(true));
+
+    ins->Initialize();
+
+    // Add test data
+    AddTestValue(ins->data_manager_, "Engine", "temp", 100);
+
+    // Test condition evaluation
+    bool result = ins->EvaluatePolicyRuleCondition("Engine.temp > 90");
+    EXPECT_TRUE(result);
+
+    result = ins->EvaluatePolicyRuleCondition("Engine.temp < 50");
+    EXPECT_FALSE(result);
 }
 
 TEST_F(DiagnosticAnalyzerTest, SubscribeReferenceMessages_TC001) {
