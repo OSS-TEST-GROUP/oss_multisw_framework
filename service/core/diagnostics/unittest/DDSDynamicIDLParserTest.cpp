@@ -24,11 +24,17 @@ using ::testing::AtLeast;
 using ::testing::Combine;
 
 using namespace diagnostic_manager;
+
 class DDSDynamicIDLParserTest : public ::testing::Test {
 protected:
+    std::optional<std::string> getEnv(const std::string& key) {
+        const char* val = std::getenv(key.c_str());
+        return val ? std::optional<std::string>(val) : std::nullopt;
+    }
     void SetUp() override {
         parser = new DDSDynamicIDLParser();
         Mock_Logger = new MockLogger();
+        idl_directory = getEnv("DIAG_IDL_PATH").value_or("idl");
     }
 
     void TearDown() override {
@@ -38,17 +44,18 @@ protected:
     }
 
     DDSDynamicIDLParser* parser;
+    std::string idl_directory;
 };
 
 TEST_F(DDSDynamicIDLParserTest, Initialize_TC001) {
-    std::string valid_dir = "idl";
+    std::string valid_dir = idl_directory;
     EXPECT_TRUE(parser->Initialize(valid_dir));
 }
 
 // Test Initialize with a valid directory that exists (successful path)
 TEST_F(DDSDynamicIDLParserTest, Initialize_TC003_valid_directory_with_idl_files) {
     // The "idl" directory should exist in the test environment
-    std::string valid_dir = "idl";
+    std::string valid_dir = idl_directory;
     bool result = parser->Initialize(valid_dir);
     EXPECT_TRUE(result);
 }
@@ -73,7 +80,7 @@ TEST_F(DDSDynamicIDLParserTest, Initialize_TC002_no_directory) {
 }
 
 TEST_F(DDSDynamicIDLParserTest, Parse_TC001) {
-    std::string valid_dir = "idl";
+    std::string valid_dir = idl_directory;
     EXPECT_TRUE(parser->Initialize(valid_dir));
 
     auto type_list = parser->Parse("DataTypeTestSimple.idl");
@@ -83,7 +90,7 @@ TEST_F(DDSDynamicIDLParserTest, Parse_TC001) {
 }
 
 TEST_F(DDSDynamicIDLParserTest, ParseAll_TC001) {
-    std::string valid_dir = "idl";
+    std::string valid_dir = idl_directory;
     EXPECT_TRUE(parser->Initialize(valid_dir));
 
     auto type_support_list = parser->ParseAll();
@@ -99,7 +106,7 @@ TEST_F(DDSDynamicIDLParserTest, ParseAll_TC002_no_initialization) {
 
 // Test ParseAll with valid directory that has multiple IDL files
 TEST_F(DDSDynamicIDLParserTest, ParseAll_TC003_iterate_all_idl_files) {
-    std::string valid_dir = "idl";
+    std::string valid_dir = idl_directory;
     EXPECT_TRUE(parser->Initialize(valid_dir));
 
     auto type_support_list = parser->ParseAll();
@@ -116,7 +123,7 @@ TEST_F(DDSDynamicIDLParserTest, ParseAll_TC003_iterate_all_idl_files) {
 }
 
 TEST_F(DDSDynamicIDLParserTest, ExtractStructNamesFromIDL_TC001) {
-    std::string valid_dir = "idl";
+    std::string valid_dir = idl_directory;
     EXPECT_TRUE(parser->Initialize(valid_dir));
 
     auto type_list = parser->ExtractStructNamesFromIDL("DataTypeTestComplex.idl");
@@ -127,7 +134,7 @@ TEST_F(DDSDynamicIDLParserTest, ExtractStructNamesFromIDL_TC001) {
 
 // Test ExtractStructNamesFromIDL with non-existent file
 TEST_F(DDSDynamicIDLParserTest, ExtractStructNamesFromIDL_TC002_nonexistent_file) {
-    std::string valid_dir = "idl";
+    std::string valid_dir = idl_directory;
     EXPECT_TRUE(parser->Initialize(valid_dir));
 
     auto type_list = parser->ExtractStructNamesFromIDL("NonExistentFile.idl");
@@ -137,7 +144,7 @@ TEST_F(DDSDynamicIDLParserTest, ExtractStructNamesFromIDL_TC002_nonexistent_file
 
 // Test ExtractStructNamesFromIDL with simple IDL file (single struct)
 TEST_F(DDSDynamicIDLParserTest, ExtractStructNamesFromIDL_TC003_single_struct) {
-    std::string valid_dir = "idl";
+    std::string valid_dir = idl_directory;
     EXPECT_TRUE(parser->Initialize(valid_dir));
 
     auto type_list = parser->ExtractStructNamesFromIDL("DataTypeTestSimple.idl");
@@ -147,7 +154,7 @@ TEST_F(DDSDynamicIDLParserTest, ExtractStructNamesFromIDL_TC003_single_struct) {
 
 // Test Parse with valid IDL file that has multiple structs
 TEST_F(DDSDynamicIDLParserTest, Parse_TC002_multiple_structs) {
-    std::string valid_dir = "idl";
+    std::string valid_dir = idl_directory;
     EXPECT_TRUE(parser->Initialize(valid_dir));
 
     auto type_list = parser->Parse("DataTypeTestComplex.idl");
@@ -162,7 +169,7 @@ TEST_F(DDSDynamicIDLParserTest, Parse_TC002_multiple_structs) {
 
 // Test Parse with non-existent IDL file
 TEST_F(DDSDynamicIDLParserTest, Parse_TC003_nonexistent_file) {
-    std::string valid_dir = "idl";
+    std::string valid_dir = idl_directory;
     EXPECT_TRUE(parser->Initialize(valid_dir));
 
     auto type_list = parser->Parse("NonExistentFile.idl");
@@ -175,7 +182,7 @@ TEST_F(DDSDynamicIDLParserTest, Parse_TC003_nonexistent_file) {
 // Test Initialize with relative path that exists
 TEST_F(DDSDynamicIDLParserTest, Initialize_TC006_relative_path_exists) {
     // The "idl" directory exists in the test environment
-    std::string valid_dir = "idl";
+    std::string valid_dir = idl_directory;
     EXPECT_TRUE(parser->Initialize(valid_dir));
     // Verify idl_directory_ is set
     EXPECT_EQ(valid_dir, parser->idl_directory_);
@@ -183,7 +190,7 @@ TEST_F(DDSDynamicIDLParserTest, Initialize_TC006_relative_path_exists) {
 
 // Test ParseAll after successful initialization - exercises the directory iteration loop
 TEST_F(DDSDynamicIDLParserTest, ParseAll_TC004_successful_iteration) {
-    std::string valid_dir = "idl";
+    std::string valid_dir = idl_directory;
     EXPECT_TRUE(parser->Initialize(valid_dir));
     
     auto type_support_list = parser->ParseAll();
@@ -203,7 +210,7 @@ TEST_F(DDSDynamicIDLParserTest, ParseAll_TC004_successful_iteration) {
 
 // Test Parse with IDL that has multiple structs - exercises the full loop
 TEST_F(DDSDynamicIDLParserTest, Parse_TC004_complex_idl_full_iteration) {
-    std::string valid_dir = "idl";
+    std::string valid_dir = idl_directory;
     EXPECT_TRUE(parser->Initialize(valid_dir));
 
     // DataTypeTestComplex.idl has 2 structs
@@ -228,7 +235,7 @@ TEST_F(DDSDynamicIDLParserTest, Parse_TC004_complex_idl_full_iteration) {
 
 // Test ExtractStructNamesFromIDL with valid file that can be opened
 TEST_F(DDSDynamicIDLParserTest, ExtractStructNamesFromIDL_TC004_successful_read) {
-    std::string valid_dir = "idl";
+    std::string valid_dir = idl_directory;
     EXPECT_TRUE(parser->Initialize(valid_dir));
 
     // DataTypeTestSimple.idl has 1 struct
@@ -239,7 +246,7 @@ TEST_F(DDSDynamicIDLParserTest, ExtractStructNamesFromIDL_TC004_successful_read)
 
 // Test ExtractStructNamesFromIDL with file that has multiple structs
 TEST_F(DDSDynamicIDLParserTest, ExtractStructNamesFromIDL_TC005_multiple_structs_read) {
-    std::string valid_dir = "idl";
+    std::string valid_dir = idl_directory;
     EXPECT_TRUE(parser->Initialize(valid_dir));
 
     // DataTypeTestComplex.idl has 2 structs
@@ -251,7 +258,7 @@ TEST_F(DDSDynamicIDLParserTest, ExtractStructNamesFromIDL_TC005_multiple_structs
 
 // Test Parse successfully builds dynamic types
 TEST_F(DDSDynamicIDLParserTest, Parse_TC005_verify_type_building) {
-    std::string valid_dir = "idl";
+    std::string valid_dir = idl_directory;
     EXPECT_TRUE(parser->Initialize(valid_dir));
 
     auto type_list = parser->Parse("DataTypeTestSimple.idl");
@@ -267,7 +274,7 @@ TEST_F(DDSDynamicIDLParserTest, Parse_TC005_verify_type_building) {
 
 // Test ParseAll with directory containing subdirectories (recursive iteration)
 TEST_F(DDSDynamicIDLParserTest, ParseAll_TC005_recursive_directory_iteration) {
-    std::string valid_dir = "idl";
+    std::string valid_dir = idl_directory;
     EXPECT_TRUE(parser->Initialize(valid_dir));
     
     // ParseAll uses recursive_directory_iterator so it should find all .idl files
@@ -286,7 +293,7 @@ TEST_F(DDSDynamicIDLParserTest, ParseAll_TC005_recursive_directory_iteration) {
 
 // Test Parse with empty type list (IDL file exists but no structs extracted)
 TEST_F(DDSDynamicIDLParserTest, Parse_TC006_no_structs_in_idl) {
-    std::string valid_dir = "idl";
+    std::string valid_dir = idl_directory;
     EXPECT_TRUE(parser->Initialize(valid_dir));
     
     // If ExtractStructNamesFromIDL returns empty, Parse should return empty
@@ -299,7 +306,7 @@ TEST_F(DDSDynamicIDLParserTest, Parse_TC006_no_structs_in_idl) {
 
 // Test edge case handling in ExtractStructNamesFromIDL
 TEST_F(DDSDynamicIDLParserTest, Parse_TC007_edge_cases_struct_extraction) {
-    std::string valid_dir = "idl";
+    std::string valid_dir = idl_directory;
     EXPECT_TRUE(parser->Initialize(valid_dir));
     
     // Test parsing a valid IDL file to ensure struct extraction works
@@ -340,7 +347,7 @@ TEST_F(DDSDynamicIDLParserTest, Initialize_TC006_path_variations) {
 
 // Test Parse error handling for file system errors
 TEST_F(DDSDynamicIDLParserTest, Parse_TC008_file_system_errors) {
-    std::string valid_dir = "idl";
+    std::string valid_dir = idl_directory;
     EXPECT_TRUE(parser->Initialize(valid_dir));
     
     // Test with various invalid file names that might cause different errors
@@ -359,7 +366,7 @@ TEST_F(DDSDynamicIDLParserTest, Parse_TC008_file_system_errors) {
 
 // Test ParseAll with permission and access errors
 TEST_F(DDSDynamicIDLParserTest, ParseAll_TC006_filesystem_edge_cases) {
-    std::string valid_dir = "idl";
+    std::string valid_dir = idl_directory;
     EXPECT_TRUE(parser->Initialize(valid_dir));
     
     // Test ParseAll under normal conditions
@@ -387,8 +394,8 @@ TEST_F(DDSDynamicIDLParserTest, ParseAll_TC006_filesystem_edge_cases) {
 
 // Test multiple Initialize calls (resource cleanup)
 TEST_F(DDSDynamicIDLParserTest, Initialize_TC007_multiple_calls) {
-    std::string valid_dir = "idl";
-    
+    std::string valid_dir = idl_directory;
+
     // First initialization
     EXPECT_TRUE(parser->Initialize(valid_dir));
     
@@ -408,7 +415,7 @@ TEST_F(DDSDynamicIDLParserTest, Initialize_TC007_multiple_calls) {
 
 // Test error handling in DynamicType creation
 TEST_F(DDSDynamicIDLParserTest, Parse_TC009_dynamic_type_creation_edge_cases) {
-    std::string valid_dir = "idl";
+    std::string valid_dir = idl_directory;
     EXPECT_TRUE(parser->Initialize(valid_dir));
     
     // Test parsing all available IDL files to exercise type creation
@@ -449,7 +456,7 @@ TEST_F(DDSDynamicIDLParserTest, Initialize_TC008_boundary_conditions) {
 
 // Test Parse with special IDL file content scenarios
 TEST_F(DDSDynamicIDLParserTest, Parse_TC010_special_content_scenarios) {
-    std::string valid_dir = "idl";
+    std::string valid_dir = idl_directory;
     EXPECT_TRUE(parser->Initialize(valid_dir));
     
     // Parse all available files to test different IDL content types
@@ -472,8 +479,8 @@ TEST_F(DDSDynamicIDLParserTest, Parse_TC010_special_content_scenarios) {
 
 // Test memory management and resource cleanup
 TEST_F(DDSDynamicIDLParserTest, ResourceManagement_TC001_cleanup) {
-    std::string valid_dir = "idl";
-    
+    std::string valid_dir = idl_directory;
+
     // Test multiple parse operations to check for memory leaks
     for (int i = 0; i < 5; ++i) {
         EXPECT_TRUE(parser->Initialize(valid_dir));
@@ -492,7 +499,7 @@ TEST_F(DDSDynamicIDLParserTest, ResourceManagement_TC001_cleanup) {
 
 // Test concurrent access patterns (basic thread safety verification)
 TEST_F(DDSDynamicIDLParserTest, ThreadSafety_TC001_basic_operations) {
-    std::string valid_dir = "idl";
+    std::string valid_dir = idl_directory;
     EXPECT_TRUE(parser->Initialize(valid_dir));
     
     // Test multiple Parse calls (simulating concurrent-like access)
@@ -514,7 +521,7 @@ TEST_F(DDSDynamicIDLParserTest, ErrorRecovery_TC001_after_failures) {
     EXPECT_EQ(0, empty_types.size());
     
     // Recover with valid initialization
-    std::string valid_dir = "idl";
+    std::string valid_dir = idl_directory;
     EXPECT_TRUE(parser->Initialize(valid_dir));
     
     // Should work normally after recovery
