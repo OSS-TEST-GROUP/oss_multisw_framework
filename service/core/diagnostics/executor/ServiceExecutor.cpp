@@ -85,10 +85,6 @@ TaskID ServiceExecutor::AddTaskInterval(const std::string& name, ExecutorFunctio
     return task_id;
 }
 
-TaskID ServiceExecutor::AddTaskOnce(const std::string& name, ExecutorFunctionType function, TaskDelay delay) {
-    return 0;
-}
-
 void ServiceExecutor::RemoveTask(TaskID task_id) {
     std::lock_guard<std::mutex> lock(task_handling_lock_);
 

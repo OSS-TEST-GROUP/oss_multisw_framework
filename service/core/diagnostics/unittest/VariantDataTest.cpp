@@ -474,6 +474,311 @@ TEST_F(VariantDataTest, OverwriteValue_TC020) {
     EXPECT_EQ(456, out);
 }
 
+// ============================================================================
+// GetValueAsVariantFromList Branch Coverage Tests
+// ============================================================================
+
+TEST_F(VariantDataTest, GetValueAsVariantFromList_WcharVector_TC021) {
+    std::vector<wchar_t> values = {L'A', L'B', L'C'};
+    ins->SetValue("wchar_list", values);
+    
+    VariantValue vv = ins->GetValueAsVariantFromList("wchar_list", 1);
+    EXPECT_EQ(std::type_index(typeid(wchar_t)), vv.type);
+}
+
+TEST_F(VariantDataTest, GetValueAsVariantFromList_Int8Vector_TC022) {
+    std::vector<int8_t> values = {1, 2, 3};
+    ins->SetValue("int8_list", values);
+    
+    VariantValue vv = ins->GetValueAsVariantFromList("int8_list", 0);
+    EXPECT_EQ(std::type_index(typeid(int8_t)), vv.type);
+}
+
+TEST_F(VariantDataTest, GetValueAsVariantFromList_Int16Vector_TC023) {
+    std::vector<int16_t> values = {100, 200, 300};
+    ins->SetValue("int16_list", values);
+    
+    VariantValue vv = ins->GetValueAsVariantFromList("int16_list", 1);
+    EXPECT_EQ(std::type_index(typeid(int16_t)), vv.type);
+}
+
+TEST_F(VariantDataTest, GetValueAsVariantFromList_Int64Vector_TC024) {
+    std::vector<int64_t> values = {1000LL, 2000LL, 3000LL};
+    ins->SetValue("int64_list", values);
+    
+    VariantValue vv = ins->GetValueAsVariantFromList("int64_list", 2);
+    EXPECT_EQ(std::type_index(typeid(int64_t)), vv.type);
+}
+
+TEST_F(VariantDataTest, GetValueAsVariantFromList_UInt8Vector_TC025) {
+    std::vector<uint8_t> values = {1, 2, 3};
+    ins->SetValue("uint8_list", values);
+    
+    VariantValue vv = ins->GetValueAsVariantFromList("uint8_list", 0);
+    EXPECT_EQ(std::type_index(typeid(uint8_t)), vv.type);
+}
+
+TEST_F(VariantDataTest, GetValueAsVariantFromList_UInt16Vector_TC026) {
+    std::vector<uint16_t> values = {100, 200, 300};
+    ins->SetValue("uint16_list", values);
+    
+    VariantValue vv = ins->GetValueAsVariantFromList("uint16_list", 1);
+    EXPECT_EQ(std::type_index(typeid(uint16_t)), vv.type);
+}
+
+TEST_F(VariantDataTest, GetValueAsVariantFromList_UInt32Vector_TC027) {
+    std::vector<uint32_t> values = {1000, 2000, 3000};
+    ins->SetValue("uint32_list", values);
+    
+    VariantValue vv = ins->GetValueAsVariantFromList("uint32_list", 0);
+    EXPECT_EQ(std::type_index(typeid(uint32_t)), vv.type);
+}
+
+TEST_F(VariantDataTest, GetValueAsVariantFromList_UInt64Vector_TC028) {
+    std::vector<uint64_t> values = {10000ULL, 20000ULL, 30000ULL};
+    ins->SetValue("uint64_list", values);
+    
+    VariantValue vv = ins->GetValueAsVariantFromList("uint64_list", 1);
+    EXPECT_EQ(std::type_index(typeid(uint64_t)), vv.type);
+}
+
+TEST_F(VariantDataTest, GetValueAsVariantFromList_DoubleVector_TC029) {
+    std::vector<double> values = {1.1, 2.2, 3.3};
+    ins->SetValue("double_list", values);
+    
+    VariantValue vv = ins->GetValueAsVariantFromList("double_list", 0);
+    EXPECT_EQ(std::type_index(typeid(double)), vv.type);
+}
+
+TEST_F(VariantDataTest, GetValueAsVariantFromList_BoolVector_TC030) {
+    std::vector<bool> values = {true, false, true};
+    ins->SetValue("bool_list", values);
+    
+    VariantValue vv = ins->GetValueAsVariantFromList("bool_list", 1);
+    EXPECT_EQ(std::type_index(typeid(bool)), vv.type);
+}
+
+TEST_F(VariantDataTest, GetValueAsVariantFromList_StringVector_TC031) {
+    std::vector<std::string> values = {"hello", "world", "test"};
+    ins->SetValue("string_list", values);
+    
+    VariantValue vv = ins->GetValueAsVariantFromList("string_list", 0);
+    EXPECT_EQ(std::type_index(typeid(std::string)), vv.type);
+}
+
+TEST_F(VariantDataTest, GetValueAsVariantFromList_WstringVector_TC032) {
+    std::vector<std::wstring> values = {L"wide", L"string", L"test"};
+    ins->SetValue("wstring_list", values);
+    
+    VariantValue vv = ins->GetValueAsVariantFromList("wstring_list", 1);
+    EXPECT_EQ(std::type_index(typeid(std::wstring)), vv.type);
+}
+
+TEST_F(VariantDataTest, GetValueAsVariantFromList_CharVector_TC033) {
+    std::vector<char> values = {'a', 'b', 'c'};
+    ins->SetValue("char_list", values);
+    
+    VariantValue vv = ins->GetValueAsVariantFromList("char_list", 0);
+    EXPECT_EQ(std::type_index(typeid(char)), vv.type);
+}
+
+TEST_F(VariantDataTest, GetValueAsVariantFromList_NonVector_TC034) {
+    // Set a non-vector value and try to get from list (should log error)
+    ins->SetValue("not_list", 123);
+    
+    VariantValue vv = ins->GetValueAsVariantFromList("not_list", 0);
+    // Should return default VariantValue with void type
+    EXPECT_EQ(std::type_index(typeid(void)), vv.type);
+}
+
+TEST_F(VariantDataTest, GetValueAsVariantFromList_OutOfBounds_WcharVector_TC035) {
+    std::vector<wchar_t> values = {L'A', L'B'};
+    ins->SetValue("wchar_list", values);
+    
+    VariantValue vv = ins->GetValueAsVariantFromList("wchar_list", 10);
+    // Type should be set, but value not assigned due to out of bounds
+    EXPECT_EQ(std::type_index(typeid(wchar_t)), vv.type);
+}
+
+// ============================================================================
+// GetUInt64 Branch Coverage Tests  
+// ============================================================================
+
+TEST_F(VariantDataTest, GetUInt64_WrongType_TC021) {
+    ins->SetValue("str_key", std::string("hello"));
+    uint64_t out;
+    EXPECT_FALSE(ins->GetUInt64("str_key", out));
+}
+
+// ============================================================================
+// GetDouble Branch Coverage Tests
+// ============================================================================
+
+TEST_F(VariantDataTest, GetDouble_WrongType_TC021) {
+    ins->SetValue("str_key", std::string("hello"));
+    double out;
+    EXPECT_FALSE(ins->GetDouble("str_key", out));
+}
+
+// ============================================================================
+// GetBoolean Branch Coverage Tests
+// ============================================================================
+
+TEST_F(VariantDataTest, GetBoolean_Valid_TC021) {
+    ins->SetValue("bool_key", true);
+    bool out;
+    EXPECT_TRUE(ins->GetBoolean("bool_key", out));
+    EXPECT_TRUE(out);
+}
+
+TEST_F(VariantDataTest, GetBoolean_NonExistent_TC022) {
+    bool out;
+    EXPECT_FALSE(ins->GetBoolean("nonexistent", out));
+}
+
+TEST_F(VariantDataTest, GetBoolean_WrongType_TC023) {
+    ins->SetValue("int_key", 123);
+    bool out;
+    EXPECT_FALSE(ins->GetBoolean("int_key", out));
+}
+
+// ============================================================================
+// GetString with vector<char> conversion Branch Coverage Tests
+// ============================================================================
+
+TEST_F(VariantDataTest, GetString_FromCharVector_TC021) {
+    std::vector<char> char_vec = {'h', 'e', 'l', 'l', 'o', '\0'};
+    ins->SetValue("char_vec_key", char_vec);
+    
+    std::string out;
+    EXPECT_TRUE(ins->GetString("char_vec_key", out));
+    EXPECT_EQ("hello", out);
+}
+
+TEST_F(VariantDataTest, GetString_FromCharVector_NoNull_TC022) {
+    std::vector<char> char_vec = {'a', 'b', 'c'};
+    ins->SetValue("char_vec_key", char_vec);
+    
+    std::string out;
+    EXPECT_TRUE(ins->GetString("char_vec_key", out));
+    EXPECT_EQ("abc", out);
+}
+
+TEST_F(VariantDataTest, GetString_WrongType_TC023) {
+    ins->SetValue("int_key", 123);
+    std::string out;
+    EXPECT_FALSE(ins->GetString("int_key", out));
+}
+
+// ============================================================================
+// GetBooleanFromList Branch Coverage Tests (entirely uncovered)
+// ============================================================================
+
+TEST_F(VariantDataTest, GetBooleanFromList_Valid_TC021) {
+    std::vector<bool> values = {true, false, true};
+    ins->SetValue("bool_list", values);
+    
+    bool out;
+    EXPECT_TRUE(ins->GetBooleanFromList("bool_list", 0, out));
+    EXPECT_TRUE(out);
+    
+    EXPECT_TRUE(ins->GetBooleanFromList("bool_list", 1, out));
+    EXPECT_FALSE(out);
+}
+
+TEST_F(VariantDataTest, GetBooleanFromList_NonExistent_TC022) {
+    bool out;
+    EXPECT_FALSE(ins->GetBooleanFromList("nonexistent", 0, out));
+}
+
+TEST_F(VariantDataTest, GetBooleanFromList_OutOfBounds_TC023) {
+    std::vector<bool> values = {true, false};
+    ins->SetValue("bool_list", values);
+    
+    bool out;
+    EXPECT_FALSE(ins->GetBooleanFromList("bool_list", 10, out));
+}
+
+TEST_F(VariantDataTest, GetBooleanFromList_WrongType_TC024) {
+    std::vector<int32_t> values = {1, 2, 3};
+    ins->SetValue("int_list", values);
+    
+    bool out;
+    EXPECT_FALSE(ins->GetBooleanFromList("int_list", 0, out));
+}
+
+// ============================================================================
+// GetUInt64FromList Branch Coverage Tests
+// ============================================================================
+
+TEST_F(VariantDataTest, GetUInt64FromList_OutOfBounds_TC021) {
+    std::vector<uint64_t> values = {100ULL, 200ULL};
+    ins->SetValue("uint64_list", values);
+    
+    uint64_t out;
+    EXPECT_FALSE(ins->GetUInt64FromList("uint64_list", 10, out));
+}
+
+TEST_F(VariantDataTest, GetUInt64FromList_WrongType_TC022) {
+    std::vector<std::string> values = {"a", "b"};
+    ins->SetValue("str_list", values);
+    
+    uint64_t out;
+    EXPECT_FALSE(ins->GetUInt64FromList("str_list", 0, out));
+}
+
+// ============================================================================
+// GetStringFromList Branch Coverage Tests
+// ============================================================================
+
+TEST_F(VariantDataTest, GetStringFromList_OutOfBounds_TC021) {
+    std::vector<std::string> values = {"hello", "world"};
+    ins->SetValue("str_list", values);
+    
+    std::string out;
+    EXPECT_FALSE(ins->GetStringFromList("str_list", 10, out));
+}
+
+TEST_F(VariantDataTest, GetStringFromList_WrongType_TC022) {
+    std::vector<int32_t> values = {1, 2, 3};
+    ins->SetValue("int_list", values);
+    
+    std::string out;
+    EXPECT_FALSE(ins->GetStringFromList("int_list", 0, out));
+}
+
+// ============================================================================
+// GetDoubleFromList Additional Branch Coverage Tests
+// ============================================================================
+
+TEST_F(VariantDataTest, GetDoubleFromList_WrongType_TC021) {
+    std::vector<std::string> values = {"a", "b"};
+    ins->SetValue("str_list", values);
+    
+    double out;
+    EXPECT_FALSE(ins->GetDoubleFromList("str_list", 0, out));
+}
+
+TEST_F(VariantDataTest, GetDoubleFromList_FloatVector_TC022) {
+    std::vector<float> values = {1.5f, 2.5f, 3.5f};
+    ins->SetValue("float_list", values);
+    
+    double out;
+    EXPECT_TRUE(ins->GetDoubleFromList("float_list", 1, out));
+    EXPECT_DOUBLE_EQ(2.5, out);
+}
+
+// ============================================================================
+// GetInt64FromList Additional Branch Coverage Tests
+// ============================================================================
+
+TEST_F(VariantDataTest, GetInt64FromList_WrongType_TC021) {
+    std::vector<std::string> values = {"a", "b"};
+    ins->SetValue("str_list", values);
+    
+    int64_t out;
+    EXPECT_FALSE(ins->GetInt64FromList("str_list", 0, out));
+}
 
 int main(int argc, char* argv[]) {
     ::testing::InitGoogleTest(&argc, argv);

@@ -64,6 +64,7 @@ add_executable ( VariantDataTest VariantDataTest.cpp )
 add_executable ( MessageTransmitterTest MessageTransmitterTest.cpp )
 add_executable ( MessageTest MessageTest.cpp )
 add_executable ( DDSProtocolTest DDSProtocolTest.cpp )
+add_executable ( DDSProtocolBranchCoverageTest DDSProtocolBranchCoverageTest.cpp )
 add_executable ( DDSDynamicIDLParserTest DDSDynamicIDLParserTest.cpp )
 add_executable ( ReferenceMessageTest ReferenceMessageTest.cpp )
 add_executable ( DiagPolicyRuleTest DiagPolicyRuleTest.cpp )
@@ -84,6 +85,7 @@ gtest_discover_tests ( VariantDataTest )
 gtest_discover_tests ( MessageTransmitterTest )
 gtest_discover_tests ( MessageTest )
 gtest_discover_tests ( DDSProtocolTest )
+gtest_discover_tests ( DDSProtocolBranchCoverageTest )
 gtest_discover_tests ( DDSDynamicIDLParserTest )
 gtest_discover_tests ( ReferenceMessageTest )
 gtest_discover_tests ( DiagPolicyRuleTest )
@@ -104,6 +106,7 @@ install ( TARGETS DiagInfoRegistryTest
                   MessageTransmitterTest
                   MessageTest
                   DDSProtocolTest
+                  DDSProtocolBranchCoverageTest
                   DDSDynamicIDLParserTest
                   ReferenceMessageTest
                   DiagPolicyRuleTest

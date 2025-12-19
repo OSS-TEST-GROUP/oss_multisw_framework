@@ -13,7 +13,6 @@ class ServiceExecutorMock : public ServiceExecutor {
     MOCK_METHOD1(SetExecutorNum, void(uint32_t));
     MOCK_METHOD3(AddTask, TaskID(const std::string&, ExecutorFunctionType, const RequestBase&));
     MOCK_METHOD3(AddTaskInterval, TaskID(const std::string&, ExecutorFunctionType, TaskInterval));
-    MOCK_METHOD3(AddTaskOnce, TaskID(const std::string&, ExecutorFunctionType, TaskDelay));
     MOCK_METHOD1(RemoveTask, void(TaskID));
     MOCK_METHOD1(RemoveTask, void(const std::string&));
     MOCK_METHOD1(RequestTask, bool(std::shared_ptr<RequestBase> request_msg));
@@ -52,10 +51,6 @@ TaskID ServiceExecutor::AddTask(const std::string& name, ExecutorFunctionType fu
 
 TaskID ServiceExecutor::AddTaskInterval(const std::string& name, ExecutorFunctionType function, TaskInterval interval) {
     return Mock_ServiceExecutorMock->AddTaskInterval(name, function, interval);
-}
-
-TaskID ServiceExecutor::AddTaskOnce(const std::string& name, ExecutorFunctionType function, TaskDelay delay) {
-    return Mock_ServiceExecutorMock->AddTaskOnce(name, function, delay);
 }
 
 void ServiceExecutor::RemoveTask(TaskID task_id) {

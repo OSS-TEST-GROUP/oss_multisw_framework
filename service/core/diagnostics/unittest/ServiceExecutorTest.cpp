@@ -142,9 +142,6 @@ TEST_F(ServiceExecutorTest, ComparatorIntervalQueue_TC001) {
     EXPECT_EQ(task3, ins->task_interval_queue_.top()); ins->task_interval_queue_.pop();
 }
 
-TEST_F(ServiceExecutorTest, AddTaskOnce_TC001) {
-}
-
 TEST_F(ServiceExecutorTest, RemoveTask_TC001_RequestTask) {
     EXPECT_EQ(0U, ins->service_task_list_.size());
     EXPECT_EQ(0U, ins->task_request_map_.size());
