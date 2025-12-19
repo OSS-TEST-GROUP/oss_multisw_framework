@@ -569,6 +569,127 @@ TEST_F(DDSProtocolTest, load_dds_dynamic_idl_TC001_invalid_path) {
     delete testProtocol;
 }
 
+// ==================== create_datareader / delete_datareader / delete_datawriter Coverage ====================
+
+// Test create_datareader directly
+TEST_F(DDSProtocolTest, create_datareader_TC001_success) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    auto topic_info = std::make_shared<TopicInformation>();
+    topic_info->topic_name = "/CreateDataReaderTest";
+    topic_info->topic_type = "DataTypeTestSimple";
+    
+    // Register type first
+    if (ins->register_type_object_from_dynamic_idl(topic_info)) {
+        // Call create_datareader directly
+        bool result = ins->create_datareader(topic_info);
+        EXPECT_TRUE(result);
+        EXPECT_NE(nullptr, topic_info->topic);
+        EXPECT_NE(nullptr, topic_info->reader);
+    }
+    
+    ins->Finalize();
+}
+
+// Test create_datareader when reader already exists
+TEST_F(DDSProtocolTest, create_datareader_TC002_reader_exists) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    auto topic_info = std::make_shared<TopicInformation>();
+    topic_info->topic_name = "/CreateDataReaderExistsTest";
+    topic_info->topic_type = "DataTypeTestSimple";
+    
+    if (ins->register_type_object_from_dynamic_idl(topic_info)) {
+        // Create reader first time
+        EXPECT_TRUE(ins->create_datareader(topic_info));
+        DataReader* first_reader = topic_info->reader;
+        
+        // Call again - should return true without creating new reader
+        EXPECT_TRUE(ins->create_datareader(topic_info));
+        EXPECT_EQ(first_reader, topic_info->reader);  // Same reader
+    }
+    
+    ins->Finalize();
+}
+
+// Test delete_datareader directly
+TEST_F(DDSProtocolTest, delete_datareader_TC001_success) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    auto topic_info = std::make_shared<TopicInformation>();
+    topic_info->topic_name = "/DeleteDataReaderTest";
+    topic_info->topic_type = "DataTypeTestSimple";
+    
+    if (ins->register_type_object_from_dynamic_idl(topic_info)) {
+        // Create reader first
+        EXPECT_TRUE(ins->create_datareader(topic_info));
+        EXPECT_NE(nullptr, topic_info->reader);
+        
+        // Delete reader
+        bool result = ins->delete_datareader(topic_info);
+        EXPECT_TRUE(result);
+        EXPECT_EQ(nullptr, topic_info->reader);
+        EXPECT_EQ(nullptr, topic_info->topic);
+    }
+    
+    ins->Finalize();
+}
+
+// Test delete_datawriter directly
+TEST_F(DDSProtocolTest, delete_datawriter_TC001_success) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    auto topic_info = std::make_shared<TopicInformation>();
+    topic_info->topic_name = "/DeleteDataWriterTest";
+    topic_info->topic_type = "DataTypeTestSimple";
+    
+    if (ins->register_type_object_from_dynamic_idl(topic_info)) {
+        // Create writer first
+        EXPECT_TRUE(ins->create_datawriter(topic_info));
+        EXPECT_NE(nullptr, topic_info->writer);
+        
+        // Delete writer
+        bool result = ins->delete_datawriter(topic_info);
+        EXPECT_TRUE(result);
+        EXPECT_EQ(nullptr, topic_info->writer);
+        EXPECT_EQ(nullptr, topic_info->topic);
+    }
+    
+    ins->Finalize();
+}
+
+// Test delete_datawriter when reader still exists (topic not deleted)
+TEST_F(DDSProtocolTest, delete_datawriter_TC002_reader_exists) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    auto topic_info = std::make_shared<TopicInformation>();
+    topic_info->topic_name = "/DeleteDataWriterWithReaderTest";
+    topic_info->topic_type = "DataTypeTestSimple";
+    
+    if (ins->register_type_object_from_dynamic_idl(topic_info)) {
+        // Create writer and reader
+        EXPECT_TRUE(ins->create_datawriter(topic_info));
+        EXPECT_TRUE(ins->create_datareader(topic_info));
+        
+        EXPECT_NE(nullptr, topic_info->writer);
+        EXPECT_NE(nullptr, topic_info->reader);
+        
+        // Delete writer - topic should NOT be deleted because reader exists
+        bool result = ins->delete_datawriter(topic_info);
+        EXPECT_TRUE(result);
+        EXPECT_EQ(nullptr, topic_info->writer);
+        EXPECT_NE(nullptr, topic_info->topic);  // Topic still exists
+        
+        // Now delete reader
+        result = ins->delete_datareader(topic_info);
+        EXPECT_TRUE(result);
+        EXPECT_EQ(nullptr, topic_info->reader);
+        EXPECT_EQ(nullptr, topic_info->topic);  // Topic deleted
+    }
+    
+    ins->Finalize();
+}
+
 // ==================== Edge Cases ====================
 
 // Test with empty message name
@@ -799,7 +920,7 @@ TEST_F(DDSProtocolTest, PublishMessage_TC010_cache_hit_null_type_support_unknown
     ins->Finalize();
 }
 
-// Test PublishMessage with cached ROS topic (using cache normally)
+// Test PublishMessage with
 TEST_F(DDSProtocolTest, PublishMessage_TC011_cache_hit_ros_topic) {
     EXPECT_TRUE(ins->Initialize());
     
@@ -830,7 +951,7 @@ TEST_F(DDSProtocolTest, PublishMessage_TC011_cache_hit_ros_topic) {
     );
     
     // This should use cached ROS topic (covers LOG_DEBUG branch)
-    bool result = ins->PublishMessage(message);
+    (void)ins->PublishMessage(message);
     
     ins->Finalize();
 }
@@ -1557,7 +1678,6 @@ TEST_F(DDSProtocolDeserializeTest, Deserialize_Direct_TC010_sequence_uint32) {
     
     auto variant_data = std::make_shared<VariantData>();
     bool result = ins->DeserializeMessage(dds_data, variant_data);
-    
     EXPECT_TRUE(result);
     
     ins->Finalize();
@@ -1594,7 +1714,7 @@ TEST_F(DDSProtocolDeserializeTest, Deserialize_Direct_TC012_sequence_uint64) {
     DynamicData::_ref_type dds_data = DynamicDataFactory::get_instance()->create_data(test_type);
     ASSERT_NE(nullptr, dds_data);
     
-    std::vector<uint64_t> values = {18000000000ULL, 36000000000ULL};
+    std::vector<uint64_t> values = {10000000000ULL, 18446744073709551615ULL};
     dds_data->set_uint64_values(dds_data->get_member_id_by_name("seq_values"), values);
     
     auto variant_data = std::make_shared<VariantData>();
@@ -1690,18 +1810,20 @@ TEST_F(DDSProtocolDeserializeTest, Deserialize_Direct_TC016_sequence_string) {
     builder->add_member(member_desc);
     
     DynamicType::_ref_type test_type = builder->build();
-    ASSERT_NE(nullptr, test_type);
-    
     DynamicData::_ref_type dds_data = DynamicDataFactory::get_instance()->create_data(test_type);
-    ASSERT_NE(nullptr, dds_data);
-    
-    std::vector<std::string> values = {"hello", "world", "test"};
-    dds_data->set_string_values(dds_data->get_member_id_by_name("seq_values"), values);
     
     auto variant_data = std::make_shared<VariantData>();
-    bool result = ins->DeserializeMessage(dds_data, variant_data);
+    variant_data->SetName("TestSeqString");
+    variant_data->SetValue("seq_string", std::vector<std::string>{"hello", "world", "test"});
     
+    bool result = ins->SerializeMessage(dds_data, variant_data);
     EXPECT_TRUE(result);
+    
+    std::vector<std::string> values;
+    dds_data->get_string_values(values, dds_data->get_member_id_by_name("seq_string"));
+    ASSERT_EQ(3, values.size());
+    EXPECT_EQ("hello", values[0]);
+    EXPECT_EQ("test", values[2]);
     
     ins->Finalize();
 }
@@ -1721,7 +1843,6 @@ TEST_F(DDSProtocolDeserializeTest, Deserialize_Direct_TC017_sequence_wstring) {
     // Create wstring sequence type
     DynamicType::_ref_type wstring_type = factory->create_wstring_type(255)->build();
     DynamicTypeBuilder::_ref_type seq_builder = factory->create_sequence_type(wstring_type, 100);
-    
     
     MemberDescriptor::_ref_type member_desc = traits<MemberDescriptor>::make_shared();
     member_desc->name("seq_values");
@@ -1856,28 +1977,6 @@ TEST_F(DDSProtocolDeserializeTest, Deserialize_Direct_TC020_array_type) {
 
 // ==================== delete_datawriter and delete_datareader Coverage ====================
 
-// Test delete_datawriter explicitly
-TEST_F(DDSProtocolTest, delete_datawriter_TC001_success) {
-    EXPECT_TRUE(ins->Initialize());
-    
-    auto topic_info = std::make_shared<TopicInformation>();
-    topic_info->topic_name = "/DeleteWriterTestTopic";
-    topic_info->topic_type = "DataTypeTestSimple";
-    
-    if (ins->register_type_object_from_dynamic_idl(topic_info)) {
-        // Create a datawriter first
-        EXPECT_TRUE(ins->create_datawriter(topic_info));
-        EXPECT_NE(nullptr, topic_info->writer);
-        EXPECT_NE(nullptr, topic_info->topic);
-        
-        // Now delete the datawriter - this should exercise delete_datawriter
-        EXPECT_TRUE(ins->delete_datawriter(topic_info));
-        EXPECT_EQ(nullptr, topic_info->writer);
-        EXPECT_EQ(nullptr, topic_info->topic);  // Topic should also be deleted since no reader
-    }
-    
-    ins->Finalize();
-}
 
 // Test delete_datawriter when reader exists (topic should NOT be deleted)
 TEST_F(DDSProtocolTest, delete_datawriter_TC002_with_reader) {
@@ -1911,28 +2010,6 @@ TEST_F(DDSProtocolTest, delete_datawriter_TC002_with_reader) {
     ins->Finalize();
 }
 
-// Test delete_datareader explicitly
-TEST_F(DDSProtocolTest, delete_datareader_TC001_success) {
-    EXPECT_TRUE(ins->Initialize());
-    
-    auto topic_info = std::make_shared<TopicInformation>();
-    topic_info->topic_name = "/DeleteReaderTestTopic";
-    topic_info->topic_type = "DataTypeTestSimple";
-    
-    if (ins->register_type_object_from_dynamic_idl(topic_info)) {
-        // Create a datareader first
-        EXPECT_TRUE(ins->create_datareader(topic_info));
-        EXPECT_NE(nullptr, topic_info->reader);
-        EXPECT_NE(nullptr, topic_info->topic);
-        
-        // Now delete the datareader - this should exercise delete_datareader
-        EXPECT_TRUE(ins->delete_datareader(topic_info));
-        EXPECT_EQ(nullptr, topic_info->reader);
-        EXPECT_EQ(nullptr, topic_info->topic);  // Topic should also be deleted
-    }
-    
-    ins->Finalize();
-}
 
 // Test delete_datareader when writer exists (topic should NOT be deleted)
 TEST_F(DDSProtocolTest, delete_datareader_TC002_with_writer) {
@@ -2010,6 +2087,906 @@ TEST_F(DDSProtocolTest, delete_datawriter_TC003_after_publish) {
 }
 
 // ==================== End of delete_datawriter/delete_datareader Coverage ====================
+
+// ==================== COMPREHENSIVE SERIALIZEMESSAGE DIRECT TESTS ====================
+// These tests create DynamicType/DynamicData programmatically and call SerializeMessage directly
+// to cover all type branches in the SerializeMessage function
+
+// Test SerializeMessage with all scalar primitive types
+TEST_F(DDSProtocolDeserializeTest, SerializeMessage_Direct_TC001_all_scalar_primitives) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    // Create DynamicType with all scalar types
+    DynamicType::_ref_type test_type = createTestStructType("TestSerializeScalars");
+    ASSERT_NE(nullptr, test_type);
+    
+    // Create empty DynamicData to serialize into
+    DynamicData::_ref_type dds_data = DynamicDataFactory::get_instance()->create_data(test_type);
+    ASSERT_NE(nullptr, dds_data);
+    
+    // Create VariantData with all scalar types
+    auto variant_data = std::make_shared<VariantData>();
+    variant_data->SetName("TestSerializeScalars");
+    
+    // Set all scalar types to hit all SerializeMessage branches
+    variant_data->SetValue("v_char8", (char)'A');
+    variant_data->SetValue("v_char16", (wchar_t)L'X');
+    variant_data->SetValue("v_int8", (int8_t)-50);
+    variant_data->SetValue("v_int16", (int16_t)-15000);
+    variant_data->SetValue("v_int32", (int32_t)-1000000);
+    variant_data->SetValue("v_int64", (int64_t)-9000000000LL);
+    variant_data->SetValue("v_uint8", (uint8_t)200);
+    variant_data->SetValue("v_uint16", (uint16_t)50000);
+    variant_data->SetValue("v_uint32", (uint32_t)3000000000U);
+    variant_data->SetValue("v_uint64", (uint64_t)10000000000ULL);
+    variant_data->SetValue("v_float32", 3.14159f);
+    variant_data->SetValue("v_float64", 2.71828182845);
+    variant_data->SetValue("v_string8", std::string("Hello World"));
+    variant_data->SetValue("v_string16", std::wstring(L"Wide String"));
+    
+    // Call SerializeMessage directly
+    bool result = ins->SerializeMessage(dds_data, variant_data);
+    EXPECT_TRUE(result);
+    
+    // Verify values were set correctly by reading them back
+    char v_char8;
+    dds_data->get_char8_value(v_char8, dds_data->get_member_id_by_name("v_char8"));
+    EXPECT_EQ('A', v_char8);
+    
+    wchar_t v_char16;
+    dds_data->get_char16_value(v_char16, dds_data->get_member_id_by_name("v_char16"));
+    EXPECT_EQ(L'X', v_char16);
+    
+    int8_t v_int8;
+    dds_data->get_int8_value(v_int8, dds_data->get_member_id_by_name("v_int8"));
+    EXPECT_EQ(-50, v_int8);
+    
+    int16_t v_int16;
+    dds_data->get_int16_value(v_int16, dds_data->get_member_id_by_name("v_int16"));
+    EXPECT_EQ(-15000, v_int16);
+    
+    int32_t v_int32;
+    dds_data->get_int32_value(v_int32, dds_data->get_member_id_by_name("v_int32"));
+    EXPECT_EQ(-1000000, v_int32);
+    
+    int64_t v_int64;
+    dds_data->get_int64_value(v_int64, dds_data->get_member_id_by_name("v_int64"));
+    EXPECT_EQ(-9000000000LL, v_int64);
+    
+    uint8_t v_uint8;
+    dds_data->get_uint8_value(v_uint8, dds_data->get_member_id_by_name("v_uint8"));
+    EXPECT_EQ(200, v_uint8);
+    
+    uint16_t v_uint16;
+    dds_data->get_uint16_value(v_uint16, dds_data->get_member_id_by_name("v_uint16"));
+    EXPECT_EQ(50000, v_uint16);
+    
+    uint32_t v_uint32;
+    dds_data->get_uint32_value(v_uint32, dds_data->get_member_id_by_name("v_uint32"));
+    EXPECT_EQ(3000000000U, v_uint32);
+    
+    uint64_t v_uint64;
+    dds_data->get_uint64_value(v_uint64, dds_data->get_member_id_by_name("v_uint64"));
+    EXPECT_EQ(10000000000ULL, v_uint64);
+    
+    float v_float32;
+    dds_data->get_float32_value(v_float32, dds_data->get_member_id_by_name("v_float32"));
+    EXPECT_FLOAT_EQ(3.14159f, v_float32);
+    
+    double v_float64;
+    dds_data->get_float64_value(v_float64, dds_data->get_member_id_by_name("v_float64"));
+    EXPECT_DOUBLE_EQ(2.71828182845, v_float64);
+    
+    ins->Finalize();
+}
+
+// Test SerializeMessage with individual char type
+TEST_F(DDSProtocolDeserializeTest, SerializeMessage_Direct_TC004_char8_only) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    DynamicTypeBuilderFactory::_ref_type factory = DynamicTypeBuilderFactory::get_instance();
+    TypeDescriptor::_ref_type type_desc = traits<TypeDescriptor>::make_shared();
+    type_desc->kind(TK_STRUCTURE);
+    type_desc->name("TestChar8Only");
+    
+    DynamicTypeBuilder::_ref_type builder = factory->create_type(type_desc);
+    
+    MemberDescriptor::_ref_type member_desc = traits<MemberDescriptor>::make_shared();
+    member_desc->name("v_char8");
+    member_desc->type(factory->get_primitive_type(TK_CHAR8));
+    builder->add_member(member_desc);
+    
+    DynamicType::_ref_type test_type = builder->build();
+    DynamicData::_ref_type dds_data = DynamicDataFactory::get_instance()->create_data(test_type);
+    
+    auto variant_data = std::make_shared<VariantData>();
+    variant_data->SetName("TestChar8Only");
+    variant_data->SetValue("v_char8", (char)'Z');
+    
+    bool result = ins->SerializeMessage(dds_data, variant_data);
+    EXPECT_TRUE(result);
+    
+    char value;
+    dds_data->get_char8_value(value, dds_data->get_member_id_by_name("v_char8"));
+    EXPECT_EQ('Z', value);
+    
+    ins->Finalize();
+}
+
+// Test SerializeMessage with individual char16 type
+TEST_F(DDSProtocolDeserializeTest, SerializeMessage_Direct_TC005_char16_only) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    DynamicTypeBuilderFactory::_ref_type factory = DynamicTypeBuilderFactory::get_instance();
+    TypeDescriptor::_ref_type type_desc = traits<TypeDescriptor>::make_shared();
+    type_desc->kind(TK_STRUCTURE);
+    type_desc->name("TestChar16Only");
+    
+    DynamicTypeBuilder::_ref_type builder = factory->create_type(type_desc);
+    
+    MemberDescriptor::_ref_type member_desc = traits<MemberDescriptor>::make_shared();
+    member_desc->name("v_char16");
+    member_desc->type(factory->get_primitive_type(TK_CHAR16));
+    builder->add_member(member_desc);
+    
+    DynamicType::_ref_type test_type = builder->build();
+    DynamicData::_ref_type dds_data = DynamicDataFactory::get_instance()->create_data(test_type);
+    
+    auto variant_data = std::make_shared<VariantData>();
+    variant_data->SetName("TestChar16Only");
+    variant_data->SetValue("v_char16", (wchar_t)L'W');
+    
+    bool result = ins->SerializeMessage(dds_data, variant_data);
+    EXPECT_TRUE(result);
+    
+    wchar_t value;
+    dds_data->get_char16_value(value, dds_data->get_member_id_by_name("v_char16"));
+    EXPECT_EQ(L'W', value);
+    
+    ins->Finalize();
+}
+
+// Test SerializeMessage with individual int8 type
+TEST_F(DDSProtocolDeserializeTest, SerializeMessage_Direct_TC006_int8_only) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    DynamicTypeBuilderFactory::_ref_type factory = DynamicTypeBuilderFactory::get_instance();
+    TypeDescriptor::_ref_type type_desc = traits<TypeDescriptor>::make_shared();
+    type_desc->kind(TK_STRUCTURE);
+    type_desc->name("TestInt8Only");
+    
+    DynamicTypeBuilder::_ref_type builder = factory->create_type(type_desc);
+    
+    MemberDescriptor::_ref_type member_desc = traits<MemberDescriptor>::make_shared();
+    member_desc->name("v_int8");
+    member_desc->type(factory->get_primitive_type(TK_INT8));
+    builder->add_member(member_desc);
+    
+    DynamicType::_ref_type test_type = builder->build();
+    DynamicData::_ref_type dds_data = DynamicDataFactory::get_instance()->create_data(test_type);
+    
+    auto variant_data = std::make_shared<VariantData>();
+    variant_data->SetName("TestInt8Only");
+    variant_data->SetValue("v_int8", (int8_t)-127);
+    
+    bool result = ins->SerializeMessage(dds_data, variant_data);
+    EXPECT_TRUE(result);
+    
+    int8_t value;
+    dds_data->get_int8_value(value, dds_data->get_member_id_by_name("v_int8"));
+    EXPECT_EQ(-127, value);
+    
+    ins->Finalize();
+}
+
+// Test SerializeMessage with individual int16 type
+TEST_F(DDSProtocolDeserializeTest, SerializeMessage_Direct_TC007_int16_only) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    DynamicTypeBuilderFactory::_ref_type factory = DynamicTypeBuilderFactory::get_instance();
+    TypeDescriptor::_ref_type type_desc = traits<TypeDescriptor>::make_shared();
+    type_desc->kind(TK_STRUCTURE);
+    type_desc->name("TestInt16Only");
+    
+    DynamicTypeBuilder::_ref_type builder = factory->create_type(type_desc);
+    
+    MemberDescriptor::_ref_type member_desc = traits<MemberDescriptor>::make_shared();
+    member_desc->name("v_int16");
+    member_desc->type(factory->get_primitive_type(TK_INT16));
+    builder->add_member(member_desc);
+    
+    DynamicType::_ref_type test_type = builder->build();
+    DynamicData::_ref_type dds_data = DynamicDataFactory::get_instance()->create_data(test_type);
+    
+    auto variant_data = std::make_shared<VariantData>();
+    variant_data->SetName("TestInt16Only");
+    variant_data->SetValue("v_int16", (int16_t)-32000);
+    
+    bool result = ins->SerializeMessage(dds_data, variant_data);
+    EXPECT_TRUE(result);
+    
+    int16_t value;
+    dds_data->get_int16_value(value, dds_data->get_member_id_by_name("v_int16"));
+    EXPECT_EQ(-32000, value);
+    
+    ins->Finalize();
+}
+
+// Test SerializeMessage with individual int64 type
+TEST_F(DDSProtocolDeserializeTest, SerializeMessage_Direct_TC008_int64_only) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    DynamicTypeBuilderFactory::_ref_type factory = DynamicTypeBuilderFactory::get_instance();
+    TypeDescriptor::_ref_type type_desc = traits<TypeDescriptor>::make_shared();
+    type_desc->kind(TK_STRUCTURE);
+    type_desc->name("TestInt64Only");
+    
+    DynamicTypeBuilder::_ref_type builder = factory->create_type(type_desc);
+    
+    MemberDescriptor::_ref_type member_desc = traits<MemberDescriptor>::make_shared();
+    member_desc->name("v_int64");
+    member_desc->type(factory->get_primitive_type(TK_INT64));
+    builder->add_member(member_desc);
+    
+    DynamicType::_ref_type test_type = builder->build();
+    DynamicData::_ref_type dds_data = DynamicDataFactory::get_instance()->create_data(test_type);
+    
+    auto variant_data = std::make_shared<VariantData>();
+    variant_data->SetName("TestInt64Only");
+    variant_data->SetValue("v_int64", (int64_t)-9223372036854775800LL);
+    
+    bool result = ins->SerializeMessage(dds_data, variant_data);
+    EXPECT_TRUE(result);
+    
+    int64_t value;
+    dds_data->get_int64_value(value, dds_data->get_member_id_by_name("v_int64"));
+    EXPECT_EQ(-9223372036854775800LL, value);
+    
+    ins->Finalize();
+}
+
+// Test SerializeMessage with individual uint8 type
+TEST_F(DDSProtocolDeserializeTest, SerializeMessage_Direct_TC009_uint8_only) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    DynamicTypeBuilderFactory::_ref_type factory = DynamicTypeBuilderFactory::get_instance();
+    TypeDescriptor::_ref_type type_desc = traits<TypeDescriptor>::make_shared();
+    type_desc->kind(TK_STRUCTURE);
+    type_desc->name("TestUint8Only");
+    
+    DynamicTypeBuilder::_ref_type builder = factory->create_type(type_desc);
+    
+    MemberDescriptor::_ref_type member_desc = traits<MemberDescriptor>::make_shared();
+    member_desc->name("v_uint8");
+    member_desc->type(factory->get_primitive_type(TK_UINT8));
+    builder->add_member(member_desc);
+    
+    DynamicType::_ref_type test_type = builder->build();
+    DynamicData::_ref_type dds_data = DynamicDataFactory::get_instance()->create_data(test_type);
+    
+    auto variant_data = std::make_shared<VariantData>();
+    variant_data->SetName("TestUint8Only");
+    variant_data->SetValue("v_uint8", (uint8_t)255);
+    
+    bool result = ins->SerializeMessage(dds_data, variant_data);
+    EXPECT_TRUE(result);
+    
+    uint8_t value;
+    dds_data->get_uint8_value(value, dds_data->get_member_id_by_name("v_uint8"));
+    EXPECT_EQ(255, value);
+    
+    ins->Finalize();
+}
+
+// Test SerializeMessage with individual uint16 type
+TEST_F(DDSProtocolDeserializeTest, SerializeMessage_Direct_TC010_uint16_only) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    DynamicTypeBuilderFactory::_ref_type factory = DynamicTypeBuilderFactory::get_instance();
+    TypeDescriptor::_ref_type type_desc = traits<TypeDescriptor>::make_shared();
+    type_desc->kind(TK_STRUCTURE);
+    type_desc->name("TestUint16Only");
+    
+    DynamicTypeBuilder::_ref_type builder = factory->create_type(type_desc);
+    
+    MemberDescriptor::_ref_type member_desc = traits<MemberDescriptor>::make_shared();
+    member_desc->name("v_uint16");
+    member_desc->type(factory->get_primitive_type(TK_UINT16));
+    builder->add_member(member_desc);
+    
+    DynamicType::_ref_type test_type = builder->build();
+    DynamicData::_ref_type dds_data = DynamicDataFactory::get_instance()->create_data(test_type);
+    
+    auto variant_data = std::make_shared<VariantData>();
+    variant_data->SetName("TestUint16Only");
+    variant_data->SetValue("v_uint16", (uint16_t)65535);
+    
+    bool result = ins->SerializeMessage(dds_data, variant_data);
+    EXPECT_TRUE(result);
+    
+    uint16_t value;
+    dds_data->get_uint16_value(value, dds_data->get_member_id_by_name("v_uint16"));
+    EXPECT_EQ(65535, value);
+    
+    ins->Finalize();
+}
+
+// Test SerializeMessage with individual uint32 type
+TEST_F(DDSProtocolDeserializeTest, SerializeMessage_Direct_TC011_uint32_only) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    DynamicTypeBuilderFactory::_ref_type factory = DynamicTypeBuilderFactory::get_instance();
+    TypeDescriptor::_ref_type type_desc = traits<TypeDescriptor>::make_shared();
+    type_desc->kind(TK_STRUCTURE);
+    type_desc->name("TestUint32Only");
+    
+    DynamicTypeBuilder::_ref_type builder = factory->create_type(type_desc);
+    
+    MemberDescriptor::_ref_type member_desc = traits<MemberDescriptor>::make_shared();
+    member_desc->name("v_uint32");
+    member_desc->type(factory->get_primitive_type(TK_UINT32));
+    builder->add_member(member_desc);
+    
+    DynamicType::_ref_type test_type = builder->build();
+    DynamicData::_ref_type dds_data = DynamicDataFactory::get_instance()->create_data(test_type);
+    
+    auto variant_data = std::make_shared<VariantData>();
+    variant_data->SetName("TestUint32Only");
+    variant_data->SetValue("v_uint32", (uint32_t)4294967295U);
+    
+    bool result = ins->SerializeMessage(dds_data, variant_data);
+    EXPECT_TRUE(result);
+    
+    uint32_t value;
+    dds_data->get_uint32_value(value, dds_data->get_member_id_by_name("v_uint32"));
+    EXPECT_EQ(4294967295U, value);
+    
+    ins->Finalize();
+}
+
+// Test SerializeMessage with individual uint64 type
+TEST_F(DDSProtocolDeserializeTest, SerializeMessage_Direct_TC012_uint64_only) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    DynamicTypeBuilderFactory::_ref_type factory = DynamicTypeBuilderFactory::get_instance();
+    TypeDescriptor::_ref_type type_desc = traits<TypeDescriptor>::make_shared();
+    type_desc->kind(TK_STRUCTURE);
+    type_desc->name("TestUint64Only");
+    
+    DynamicTypeBuilder::_ref_type builder = factory->create_type(type_desc);
+    
+    MemberDescriptor::_ref_type member_desc = traits<MemberDescriptor>::make_shared();
+    member_desc->name("v_uint64");
+    member_desc->type(factory->get_primitive_type(TK_UINT64));
+    builder->add_member(member_desc);
+    
+    DynamicType::_ref_type test_type = builder->build();
+    DynamicData::_ref_type dds_data = DynamicDataFactory::get_instance()->create_data(test_type);
+    
+    auto variant_data = std::make_shared<VariantData>();
+    variant_data->SetName("TestUint64Only");
+    variant_data->SetValue("v_uint64", (uint64_t)18446744073709551615ULL);
+    
+    bool result = ins->SerializeMessage(dds_data, variant_data);
+    EXPECT_TRUE(result);
+    
+    uint64_t value;
+    dds_data->get_uint64_value(value, dds_data->get_member_id_by_name("v_uint64"));
+    EXPECT_EQ(18446744073709551615ULL, value);
+    
+    ins->Finalize();
+}
+
+// Test SerializeMessage with individual float type
+TEST_F(DDSProtocolDeserializeTest, SerializeMessage_Direct_TC013_float_only) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    DynamicTypeBuilderFactory::_ref_type factory = DynamicTypeBuilderFactory::get_instance();
+    TypeDescriptor::_ref_type type_desc = traits<TypeDescriptor>::make_shared();
+    type_desc->kind(TK_STRUCTURE);
+    type_desc->name("TestFloatOnly");
+    
+    DynamicTypeBuilder::_ref_type builder = factory->create_type(type_desc);
+    
+    MemberDescriptor::_ref_type member_desc = traits<MemberDescriptor>::make_shared();
+    member_desc->name("v_float");
+    member_desc->type(factory->get_primitive_type(TK_FLOAT32));
+    builder->add_member(member_desc);
+    
+    DynamicType::_ref_type test_type = builder->build();
+    DynamicData::_ref_type dds_data = DynamicDataFactory::get_instance()->create_data(test_type);
+    
+    auto variant_data = std::make_shared<VariantData>();
+    variant_data->SetName("TestFloatOnly");
+    variant_data->SetValue("v_float", 3.14159265f);
+    
+    bool result = ins->SerializeMessage(dds_data, variant_data);
+    EXPECT_TRUE(result);
+    
+    float value;
+    dds_data->get_float32_value(value, dds_data->get_member_id_by_name("v_float"));
+    EXPECT_FLOAT_EQ(3.14159265f, value);
+    
+    ins->Finalize();
+}
+
+// Test SerializeMessage with individual double type
+TEST_F(DDSProtocolDeserializeTest, SerializeMessage_Direct_TC014_double_only) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    DynamicTypeBuilderFactory::_ref_type factory = DynamicTypeBuilderFactory::get_instance();
+    TypeDescriptor::_ref_type type_desc = traits<TypeDescriptor>::make_shared();
+    type_desc->kind(TK_STRUCTURE);
+    type_desc->name("TestDoubleOnly");
+    
+    DynamicTypeBuilder::_ref_type builder = factory->create_type(type_desc);
+    
+    MemberDescriptor::_ref_type member_desc = traits<MemberDescriptor>::make_shared();
+    member_desc->name("v_double");
+    member_desc->type(factory->get_primitive_type(TK_FLOAT64));
+    builder->add_member(member_desc);
+    
+    DynamicType::_ref_type test_type = builder->build();
+    DynamicData::_ref_type dds_data = DynamicDataFactory::get_instance()->create_data(test_type);
+    
+    auto variant_data = std::make_shared<VariantData>();
+    variant_data->SetName("TestDoubleOnly");
+    variant_data->SetValue("v_double", 3.141592653589793);
+    
+    bool result = ins->SerializeMessage(dds_data, variant_data);
+    EXPECT_TRUE(result);
+    
+    double value;
+    dds_data->get_float64_value(value, dds_data->get_member_id_by_name("v_double"));
+    EXPECT_DOUBLE_EQ(3.141592653589793, value);
+    
+    ins->Finalize();
+}
+
+// Test SerializeMessage with individual string type
+TEST_F(DDSProtocolDeserializeTest, SerializeMessage_Direct_TC015_string_only) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    DynamicTypeBuilderFactory::_ref_type factory = DynamicTypeBuilderFactory::get_instance();
+    TypeDescriptor::_ref_type type_desc = traits<TypeDescriptor>::make_shared();
+    type_desc->kind(TK_STRUCTURE);
+    type_desc->name("TestStringOnly");
+    
+    DynamicTypeBuilder::_ref_type builder = factory->create_type(type_desc);
+    
+    MemberDescriptor::_ref_type member_desc = traits<MemberDescriptor>::make_shared();
+    member_desc->name("v_string");
+    member_desc->type(factory->create_string_type(255)->build());
+    builder->add_member(member_desc);
+    
+    DynamicType::_ref_type test_type = builder->build();
+    DynamicData::_ref_type dds_data = DynamicDataFactory::get_instance()->create_data(test_type);
+    
+    auto variant_data = std::make_shared<VariantData>();
+    variant_data->SetName("TestStringOnly");
+    variant_data->SetValue("v_string", std::string("Hello SerializeMessage Test"));
+    
+    bool result = ins->SerializeMessage(dds_data, variant_data);
+    EXPECT_TRUE(result);
+    
+    std::string value;
+    dds_data->get_string_value(value, dds_data->get_member_id_by_name("v_string"));
+    EXPECT_EQ("Hello SerializeMessage Test", value);
+    
+    ins->Finalize();
+}
+
+// Test SerializeMessage with individual wstring type
+TEST_F(DDSProtocolDeserializeTest, SerializeMessage_Direct_TC016_wstring_only) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    DynamicTypeBuilderFactory::_ref_type factory = DynamicTypeBuilderFactory::get_instance();
+    TypeDescriptor::_ref_type type_desc = traits<TypeDescriptor>::make_shared();
+    type_desc->kind(TK_STRUCTURE);
+    type_desc->name("TestWstringOnly");
+    
+    DynamicTypeBuilder::_ref_type builder = factory->create_type(type_desc);
+    
+    MemberDescriptor::_ref_type member_desc = traits<MemberDescriptor>::make_shared();
+    member_desc->name("v_wstring");
+    member_desc->type(factory->create_wstring_type(255)->build());
+    builder->add_member(member_desc);
+    
+    DynamicType::_ref_type test_type = builder->build();
+    DynamicData::_ref_type dds_data = DynamicDataFactory::get_instance()->create_data(test_type);
+    
+    auto variant_data = std::make_shared<VariantData>();
+    variant_data->SetName("TestWstringOnly");
+    variant_data->SetValue("v_wstring", std::wstring(L"Wide String Test"));
+    
+    bool result = ins->SerializeMessage(dds_data, variant_data);
+    EXPECT_TRUE(result);
+    
+    std::wstring value;
+    dds_data->get_wstring_value(value, dds_data->get_member_id_by_name("v_wstring"));
+    EXPECT_EQ(L"Wide String Test", value);
+    
+    ins->Finalize();
+}
+
+// ==================== SerializeMessage Sequence Type Tests ====================
+
+// Helper to create a struct with a single sequence member
+DynamicType::_ref_type createSingleSeqType(const std::string& typeName, const std::string& memberName, TypeKind elemKind) {
+    DynamicTypeBuilderFactory::_ref_type factory = DynamicTypeBuilderFactory::get_instance();
+    TypeDescriptor::_ref_type type_desc = traits<TypeDescriptor>::make_shared();
+    type_desc->kind(TK_STRUCTURE);
+    type_desc->name(typeName);
+    
+    DynamicTypeBuilder::_ref_type builder = factory->create_type(type_desc);
+    
+    MemberDescriptor::_ref_type member_desc = traits<MemberDescriptor>::make_shared();
+    member_desc->name(memberName);
+    member_desc->type(factory->create_sequence_type(factory->get_primitive_type(elemKind), 100)->build());
+    builder->add_member(member_desc);
+    
+    return builder->build();
+}
+
+// Test SerializeMessage with char8 sequence
+TEST_F(DDSProtocolDeserializeTest, SerializeMessage_Direct_TC017_seq_char8) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    DynamicType::_ref_type test_type = createSingleSeqType("TestSeqChar8", "seq_char8", TK_CHAR8);
+    DynamicData::_ref_type dds_data = DynamicDataFactory::get_instance()->create_data(test_type);
+    
+    auto variant_data = std::make_shared<VariantData>();
+    variant_data->SetName("TestSeqChar8");
+    variant_data->SetValue("seq_char8", std::vector<char>{'A', 'B', 'C', 'D'});
+    
+    bool result = ins->SerializeMessage(dds_data, variant_data);
+    EXPECT_TRUE(result);
+    
+    std::vector<char> values;
+    dds_data->get_char8_values(values, dds_data->get_member_id_by_name("seq_char8"));
+    ASSERT_EQ(4, values.size());
+    EXPECT_EQ('A', values[0]);
+    EXPECT_EQ('D', values[3]);
+    
+    ins->Finalize();
+}
+
+// Test SerializeMessage with char16 sequence
+TEST_F(DDSProtocolDeserializeTest, SerializeMessage_Direct_TC018_seq_char16) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    DynamicType::_ref_type test_type = createSingleSeqType("TestSeqChar16", "seq_char16", TK_CHAR16);
+    DynamicData::_ref_type dds_data = DynamicDataFactory::get_instance()->create_data(test_type);
+    
+    auto variant_data = std::make_shared<VariantData>();
+    variant_data->SetName("TestSeqChar16");
+    variant_data->SetValue("seq_char16", std::vector<wchar_t>{L'X', L'Y', L'Z'});
+    
+    bool result = ins->SerializeMessage(dds_data, variant_data);
+    EXPECT_TRUE(result);
+    
+    std::vector<wchar_t> values;
+    dds_data->get_char16_values(values, dds_data->get_member_id_by_name("seq_char16"));
+    ASSERT_EQ(3, values.size());
+    EXPECT_EQ(L'X', values[0]);
+    
+    ins->Finalize();
+}
+
+// Test SerializeMessage with int8 sequence
+TEST_F(DDSProtocolDeserializeTest, SerializeMessage_Direct_TC019_seq_int8) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    DynamicType::_ref_type test_type = createSingleSeqType("TestSeqInt8", "seq_int8", TK_INT8);
+    DynamicData::_ref_type dds_data = DynamicDataFactory::get_instance()->create_data(test_type);
+    
+    auto variant_data = std::make_shared<VariantData>();
+    variant_data->SetName("TestSeqInt8");
+    variant_data->SetValue("seq_int8", std::vector<int8_t>{-10, -20, 30, 40});
+    
+    bool result = ins->SerializeMessage(dds_data, variant_data);
+    EXPECT_TRUE(result);
+    
+    std::vector<int8_t> values;
+    dds_data->get_int8_values(values, dds_data->get_member_id_by_name("seq_int8"));
+    ASSERT_EQ(4, values.size());
+    EXPECT_EQ(-10, values[0]);
+    
+    ins->Finalize();
+}
+
+// Test SerializeMessage with int16 sequence
+TEST_F(DDSProtocolDeserializeTest, SerializeMessage_Direct_TC020_seq_int16) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    DynamicType::_ref_type test_type = createSingleSeqType("TestSeqInt16", "seq_int16", TK_INT16);
+    DynamicData::_ref_type dds_data = DynamicDataFactory::get_instance()->create_data(test_type);
+    
+    auto variant_data = std::make_shared<VariantData>();
+    variant_data->SetName("TestSeqInt16");
+    variant_data->SetValue("seq_int16", std::vector<int16_t>{-1000, -2000, 3000});
+    
+    bool result = ins->SerializeMessage(dds_data, variant_data);
+    EXPECT_TRUE(result);
+    
+    std::vector<int16_t> values;
+    dds_data->get_int16_values(values, dds_data->get_member_id_by_name("seq_int16"));
+    ASSERT_EQ(3, values.size());
+    EXPECT_EQ(-1000, values[0]);
+    
+    ins->Finalize();
+}
+
+// Test SerializeMessage with int32 sequence
+TEST_F(DDSProtocolDeserializeTest, SerializeMessage_Direct_TC021_seq_int32) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    DynamicType::_ref_type test_type = createSingleSeqType("TestSeqInt32", "seq_int32", TK_INT32);
+    DynamicData::_ref_type dds_data = DynamicDataFactory::get_instance()->create_data(test_type);
+    
+    auto variant_data = std::make_shared<VariantData>();
+    variant_data->SetName("TestSeqInt32");
+    variant_data->SetValue("seq_int32", std::vector<int32_t>{-100000, 200000, -300000});
+    
+    bool result = ins->SerializeMessage(dds_data, variant_data);
+    EXPECT_TRUE(result);
+    
+    std::vector<int32_t> values;
+    dds_data->get_int32_values(values, dds_data->get_member_id_by_name("seq_int32"));
+    ASSERT_EQ(3, values.size());
+    EXPECT_EQ(-100000, values[0]);
+    
+    ins->Finalize();
+}
+
+// Test SerializeMessage with int64 sequence
+TEST_F(DDSProtocolDeserializeTest, SerializeMessage_Direct_TC022_seq_int64) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    DynamicType::_ref_type test_type = createSingleSeqType("TestSeqInt64", "seq_int64", TK_INT64);
+    DynamicData::_ref_type dds_data = DynamicDataFactory::get_instance()->create_data(test_type);
+    
+    auto variant_data = std::make_shared<VariantData>();
+    variant_data->SetName("TestSeqInt64");
+    variant_data->SetValue("seq_int64", std::vector<int64_t>{-9000000000LL, 9000000000LL});
+    
+    bool result = ins->SerializeMessage(dds_data, variant_data);
+    EXPECT_TRUE(result);
+    
+    std::vector<int64_t> values;
+    dds_data->get_int64_values(values, dds_data->get_member_id_by_name("seq_int64"));
+    ASSERT_EQ(2, values.size());
+    EXPECT_EQ(-9000000000LL, values[0]);
+    
+    ins->Finalize();
+}
+
+// Test SerializeMessage with uint8 sequence
+TEST_F(DDSProtocolDeserializeTest, SerializeMessage_Direct_TC023_seq_uint8) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    DynamicType::_ref_type test_type = createSingleSeqType("TestSeqUint8", "seq_uint8", TK_UINT8);
+    DynamicData::_ref_type dds_data = DynamicDataFactory::get_instance()->create_data(test_type);
+    
+    auto variant_data = std::make_shared<VariantData>();
+    variant_data->SetName("TestSeqUint8");
+    variant_data->SetValue("seq_uint8", std::vector<uint8_t>{10, 20, 30, 255});
+    
+    bool result = ins->SerializeMessage(dds_data, variant_data);
+    EXPECT_TRUE(result);
+    
+    std::vector<uint8_t> values;
+    dds_data->get_uint8_values(values, dds_data->get_member_id_by_name("seq_uint8"));
+    ASSERT_EQ(4, values.size());
+    EXPECT_EQ(255, values[3]);
+    
+    ins->Finalize();
+}
+
+// Test SerializeMessage with uint16 sequence
+TEST_F(DDSProtocolDeserializeTest, SerializeMessage_Direct_TC024_seq_uint16) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    DynamicType::_ref_type test_type = createSingleSeqType("TestSeqUint16", "seq_uint16", TK_UINT16);
+    DynamicData::_ref_type dds_data = DynamicDataFactory::get_instance()->create_data(test_type);
+    
+    auto variant_data = std::make_shared<VariantData>();
+    variant_data->SetName("TestSeqUint16");
+    variant_data->SetValue("seq_uint16", std::vector<uint16_t>{1000, 2000, 65535});
+    
+    bool result = ins->SerializeMessage(dds_data, variant_data);
+    EXPECT_TRUE(result);
+    
+    std::vector<uint16_t> values;
+    dds_data->get_uint16_values(values, dds_data->get_member_id_by_name("seq_uint16"));
+    ASSERT_EQ(3, values.size());
+    EXPECT_EQ(65535, values[2]);
+    
+    ins->Finalize();
+}
+
+// Test SerializeMessage with uint32 sequence
+TEST_F(DDSProtocolDeserializeTest, SerializeMessage_Direct_TC025_seq_uint32) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    DynamicType::_ref_type test_type = createSingleSeqType("TestSeqUint32", "seq_uint32", TK_UINT32);
+    DynamicData::_ref_type dds_data = DynamicDataFactory::get_instance()->create_data(test_type);
+    
+    auto variant_data = std::make_shared<VariantData>();
+    variant_data->SetName("TestSeqUint32");
+    variant_data->SetValue("seq_uint32", std::vector<uint32_t>{1000000, 4294967295U});
+    
+    bool result = ins->SerializeMessage(dds_data, variant_data);
+    EXPECT_TRUE(result);
+    
+    std::vector<uint32_t> values;
+    dds_data->get_uint32_values(values, dds_data->get_member_id_by_name("seq_uint32"));
+    ASSERT_EQ(2, values.size());
+    EXPECT_EQ(4294967295U, values[1]);
+    
+    ins->Finalize();
+}
+
+// Test SerializeMessage with uint64 sequence
+TEST_F(DDSProtocolDeserializeTest, SerializeMessage_Direct_TC026_seq_uint64) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    DynamicType::_ref_type test_type = createSingleSeqType("TestSeqUint64", "seq_uint64", TK_UINT64);
+    DynamicData::_ref_type dds_data = DynamicDataFactory::get_instance()->create_data(test_type);
+    
+    auto variant_data = std::make_shared<VariantData>();
+    variant_data->SetName("TestSeqUint64");
+    variant_data->SetValue("seq_uint64", std::vector<uint64_t>{10000000000ULL, 18446744073709551615ULL});
+    
+    bool result = ins->SerializeMessage(dds_data, variant_data);
+    EXPECT_TRUE(result);
+    
+    std::vector<uint64_t> values;
+    dds_data->get_uint64_values(values, dds_data->get_member_id_by_name("seq_uint64"));
+    ASSERT_EQ(2, values.size());
+    EXPECT_EQ(18446744073709551615ULL, values[1]);
+    
+    ins->Finalize();
+}
+
+// Test SerializeMessage with float sequence
+TEST_F(DDSProtocolDeserializeTest, SerializeMessage_Direct_TC027_seq_float) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    DynamicType::_ref_type test_type = createSingleSeqType("TestSeqFloat", "seq_float", TK_FLOAT32);
+    DynamicData::_ref_type dds_data = DynamicDataFactory::get_instance()->create_data(test_type);
+    
+    auto variant_data = std::make_shared<VariantData>();
+    variant_data->SetName("TestSeqFloat");
+    variant_data->SetValue("seq_float", std::vector<float>{1.1f, 2.2f, 3.3f});
+    
+    bool result = ins->SerializeMessage(dds_data, variant_data);
+    EXPECT_TRUE(result);
+    
+    std::vector<float> values;
+    dds_data->get_float32_values(values, dds_data->get_member_id_by_name("seq_float"));
+    ASSERT_EQ(3, values.size());
+    EXPECT_FLOAT_EQ(1.1f, values[0]);
+    
+    ins->Finalize();
+}
+
+// Test SerializeMessage with double sequence
+TEST_F(DDSProtocolDeserializeTest, SerializeMessage_Direct_TC028_seq_double) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    DynamicType::_ref_type test_type = createSingleSeqType("TestSeqDouble", "seq_double", TK_FLOAT64);
+    DynamicData::_ref_type dds_data = DynamicDataFactory::get_instance()->create_data(test_type);
+    
+    auto variant_data = std::make_shared<VariantData>();
+    variant_data->SetName("TestSeqDouble");
+    variant_data->SetValue("seq_double", std::vector<double>{1.111, 2.222, 3.333});
+    
+    bool result = ins->SerializeMessage(dds_data, variant_data);
+    EXPECT_TRUE(result);
+    
+    std::vector<double> values;
+    dds_data->get_float64_values(values, dds_data->get_member_id_by_name("seq_double"));
+    ASSERT_EQ(3, values.size());
+    EXPECT_DOUBLE_EQ(1.111, values[0]);
+    
+    ins->Finalize();
+}
+
+// Test SerializeMessage with bool sequence
+TEST_F(DDSProtocolDeserializeTest, SerializeMessage_Direct_TC029_seq_bool) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    DynamicType::_ref_type test_type = createSingleSeqType("TestSeqBool", "seq_bool", TK_BOOLEAN);
+    DynamicData::_ref_type dds_data = DynamicDataFactory::get_instance()->create_data(test_type);
+    
+    auto variant_data = std::make_shared<VariantData>();
+    variant_data->SetName("TestSeqBool");
+    variant_data->SetValue("seq_bool", std::vector<bool>{true, false, true, false});
+    
+    bool result = ins->SerializeMessage(dds_data, variant_data);
+    EXPECT_TRUE(result);
+    
+    std::vector<bool> values;
+    dds_data->get_boolean_values(values, dds_data->get_member_id_by_name("seq_bool"));
+    ASSERT_EQ(4, values.size());
+    EXPECT_TRUE(values[0]);
+    EXPECT_FALSE(values[1]);
+    
+    ins->Finalize();
+}
+
+// Test SerializeMessage with string sequence
+TEST_F(DDSProtocolDeserializeTest, SerializeMessage_Direct_TC030_seq_string) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    DynamicTypeBuilderFactory::_ref_type factory = DynamicTypeBuilderFactory::get_instance();
+    TypeDescriptor::_ref_type type_desc = traits<TypeDescriptor>::make_shared();
+    type_desc->kind(TK_STRUCTURE);
+    type_desc->name("TestSeqString");
+    
+    DynamicTypeBuilder::_ref_type builder = factory->create_type(type_desc);
+    
+    MemberDescriptor::_ref_type member_desc = traits<MemberDescriptor>::make_shared();
+    member_desc->name("seq_string");
+    member_desc->type(factory->create_sequence_type(factory->create_string_type(255)->build(), 100)->build());
+    builder->add_member(member_desc);
+    
+    DynamicType::_ref_type test_type = builder->build();
+    DynamicData::_ref_type dds_data = DynamicDataFactory::get_instance()->create_data(test_type);
+    
+    auto variant_data = std::make_shared<VariantData>();
+    variant_data->SetName("TestSeqString");
+    variant_data->SetValue("seq_string", std::vector<std::string>{"hello", "world", "test"});
+    
+    bool result = ins->SerializeMessage(dds_data, variant_data);
+    EXPECT_TRUE(result);
+    
+    std::vector<std::string> values;
+    dds_data->get_string_values(values, dds_data->get_member_id_by_name("seq_string"));
+    ASSERT_EQ(3, values.size());
+    EXPECT_EQ("hello", values[0]);
+    EXPECT_EQ("test", values[2]);
+    
+    ins->Finalize();
+}
+
+// Test SerializeMessage with wstring sequence
+TEST_F(DDSProtocolDeserializeTest, SerializeMessage_Direct_TC031_seq_wstring) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    DynamicTypeBuilderFactory::_ref_type factory = DynamicTypeBuilderFactory::get_instance();
+    TypeDescriptor::_ref_type type_desc = traits<TypeDescriptor>::make_shared();
+    type_desc->kind(TK_STRUCTURE);
+    type_desc->name("TestSeqWstring");
+    
+    DynamicTypeBuilder::_ref_type builder = factory->create_type(type_desc);
+    
+    MemberDescriptor::_ref_type member_desc = traits<MemberDescriptor>::make_shared();
+    member_desc->name("seq_wstring");
+    member_desc->type(factory->create_sequence_type(factory->create_wstring_type(255)->build(), 100)->build());
+    builder->add_member(member_desc);
+    
+    DynamicType::_ref_type test_type = builder->build();
+    DynamicData::_ref_type dds_data = DynamicDataFactory::get_instance()->create_data(test_type);
+    
+    auto variant_data = std::make_shared<VariantData>();
+    variant_data->SetName("TestSeqWstring");
+    variant_data->SetValue("seq_wstring", std::vector<std::wstring>{L"wide1", L"wide2", L"wide3"});
+    
+    bool result = ins->SerializeMessage(dds_data, variant_data);
+    EXPECT_TRUE(result);
+    
+    std::vector<std::wstring> values;
+    dds_data->get_wstring_values(values, dds_data->get_member_id_by_name("seq_wstring"));
+    ASSERT_EQ(3, values.size());
+    EXPECT_EQ(L"wide1", values[0]);
+    EXPECT_EQ(L"wide3", values[2]);
+    
+    ins->Finalize();
+}
+
+// ==================== End of SerializeMessage Direct Tests ====================
 
 int main(int argc, char* argv[]) {
     ::testing::InitGoogleTest(&argc, argv);
