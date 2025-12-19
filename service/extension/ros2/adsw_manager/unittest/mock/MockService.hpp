@@ -52,44 +52,57 @@ std::string Service::GetName() {
     return name_;
 }
 ServiceType Service::GetServiceType() {
-    return Mock_Service->GetServiceType();
+    if (Mock_Service) return Mock_Service->GetServiceType();
+    return service_type_;
 }
 RecoveryPolicy Service::GetRecoveryPolicy() {
-    return Mock_Service->GetRecoveryPolicy();
+    if (Mock_Service) return Mock_Service->GetRecoveryPolicy();
+    return recovery_policy_;
 }
 bool Service::IsEnabled() {
-    return Mock_Service->IsEnabled();
+    if (Mock_Service) return Mock_Service->IsEnabled();
+    return is_enabled_;
 }
 ServiceState Service::GetServiceState() {
-    return Mock_Service->GetServiceState();
+    if (Mock_Service) return Mock_Service->GetServiceState();
+    return service_state_;
 }
 void Service::SetServiceState(ServiceState state) {
-    Mock_Service->SetServiceState(state);
+    if (Mock_Service) Mock_Service->SetServiceState(state);
+    service_state_ = state;
 }
 void Service::SetLaunchFile(const std::string& launchfile) {
-    Mock_Service->SetLaunchFile(launchfile);
+    if (Mock_Service) Mock_Service->SetLaunchFile(launchfile);
+    launch_file_ = launchfile;
 }
 
 void Service::SetPackage(const std::string& package) {
-    Mock_Service->SetPackage(package);
+    if (Mock_Service) Mock_Service->SetPackage(package);
+    packag_name_ = package;
 }
 const std::string Service::GetPackage() {
-    return Mock_Service->GetPackage();
+    if (Mock_Service) return Mock_Service->GetPackage();
+    return packag_name_;
 }
 void Service::SetRunningNodes(int32_t count) {
-    Mock_Service->SetRunningNodes(count);
+    if (Mock_Service) Mock_Service->SetRunningNodes(count);
+    current_nodes_ = count;
 }
 int32_t Service::GetRunningNodes() {
-    return Mock_Service->GetRunningNodes();
+    if (Mock_Service) return Mock_Service->GetRunningNodes();
+    return current_nodes_;
 }
 int32_t Service::GetMaxNodes()  {
-    return Mock_Service->GetMaxNodes();
+    if (Mock_Service) return Mock_Service->GetMaxNodes();
+    return max_nodes_;
 }
 void Service::SetPID(uint64_t pid) {
-    Mock_Service->SetPID(pid);
+    if (Mock_Service) Mock_Service->SetPID(pid);
+    pid_ = pid;
 }
 uint64_t Service::GetPID()  {
-    return Mock_Service->GetPID();
+    if (Mock_Service) return Mock_Service->GetPID();
+    return pid_;
 }
 
 }
