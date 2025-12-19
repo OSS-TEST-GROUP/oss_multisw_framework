@@ -275,5 +275,63 @@ TEST_F(AppControllerTest, TerminateApp_StopFail_ByEnv)
     SetFail("stop");
     EXPECT_FALSE(c.TerminateApp(name));
 }
+#ifdef UNIT_TEST
+struct ExitCalled { int code; };
+
+struct ScopedHooks {
+  ~ScopedHooks(){ adsw_manager::agl::testhook::ResetAll(); }
+};
+
+TEST_F(AppControllerTest, RunDocker_ForkFails_pidLessThan0Branch) {
+  ScopedHooks _;
+  AppController c;
+
+  adsw_manager::agl::testhook::SetFork([]()->pid_t { errno=EAGAIN; return -1; });
+  EXPECT_LT(c.RunDocker({"--version"}), 0);
+}
+
+TEST_F(AppControllerTest, RunDocker_ChildBranch_ExecvpFails_Exit127Covered) {
+  ScopedHooks _;
+  AppController c;
+
+  adsw_manager::agl::testhook::SetFork([]()->pid_t { return 0; });
+  adsw_manager::agl::testhook::SetExecvp([](const char*, char* const*)->int { errno=ENOENT; return -1; });
+  adsw_manager::agl::testhook::SetExit([](int code){ throw ExitCalled{code}; });
+
+  try {
+    (void)c.RunDocker({"--version"});
+    FAIL() << "Expected ExitCalled";
+  } catch(const ExitCalled& e){
+    EXPECT_EQ(e.code, 127);
+  }
+}
+
+TEST_F(AppControllerTest, RunDocker_WaitpidFails_waitpidErrorBranch) {
+  ScopedHooks _;
+  AppController c;
+
+  adsw_manager::agl::testhook::SetFork([]()->pid_t { return 1234; });
+  adsw_manager::agl::testhook::SetWaitpid([](pid_t, int*, int)->pid_t { errno=ECHILD; return -1; });
+
+  EXPECT_LT(c.RunDocker({"--version"}), 0);
+}
+
+TEST_F(AppControllerTest, RunDocker_ParentSuccess_StatusExit0Branch) {
+  ScopedHooks _;
+  AppController c;
+
+  adsw_manager::agl::testhook::SetFork([]()->pid_t { return 1234; });
+  adsw_manager::agl::testhook::SetWaitpid([](pid_t pid, int* st, int)->pid_t {
+    *st = 0; // exit 0
+    return pid;
+  });
+
+  int rc = c.RunDocker({"--version"});
+  ASSERT_GE(rc, 0);
+  ASSERT_TRUE(WIFEXITED(rc));
+  EXPECT_EQ(WEXITSTATUS(rc), 0);
+}
+#endif
+
 
 } // namespace adsw_manager::agl

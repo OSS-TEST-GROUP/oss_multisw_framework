@@ -22,4 +22,19 @@ namespace adsw_manager::agl {
 
 } // namespace adsw_manager::agl
 
+#ifdef UNIT_TEST
+namespace adsw_manager::agl::testhook {
+  using ForkFn = pid_t(*)();
+  using ExecvpFn = int(*)(const char*, char* const*);
+  using WaitpidFn = pid_t(*)(pid_t, int*, int);
+  using ExitFn = void(*)(int);
+
+  void SetFork(ForkFn);
+  void SetExecvp(ExecvpFn);
+  void SetWaitpid(WaitpidFn);
+  void SetExit(ExitFn);
+  void ResetAll();
+}
+#endif
+
 #endif
