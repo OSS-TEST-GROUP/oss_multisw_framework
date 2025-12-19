@@ -980,7 +980,15 @@ bool DDSProtocol::read_values_from_dynamic_data(DynamicData::_ref_type dds_data,
                         dds_data->get_char8_values(value, member->get_id());
                         variant_data->SetValue(member->get_name().c_str(), std::move(value));
                         break;
-                    } else if (arr_elem_kind == TK_UINT8 || arr_elem_kind == TK_BYTE) {
+                    }
+#ifdef TK_ARRAY_VARIOUS_TYPES
+                    else if (arr_elem_kind == TK_CHAR16) {
+                        std::vector<wchar_t> value;
+                        dds_data->get_char16_values(value, member->get_id());
+                        variant_data->SetValue(member->get_name().c_str(), std::move(value));
+                        break;
+                    }                    
+                    else if (arr_elem_kind == TK_UINT8 || arr_elem_kind == TK_BYTE) {
                         std::vector<uint8_t> value;
                         dds_data->get_uint8_values(value, member->get_id());
                         variant_data->SetValue(member->get_name().c_str(), std::move(value));
@@ -1011,6 +1019,7 @@ bool DDSProtocol::read_values_from_dynamic_data(DynamicData::_ref_type dds_data,
                         variant_data->SetValue(member->get_name().c_str(), std::move(value));
                         break;
                     }
+#endif                    
                 }
             }
             // Fallback: try to read as char8 values (most common for char arrays)

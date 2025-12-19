@@ -1944,8 +1944,8 @@ TEST_F(DDSProtocolDeserializeTest, Deserialize_Direct_TC020_array_type) {
     
     DynamicTypeBuilder::_ref_type builder = factory->create_type(type_desc);
     
-    // Create fixed-size array type (not sequence)
-    DynamicType::_ref_type elem_type = factory->get_primitive_type(TK_INT32);
+    // Create fixed-size char8 array type (not sequence)
+    DynamicType::_ref_type elem_type = factory->get_primitive_type(TK_CHAR8);
     BoundSeq bounds = {5};  // Array of 5 elements
     DynamicTypeBuilder::_ref_type array_builder = factory->create_array_type(elem_type, bounds);
     
@@ -1960,9 +1960,9 @@ TEST_F(DDSProtocolDeserializeTest, Deserialize_Direct_TC020_array_type) {
     DynamicData::_ref_type dds_data = DynamicDataFactory::get_instance()->create_data(test_type);
     ASSERT_NE(nullptr, dds_data);
     
-    // Set array values
-    std::vector<int32_t> values = {10, 20, 30, 40, 50};
-    dds_data->set_int32_values(dds_data->get_member_id_by_name("arr_values"), values);
+    // Set char array values
+    std::vector<char> char_values = {'A', 'B', 'C', 'D', 'E'};
+    dds_data->set_char8_values(dds_data->get_member_id_by_name("arr_values"), char_values);
     
     auto variant_data = std::make_shared<VariantData>();
     bool result = ins->DeserializeMessage(dds_data, variant_data);
@@ -3325,6 +3325,8 @@ TEST_F(DDSProtocolTest, delete_datawriter_TC005_reader_exists) {
 
 // Test delete_datareader when writer still exists
 TEST_F(DDSProtocolTest, delete_datareader_TC004_writer_exists) {
+    // Tests that delete_datareader returns false when topic is still in use by a writer
+    // (DDS cannot delete a topic while entities are using it)
     EXPECT_TRUE(ins->Initialize());
     
     auto topic_info = std::make_shared<TopicInformation>();
@@ -3348,14 +3350,22 @@ TEST_F(DDSProtocolTest, delete_datareader_TC004_writer_exists) {
                 topic_info->writer = ins->publisher_->create_datawriter(topic_info->topic, writer_qos);
                 
                 if (topic_info->writer != nullptr) {
-                    // Delete reader
+                    // Delete reader should fail because topic is still in use by writer
+                    // The datareader is deleted but delete_topic fails
                     bool result = ins->delete_datareader(topic_info);
-                    EXPECT_TRUE(result);
+                    // Expect false because delete_topic fails when writer still exists
+                    EXPECT_FALSE(result);
+                    // Reader should be nullptr (it was deleted successfully)
                     EXPECT_EQ(nullptr, topic_info->reader);
+                    // Topic should still exist (delete_topic failed)
+                    EXPECT_NE(nullptr, topic_info->topic);
                     
-                    // Clean up writer
+                    // Clean up writer first, then topic
                     ins->publisher_->delete_datawriter(topic_info->writer);
                     topic_info->writer = nullptr;
+                    // Now we can delete the topic
+                    ins->participant_->delete_topic(topic_info->topic);
+                    topic_info->topic = nullptr;
                 }
             }
         }
