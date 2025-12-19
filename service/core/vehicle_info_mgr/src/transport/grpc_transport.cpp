@@ -32,20 +32,36 @@ void populateErrorResponse(const rapidjson::Value& error_val, grpcProtobufMessag
 
 // Helper function to populate a DataPackage from a JSON object
 void populateDataPackage(const rapidjson::Value& data_item, grpcProtobufMessages::DataPackages::DataPackage* data_package) {
-    if (!data_item.IsObject()) return;
+    //if (!data_item.IsObject()) return;
 
     if (data_item.HasMember("path") && data_item["path"].IsString()) {
         data_package->set_path(data_item["path"].GetString());
     }
 
-    if (data_item.HasMember("dp") && data_item["dp"].IsObject()) {
-        const auto& dp_obj = data_item["dp"];
-        auto dp = data_package->add_dp();
-        if (dp_obj.HasMember("value") && dp_obj["value"].IsString()) {
-            dp->set_value(dp_obj["value"].GetString());
-        }
-        if (dp_obj.HasMember("ts") && dp_obj["ts"].IsString()) {
-            dp->set_ts(dp_obj["ts"].GetString());
+    if (data_item.HasMember("dp")) {
+        const auto& dp_val = data_item["dp"];
+        if (dp_val.IsArray()) {
+            for (const auto& dp_item : dp_val.GetArray()) {
+                if (dp_item.IsObject()) {
+                    const auto& dp_obj = dp_item;
+                    auto dp = data_package->add_dp();
+                    if (dp_obj.HasMember("value") && dp_obj["value"].IsString()) {
+                        dp->set_value(dp_obj["value"].GetString());
+                    }
+                    if (dp_obj.HasMember("ts") && dp_obj["ts"].IsString()) {
+                        dp->set_ts(dp_obj["ts"].GetString());
+                    }
+                }
+            }
+        } else {
+            const auto& dp_obj = dp_val;
+            auto dp = data_package->add_dp();
+            if (dp_obj.HasMember("value") && dp_obj["value"].IsString()) {
+                dp->set_value(dp_obj["value"].GetString());
+            }
+            if (dp_obj.HasMember("ts") && dp_obj["ts"].IsString()) {
+                dp->set_ts(dp_obj["ts"].GetString());
+            }
         }
     }
 }
@@ -198,7 +214,7 @@ grpc::Status VISSServiceImpl::GetRequest(grpc::ServerContext* context, const grp
             for (const auto& data_item : data_val.GetArray()) {
                 populateDataPackage(data_item, data_pack->add_data());
             }
-        } else if (data_val.IsObject()) {
+        } else {
             populateDataPackage(data_val, data_pack->add_data());
         }
     } else if (response_doc->HasMember("metadata")) {
@@ -370,7 +386,7 @@ grpc::Status VISSServiceImpl::SubscribeRequest(grpc::ServerContext* context, con
                 for (const auto& data_item : data_val.GetArray()) {
                     populateDataPackage(data_item, data_pack->add_data());
                 }
-            } else if (data_val.IsObject()) {
+            } else {
                 populateDataPackage(data_val, data_pack->add_data());
             }
         }

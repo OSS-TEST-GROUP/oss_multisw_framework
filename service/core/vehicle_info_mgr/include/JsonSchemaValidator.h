@@ -16,9 +16,9 @@ public:
     // Validates a string, and if successful, returns a unique_ptr to the parsed Document.
     // Returns nullptr on parse or validation failure.
     std::unique_ptr<rapidjson::Document> validate(const std::string& json_str);
-
-private:
     bool validate(const rapidjson::Document& doc); // Keep the old one for internal use
+    
+private:    
     JsonSchemaValidator(const std::string& schemaPath); // Private constructor now takes path
     JsonSchemaValidator(const JsonSchemaValidator&) = delete;
     JsonSchemaValidator& operator=(const JsonSchemaValidator&) = delete;
