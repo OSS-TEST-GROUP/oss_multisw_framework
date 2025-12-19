@@ -85,6 +85,422 @@ TEST_F(GrpcTransportTest, GetRequestIsQueued) {
     client_thread.join();
 }
 
+TEST_F(GrpcTransportTest, GetRequestAndNoTsResponse) {
+    // 1. Prepare client request in a separate thread
+    std::thread client_thread([this]() {
+        grpcProtobufMessages::GetRequestMessage req;
+        req.set_path("Vehicle.Speed");
+        req.set_requestid("test-get-req-1");
+        req.set_authorization("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ");
+        
+        grpcProtobufMessages::GetResponseMessage res;
+        grpc::ClientContext context;
+        
+        // This call will block until a response is sent back from the test
+        grpc::Status status = stub->GetRequest(&context, req, &res);
+        EXPECT_TRUE(status.ok());
+        EXPECT_TRUE(res.ts().empty());
+        
+    });
+
+    // 2. Wait for the server to process and queue the request
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(queue->wait_and_pop(received_request));
+
+    // 3. Verify the request content
+    EXPECT_EQ(received_request->requestId, "test-get-req-1");
+    const auto& doc = *received_request->request_doc;
+    EXPECT_STREQ(doc["action"].GetString(), "get");
+    EXPECT_STREQ(doc["path"].GetString(), "Vehicle.Speed");
+
+    // 4. Send a mock response back to unblock the client thread
+    auto mock_response = response_pool->acquire();
+    mock_response->SetObject();
+    rapidjson::Document::AllocatorType& allocator = mock_response->GetAllocator();
+    mock_response->AddMember("requestId", "test-get-req-1", allocator);
+    // No "ts" member in this response to test the client's handling
+    // mock_response->AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    // Add a dummy data part to make it a valid success response
+    rapidjson::Value data_val(rapidjson::kObjectType);
+    data_val.AddMember("path", "Vehicle.Speed", allocator);
+    rapidjson::Value dp_val(rapidjson::kObjectType);
+    dp_val.AddMember("value", "0", allocator);
+    //dp_val.AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    data_val.AddMember("dp", dp_val, allocator);
+    mock_response->AddMember("data", data_val, allocator);
+    
+    received_request->responseChan->push(mock_response);
+
+    client_thread.join();
+}
+
+TEST_F(GrpcTransportTest, GetRequestAndResponseDataPackageTestNoPathNoDp) {
+    // 1. Prepare client request in a separate thread
+    std::thread client_thread([this]() {
+        grpcProtobufMessages::GetRequestMessage req;
+        req.set_path("Vehicle.Speed");
+        req.set_requestid("test-get-req-1");
+        req.set_authorization("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ");
+        
+        grpcProtobufMessages::GetResponseMessage res;
+        grpc::ClientContext context;
+        
+        // This call will block until a response is sent back from the test
+        grpc::Status status = stub->GetRequest(&context, req, &res);
+        EXPECT_TRUE(status.ok());
+        const auto& data_pack = res.successresponse().datapack();
+        EXPECT_EQ(data_pack.data_size(), 1);
+        EXPECT_TRUE(data_pack.data(0).path().empty());
+        EXPECT_EQ(data_pack.data(0).dp_size(), 0);
+    });
+
+    // 2. Wait for the server to process and queue the request
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(queue->wait_and_pop(received_request));
+
+    // 3. Verify the request content
+    EXPECT_EQ(received_request->requestId, "test-get-req-1");
+    const auto& doc = *received_request->request_doc;
+    EXPECT_STREQ(doc["action"].GetString(), "get");
+    EXPECT_STREQ(doc["path"].GetString(), "Vehicle.Speed");
+
+    // 4. Send a mock response back to unblock the client thread
+    auto mock_response = response_pool->acquire();
+    mock_response->SetObject();
+    rapidjson::Document::AllocatorType& allocator = mock_response->GetAllocator();
+    mock_response->AddMember("requestId", "test-get-req-1", allocator);
+    mock_response->AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    
+    rapidjson::Value data_val(rapidjson::kObjectType);
+    //data_val.AddMember("path", "Vehicle.Speed", allocator);
+    rapidjson::Value dp_val(rapidjson::kObjectType);
+    dp_val.AddMember("value", "0", allocator);
+    dp_val.AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    //data_val.AddMember("dp", dp_val, allocator);
+    mock_response->AddMember("data", data_val, allocator);
+    
+    received_request->responseChan->push(mock_response);
+
+    client_thread.join();
+}
+
+TEST_F(GrpcTransportTest, GetRequestAndResponseDataPackageTestDpNoValueNoTs) {
+    // 1. Prepare client request in a separate thread
+    std::thread client_thread([this]() {
+        grpcProtobufMessages::GetRequestMessage req;
+        req.set_path("Vehicle.Speed");
+        req.set_requestid("test-get-req-1");
+        req.set_authorization("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ");
+        
+        grpcProtobufMessages::GetResponseMessage res;
+        grpc::ClientContext context;
+        
+        // This call will block until a response is sent back from the test
+        grpc::Status status = stub->GetRequest(&context, req, &res);
+        EXPECT_TRUE(status.ok());
+        const auto& data_pack = res.successresponse().datapack();
+        EXPECT_EQ(data_pack.data_size(), 1);
+        EXPECT_EQ(data_pack.data(0).path(), "Vehicle.Speed");
+        EXPECT_EQ(data_pack.data(0).dp_size(), 1);
+        EXPECT_TRUE(data_pack.data(0).dp(0).value().empty());
+        EXPECT_TRUE(data_pack.data(0).dp(0).ts().empty());
+    });
+
+    // 2. Wait for the server to process and queue the request
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(queue->wait_and_pop(received_request));
+
+    // 3. Verify the request content
+    EXPECT_EQ(received_request->requestId, "test-get-req-1");
+    const auto& doc = *received_request->request_doc;
+    EXPECT_STREQ(doc["action"].GetString(), "get");
+    EXPECT_STREQ(doc["path"].GetString(), "Vehicle.Speed");
+
+    // 4. Send a mock response back to unblock the client thread
+    auto mock_response = response_pool->acquire();
+    mock_response->SetObject();
+    rapidjson::Document::AllocatorType& allocator = mock_response->GetAllocator();
+    mock_response->AddMember("requestId", "test-get-req-1", allocator);
+    mock_response->AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    
+    rapidjson::Value data_val(rapidjson::kObjectType);
+    data_val.AddMember("path", "Vehicle.Speed", allocator);
+    rapidjson::Value dp_val(rapidjson::kObjectType);
+    //dp_val.AddMember("value", "0", allocator);
+    //dp_val.AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    data_val.AddMember("dp", dp_val, allocator);
+    mock_response->AddMember("data", data_val, allocator);
+    
+    received_request->responseChan->push(mock_response);
+
+    client_thread.join();
+}
+
+TEST_F(GrpcTransportTest, GetRequestAndResponseDataPackageTestDpIntValueIntTs) {
+    // 1. Prepare client request in a separate thread
+    std::thread client_thread([this]() {
+        grpcProtobufMessages::GetRequestMessage req;
+        req.set_path("Vehicle.Speed");
+        req.set_requestid("test-get-req-1");
+        req.set_authorization("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ");
+        
+        grpcProtobufMessages::GetResponseMessage res;
+        grpc::ClientContext context;
+        
+        // This call will block until a response is sent back from the test
+        grpc::Status status = stub->GetRequest(&context, req, &res);
+        EXPECT_TRUE(status.ok());
+        const auto& data_pack = res.successresponse().datapack();
+        EXPECT_EQ(data_pack.data_size(), 1);
+        EXPECT_EQ(data_pack.data(0).path(), "Vehicle.Speed");
+        EXPECT_EQ(data_pack.data(0).dp_size(), 1);
+        EXPECT_TRUE(data_pack.data(0).dp(0).value().empty());
+        EXPECT_TRUE(data_pack.data(0).dp(0).ts().empty());
+    });
+
+    // 2. Wait for the server to process and queue the request
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(queue->wait_and_pop(received_request));
+
+    // 3. Verify the request content
+    EXPECT_EQ(received_request->requestId, "test-get-req-1");
+    const auto& doc = *received_request->request_doc;
+    EXPECT_STREQ(doc["action"].GetString(), "get");
+    EXPECT_STREQ(doc["path"].GetString(), "Vehicle.Speed");
+
+    // 4. Send a mock response back to unblock the client thread
+    auto mock_response = response_pool->acquire();
+    mock_response->SetObject();
+    rapidjson::Document::AllocatorType& allocator = mock_response->GetAllocator();
+    mock_response->AddMember("requestId", "test-get-req-1", allocator);
+    mock_response->AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    
+    rapidjson::Value data_val(rapidjson::kObjectType);
+    data_val.AddMember("path", "Vehicle.Speed", allocator);
+    rapidjson::Value dp_val(rapidjson::kObjectType);
+    dp_val.AddMember("value", 111, allocator);
+    dp_val.AddMember("ts", 111, allocator);
+    data_val.AddMember("dp", dp_val, allocator);
+    mock_response->AddMember("data", data_val, allocator);
+    
+    received_request->responseChan->push(mock_response);
+
+    client_thread.join();
+}
+
+TEST_F(GrpcTransportTest, GetRequestAndResponseDataPackageTestIntPathArrayDp) {
+    // 1. Prepare client request in a separate thread
+    std::thread client_thread([this]() {
+        grpcProtobufMessages::GetRequestMessage req;
+        req.set_path("Vehicle.Speed");
+        req.set_requestid("test-get-req-1");
+        req.set_authorization("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ");
+        
+        grpcProtobufMessages::GetResponseMessage res;
+        grpc::ClientContext context;
+        
+        // This call will block until a response is sent back from the test
+        grpc::Status status = stub->GetRequest(&context, req, &res);
+        EXPECT_TRUE(status.ok());
+        const auto& data_pack = res.successresponse().datapack();
+        EXPECT_EQ(data_pack.data_size(), 1);
+        EXPECT_TRUE(data_pack.data(0).path().empty());
+        EXPECT_EQ(data_pack.data(0).dp_size(), 1);
+        
+    });
+
+    // 2. Wait for the server to process and queue the request
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(queue->wait_and_pop(received_request));
+
+    // 3. Verify the request content
+    EXPECT_EQ(received_request->requestId, "test-get-req-1");
+    const auto& doc = *received_request->request_doc;
+    EXPECT_STREQ(doc["action"].GetString(), "get");
+    EXPECT_STREQ(doc["path"].GetString(), "Vehicle.Speed");
+
+    // 4. Send a mock response back to unblock the client thread
+    auto mock_response = response_pool->acquire();
+    mock_response->SetObject();
+    rapidjson::Document::AllocatorType& allocator = mock_response->GetAllocator();
+    mock_response->AddMember("requestId", "test-get-req-1", allocator);
+    mock_response->AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    
+    rapidjson::Value data_val(rapidjson::kObjectType);
+    data_val.AddMember("path", 11111, allocator);
+    rapidjson::Value dp_array(rapidjson::kArrayType);
+    rapidjson::Value dp_obj(rapidjson::kObjectType);
+    dp_obj.AddMember("value", "0", allocator);
+    dp_obj.AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    dp_array.PushBack(dp_obj, allocator);
+    data_val.AddMember("dp", dp_array, allocator);
+    mock_response->AddMember("data", data_val, allocator);
+    
+    received_request->responseChan->push(mock_response);
+
+    client_thread.join();
+}
+
+TEST_F(GrpcTransportTest, GetRequestAndResponseDataPackageTestArrayDpNoValueNoTs) {
+    // 1. Prepare client request in a separate thread
+    std::thread client_thread([this]() {
+        grpcProtobufMessages::GetRequestMessage req;
+        req.set_path("Vehicle.Speed");
+        req.set_requestid("test-get-req-1");
+        req.set_authorization("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ");
+        
+        grpcProtobufMessages::GetResponseMessage res;
+        grpc::ClientContext context;
+        
+        // This call will block until a response is sent back from the test
+        grpc::Status status = stub->GetRequest(&context, req, &res);
+        EXPECT_TRUE(status.ok());
+        const auto& data_pack = res.successresponse().datapack();
+        EXPECT_EQ(data_pack.data_size(), 1);
+        EXPECT_EQ(data_pack.data(0).path(), "Vehicle.Speed");
+        EXPECT_EQ(data_pack.data(0).dp_size(), 1);
+        EXPECT_TRUE(data_pack.data(0).dp(0).value().empty());
+        EXPECT_TRUE(data_pack.data(0).dp(0).ts().empty());
+        
+    });
+
+    // 2. Wait for the server to process and queue the request
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(queue->wait_and_pop(received_request));
+
+    // 3. Verify the request content
+    EXPECT_EQ(received_request->requestId, "test-get-req-1");
+    const auto& doc = *received_request->request_doc;
+    EXPECT_STREQ(doc["action"].GetString(), "get");
+    EXPECT_STREQ(doc["path"].GetString(), "Vehicle.Speed");
+
+    // 4. Send a mock response back to unblock the client thread
+    auto mock_response = response_pool->acquire();
+    mock_response->SetObject();
+    rapidjson::Document::AllocatorType& allocator = mock_response->GetAllocator();
+    mock_response->AddMember("requestId", "test-get-req-1", allocator);
+    mock_response->AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    
+    rapidjson::Value data_val(rapidjson::kObjectType);
+    data_val.AddMember("path", "Vehicle.Speed", allocator);
+    rapidjson::Value dp_array(rapidjson::kArrayType);
+    rapidjson::Value dp_obj(rapidjson::kObjectType);
+    //dp_obj.AddMember("value", "0", allocator);
+    //dp_obj.AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    dp_array.PushBack(dp_obj, allocator);
+    data_val.AddMember("dp", dp_array, allocator);
+    mock_response->AddMember("data", data_val, allocator);
+    
+    received_request->responseChan->push(mock_response);
+
+    client_thread.join();
+}
+
+TEST_F(GrpcTransportTest, GetRequestAndResponseDataPackageTestArrayDpIntValueIntTs) {
+    // 1. Prepare client request in a separate thread
+    std::thread client_thread([this]() {
+        grpcProtobufMessages::GetRequestMessage req;
+        req.set_path("Vehicle.Speed");
+        req.set_requestid("test-get-req-1");
+        req.set_authorization("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ");
+        
+        grpcProtobufMessages::GetResponseMessage res;
+        grpc::ClientContext context;
+        
+        // This call will block until a response is sent back from the test
+        grpc::Status status = stub->GetRequest(&context, req, &res);
+        EXPECT_TRUE(status.ok());
+        const auto& data_pack = res.successresponse().datapack();
+        EXPECT_EQ(data_pack.data_size(), 1);
+        EXPECT_EQ(data_pack.data(0).path(), "Vehicle.Speed");
+        EXPECT_EQ(data_pack.data(0).dp_size(), 1);
+        EXPECT_TRUE(data_pack.data(0).dp(0).value().empty());
+        EXPECT_TRUE(data_pack.data(0).dp(0).ts().empty());
+        
+    });
+
+    // 2. Wait for the server to process and queue the request
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(queue->wait_and_pop(received_request));
+
+    // 3. Verify the request content
+    EXPECT_EQ(received_request->requestId, "test-get-req-1");
+    const auto& doc = *received_request->request_doc;
+    EXPECT_STREQ(doc["action"].GetString(), "get");
+    EXPECT_STREQ(doc["path"].GetString(), "Vehicle.Speed");
+
+    // 4. Send a mock response back to unblock the client thread
+    auto mock_response = response_pool->acquire();
+    mock_response->SetObject();
+    rapidjson::Document::AllocatorType& allocator = mock_response->GetAllocator();
+    mock_response->AddMember("requestId", "test-get-req-1", allocator);
+    mock_response->AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    
+    rapidjson::Value data_val(rapidjson::kObjectType);
+    data_val.AddMember("path", "Vehicle.Speed", allocator);
+    rapidjson::Value dp_array(rapidjson::kArrayType);
+    rapidjson::Value dp_obj(rapidjson::kObjectType);
+    dp_obj.AddMember("value", 123, allocator);
+    dp_obj.AddMember("ts", 12345, allocator);
+    dp_array.PushBack(dp_obj, allocator);
+    data_val.AddMember("dp", dp_array, allocator);
+    mock_response->AddMember("data", data_val, allocator);
+    
+    received_request->responseChan->push(mock_response);
+
+    client_thread.join();
+}
+
+
+TEST_F(GrpcTransportTest, GetRequestAndIntTsResponse) {
+    // 1. Prepare client request in a separate thread
+    std::thread client_thread([this]() {
+        grpcProtobufMessages::GetRequestMessage req;
+        req.set_path("Vehicle.Speed");
+        req.set_requestid("test-get-req-1");
+        req.set_authorization("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ");
+        
+        grpcProtobufMessages::GetResponseMessage res;
+        grpc::ClientContext context;
+        
+        // This call will block until a response is sent back from the test
+        grpc::Status status = stub->GetRequest(&context, req, &res);
+        EXPECT_TRUE(status.ok());
+        EXPECT_TRUE(res.ts().empty());
+        
+    });
+
+    // 2. Wait for the server to process and queue the request
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(queue->wait_and_pop(received_request));
+
+    // 3. Verify the request content
+    EXPECT_EQ(received_request->requestId, "test-get-req-1");
+    const auto& doc = *received_request->request_doc;
+    EXPECT_STREQ(doc["action"].GetString(), "get");
+    EXPECT_STREQ(doc["path"].GetString(), "Vehicle.Speed");
+
+    // 4. Send a mock response back to unblock the client thread
+    auto mock_response = response_pool->acquire();
+    mock_response->SetObject();
+    rapidjson::Document::AllocatorType& allocator = mock_response->GetAllocator();
+    mock_response->AddMember("requestId", "test-get-req-1", allocator);
+    // No "ts" member in this response to test the client's handling
+    // mock_response->AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    // Add a dummy data part to make it a valid success response
+    rapidjson::Value data_val(rapidjson::kObjectType);
+    data_val.AddMember("path", "Vehicle.Speed", allocator);
+    rapidjson::Value dp_val(rapidjson::kObjectType);
+    dp_val.AddMember("value", "0", allocator);
+    dp_val.AddMember("ts", 1234567, allocator);
+    data_val.AddMember("dp", dp_val, allocator);
+    mock_response->AddMember("data", data_val, allocator);
+    
+    received_request->responseChan->push(mock_response);
+
+    client_thread.join();
+}
+
 // ################### Comprehensive Error Format Tests ###################
 
 // --- SET Request Error Formats ---
@@ -515,6 +931,88 @@ TEST_F(GrpcTransportTest, SetRequestReturnsError) {
     client_thread.join();
 }
 
+TEST_F(GrpcTransportTest, SetRequestWithoutRequestid) {
+    // 1. Prepare client request that will cause an error (e.g., invalid path)
+    std::thread client_thread([this]() {
+        grpcProtobufMessages::SetRequestMessage req;
+        req.set_path("Vehicle.Invalid.Path");
+        req.set_value("100");
+        //req.set_requestid("test-set-error-req-1");
+        
+        grpcProtobufMessages::SetResponseMessage res;
+        grpc::ClientContext context;
+        
+        grpc::Status status = stub->SetRequest(&context, req, &res);
+        EXPECT_TRUE(status.ok());
+        EXPECT_EQ(res.status(), grpcProtobufMessages::ResponseStatus::ERROR);
+        ASSERT_TRUE(res.requestid().empty());
+        EXPECT_EQ(res.errorresponse().number(), "555");
+        EXPECT_EQ(res.errorresponse().description(), "Invalid path");
+    });
+
+    // 2. Wait for the server to process and queue the request
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(queue->wait_and_pop(received_request));
+    //EXPECT_EQ(received_request->requestId, "test-set-error-req-1");
+
+    // 4. Send a mock error response
+    auto mock_response = response_pool->acquire();
+    mock_response->SetObject();
+    rapidjson::Document::AllocatorType& allocator = mock_response->GetAllocator();
+    //mock_response->AddMember("requestId", "test-set-error-req-1", allocator);
+    rapidjson::Value error_val(rapidjson::kObjectType);
+    error_val.AddMember("number", "555", allocator);
+    error_val.AddMember("reason", "Bad Request", allocator);
+    error_val.AddMember("description", "Invalid path", allocator);
+    mock_response->AddMember("error", error_val, allocator);
+    mock_response->AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    
+    received_request->responseChan->push(mock_response);
+
+    client_thread.join();
+}
+
+TEST_F(GrpcTransportTest, SetRequestAndResponseWithIntRequestid) {
+    // 1. Prepare client request that will cause an error (e.g., invalid path)
+    std::thread client_thread([this]() {
+        grpcProtobufMessages::SetRequestMessage req;
+        req.set_path("Vehicle.Invalid.Path");
+        req.set_value("100");
+        req.set_requestid("test-set-error-req-1");
+        
+        grpcProtobufMessages::SetResponseMessage res;
+        grpc::ClientContext context;
+        
+        grpc::Status status = stub->SetRequest(&context, req, &res);
+        EXPECT_TRUE(status.ok());
+        EXPECT_EQ(res.status(), grpcProtobufMessages::ResponseStatus::ERROR);
+        ASSERT_TRUE(res.requestid().empty());
+        EXPECT_EQ(res.errorresponse().number(), "555");
+        EXPECT_EQ(res.errorresponse().description(), "Invalid path");
+    });
+
+    // 2. Wait for the server to process and queue the request
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(queue->wait_and_pop(received_request));
+    EXPECT_EQ(received_request->requestId, "test-set-error-req-1");
+
+    // 4. Send a mock error response
+    auto mock_response = response_pool->acquire();
+    mock_response->SetObject();
+    rapidjson::Document::AllocatorType& allocator = mock_response->GetAllocator();
+    mock_response->AddMember("requestId", 11111, allocator);
+    rapidjson::Value error_val(rapidjson::kObjectType);
+    error_val.AddMember("number", "555", allocator);
+    error_val.AddMember("reason", "Bad Request", allocator);
+    error_val.AddMember("description", "Invalid path", allocator);
+    mock_response->AddMember("error", error_val, allocator);
+    mock_response->AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    
+    received_request->responseChan->push(mock_response);
+
+    client_thread.join();
+}
+
 TEST_F(GrpcTransportTest, SubscribeRequestReturnsError) {
     // 1. Prepare client request that will cause an error
     std::thread client_thread([this]() {
@@ -637,6 +1135,102 @@ TEST_F(GrpcTransportTest, GetRequestReturnsError) {
     client_thread.join();
 }
 
+TEST_F(GrpcTransportTest, GetRequestWithoutRequestid) {
+    // 1. Prepare client request for a non-existent path
+    std::thread client_thread([this]() {
+        grpcProtobufMessages::GetRequestMessage req;
+        req.set_path("Vehicle.NonExistent.Path");
+        //req.set_requestid("test-get-error-req-1");
+        
+        grpcProtobufMessages::GetResponseMessage res;
+        grpc::ClientContext context;
+        
+        grpc::Status status = stub->GetRequest(&context, req, &res);
+        EXPECT_TRUE(status.ok());
+        EXPECT_EQ(res.status(), grpcProtobufMessages::ResponseStatus::ERROR);
+        ASSERT_TRUE(res.requestid().empty());
+        EXPECT_EQ(res.errorresponse().number(), "404");
+    });
+
+    // 2. Wait for the server to process and queue the request
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(queue->wait_and_pop(received_request));
+
+    // 3. Verify the request content
+    EXPECT_TRUE(received_request->requestId.empty());
+
+    const auto& doc = *received_request->request_doc;
+    EXPECT_STREQ(doc["action"].GetString(), "get");
+    EXPECT_STREQ(doc["path"].GetString(), "Vehicle.NonExistent.Path");
+    EXPECT_FALSE(doc.HasMember("requestId"));
+
+
+
+    // 4. Send a mock error response
+    auto mock_response = response_pool->acquire();
+    mock_response->SetObject();
+    rapidjson::Document::AllocatorType& allocator = mock_response->GetAllocator();
+    //mock_response->AddMember("requestId", "test-get-error-req-1", allocator);
+    rapidjson::Value error_val(rapidjson::kObjectType);
+    error_val.AddMember("number", "404", allocator);
+    error_val.AddMember("reason", "Not Found", allocator);
+    error_val.AddMember("description", "Path not found.", allocator);
+    mock_response->AddMember("error", error_val, allocator);
+    mock_response->AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    
+    received_request->responseChan->push(mock_response);
+
+    client_thread.join();
+}
+
+TEST_F(GrpcTransportTest, GetRequestAndResponseWithIntRequestid) {
+    // 1. Prepare client request for a non-existent path
+    std::thread client_thread([this]() {
+        grpcProtobufMessages::GetRequestMessage req;
+        req.set_path("Vehicle.NonExistent.Path");
+        //req.set_requestid("test-get-error-req-1");
+        
+        grpcProtobufMessages::GetResponseMessage res;
+        grpc::ClientContext context;
+        
+        grpc::Status status = stub->GetRequest(&context, req, &res);
+        EXPECT_TRUE(status.ok());
+        EXPECT_EQ(res.status(), grpcProtobufMessages::ResponseStatus::ERROR);
+        ASSERT_TRUE(res.requestid().empty());
+        EXPECT_EQ(res.errorresponse().number(), "404");
+    });
+
+    // 2. Wait for the server to process and queue the request
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(queue->wait_and_pop(received_request));
+
+    // 3. Verify the request content
+    EXPECT_TRUE(received_request->requestId.empty());
+
+    const auto& doc = *received_request->request_doc;
+    EXPECT_STREQ(doc["action"].GetString(), "get");
+    EXPECT_STREQ(doc["path"].GetString(), "Vehicle.NonExistent.Path");
+    EXPECT_FALSE(doc.HasMember("requestId"));
+
+
+
+    // 4. Send a mock error response
+    auto mock_response = response_pool->acquire();
+    mock_response->SetObject();
+    rapidjson::Document::AllocatorType& allocator = mock_response->GetAllocator();
+    mock_response->AddMember("requestId", 11111, allocator);
+    rapidjson::Value error_val(rapidjson::kObjectType);
+    error_val.AddMember("number", "404", allocator);
+    error_val.AddMember("reason", "Not Found", allocator);
+    error_val.AddMember("description", "Path not found.", allocator);
+    mock_response->AddMember("error", error_val, allocator);
+    mock_response->AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    
+    received_request->responseChan->push(mock_response);
+
+    client_thread.join();
+}
+
 TEST_F(GrpcTransportTest, GetRequestWithMetadataFilter) {
     // 1. Prepare client request with a metadata filter
     std::thread client_thread([this]() {
@@ -664,7 +1258,7 @@ TEST_F(GrpcTransportTest, GetRequestWithMetadataFilter) {
     const auto& doc = *received_request->request_doc;
     EXPECT_STREQ(doc["action"].GetString(), "get");
     EXPECT_STREQ(doc["path"].GetString(), "Vehicle.Speed");
-    EXPECT_TRUE(doc.HasMember("filter"));
+    ASSERT_TRUE(doc.HasMember("filter"));
 
     // 4. Send a mock response with metadata
     auto mock_response = response_pool->acquire();
@@ -681,6 +1275,58 @@ TEST_F(GrpcTransportTest, GetRequestWithMetadataFilter) {
 
     client_thread.join();
 }
+
+TEST_F(GrpcTransportTest, GetRequestWithMetadataFilterNoParam) {
+    // 1. Prepare client request with a metadata filter
+    std::thread client_thread([this]() {
+        grpcProtobufMessages::GetRequestMessage req;
+        req.set_path("Vehicle.Speed");
+        req.set_requestid("test-get-metadata-filter-req-1");
+        auto* filter_exp = req.mutable_filter()->add_filterexp();
+        filter_exp->set_variant(grpcProtobufMessages::FilterExpressions_FilterExpression_FilterVariant_METADATA);
+        //auto* meta_value = filter_exp->mutable_value()->mutable_valuemetadata();
+        //meta_value->set_tree("1");
+
+        grpcProtobufMessages::GetResponseMessage res;
+        grpc::ClientContext context;
+        
+        grpc::Status status = stub->GetRequest(&context, req, &res);
+        EXPECT_TRUE(status.ok());
+    });
+
+    // 2. Wait for the server to process and queue the request
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(queue->wait_and_pop(received_request));
+
+    // 3. Verify the request content
+    EXPECT_EQ(received_request->requestId, "test-get-metadata-filter-req-1");
+    const auto& doc = *received_request->request_doc;
+    EXPECT_STREQ(doc["action"].GetString(), "get");
+    EXPECT_STREQ(doc["path"].GetString(), "Vehicle.Speed");
+    EXPECT_TRUE(doc.HasMember("filter"));
+    const auto& filters = doc["filter"];
+    ASSERT_TRUE(filters.IsArray() && !filters.Empty());
+    const auto& first_filter = filters[0];
+    EXPECT_FALSE(first_filter.HasMember("parameter"));
+
+    
+ // 4. Send a mock error response
+    auto mock_response = response_pool->acquire();
+    mock_response->SetObject();
+    rapidjson::Document::AllocatorType& allocator = mock_response->GetAllocator();
+    mock_response->AddMember("requestId", "test-get-metadata-filter-req-1", allocator);
+    rapidjson::Value error_val(rapidjson::kObjectType);
+    error_val.AddMember("number", "404", allocator);
+    error_val.AddMember("reason", "Not Found", allocator);
+    error_val.AddMember("description", "Path not found.", allocator);
+    mock_response->AddMember("error", error_val, allocator);
+    mock_response->AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    
+    received_request->responseChan->push(mock_response);
+
+    client_thread.join();
+}
+
 
 TEST_F(GrpcTransportTest, GetRequestWithHistoryFilter) {
     // 1. Prepare client request with a history filter
@@ -740,6 +1386,58 @@ TEST_F(GrpcTransportTest, GetRequestWithHistoryFilter) {
 
     data_val.AddMember("dp", dp_array, allocator);
     mock_response->AddMember("data", data_val, allocator);
+    
+    received_request->responseChan->push(mock_response);
+
+    client_thread.join();
+}
+
+TEST_F(GrpcTransportTest, GetRequestWithHistoryFilterNoParam) {
+    // 1. Prepare client request with a history filter
+    std::thread client_thread([this]() {
+        grpcProtobufMessages::GetRequestMessage req;
+        req.set_path("Vehicle.Speed");
+        req.set_requestid("test-get-history-filter-req-1");
+        auto* filter_exp = req.mutable_filter()->add_filterexp();
+        filter_exp->set_variant(grpcProtobufMessages::FilterExpressions_FilterExpression_FilterVariant_HISTORY);
+        //auto* hist_value = filter_exp->mutable_value()->mutable_valuehistory();
+        //hist_value->set_timeperiod("P2DT12H");
+
+        grpcProtobufMessages::GetResponseMessage res;
+        grpc::ClientContext context;
+        
+        grpc::Status status = stub->GetRequest(&context, req, &res);
+        EXPECT_TRUE(status.ok());
+    });
+
+    // 2. Wait for the server to process and queue the request
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(queue->wait_and_pop(received_request));
+
+    // 3. Verify the request content
+    EXPECT_EQ(received_request->requestId, "test-get-history-filter-req-1");
+    const auto& doc = *received_request->request_doc;
+    EXPECT_STREQ(doc["action"].GetString(), "get");
+    EXPECT_STREQ(doc["path"].GetString(), "Vehicle.Speed");
+    ASSERT_TRUE(doc.HasMember("filter"));
+    const auto& filters = doc["filter"];
+    ASSERT_TRUE(filters.IsArray() && !filters.Empty());
+    const auto& first_filter = filters[0];
+    ASSERT_TRUE(first_filter.HasMember("variant"));
+    EXPECT_STREQ(first_filter["variant"].GetString(), "history");
+    EXPECT_FALSE(first_filter.HasMember("parameter"));
+
+    // 4. Send a mock error response
+    auto mock_response = response_pool->acquire();
+    mock_response->SetObject();
+    rapidjson::Document::AllocatorType& allocator = mock_response->GetAllocator();
+    mock_response->AddMember("requestId", "test-get-metadata-filter-req-1", allocator);
+    rapidjson::Value error_val(rapidjson::kObjectType);
+    error_val.AddMember("number", "404", allocator);
+    error_val.AddMember("reason", "Not Found", allocator);
+    error_val.AddMember("description", "Path not found.", allocator);
+    mock_response->AddMember("error", error_val, allocator);
+    mock_response->AddMember("ts", "2024-01-01T00:00:00Z", allocator);
     
     received_request->responseChan->push(mock_response);
 
@@ -907,6 +1605,206 @@ TEST_F(GrpcTransportTest, GetRequestWithPathFilter) {
 }
 
 
+TEST_F(GrpcTransportTest, GetRequestWithPathFilterNoParam) {
+    // 1. Prepare client request with a paths filter
+    std::thread client_thread([this]() {
+        grpcProtobufMessages::GetRequestMessage req;
+        req.set_path("Vehicle.Cabin"); // Base path
+        req.set_requestid("test-get-path-filter-req-1");
+        
+        // Add paths filter
+        auto* paths_filter = req.mutable_filter()->add_filterexp();
+        paths_filter->set_variant(grpcProtobufMessages::FilterExpressions_FilterExpression_FilterVariant_PATHS);
+        //auto* paths_value = paths_filter->mutable_value()->mutable_valuepaths();
+        //paths_value->add_relativepath("Sunroof.Position");
+        //paths_value->add_relativepath("Light.IsDomeOn");
+
+        grpcProtobufMessages::GetResponseMessage res;
+        grpc::ClientContext context;
+        
+        grpc::Status status = stub->GetRequest(&context, req, &res);
+        EXPECT_TRUE(status.ok());
+    });
+
+    // 2. Wait for the server to process and queue the request
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(queue->wait_and_pop(received_request));
+
+    // 3. Verify the request content
+    EXPECT_EQ(received_request->requestId, "test-get-path-filter-req-1");
+    const auto& doc = *received_request->request_doc;
+    EXPECT_STREQ(doc["action"].GetString(), "get");
+    EXPECT_STREQ(doc["path"].GetString(), "Vehicle.Cabin");
+    ASSERT_TRUE(doc.HasMember("filter"));
+    const auto& filters = doc["filter"];
+    ASSERT_TRUE(filters.IsArray() && !filters.Empty());
+    const auto& first_filter = filters[0];
+    EXPECT_STREQ(first_filter["variant"].GetString(), "paths");
+    ASSERT_FALSE(doc.HasMember("parameter"));
+    
+        // 4. Send a mock error response
+    auto mock_response = response_pool->acquire();
+    mock_response->SetObject();
+    rapidjson::Document::AllocatorType& allocator = mock_response->GetAllocator();
+    mock_response->AddMember("requestId", "test-get-path-filter-req-1", allocator);
+    rapidjson::Value error_val(rapidjson::kObjectType);
+    error_val.AddMember("number", "404", allocator);
+    error_val.AddMember("reason", "Not Found", allocator);
+    error_val.AddMember("description", "Path not found.", allocator);
+    mock_response->AddMember("error", error_val, allocator);
+    mock_response->AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    
+    received_request->responseChan->push(mock_response);
+
+    client_thread.join();
+
+}
+
+
+TEST_F(GrpcTransportTest, GetRequestWithTimebasedFilterNoParam) {
+    // 1. Prepare client request with a paths filter
+    std::thread client_thread([this]() {
+        grpcProtobufMessages::GetRequestMessage req;
+        req.set_path("Vehicle.Cabin"); // Base path
+        req.set_requestid("test-get-path-filter-req-1");
+        // Add paths filter
+        auto* paths_filter = req.mutable_filter()->add_filterexp();
+        paths_filter->set_variant(grpcProtobufMessages::FilterExpressions_FilterExpression_FilterVariant_TIMEBASED);
+
+        grpcProtobufMessages::GetResponseMessage res;
+        grpc::ClientContext context;
+        
+        grpc::Status status = stub->GetRequest(&context, req, &res);
+        EXPECT_TRUE(status.ok());
+    });
+
+    // 2. Wait for the server to process and queue the request
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(queue->wait_and_pop(received_request));
+
+    // 3. Verify the request content
+    EXPECT_EQ(received_request->requestId, "test-get-path-filter-req-1");
+    const auto& doc = *received_request->request_doc;
+    EXPECT_STREQ(doc["action"].GetString(), "get");
+    EXPECT_STREQ(doc["path"].GetString(), "Vehicle.Cabin");
+    ASSERT_TRUE(doc.HasMember("filter"));
+    const auto& filters = doc["filter"];
+    ASSERT_TRUE(filters.IsArray() && !filters.Empty());
+    const auto& first_filter = filters[0];
+    ASSERT_FALSE(doc.HasMember("parameter"));
+    
+        // 4. Send a mock error response
+    auto mock_response = response_pool->acquire();
+    mock_response->SetObject();
+    rapidjson::Document::AllocatorType& allocator = mock_response->GetAllocator();
+    mock_response->AddMember("requestId", "test-get-path-filter-req-1", allocator);
+    rapidjson::Value error_val(rapidjson::kObjectType);
+    error_val.AddMember("number", "404", allocator);
+    mock_response->AddMember("error", error_val, allocator);
+    mock_response->AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    
+    received_request->responseChan->push(mock_response);
+
+    client_thread.join();
+}
+
+
+TEST_F(GrpcTransportTest, GetRequestWithRangeFilterNoParam) {
+    // 1. Prepare client request with a paths filter
+    std::thread client_thread([this]() {
+        grpcProtobufMessages::GetRequestMessage req;
+        req.set_path("Vehicle.Cabin"); // Base path
+        req.set_requestid("test-get-path-filter-req-1");
+        // Add paths filter
+        auto* paths_filter = req.mutable_filter()->add_filterexp();
+        paths_filter->set_variant(grpcProtobufMessages::FilterExpressions_FilterExpression_FilterVariant_RANGE);
+
+        grpcProtobufMessages::GetResponseMessage res;
+        grpc::ClientContext context;
+        
+        grpc::Status status = stub->GetRequest(&context, req, &res);
+        EXPECT_TRUE(status.ok());
+    });
+
+    // 2. Wait for the server to process and queue the request
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(queue->wait_and_pop(received_request));
+
+    // 3. Verify the request content
+    EXPECT_EQ(received_request->requestId, "test-get-path-filter-req-1");
+    const auto& doc = *received_request->request_doc;
+    EXPECT_STREQ(doc["action"].GetString(), "get");
+    EXPECT_STREQ(doc["path"].GetString(), "Vehicle.Cabin");
+    ASSERT_TRUE(doc.HasMember("filter"));
+    const auto& filters = doc["filter"];
+    ASSERT_TRUE(filters.IsArray() && !filters.Empty());
+    const auto& first_filter = filters[0];
+    ASSERT_FALSE(doc.HasMember("parameter"));
+    
+        // 4. Send a mock error response
+    auto mock_response = response_pool->acquire();
+    mock_response->SetObject();
+    rapidjson::Document::AllocatorType& allocator = mock_response->GetAllocator();
+    mock_response->AddMember("requestId", "test-get-path-filter-req-1", allocator);
+    rapidjson::Value error_val(rapidjson::kObjectType);
+    error_val.AddMember("number", "404", allocator);
+    mock_response->AddMember("error", error_val, allocator);
+    mock_response->AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    
+    received_request->responseChan->push(mock_response);
+
+    client_thread.join();
+}
+
+TEST_F(GrpcTransportTest, GetRequestWithChangeFilterNoParam) {
+    // 1. Prepare client request with a paths filter
+    std::thread client_thread([this]() {
+        grpcProtobufMessages::GetRequestMessage req;
+        req.set_path("Vehicle.Cabin"); // Base path
+        req.set_requestid("test-get-path-filter-req-1");
+        // Add paths filter
+        auto* paths_filter = req.mutable_filter()->add_filterexp();
+        paths_filter->set_variant(grpcProtobufMessages::FilterExpressions_FilterExpression_FilterVariant_CHANGE);
+
+        grpcProtobufMessages::GetResponseMessage res;
+        grpc::ClientContext context;
+        
+        grpc::Status status = stub->GetRequest(&context, req, &res);
+        EXPECT_TRUE(status.ok());
+    });
+
+    // 2. Wait for the server to process and queue the request
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(queue->wait_and_pop(received_request));
+
+    // 3. Verify the request content
+    EXPECT_EQ(received_request->requestId, "test-get-path-filter-req-1");
+    const auto& doc = *received_request->request_doc;
+    EXPECT_STREQ(doc["action"].GetString(), "get");
+    EXPECT_STREQ(doc["path"].GetString(), "Vehicle.Cabin");
+    ASSERT_TRUE(doc.HasMember("filter"));
+    const auto& filters = doc["filter"];
+    ASSERT_TRUE(filters.IsArray() && !filters.Empty());
+    const auto& first_filter = filters[0];
+    ASSERT_FALSE(doc.HasMember("parameter"));
+    
+        // 4. Send a mock error response
+    auto mock_response = response_pool->acquire();
+    mock_response->SetObject();
+    rapidjson::Document::AllocatorType& allocator = mock_response->GetAllocator();
+    mock_response->AddMember("requestId", "test-get-path-filter-req-1", allocator);
+    rapidjson::Value error_val(rapidjson::kObjectType);
+    error_val.AddMember("number", "404", allocator);
+    mock_response->AddMember("error", error_val, allocator);
+    mock_response->AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    
+    received_request->responseChan->push(mock_response);
+
+    client_thread.join();
+
+}
+
+
 
 
 TEST_F(GrpcTransportTest, SetRequestIsQueued) {
@@ -948,6 +1846,86 @@ TEST_F(GrpcTransportTest, SetRequestIsQueued) {
     client_thread.join();
 }
 
+TEST_F(GrpcTransportTest, SetRequestResponseNoTs) {
+    // 1. Prepare client request
+    std::thread client_thread([this]() {
+        grpcProtobufMessages::SetRequestMessage req;
+        req.set_path("Vehicle.Speed");
+        req.set_value("50");
+        req.set_requestid("test-set-req-1");
+        
+        grpcProtobufMessages::SetResponseMessage res;
+        grpc::ClientContext context;
+        
+        grpc::Status status = stub->SetRequest(&context, req, &res);
+        EXPECT_TRUE(status.ok());
+        EXPECT_EQ(res.status(), grpcProtobufMessages::ResponseStatus::SUCCESS);
+        EXPECT_TRUE(res.ts().empty());
+    });
+
+    // 2. Wait for the server to process and queue the request
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(queue->wait_and_pop(received_request));
+
+    // 3. Verify the request content
+    EXPECT_EQ(received_request->requestId, "test-set-req-1");
+    const auto& doc = *received_request->request_doc;
+    EXPECT_STREQ(doc["action"].GetString(), "set");
+    EXPECT_STREQ(doc["path"].GetString(), "Vehicle.Speed");
+    EXPECT_STREQ(doc["value"].GetString(), "50");
+
+    // 4. Send a mock success response
+    auto mock_response = response_pool->acquire();
+    mock_response->SetObject();
+    rapidjson::Document::AllocatorType& allocator = mock_response->GetAllocator();
+    mock_response->AddMember("requestId", "test-set-req-1", allocator);
+    //mock_response->AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    
+    received_request->responseChan->push(mock_response);
+
+    client_thread.join();
+}
+
+TEST_F(GrpcTransportTest, SetRequestResponseIntTs) {
+    // 1. Prepare client request
+    std::thread client_thread([this]() {
+        grpcProtobufMessages::SetRequestMessage req;
+        req.set_path("Vehicle.Speed");
+        req.set_value("50");
+        req.set_requestid("test-set-req-1");
+        
+        grpcProtobufMessages::SetResponseMessage res;
+        grpc::ClientContext context;
+        
+        grpc::Status status = stub->SetRequest(&context, req, &res);
+        EXPECT_TRUE(status.ok());
+        EXPECT_EQ(res.status(), grpcProtobufMessages::ResponseStatus::SUCCESS);
+        EXPECT_TRUE(res.ts().empty());
+    });
+
+    // 2. Wait for the server to process and queue the request
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(queue->wait_and_pop(received_request));
+
+    // 3. Verify the request content
+    EXPECT_EQ(received_request->requestId, "test-set-req-1");
+    const auto& doc = *received_request->request_doc;
+    EXPECT_STREQ(doc["action"].GetString(), "set");
+    EXPECT_STREQ(doc["path"].GetString(), "Vehicle.Speed");
+    EXPECT_STREQ(doc["value"].GetString(), "50");
+
+    // 4. Send a mock success response
+    auto mock_response = response_pool->acquire();
+    mock_response->SetObject();
+    rapidjson::Document::AllocatorType& allocator = mock_response->GetAllocator();
+    mock_response->AddMember("requestId", "test-set-req-1", allocator);
+    mock_response->AddMember("ts", 12345, allocator);
+    
+    received_request->responseChan->push(mock_response);
+
+    client_thread.join();
+}
+
 TEST_F(GrpcTransportTest, UnsubscribeRequestIsQueued) {
     // 1. Prepare client request
     std::thread client_thread([this]() {
@@ -980,6 +1958,84 @@ TEST_F(GrpcTransportTest, UnsubscribeRequestIsQueued) {
     mock_response->AddMember("requestId", "test-unsub-req-1", allocator);
      mock_response->AddMember("subscriptionId", "test-sub-id-1", allocator);
     mock_response->AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    
+    received_request->responseChan->push(mock_response);
+
+    client_thread.join();
+}
+
+TEST_F(GrpcTransportTest, UnsubscribeRequestAndResponseNoTs) {
+    // 1. Prepare client request
+    std::thread client_thread([this]() {
+        grpcProtobufMessages::UnsubscribeRequestMessage req;
+        req.set_subscriptionid("test-sub-id-1");
+        req.set_requestid("test-unsub-req-1");
+        
+        grpcProtobufMessages::UnsubscribeResponseMessage res;
+        grpc::ClientContext context;
+        
+        grpc::Status status = stub->UnsubscribeRequest(&context, req, &res);
+        EXPECT_TRUE(status.ok());
+        EXPECT_EQ(res.status(), grpcProtobufMessages::ResponseStatus::SUCCESS);
+        EXPECT_TRUE(res.ts().empty());
+    });
+
+    // 2. Wait for the server to process and queue the request
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(queue->wait_and_pop(received_request));
+
+    // 3. Verify the request content
+    EXPECT_EQ(received_request->requestId, "test-unsub-req-1");
+    const auto& doc = *received_request->request_doc;
+    EXPECT_STREQ(doc["action"].GetString(), "unsubscribe");
+    EXPECT_STREQ(doc["subscriptionId"].GetString(), "test-sub-id-1");
+
+    // 4. Send a mock success response
+    auto mock_response = response_pool->acquire();
+    mock_response->SetObject();
+    rapidjson::Document::AllocatorType& allocator = mock_response->GetAllocator();
+    mock_response->AddMember("requestId", "test-unsub-req-1", allocator);
+    mock_response->AddMember("subscriptionId", "test-sub-id-1", allocator);
+    //mock_response->AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    
+    received_request->responseChan->push(mock_response);
+
+    client_thread.join();
+}
+
+TEST_F(GrpcTransportTest, UnsubscribeRequestAndResponseIntTs) {
+    // 1. Prepare client request
+    std::thread client_thread([this]() {
+        grpcProtobufMessages::UnsubscribeRequestMessage req;
+        req.set_subscriptionid("test-sub-id-1");
+        req.set_requestid("test-unsub-req-1");
+        
+        grpcProtobufMessages::UnsubscribeResponseMessage res;
+        grpc::ClientContext context;
+        
+        grpc::Status status = stub->UnsubscribeRequest(&context, req, &res);
+        EXPECT_TRUE(status.ok());
+        EXPECT_EQ(res.status(), grpcProtobufMessages::ResponseStatus::SUCCESS);
+        EXPECT_TRUE(res.ts().empty());
+    });
+
+    // 2. Wait for the server to process and queue the request
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(queue->wait_and_pop(received_request));
+
+    // 3. Verify the request content
+    EXPECT_EQ(received_request->requestId, "test-unsub-req-1");
+    const auto& doc = *received_request->request_doc;
+    EXPECT_STREQ(doc["action"].GetString(), "unsubscribe");
+    EXPECT_STREQ(doc["subscriptionId"].GetString(), "test-sub-id-1");
+
+    // 4. Send a mock success response
+    auto mock_response = response_pool->acquire();
+    mock_response->SetObject();
+    rapidjson::Document::AllocatorType& allocator = mock_response->GetAllocator();
+    mock_response->AddMember("requestId", "test-unsub-req-1", allocator);
+    mock_response->AddMember("subscriptionId", "test-sub-id-1", allocator);
+    mock_response->AddMember("ts", 12345, allocator);
     
     received_request->responseChan->push(mock_response);
 
@@ -1052,6 +2108,253 @@ TEST_F(GrpcTransportTest, SubscribeRequestAndEvent) {
     dp_val.AddMember("ts", "2024-01-01T00:00:01Z", event_allocator);
     data_val.AddMember("dp", dp_val, event_allocator);
     mock_event->AddMember("data", data_val, event_allocator);
+    mock_event->AddMember("ts", "2024-01-01T00:00:01Z", event_allocator);
+    received_request->responseChan->push(mock_event);
+
+    // 8. Invalidate the channel to terminate the server-side stream
+    std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Give time for the event to be sent
+    received_request->responseChan->invalidate();
+
+    client_thread.join();
+}
+
+TEST_F(GrpcTransportTest, SubscribeRequestAndEventNoTs) {
+    // 1. Prepare client request in a separate thread
+    std::thread client_thread([this]() {
+        grpcProtobufMessages::SubscribeRequestMessage req;
+        req.set_path("Vehicle.Speed");
+        req.set_requestid("test-sub-req-1");
+        // Add a dummy filter as it's required by the schema
+        auto* filter = req.mutable_filter()->add_filterexp();
+        filter->set_variant(grpcProtobufMessages::FilterExpressions_FilterExpression_FilterVariant_TIMEBASED);
+        filter->mutable_value()->mutable_valuetimebased()->set_period("1000");
+
+        grpcProtobufMessages::SubscribeStreamMessage res;
+        grpc::ClientContext context;
+        
+        std::unique_ptr<grpc::ClientReader<grpcProtobufMessages::SubscribeStreamMessage>> reader(
+            stub->SubscribeRequest(&context, req));
+
+        // 2. Expect initial response
+        ASSERT_TRUE(reader->Read(&res));
+        EXPECT_EQ(res.response().requestid(), "test-sub-req-1");
+        EXPECT_EQ(res.response().subscriptionid(), "test-subscription-id");
+        EXPECT_EQ(res.status(), grpcProtobufMessages::ResponseStatus::SUCCESS);
+        EXPECT_TRUE(res.response().ts().empty());
+
+        // 3. Expect event
+        ASSERT_TRUE(reader->Read(&res));
+        EXPECT_EQ(res.event().subscriptionid(), "test-subscription-id");
+        EXPECT_TRUE(res.event().ts().empty());
+        const auto& data_pack = res.event().successresponse().datapack();
+        EXPECT_EQ(data_pack.data_size(), 1);
+        EXPECT_EQ(data_pack.data(0).path(), "Vehicle.Speed");
+        EXPECT_EQ(data_pack.data(0).dp_size(), 1);
+        EXPECT_EQ(data_pack.data(0).dp(0).value(), "80");
+
+        // 4. Expect stream to end
+        ASSERT_FALSE(reader->Read(&res));
+        grpc::Status status = reader->Finish();
+        EXPECT_TRUE(status.ok());
+    });
+
+    // 5. Handle initial subscribe request from the queue
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(queue->wait_and_pop(received_request));
+    EXPECT_EQ(received_request->requestId, "test-sub-req-1");
+
+    // 6. Send mock subscription confirmation
+    auto mock_response = response_pool->acquire();
+    mock_response->SetObject();
+    rapidjson::Document::AllocatorType& allocator = mock_response->GetAllocator();
+    mock_response->AddMember("requestId", "test-sub-req-1", allocator);
+    mock_response->AddMember("subscriptionId", "test-subscription-id", allocator);
+    //mock_response->AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    received_request->responseChan->push(mock_response);
+    
+    // 7. Send mock event
+    // The responseChan for the original request is reused for events
+    auto mock_event = response_pool->acquire();
+    mock_event->SetObject();
+    rapidjson::Document::AllocatorType& event_allocator = mock_event->GetAllocator();
+    mock_event->AddMember("action", "subscription", event_allocator);
+    mock_event->AddMember("subscriptionId", "test-subscription-id", event_allocator);
+    rapidjson::Value data_val(rapidjson::kObjectType);
+    data_val.AddMember("path", "Vehicle.Speed", event_allocator);
+    rapidjson::Value dp_val(rapidjson::kObjectType);
+    dp_val.AddMember("value", "80", event_allocator);
+    dp_val.AddMember("ts", "2024-01-01T00:00:01Z", event_allocator);
+    data_val.AddMember("dp", dp_val, event_allocator);
+    mock_event->AddMember("data", data_val, event_allocator);
+    //mock_event->AddMember("ts", "2024-01-01T00:00:01Z", event_allocator);
+    received_request->responseChan->push(mock_event);
+
+    // 8. Invalidate the channel to terminate the server-side stream
+    std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Give time for the event to be sent
+    received_request->responseChan->invalidate();
+
+    client_thread.join();
+}
+
+TEST_F(GrpcTransportTest, SubscribeRequestAndEventIntTs) {
+    // 1. Prepare client request in a separate thread
+    std::thread client_thread([this]() {
+        grpcProtobufMessages::SubscribeRequestMessage req;
+        req.set_path("Vehicle.Speed");
+        req.set_requestid("test-sub-req-1");
+        // Add a dummy filter as it's required by the schema
+        auto* filter = req.mutable_filter()->add_filterexp();
+        filter->set_variant(grpcProtobufMessages::FilterExpressions_FilterExpression_FilterVariant_TIMEBASED);
+        filter->mutable_value()->mutable_valuetimebased()->set_period("1000");
+
+        grpcProtobufMessages::SubscribeStreamMessage res;
+        grpc::ClientContext context;
+        
+        std::unique_ptr<grpc::ClientReader<grpcProtobufMessages::SubscribeStreamMessage>> reader(
+            stub->SubscribeRequest(&context, req));
+
+        // 2. Expect initial response
+        ASSERT_TRUE(reader->Read(&res));
+        EXPECT_EQ(res.response().requestid(), "test-sub-req-1");
+        EXPECT_EQ(res.response().subscriptionid(), "test-subscription-id");
+        EXPECT_EQ(res.status(), grpcProtobufMessages::ResponseStatus::SUCCESS);
+        EXPECT_TRUE(res.response().ts().empty());
+
+        // 3. Expect event
+        ASSERT_TRUE(reader->Read(&res));
+        EXPECT_EQ(res.event().subscriptionid(), "test-subscription-id");
+        EXPECT_TRUE(res.event().ts().empty());
+        const auto& data_pack = res.event().successresponse().datapack();
+        EXPECT_EQ(data_pack.data_size(), 1);
+        EXPECT_EQ(data_pack.data(0).path(), "Vehicle.Speed");
+        EXPECT_EQ(data_pack.data(0).dp_size(), 1);
+        EXPECT_EQ(data_pack.data(0).dp(0).value(), "80");
+
+        // 4. Expect stream to end
+        ASSERT_FALSE(reader->Read(&res));
+        grpc::Status status = reader->Finish();
+        EXPECT_TRUE(status.ok());
+    });
+
+    // 5. Handle initial subscribe request from the queue
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(queue->wait_and_pop(received_request));
+    EXPECT_EQ(received_request->requestId, "test-sub-req-1");
+
+    // 6. Send mock subscription confirmation
+    auto mock_response = response_pool->acquire();
+    mock_response->SetObject();
+    rapidjson::Document::AllocatorType& allocator = mock_response->GetAllocator();
+    mock_response->AddMember("requestId", "test-sub-req-1", allocator);
+    mock_response->AddMember("subscriptionId", "test-subscription-id", allocator);
+    mock_response->AddMember("ts", 12345, allocator);
+    received_request->responseChan->push(mock_response);
+    
+    // 7. Send mock event
+    // The responseChan for the original request is reused for events
+    auto mock_event = response_pool->acquire();
+    mock_event->SetObject();
+    rapidjson::Document::AllocatorType& event_allocator = mock_event->GetAllocator();
+    mock_event->AddMember("action", "subscription", event_allocator);
+    mock_event->AddMember("subscriptionId", "test-subscription-id", event_allocator);
+    rapidjson::Value data_val(rapidjson::kObjectType);
+    data_val.AddMember("path", "Vehicle.Speed", event_allocator);
+    rapidjson::Value dp_val(rapidjson::kObjectType);
+    dp_val.AddMember("value", "80", event_allocator);
+    dp_val.AddMember("ts", "2024-01-01T00:00:01Z", event_allocator);
+    data_val.AddMember("dp", dp_val, event_allocator);
+    mock_event->AddMember("data", data_val, event_allocator);
+    mock_event->AddMember("ts", 56789, event_allocator);
+    received_request->responseChan->push(mock_event);
+
+    // 8. Invalidate the channel to terminate the server-side stream
+    std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Give time for the event to be sent
+    received_request->responseChan->invalidate();
+
+    client_thread.join();
+}
+
+TEST_F(GrpcTransportTest, SubscribeRequestAndEventArrayData) {
+    // 1. Prepare client request in a separate thread
+    std::thread client_thread([this]() {
+        grpcProtobufMessages::SubscribeRequestMessage req;
+        req.set_path("Vehicle.Speed");
+        req.set_requestid("test-sub-req-1");
+        // Add a dummy filter as it's required by the schema
+        auto* filter = req.mutable_filter()->add_filterexp();
+        filter->set_variant(grpcProtobufMessages::FilterExpressions_FilterExpression_FilterVariant_TIMEBASED);
+        filter->mutable_value()->mutable_valuetimebased()->set_period("1000");
+
+        grpcProtobufMessages::SubscribeStreamMessage res;
+        grpc::ClientContext context;
+        
+        std::unique_ptr<grpc::ClientReader<grpcProtobufMessages::SubscribeStreamMessage>> reader(
+            stub->SubscribeRequest(&context, req));
+
+        // 2. Expect initial response
+        ASSERT_TRUE(reader->Read(&res));
+        EXPECT_EQ(res.response().requestid(), "test-sub-req-1");
+        EXPECT_EQ(res.response().subscriptionid(), "test-subscription-id");
+        EXPECT_EQ(res.status(), grpcProtobufMessages::ResponseStatus::SUCCESS);
+
+        // 3. Expect event
+        ASSERT_TRUE(reader->Read(&res));
+        EXPECT_EQ(res.event().subscriptionid(), "test-subscription-id");
+        const auto& data_pack = res.event().successresponse().datapack();
+        EXPECT_EQ(data_pack.data_size(), 2);
+        EXPECT_EQ(data_pack.data(0).path(), "Vehicle.Speed");
+        EXPECT_EQ(data_pack.data(0).dp_size(), 1);
+        EXPECT_EQ(data_pack.data(0).dp(0).value(), "80");
+        EXPECT_EQ(data_pack.data(1).path(), "Vehicle.Height");
+
+        // 4. Expect stream to end
+        ASSERT_FALSE(reader->Read(&res));
+        grpc::Status status = reader->Finish();
+        EXPECT_TRUE(status.ok());
+    });
+
+    // 5. Handle initial subscribe request from the queue
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(queue->wait_and_pop(received_request));
+    EXPECT_EQ(received_request->requestId, "test-sub-req-1");
+
+    // 6. Send mock subscription confirmation
+    auto mock_response = response_pool->acquire();
+    mock_response->SetObject();
+    rapidjson::Document::AllocatorType& allocator = mock_response->GetAllocator();
+    mock_response->AddMember("requestId", "test-sub-req-1", allocator);
+    mock_response->AddMember("subscriptionId", "test-subscription-id", allocator);
+    mock_response->AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    received_request->responseChan->push(mock_response);
+    
+    // 7. Send mock event
+    // The responseChan for the original request is reused for events
+    auto mock_event = response_pool->acquire();
+    mock_event->SetObject();
+    rapidjson::Document::AllocatorType& event_allocator = mock_event->GetAllocator();
+    mock_event->AddMember("action", "subscription", event_allocator);
+    mock_event->AddMember("subscriptionId", "test-subscription-id", event_allocator);
+    rapidjson::Value data_array(rapidjson::kArrayType);
+    
+    // First data element
+    rapidjson::Value data_val1(rapidjson::kObjectType);
+    data_val1.AddMember("path", "Vehicle.Speed", event_allocator);
+    rapidjson::Value dp_val1(rapidjson::kObjectType);
+    dp_val1.AddMember("value", "80", event_allocator);
+    dp_val1.AddMember("ts", "2024-01-01T00:00:01Z", event_allocator);
+    data_val1.AddMember("dp", dp_val1, event_allocator);
+    data_array.PushBack(data_val1, event_allocator);
+
+    // Second data element
+    rapidjson::Value data_val2(rapidjson::kObjectType);
+    data_val2.AddMember("path", "Vehicle.Height", event_allocator);
+    rapidjson::Value dp_val2(rapidjson::kObjectType);
+    dp_val2.AddMember("value", "88", event_allocator);
+    dp_val2.AddMember("ts", "2024-01-01T00:00:01Z", event_allocator);
+    data_val2.AddMember("dp", dp_val2, event_allocator);
+    data_array.PushBack(data_val2, event_allocator);
+
+    mock_event->AddMember("data", data_array, event_allocator);
     mock_event->AddMember("ts", "2024-01-01T00:00:01Z", event_allocator);
     received_request->responseChan->push(mock_event);
 

@@ -28,15 +28,19 @@ protected:
 };
 
 TEST_F(JsonSchemaValidatorTest, ValidJson) {
-    std::string valid_json = R"({"name": "John Doe", "age": 30})";
-    auto doc = JsonSchemaValidator::getInstance().validate(valid_json);
-    ASSERT_NE(doc, nullptr);
+    std::string valid_json_str = R"({"name": "John Doe", "age": 30})";
+    rapidjson::Document doc;
+    doc.Parse(valid_json_str.c_str());
+    ASSERT_FALSE(doc.HasParseError());
+    EXPECT_TRUE(JsonSchemaValidator::getInstance().validate(doc));
 }
 
 TEST_F(JsonSchemaValidatorTest, InvalidJson) {
-    std::string invalid_json = R"({"name": "John Doe", "age": "thirty"})";
-    auto doc = JsonSchemaValidator::getInstance().validate(invalid_json);
-    ASSERT_NE(doc, nullptr);
+    std::string invalid_json_str = R"({"name": "John Doe", "age": "thirty"})";
+    rapidjson::Document doc;
+    doc.Parse(invalid_json_str.c_str());
+    ASSERT_FALSE(doc.HasParseError());
+    EXPECT_FALSE(JsonSchemaValidator::getInstance().validate(doc));
 }
 
 TEST_F(JsonSchemaValidatorTest, MalformedJson) {
@@ -46,7 +50,9 @@ TEST_F(JsonSchemaValidatorTest, MalformedJson) {
 }
 
 TEST_F(JsonSchemaValidatorTest, MissingRequiredField) {
-    std::string missing_field_json = R"({"name": "John Doe"})";
-    auto doc = JsonSchemaValidator::getInstance().validate(missing_field_json);
-    ASSERT_NE(doc, nullptr);
+    std::string missing_field_json_str = R"({"name": "John Doe"})";
+    rapidjson::Document doc;
+    doc.Parse(missing_field_json_str.c_str());
+    ASSERT_FALSE(doc.HasParseError());
+    EXPECT_FALSE(JsonSchemaValidator::getInstance().validate(doc));
 }
