@@ -195,6 +195,426 @@ TEST_F(DdsTransportTest, GetRequestIsQueued) {
     ASSERT_TRUE(response_data.HasMember("dp"));
 }
 
+TEST_F(DdsTransportTest, GetRequestNoActionResponse) {
+    // 1. Prepare the inner VISS request JSON
+    std::string viss_request = R"({
+        "action": "get",
+        "path": "Vehicle.Speed",
+        "requestId": "dds-test-get-req-1"
+    })";
+
+    // 2. Prepare and publish
+    std::string payload_str = CreatePayload(viss_request);
+    VissRequestTopic data;
+    data.payload(payload_str);
+    ASSERT_EQ(request_writer->write(&data), eprosima::fastdds::dds::RETCODE_OK);
+
+    // 3. Wait and verify that the request is queued
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(request_queue->wait_and_pop(received_request));
+    ASSERT_EQ(received_request->requestId, "dds-test-get-req-1");
+    const auto& doc = *received_request->request_doc;
+    ASSERT_STREQ(doc["action"].GetString(), "get");
+    ASSERT_STREQ(doc["path"].GetString(), "Vehicle.Speed");
+
+    // 4. Simulate a success response from the ServiceManager
+    auto response_doc = std::make_shared<PooledResponseMap>();
+    response_doc->SetObject();
+    rapidjson::Document::AllocatorType& allocator = response_doc->GetAllocator();
+    response_doc->AddMember("requestId", "dds-test-get-req-1", allocator);
+    //response_doc->AddMember("action", "get", allocator);
+    rapidjson::Value data_val(rapidjson::kObjectType);
+    data_val.AddMember("path", "Vehicle.Speed", allocator);
+    rapidjson::Value dp_val(rapidjson::kObjectType);
+    dp_val.AddMember("value", "120", allocator);
+    dp_val.AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    data_val.AddMember("dp", dp_val, allocator);
+    response_doc->AddMember("data", data_val, allocator);
+    response_doc->AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+
+    received_request->responseChan->push(response_doc);
+
+    // 5. Wait for the response to be published back
+    std::unique_lock<std::mutex> lock(response_listener.mtx);
+    ASSERT_FALSE(response_listener.cv.wait_for(lock, std::chrono::seconds(1), [&]{ return response_listener.received.load(); }));
+    
+}
+
+TEST_F(DdsTransportTest, GetRequestIntTypeActionResponse) {
+    // 1. Prepare the inner VISS request JSON
+    std::string viss_request = R"({
+        "action": "get",
+        "path": "Vehicle.Speed",
+        "requestId": "dds-test-get-req-1"
+    })";
+
+    // 2. Prepare and publish
+    std::string payload_str = CreatePayload(viss_request);
+    VissRequestTopic data;
+    data.payload(payload_str);
+    ASSERT_EQ(request_writer->write(&data), eprosima::fastdds::dds::RETCODE_OK);
+
+    // 3. Wait and verify that the request is queued
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(request_queue->wait_and_pop(received_request));
+    ASSERT_EQ(received_request->requestId, "dds-test-get-req-1");
+    const auto& doc = *received_request->request_doc;
+    ASSERT_STREQ(doc["action"].GetString(), "get");
+    ASSERT_STREQ(doc["path"].GetString(), "Vehicle.Speed");
+
+    // 4. Simulate a success response from the ServiceManager
+    auto response_doc = std::make_shared<PooledResponseMap>();
+    response_doc->SetObject();
+    rapidjson::Document::AllocatorType& allocator = response_doc->GetAllocator();
+    response_doc->AddMember("requestId", "dds-test-get-req-1", allocator);
+    response_doc->AddMember("action", 1111, allocator);
+    rapidjson::Value data_val(rapidjson::kObjectType);
+    data_val.AddMember("path", "Vehicle.Speed", allocator);
+    rapidjson::Value dp_val(rapidjson::kObjectType);
+    dp_val.AddMember("value", "120", allocator);
+    dp_val.AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    data_val.AddMember("dp", dp_val, allocator);
+    response_doc->AddMember("data", data_val, allocator);
+    response_doc->AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+
+    received_request->responseChan->push(response_doc);
+
+    // 5. Wait for the response to be published back
+    std::unique_lock<std::mutex> lock(response_listener.mtx);
+    ASSERT_FALSE(response_listener.cv.wait_for(lock, std::chrono::seconds(1), [&]{ return response_listener.received.load(); }));
+    
+}
+
+TEST_F(DdsTransportTest, GetRequestNoRequestIdResponse) {
+    // 1. Prepare the inner VISS request JSON
+    std::string viss_request = R"({
+        "action": "get",
+        "path": "Vehicle.Speed",
+        "requestId": "dds-test-get-req-1"
+    })";
+
+    // 2. Prepare and publish
+    std::string payload_str = CreatePayload(viss_request);
+    VissRequestTopic data;
+    data.payload(payload_str);
+    ASSERT_EQ(request_writer->write(&data), eprosima::fastdds::dds::RETCODE_OK);
+
+    // 3. Wait and verify that the request is queued
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(request_queue->wait_and_pop(received_request));
+    ASSERT_EQ(received_request->requestId, "dds-test-get-req-1");
+    const auto& doc = *received_request->request_doc;
+    ASSERT_STREQ(doc["action"].GetString(), "get");
+    ASSERT_STREQ(doc["path"].GetString(), "Vehicle.Speed");
+
+    // 4. Simulate a success response from the ServiceManager
+    auto response_doc = std::make_shared<PooledResponseMap>();
+    response_doc->SetObject();
+    rapidjson::Document::AllocatorType& allocator = response_doc->GetAllocator();
+    //response_doc->AddMember("requestId", "dds-test-get-req-1", allocator);
+    response_doc->AddMember("action", "get", allocator);
+    rapidjson::Value data_val(rapidjson::kObjectType);
+    data_val.AddMember("path", "Vehicle.Speed", allocator);
+    rapidjson::Value dp_val(rapidjson::kObjectType);
+    dp_val.AddMember("value", "120", allocator);
+    dp_val.AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    data_val.AddMember("dp", dp_val, allocator);
+    response_doc->AddMember("data", data_val, allocator);
+    response_doc->AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+
+    received_request->responseChan->push(response_doc);
+
+    // 5. Wait for the response to be published back
+    std::unique_lock<std::mutex> lock(response_listener.mtx);
+    ASSERT_FALSE(response_listener.cv.wait_for(lock, std::chrono::seconds(1), [&]{ return response_listener.received.load(); }));
+    
+}
+
+TEST_F(DdsTransportTest, GetRequestIntTypeRequestIdResponse) {
+    // 1. Prepare the inner VISS request JSON
+    std::string viss_request = R"({
+        "action": "get",
+        "path": "Vehicle.Speed",
+        "requestId": "dds-test-get-req-1"
+    })";
+
+    // 2. Prepare and publish
+    std::string payload_str = CreatePayload(viss_request);
+    VissRequestTopic data;
+    data.payload(payload_str);
+    ASSERT_EQ(request_writer->write(&data), eprosima::fastdds::dds::RETCODE_OK);
+
+    // 3. Wait and verify that the request is queued
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(request_queue->wait_and_pop(received_request));
+    ASSERT_EQ(received_request->requestId, "dds-test-get-req-1");
+    const auto& doc = *received_request->request_doc;
+    ASSERT_STREQ(doc["action"].GetString(), "get");
+    ASSERT_STREQ(doc["path"].GetString(), "Vehicle.Speed");
+
+    // 4. Simulate a success response from the ServiceManager
+    auto response_doc = std::make_shared<PooledResponseMap>();
+    response_doc->SetObject();
+    rapidjson::Document::AllocatorType& allocator = response_doc->GetAllocator();
+    response_doc->AddMember("requestId", 11111, allocator);
+    response_doc->AddMember("action", "get", allocator);
+    rapidjson::Value data_val(rapidjson::kObjectType);
+    data_val.AddMember("path", "Vehicle.Speed", allocator);
+    rapidjson::Value dp_val(rapidjson::kObjectType);
+    dp_val.AddMember("value", "120", allocator);
+    dp_val.AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    data_val.AddMember("dp", dp_val, allocator);
+    response_doc->AddMember("data", data_val, allocator);
+    response_doc->AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+
+    received_request->responseChan->push(response_doc);
+
+    // 5. Wait for the response to be published back
+    std::unique_lock<std::mutex> lock(response_listener.mtx);
+    ASSERT_FALSE(response_listener.cv.wait_for(lock, std::chrono::seconds(1), [&]{ return response_listener.received.load(); }));
+    
+}
+
+TEST_F(DdsTransportTest, GetRequestWithInvalidJson) {
+    // 1. Prepare an invalid inner VISS request JSON (missing '{')
+    std::string viss_request = R"(
+        "action": "get",
+        "path": "Vehicle.Speed",
+        "requestId": "dds-test-get-req-1"
+    })";
+
+    // 2. Prepare and publish
+    std::string payload_str = CreatePayload(viss_request);
+    VissRequestTopic data;
+    data.payload(viss_request);
+    ASSERT_EQ(request_writer->write(&data), eprosima::fastdds::dds::RETCODE_OK);
+
+    std::thread client_thread([this]() {
+        // 3. Wait and verify that the request is queued
+        std::shared_ptr<RequestData> received_request;
+        ASSERT_FALSE(request_queue->wait_and_pop(received_request));            
+    });
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Give time for the event to be sent
+    request_queue->invalidate();
+    // 4. Wait for the client thread to complete its check
+    client_thread.join();
+}
+
+TEST_F(DdsTransportTest, GetRequestWithArrayJson) {
+    // 1. Prepare an invalid inner VISS request JSON (missing '{')
+    std::string viss_request = R"([{
+        "action": "get",
+        "path": "Vehicle.Speed",
+        "requestId": "dds-test-get-req-1"
+    }])";
+
+    // 2. Prepare and publish
+    std::string payload_str = CreatePayload(viss_request);
+    VissRequestTopic data;
+    data.payload(viss_request);
+    ASSERT_EQ(request_writer->write(&data), eprosima::fastdds::dds::RETCODE_OK);
+
+    std::thread client_thread([this]() {
+        // 3. Wait and verify that the request is queued
+        std::shared_ptr<RequestData> received_request;
+        ASSERT_FALSE(request_queue->wait_and_pop(received_request));            
+    });
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Give time for the event to be sent
+    request_queue->invalidate();
+    // 4. Wait for the client thread to complete its check
+    client_thread.join();
+}
+
+TEST_F(DdsTransportTest, GetRequestWithNoTopicJson) {
+    // 1. Prepare an invalid inner VISS request JSON (missing '{')
+    std::string viss_request = R"({
+        "action": "get",
+        "path": "Vehicle.Speed",
+        "requestId": "dds-test-get-req-1"
+        })";
+
+    rapidjson::Document payload_doc;
+    payload_doc.SetObject();
+    rapidjson::Document::AllocatorType& allocator = payload_doc.GetAllocator();
+    //payload_doc.AddMember("topic", rapidjson::Value(RESPONSE_TOPIC.c_str(), allocator), allocator);
+    payload_doc.AddMember("request", rapidjson::Value(viss_request.c_str(), allocator), allocator);
+
+    rapidjson::StringBuffer buffer;
+    rapidjson::Writer<rapidjson::StringBuffer> writer_json(buffer);
+    payload_doc.Accept(writer_json);
+
+    VissRequestTopic data;
+    data.payload(buffer.GetString());
+    ASSERT_EQ(request_writer->write(&data), eprosima::fastdds::dds::RETCODE_OK);
+
+    std::thread client_thread([this]() {
+        // 3. Wait and verify that the request is queued
+        std::shared_ptr<RequestData> received_request;
+        ASSERT_FALSE(request_queue->wait_and_pop(received_request));            
+    });
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Give time for the event to be sent
+    request_queue->invalidate();
+    // 4. Wait for the client thread to complete its check
+    client_thread.join();
+}
+
+TEST_F(DdsTransportTest, GetRequestWithIntTypeTopicJson) {
+    // 1. Prepare an invalid inner VISS request JSON (missing '{')
+    std::string viss_request = R"({
+        "action": "get",
+        "path": "Vehicle.Speed",
+        "requestId": "dds-test-get-req-1"
+        })";
+
+    rapidjson::Document payload_doc;
+    payload_doc.SetObject();
+    rapidjson::Document::AllocatorType& allocator = payload_doc.GetAllocator();
+    payload_doc.AddMember("topic", rapidjson::Value(11111), allocator);
+    payload_doc.AddMember("request", rapidjson::Value(viss_request.c_str(), allocator), allocator);
+
+    rapidjson::StringBuffer buffer;
+    rapidjson::Writer<rapidjson::StringBuffer> writer_json(buffer);
+    payload_doc.Accept(writer_json);
+
+    VissRequestTopic data;
+    data.payload(buffer.GetString());
+    ASSERT_EQ(request_writer->write(&data), eprosima::fastdds::dds::RETCODE_OK);
+
+    std::thread client_thread([this]() {
+        // 3. Wait and verify that the request is queued
+        std::shared_ptr<RequestData> received_request;
+        ASSERT_FALSE(request_queue->wait_and_pop(received_request));            
+    });
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Give time for the event to be sent
+    request_queue->invalidate();
+    // 4. Wait for the client thread to complete its check
+    client_thread.join();
+}
+
+TEST_F(DdsTransportTest, GetRequestWithNoRequestJson) {
+    // 1. Prepare an invalid inner VISS request JSON (missing '{')
+    std::string viss_request = R"({
+        "action": "get",
+        "path": "Vehicle.Speed",
+        "requestId": "dds-test-get-req-1"
+        })";
+
+    rapidjson::Document payload_doc;
+    payload_doc.SetObject();
+    rapidjson::Document::AllocatorType& allocator = payload_doc.GetAllocator();
+    payload_doc.AddMember("topic", rapidjson::Value(RESPONSE_TOPIC.c_str(), allocator), allocator);
+    //payload_doc.AddMember("request", rapidjson::Value(viss_request.c_str(), allocator), allocator);
+
+    rapidjson::StringBuffer buffer;
+    rapidjson::Writer<rapidjson::StringBuffer> writer_json(buffer);
+    payload_doc.Accept(writer_json);
+
+    VissRequestTopic data;
+    data.payload(buffer.GetString());
+    ASSERT_EQ(request_writer->write(&data), eprosima::fastdds::dds::RETCODE_OK);
+
+    std::thread client_thread([this]() {
+        // 3. Wait and verify that the request is queued
+        std::shared_ptr<RequestData> received_request;
+        ASSERT_FALSE(request_queue->wait_and_pop(received_request));            
+    });
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Give time for the event to be sent
+    request_queue->invalidate();
+    // 4. Wait for the client thread to complete its check
+    client_thread.join();
+}
+
+TEST_F(DdsTransportTest, GetRequestWithIntTypeRequestJson) {
+    // 1. Prepare an invalid inner VISS request JSON (missing '{')
+    std::string viss_request = R"({
+        "action": "get",
+        "path": "Vehicle.Speed",
+        "requestId": "dds-test-get-req-1"
+        })";
+
+    rapidjson::Document payload_doc;
+    payload_doc.SetObject();
+    rapidjson::Document::AllocatorType& allocator = payload_doc.GetAllocator();
+    payload_doc.AddMember("topic", rapidjson::Value(RESPONSE_TOPIC.c_str(), allocator), allocator);
+    payload_doc.AddMember("request", rapidjson::Value(1111111), allocator);
+
+    rapidjson::StringBuffer buffer;
+    rapidjson::Writer<rapidjson::StringBuffer> writer_json(buffer);
+    payload_doc.Accept(writer_json);
+
+    VissRequestTopic data;
+    data.payload(buffer.GetString());
+    ASSERT_EQ(request_writer->write(&data), eprosima::fastdds::dds::RETCODE_OK);
+
+    std::thread client_thread([this]() {
+        // 3. Wait and verify that the request is queued
+        std::shared_ptr<RequestData> received_request;
+        ASSERT_FALSE(request_queue->wait_and_pop(received_request));            
+    });
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Give time for the event to be sent
+    request_queue->invalidate();
+    // 4. Wait for the client thread to complete its check
+    client_thread.join();
+}
+
+TEST_F(DdsTransportTest, GetRequestWithNoRequestIdJson) {
+    // 1. Prepare an invalid inner VISS request JSON (missing '{')
+    std::string viss_request = R"({
+        "action": "get",
+        "path": "Vehicle.Speed",
+        "requestIdsss": "dds-test-get-req-1"
+    })";
+
+    // 2. Prepare and publish
+    std::string payload_str = CreatePayload(viss_request);
+    VissRequestTopic data;
+    data.payload(payload_str);
+    ASSERT_EQ(request_writer->write(&data), eprosima::fastdds::dds::RETCODE_OK);
+
+    std::thread client_thread([this]() {
+        // 3. Wait and verify that the request is queued
+        std::shared_ptr<RequestData> received_request;
+        ASSERT_FALSE(request_queue->wait_and_pop(received_request));            
+    });
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Give time for the event to be sent
+    request_queue->invalidate();
+    // 4. Wait for the client thread to complete its check
+    client_thread.join();
+}
+
+TEST_F(DdsTransportTest, GetRequestWithIntTypeRequestIdJson) {
+    // 1. Prepare an invalid inner VISS request JSON (missing '{')
+    std::string viss_request = R"({
+        "action": "get",
+        "path": "Vehicle.Speed",
+        "requestId": 11111
+    })";
+
+    // 2. Prepare and publish
+    std::string payload_str = CreatePayload(viss_request);
+    VissRequestTopic data;
+    data.payload(payload_str);
+    ASSERT_EQ(request_writer->write(&data), eprosima::fastdds::dds::RETCODE_OK);
+
+    std::thread client_thread([this]() {
+        // 3. Wait and verify that the request is queued
+        std::shared_ptr<RequestData> received_request;
+        ASSERT_FALSE(request_queue->wait_and_pop(received_request));            
+    });
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Give time for the event to be sent
+    request_queue->invalidate();
+    // 4. Wait for the client thread to complete its check
+    client_thread.join();
+}
+
 TEST_F(DdsTransportTest, SetRequestIsQueued) {
     std::string viss_request = R"({
         "action": "set",
@@ -969,4 +1389,3 @@ TEST_F(DdsTransportTest, UnsubscribeRequestReturnsError) {
     received_payload.Parse(response_listener.payload.c_str());
     ASSERT_TRUE(received_payload.HasMember("error"));
 }
-

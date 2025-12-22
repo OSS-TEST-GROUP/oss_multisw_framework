@@ -95,6 +95,17 @@ TEST(UtilsTest, AnyToString) {
     EXPECT_EQ(any_to_string("world"), "world");
     EXPECT_EQ(any_to_string(std::any()), "N/A");
 
+    EXPECT_EQ(any_to_string((uint8_t)123), "123");
+    EXPECT_EQ(any_to_string((int8_t)123), "123");
+    EXPECT_EQ(any_to_string((uint16_t)123), "123");
+    EXPECT_EQ(any_to_string((int16_t)123), "123");
+    EXPECT_EQ(any_to_string((uint32_t)123), "123");
+    EXPECT_EQ(any_to_string((int32_t)123), "123");
+    EXPECT_EQ(any_to_string((uint64_t)123), "123");
+    EXPECT_EQ(any_to_string((int64_t)123), "123");
+    EXPECT_EQ(any_to_string((float)123.345), "123.345");
+    EXPECT_EQ(any_to_string((double)123.88809), "123.88809");
+
     // rapidjson::Document
     auto doc = std::make_shared<rapidjson::Document>();
     doc->Parse(R"({"key":"value"})");
