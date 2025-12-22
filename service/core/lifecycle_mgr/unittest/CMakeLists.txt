@@ -83,6 +83,21 @@ add_executable ( ArgumentConfigTest ArgumentConfigTest.cpp ../service/ArgumentCo
 add_executable ( MWServiceTest MWServiceTest.cpp ../service/MWService.cpp ../service/ArgumentConfig.cpp )
 add_executable ( HelperTest HelperTest.cpp )
 
+# Integration test for concrete endpoints with actual DDS read
+add_executable ( ConcreteEndpointIntegrationTest 
+                ConcreteEndpointIntegrationTest.cpp
+                ../endpoint/StartServiceEndPoint.cpp
+                ../endpoint/StopServiceEndPoint.cpp
+                ../endpoint/GetServiceStateEndPoint.cpp
+                ../endpoint/NotifyServiceStateEndPoint.cpp
+                ../endpoint/UpdateServiceListEndPoint.cpp
+                ../endpoint/SetServiceModeEndPoint.cpp
+                ../endpoint/LifecycleDiagReportEndPoint.cpp
+                ../transmitter/DDSMessageEndPoint.cpp
+                ../transmitter/MessageEndPoint.cpp
+                ${GENERATED_DDS_FILES}
+                )
+
 gtest_discover_tests ( LifecycleManagerTest )
 gtest_discover_tests ( DDSTransmitterTest )
 gtest_discover_tests ( DDSMessageEndPointTest )
@@ -97,6 +112,7 @@ gtest_discover_tests ( StateMonitorTest )
 gtest_discover_tests ( ArgumentConfigTest )
 gtest_discover_tests ( MWServiceTest )
 gtest_discover_tests ( HelperTest )
+gtest_discover_tests ( ConcreteEndpointIntegrationTest )
 
 
 ## Install
@@ -115,6 +131,7 @@ install ( TARGETS
                 LifecycleManagerTest
                 ServiceRegistryTest
                 HelperTest
+                ConcreteEndpointIntegrationTest
     RUNTIME DESTINATION bin/unittest/lifecycle_mgr
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib

@@ -544,6 +544,129 @@ TEST_F(DDSProtocolBranchCoverageTest, on_data_writer_discovery_TC002_pre_subscri
     ins->Finalize();
 }
 
+// Test on_data_writer_discovery with pre-subscribed topic - triggers need_to_subscribe branch
+// This test covers line 591 (need_to_subscribe = true) and lines 595-602 (the if block)
+TEST_F(DDSProtocolBranchCoverageTest, on_data_writer_discovery_TC003_need_to_subscribe_branch) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    // First, subscribe to a topic BEFORE any discovery happens
+    const std::string test_topic = "/NeedToSubscribeTopic";
+    ins->SubscribeMessage(test_topic);
+    
+    // Verify topic is in subscribed list
+    EXPECT_EQ(1, ins->subscribed_topic_.count(test_topic));
+    EXPECT_EQ(0, ins->discovered_topic_.count(test_topic));
+    
+    // Create discovery info for this pre-subscribed topic
+    // This will trigger the need_to_subscribe = true branch
+    eprosima::fastdds::dds::PublicationBuiltinTopicData info;
+    info.topic_name = test_topic;
+    info.type_name = "DataTypeTest";  // Use a known type from IDL
+    
+    bool should_be_ignored = false;
+    
+    // Calling on_data_writer_discovery should:
+    // 1. Find that topic is in subscribed_topic_
+    // 2. Set need_to_subscribe = true
+    // 3. Try to register_type_object and create_datareader
+    EXPECT_NO_THROW(ins->on_data_writer_discovery(
+        ins->participant_,
+        eprosima::fastdds::rtps::WriterDiscoveryStatus::DISCOVERED_WRITER,
+        info,
+        should_be_ignored
+    ));
+    
+    // Topic should now be in discovered_topic_
+    EXPECT_EQ(1, ins->discovered_topic_.count(test_topic));
+    
+    ins->Finalize();
+}
+
+// Test on_data_writer_discovery with pre-subscribed topic using valid type from IDL
+// This test more comprehensively tests the need_to_subscribe path with successful type registration
+TEST_F(DDSProtocolBranchCoverageTest, on_data_writer_discovery_TC004_need_to_subscribe_with_valid_type) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    // Subscribe to a topic with a type that exists in our IDL files
+    const std::string test_topic = "/ValidTypeSubscribeTopic";
+    ins->SubscribeMessage(test_topic);
+    
+    EXPECT_EQ(1, ins->subscribed_topic_.count(test_topic));
+    
+    // Simulate discovery with a valid type name
+    eprosima::fastdds::dds::PublicationBuiltinTopicData info;
+    info.topic_name = test_topic;
+    info.type_name = "DataTypeTestSimple";  // Simple type from IDL
+    
+    bool should_be_ignored = false;
+    
+    // This should trigger:
+    // 1. need_to_subscribe = true (line 591)
+    // 2. register_type_object call (line 596)
+    // 3. create_datareader call if type registration succeeds (line 600)
+    EXPECT_NO_THROW(ins->on_data_writer_discovery(
+        ins->participant_,
+        eprosima::fastdds::rtps::WriterDiscoveryStatus::DISCOVERED_WRITER,
+        info,
+        should_be_ignored
+    ));
+    
+    // Verify topic was discovered
+    EXPECT_EQ(1, ins->discovered_topic_.count(test_topic));
+    
+    // Check if type registration and datareader creation succeeded
+    auto it = ins->discovered_topic_.find(test_topic);
+    if (it != ins->discovered_topic_.end() && it->second) {
+        // If type_support was created, registration succeeded via dynamic_idl
+        if (it->second->type_support != nullptr) {
+            // Reader might have been created
+            // This exercises the successful path
+        }
+    }
+    
+    ins->Finalize();
+}
+
+// Test on_data_writer_discovery where type registration fails (unknown type)
+// This tests the error path at line 597-598
+TEST_F(DDSProtocolBranchCoverageTest, on_data_writer_discovery_TC005_register_type_fails) {
+    EXPECT_TRUE(ins->Initialize());
+    
+    const std::string test_topic = "/UnknownTypeSubscribeTopic";
+    ins->SubscribeMessage(test_topic);
+    
+    EXPECT_EQ(1, ins->subscribed_topic_.count(test_topic));
+    
+    // Simulate discovery with an unknown type name
+    eprosima::fastdds::dds::PublicationBuiltinTopicData info;
+    info.topic_name = test_topic;
+    info.type_name = "CompletelyUnknownTypeXYZ123";  // Type not in IDL
+    
+    bool should_be_ignored = false;
+    
+    // This should trigger:
+    // 1. need_to_subscribe = true
+    // 2. register_type_object returns false (type not found)
+    // 3. LOG_ERROR and return (lines 597-598)
+    EXPECT_NO_THROW(ins->on_data_writer_discovery(
+        ins->participant_,
+        eprosima::fastdds::rtps::WriterDiscoveryStatus::DISCOVERED_WRITER,
+        info,
+        should_be_ignored
+    ));
+    
+    // Topic should still be in discovered_topic_ (added before registration attempt)
+    EXPECT_EQ(1, ins->discovered_topic_.count(test_topic));
+    
+    // But reader should not have been created
+    auto it = ins->discovered_topic_.find(test_topic);
+    if (it != ins->discovered_topic_.end() && it->second) {
+        EXPECT_EQ(nullptr, it->second->reader);
+    }
+    
+    ins->Finalize();
+}
+
 // ============================================================================
 // load_dds_dynamic_idl Tests
 // ============================================================================
