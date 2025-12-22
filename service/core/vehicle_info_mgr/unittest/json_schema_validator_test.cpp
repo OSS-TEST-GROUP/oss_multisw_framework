@@ -6,24 +6,32 @@
 
 class JsonSchemaValidatorTest : public ::testing::Test {
 protected:
+    std::optional<std::string> getEnv(const std::string& key) {
+        const char* val = std::getenv(key.c_str());
+        return val ? std::optional<std::string>(val) : std::nullopt;
+    }
+
     void SetUp() override {
         // Create a dummy schema for testing purposes
-        std::ofstream schema_file("build/test_schema.json");
-        schema_file << R"({
-            "type": "object",
-            "properties": {
-                "name": {"type": "string"},
-                "age": {"type": "integer"}
-            },
-            "required": ["name", "age"]
-        })";
-        schema_file.close();
+        // std::ofstream schema_file("build/test_schema.json");
+        // schema_file << R"({
+        //     "type": "object",
+        //     "properties": {
+        //         "name": {"type": "string"},
+        //         "age": {"type": "integer"}
+        //     },
+        //     "required": ["name", "age"]
+        // })";
+        // schema_file.close();
 
-        JsonSchemaValidator::init("build/test_schema.json");
+        auto test_path = getEnv("VEHICLE_CONFIG_PATH").value_or("../unittest");
+        test_path.append("/testfiles/test-schema.json");
+
+        JsonSchemaValidator::init(test_path);
     }
 
     void TearDown() override {
-        std::remove("build/test_schema.json");
+        //std::remove("build/test-schema.json");
     }
 };
 
