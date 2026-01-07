@@ -311,7 +311,10 @@ pipeline {
                                 \\( -name "*.cpp" -o -name "*.hpp" -o -name "*.h" -o -name "*.cc" \\) \
                                 > ${WORKSPACE}/output/reports/files_to_analysis.txt || true
                         fi
-
+                        ls -al ${workdir}/output
+                        ls -al ${WORKSPACE}/output/clang-tidy/agl
+                        ls -al ${WORKSPACE}/output/clang-tidy/core
+                        ls -al ${WORKSPACE}/output/clang-tidy/ros2
                         cppcheck --enable=all \
                             --xml \
                             --xml-version=2 \
