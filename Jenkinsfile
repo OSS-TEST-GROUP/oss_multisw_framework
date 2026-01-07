@@ -192,83 +192,6 @@ pipeline {
                 }
             }
         }
-        stage('Cppcheck') {
-            steps {
-                script {
-                    echo "Running Cppcheck..."
-                    sh '''
-                        mkdir -p ${WORKSPACE}/output/reports/cppcheck
-                        if [ ! -f ${WORKSPACE}/output/reports/files_to_analysis.txt ]; then
-                            find ${WORKSPACE}/service/ \
-                                -not -path "*/unittest/*" \
-                                -not -path "*/rapidjson/*" \
-                                -not -path "*/nlohmann/*" \
-                                -not -path "*/valijson/*" \
-                                \\( -name "*.cpp" -o -name "*.hpp" -o -name "*.h" -o -name "*.cc" \\) \
-                                > ${WORKSPACE}/output/reports/files_to_analysis.txt || true
-                        fi
-
-                        cppcheck --enable=all \
-                            --xml \
-                            --xml-version=2 \
-                            --output-file=${WORKSPACE}/output/reports/cppcheck/cppcheck-result.xml \
-                            --project=compile_commands.json \
-                            --suppress=missingIncludeSystem \
-                            --suppress=unmatchedSuppression \
-                            --suppress=unusedFunction \
-                            --suppress=missingInclude \
-                            --std=c++20 \
-                            --file-list=${WORKSPACE}/output/reports/files_to_analysis.txt || true
-                    '''
-                }
-            }
-            post {
-                always {
-                    archiveArtifacts artifacts: 'output/reports/cppcheck/cppcheck-result.xml', allowEmptyArchive: true
-                    recordIssues(
-                        tools: [
-                            cppCheck(name: 'CppCheck', pattern: 'output/reports/cppcheck/cppcheck-result.xml')
-                        ]
-                    )
-                }
-            }
-        }
-        stage('CppLint') {
-            steps {
-                script {
-                    echo "Running CppLint..."
-                    sh '''
-                        mkdir -p ${WORKSPACE}/output/reports/cpplint
-                        if [ ! -f ${WORKSPACE}/output/reports/files_to_analysis.txt ]; then
-                            find ${WORKSPACE}/service/ \
-                                -not -path "*/unittest/*" \
-                                -not -path "*/rapidjson/*" \
-                                -not -path "*/nlohmann/*" \
-                                -not -path "*/valijson/*" \
-                                \\( -name "*.cpp" -o -name "*.hpp" -o -name "*.h" -o -name "*.cc" \\) \
-                                > ${WORKSPACE}/output/reports/files_to_analysis.txt
-                        fi
-                        cat ${WORKSPACE}/output/reports/files_to_analysis.txt | xargs cpplint \
-                            --filter=-whitespace/tab,-legal/copyright,-build/include_order,-build/c++11,-build/header_guard,-build/include_subdir \
-                            --linelength=80 \
-                            --extensions=cpp,cc,h,hpp \
-                            --counting=detailed \
-                            > ${WORKSPACE}/output/reports/cpplint/cpplint-result.txt 2>&1 || true
-                    '''
-                }
-            }
-            post {
-                always {
-                    archiveArtifacts artifacts: 'output/reports/cpplint/cpplint-result.txt', allowEmptyArchive: true
-                    recordIssues(
-                        tools: [
-                            cppLint(name: 'CppLint', pattern: 'output/reports/cpplint/cpplint-result.txt')
-                        ]
-                    )
-                    
-                }
-            }
-        }
         stage('Clang-tidy') {
             steps {
                 script {
@@ -308,6 +231,7 @@ pipeline {
                                 if [ -f compile_commands.json ]; then
                                     mkdir -p ${workdir}/output/clang-tidy/${t}
                                     cp compile_commands.json ${workdir}/output/clang-tidy/${t}
+                                    cp compile_commands.json ${workdir}/output
                                     run-clang-tidy -p ${workdir}/output/clang-tidy/${t} \
                                         -j \$(nproc) \
                                         $(find ${src_dir} \
@@ -365,6 +289,83 @@ pipeline {
                     archiveArtifacts artifacts: 'output/reports/clang-tidy/clang-tidy-core.txt', allowEmptyArchive: true
                     archiveArtifacts artifacts: 'output/reports/clang-tidy/clang-tidy-ros2.txt', allowEmptyArchive: true
                     archiveArtifacts artifacts: 'output/reports/clang-tidy/clang-tidy-agl.txt', allowEmptyArchive: true
+                }
+            }
+        }
+        stage('Cppcheck') {
+            steps {
+                script {
+                    echo "Running Cppcheck..."
+                    sh '''
+                        mkdir -p ${WORKSPACE}/output/reports/cppcheck
+                        if [ ! -f ${WORKSPACE}/output/reports/files_to_analysis.txt ]; then
+                            find ${WORKSPACE}/service/ \
+                                -not -path "*/unittest/*" \
+                                -not -path "*/rapidjson/*" \
+                                -not -path "*/nlohmann/*" \
+                                -not -path "*/valijson/*" \
+                                \\( -name "*.cpp" -o -name "*.hpp" -o -name "*.h" -o -name "*.cc" \\) \
+                                > ${WORKSPACE}/output/reports/files_to_analysis.txt || true
+                        fi
+
+                        cppcheck --enable=all \
+                            --xml \
+                            --xml-version=2 \
+                            --output-file=${WORKSPACE}/output/reports/cppcheck/cppcheck-result.xml \
+                            --project=${WORKSPACE}/output/compile_commands.json \
+                            --suppress=missingIncludeSystem \
+                            --suppress=unmatchedSuppression \
+                            --suppress=unusedFunction \
+                            --suppress=missingInclude \
+                            --std=c++20 \
+                            --file-list=${WORKSPACE}/output/reports/files_to_analysis.txt || true
+                    '''
+                }
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'output/reports/cppcheck/cppcheck-result.xml', allowEmptyArchive: true
+                    recordIssues(
+                        tools: [
+                            cppCheck(name: 'CppCheck', pattern: 'output/reports/cppcheck/cppcheck-result.xml')
+                        ]
+                    )
+                }
+            }
+        }
+        stage('CppLint') {
+            steps {
+                script {
+                    echo "Running CppLint..."
+                    sh '''
+                        mkdir -p ${WORKSPACE}/output/reports/cpplint
+                        if [ ! -f ${WORKSPACE}/output/reports/files_to_analysis.txt ]; then
+                            find ${WORKSPACE}/service/ \
+                                -not -path "*/unittest/*" \
+                                -not -path "*/rapidjson/*" \
+                                -not -path "*/nlohmann/*" \
+                                -not -path "*/valijson/*" \
+                                \\( -name "*.cpp" -o -name "*.hpp" -o -name "*.h" -o -name "*.cc" \\) \
+                                > ${WORKSPACE}/output/reports/files_to_analysis.txt
+                        fi
+                        cat ${WORKSPACE}/output/reports/files_to_analysis.txt | xargs cpplint \
+                            --filter=-whitespace/tab,-legal/copyright,-build/include_order,-build/c++11,-build/header_guard,-build/include_subdir \
+                            --linelength=80 \
+                            --extensions=cpp,cc,h,hpp \
+                            --counting=detailed \
+                            > ${WORKSPACE}/output/reports/cpplint/cpplint-result.txt 2>&1 || true
+                    '''
+                }
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'output/reports/cpplint/cpplint-result.txt', allowEmptyArchive: true
+                    recordIssues(
+                        tools: [
+                            cppLint(name: 'CppLint', pattern: 'output/reports/cpplint/cpplint-result.txt')
+                        ]
+                    )
+                    
                 }
             }
         }
