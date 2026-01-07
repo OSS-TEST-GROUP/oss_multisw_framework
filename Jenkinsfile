@@ -311,15 +311,27 @@ pipeline {
                                 \\( -name "*.cpp" -o -name "*.hpp" -o -name "*.h" -o -name "*.cc" \\) \
                                 > ${WORKSPACE}/output/reports/files_to_analysis.txt || true
                         fi
-                        ls -al ${WORKSPACE}/output
+                        
                         ls -al ${WORKSPACE}/output/clang-tidy/agl
                         ls -al ${WORKSPACE}/output/clang-tidy/core
                         ls -al ${WORKSPACE}/output/clang-tidy/ros2
+
+                        if ! command -v jq >/dev/null 2>&1; then
+                            apt update && apt install -y jq
+                        fi    
+
+                        jq -s 'add' ${WORKSPACE}/output/clang-tidy/ros2/compile_commands.json \
+                                    ${WORKSPACE}/output/clang-tidy/core/compile_commands.json \
+                                    ${WORKSPACE}/output/clang-tidy/agl/compile_commands.json \
+                                    > ${WORKSPACE}/output/combined_compile_commands.json
+
+                        ls -al ${WORKSPACE}/output
+
                         cppcheck --enable=all \
                             --xml \
                             --xml-version=2 \
                             --output-file=${WORKSPACE}/output/reports/cppcheck/cppcheck-result.xml \
-                            --project=${workdir}/output/compile_commands.json \
+                            --project=${WORKSPACE}/output/combined_compile_commands.json \
                             --suppress=missingIncludeSystem \
                             --suppress=unmatchedSuppression \
                             --suppress=unusedFunction \
