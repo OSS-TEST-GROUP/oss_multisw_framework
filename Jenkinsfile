@@ -327,6 +327,8 @@ pipeline {
 
                         ls -al ${WORKSPACE}/output
 
+                        sed -i "s#\${workdir}#\${WORKSPACE}#g" ${WORKSPACE}/output/combined_compile_commands.json
+
                         cppcheck --enable=all \
                             --xml \
                             --xml-version=2 \
