@@ -231,7 +231,7 @@ pipeline {
                                 if [ -f compile_commands.json ]; then
                                     mkdir -p ${workdir}/output/clang-tidy/${t}
                                     cp compile_commands.json ${workdir}/output/clang-tidy/${t}
-                                    cp compile_commands.json ${workdir}/output
+                                    cp compile_commands.json ${WORKSPACE}/output
                                     run-clang-tidy -p ${workdir}/output/clang-tidy/${t} \
                                         -j \$(nproc) \
                                         $(find ${src_dir} \
