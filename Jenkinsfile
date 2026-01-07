@@ -300,6 +300,7 @@ pipeline {
                 script {
                     echo "Running Cppcheck..."
                     sh '''
+                        workdir=/home/ossuser/workspace
                         mkdir -p ${WORKSPACE}/output/reports/cppcheck
                         if [ ! -f ${WORKSPACE}/output/reports/files_to_analysis.txt ]; then
                             find ${WORKSPACE}/service/ \
@@ -315,7 +316,7 @@ pipeline {
                             --xml \
                             --xml-version=2 \
                             --output-file=${WORKSPACE}/output/reports/cppcheck/cppcheck-result.xml \
-                            --project=${WORKSPACE}/output/compile_commands.json \
+                            --project=${workdir}/output/compile_commands.json \
                             --suppress=missingIncludeSystem \
                             --suppress=unmatchedSuppression \
                             --suppress=unusedFunction \
