@@ -368,6 +368,7 @@ pipeline {
                             --linelength=80 \
                             --extensions=cpp,cc,h,hpp \
                             --counting=detailed \
+                            --verbose=3 \
                             > ${WORKSPACE}/output/reports/cpplint/cpplint-result.txt 2>&1 || true
                     '''
                 }
