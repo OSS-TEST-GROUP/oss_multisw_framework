@@ -203,7 +203,7 @@ pipeline {
                         "-v ${WORKSPACE}/CMakeLists.txt:/home/ossuser/workspace/CMakeLists.txt",
                         "-v ${WORKSPACE}/service:/home/ossuser/workspace/service",
                         "-v ${WORKSPACE}/idl:/home/ossuser/workspace/idl",
-                        "-v ${WORKSPACE}/output:/home/ossuser/workspace/output"
+                        "-v ${WORKSPACE}/output:/home/ossuser/workspace/output",
                         "-v ${WORKSPACE}/build:/home/ossuser/workspace/build"
                     ].join(' ')
                     docker.image("${BUILDER_IMAGE}").inside(dockerArgs) {
