@@ -34,7 +34,9 @@ genhtml \
 	--output-directory ${COVERAGE_DIR}/report \
 	--branch-coverage \
 	--legend \
-	--rc lcov_branch_coverage=1
+	--rc lcov_branch_coverage=1 \
+	--rc genhtml_branch_hi_limit=50 \
+  	--rc genhtml_branch_med_limit=30
 
 lcov_cobertura \
 	${COVERAGE_DIR}/filtered.info \
