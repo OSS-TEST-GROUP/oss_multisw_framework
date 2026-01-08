@@ -203,8 +203,7 @@ pipeline {
                         "-v ${WORKSPACE}/CMakeLists.txt:/home/ossuser/workspace/CMakeLists.txt",
                         "-v ${WORKSPACE}/service:/home/ossuser/workspace/service",
                         "-v ${WORKSPACE}/idl:/home/ossuser/workspace/idl",
-                        "-v ${WORKSPACE}/output:/home/ossuser/workspace/output",
-                        "-v ${WORKSPACE}/build:/home/ossuser/workspace/build"
+                        "-v ${WORKSPACE}/output:/home/ossuser/workspace/output"
                     ].join(' ')
                     docker.image("${BUILDER_IMAGE}").inside(dockerArgs) {
                         sh '''
@@ -216,8 +215,8 @@ pipeline {
                             source /opt/Fast-DDS/output/ros2_x86_64/setup.bash
                             for t in ${targets[@]}; do
                                 echo "configure for ${t^^}"
-                                mkdir -p ${workdir}/build/${t}
-                                cd ${workdir}/build/${t}
+                                mkdir -p ${workdir}/.build/${t}
+                                cd ${workdir}/.build/${t}
                                 build_ext=TRUE
                                 src_dir=${workdir}/service/extension
                                 if [[ ${t} = core ]]; then
@@ -274,6 +273,9 @@ pipeline {
                             rm -rf ${workdir}/clang-tidy
                         fi
 
+                        if [ -d ${workdir}/.build ]; then
+                            rm -rf ${workdir}/.build
+                        fi
                     '''
                 }
             }
@@ -328,11 +330,15 @@ pipeline {
 
                         sed -i "s#\${workdir}#\${WORKSPACE}#g" ${WORKSPACE}/output/combined_compile_commands.json
 
+                        jq --rawfile list ${WORKSPACE}/output/reports/files_to_analysis.txt \
+                           '($list | split("\n") | map(select(length > 0))) as $allowed | map(select(.file as $f | $allowed | index($f)))' \
+                           ${WORKSPACE}/output/combined_compile_commands.json > ${WORKSPACE}/output/filtered_commands.json
+
                         cppcheck --enable=all \
                             --xml \
                             --xml-version=2 \
                             --output-file=${WORKSPACE}/output/reports/cppcheck/cppcheck-result.xml \
-                            --project=${WORKSPACE}/output/combined_compile_commands.json \
+                            --project=${WORKSPACE}/output/filtered_commands.json \
                             --suppress=missingIncludeSystem \
                             --suppress=unmatchedSuppression \
                             --suppress=unusedFunction \
