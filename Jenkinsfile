@@ -231,10 +231,6 @@ pipeline {
                                 if [ -f compile_commands.json ]; then
                                     mkdir -p ${workdir}/output/clang-tidy/${t}
                                     cp compile_commands.json ${workdir}/output/clang-tidy/${t}
-
-                                    echo "====================   ${workdir}"
-
-                                    cp compile_commands.json ${workdir}/output
                                     run-clang-tidy -p ${workdir}/output/clang-tidy/${t} \
                                         -j \$(nproc) \
                                         $(find ${src_dir} \
@@ -312,10 +308,6 @@ pipeline {
                                 \\( -name "*.cpp" -o -name "*.hpp" -o -name "*.h" -o -name "*.cc" \\) \
                                 > ${WORKSPACE}/output/reports/files_to_analysis.txt || true
                         fi
-                        
-                        ls -al ${WORKSPACE}/output/clang-tidy/agl
-                        ls -al ${WORKSPACE}/output/clang-tidy/core
-                        ls -al ${WORKSPACE}/output/clang-tidy/ros2
 
                         if ! command -v jq >/dev/null 2>&1; then
                             apt update && apt install -y jq
@@ -325,8 +317,6 @@ pipeline {
                                     ${WORKSPACE}/output/clang-tidy/core/compile_commands.json \
                                     ${WORKSPACE}/output/clang-tidy/agl/compile_commands.json \
                                     > ${WORKSPACE}/output/combined_compile_commands.json
-
-                        ls -al ${WORKSPACE}/output
 
                         sed -i "s#\${workdir}#\${WORKSPACE}#g" ${WORKSPACE}/output/combined_compile_commands.json
 
@@ -343,8 +333,7 @@ pipeline {
                             --suppress=unmatchedSuppression \
                             --suppress=unusedFunction \
                             --suppress=missingInclude \
-                            --std=c++20 \
-                            --file-list=${WORKSPACE}/output/reports/files_to_analysis.txt || true
+                            --std=c++20 || true
                     '''
                 }
             }
