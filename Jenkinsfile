@@ -272,9 +272,7 @@ pipeline {
                         if [ -d ${workdir}/clang-tidy ]; then
                             rm -rf ${workdir}/clang-tidy
                         fi
-                        if [ -d ${workdir}/.build ]; then
-                            rm -rf ${workdir}/.build
-                        fi
+
                     '''
                 }
             }
