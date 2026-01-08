@@ -334,6 +334,7 @@ pipeline {
                             --xml-version=2 \
                             --output-file=${WORKSPACE}/output/reports/cppcheck/cppcheck-result.xml \
                             --project=${WORKSPACE}/output/combined_compile_commands.json \
+                            --exclude=${WORKSPACE}/.build \
                             --suppress=missingIncludeSystem \
                             --suppress=unmatchedSuppression \
                             --suppress=unusedFunction \
