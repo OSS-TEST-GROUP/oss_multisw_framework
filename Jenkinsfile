@@ -204,6 +204,7 @@ pipeline {
                         "-v ${WORKSPACE}/service:/home/ossuser/workspace/service",
                         "-v ${WORKSPACE}/idl:/home/ossuser/workspace/idl",
                         "-v ${WORKSPACE}/output:/home/ossuser/workspace/output"
+                        "-v ${WORKSPACE}/build:/home/ossuser/workspace/build"
                     ].join(' ')
                     docker.image("${BUILDER_IMAGE}").inside(dockerArgs) {
                         sh '''
@@ -215,8 +216,8 @@ pipeline {
                             source /opt/Fast-DDS/output/ros2_x86_64/setup.bash
                             for t in ${targets[@]}; do
                                 echo "configure for ${t^^}"
-                                mkdir -p ${workdir}/.build/${t}
-                                cd ${workdir}/.build/${t}
+                                mkdir -p ${workdir}/build/${t}
+                                cd ${workdir}/build/${t}
                                 build_ext=TRUE
                                 src_dir=${workdir}/service/extension
                                 if [[ ${t} = core ]]; then
@@ -331,7 +332,7 @@ pipeline {
                             --xml \
                             --xml-version=2 \
                             --output-file=${WORKSPACE}/output/reports/cppcheck/cppcheck-result.xml \
-                            --project=${WORKSPACE}/output/combined_compile_commands.json -i${WORKSPACE}/.build \
+                            --project=${WORKSPACE}/output/combined_compile_commands.json \
                             --suppress=missingIncludeSystem \
                             --suppress=unmatchedSuppression \
                             --suppress=unusedFunction \
