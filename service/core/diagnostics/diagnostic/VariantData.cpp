@@ -293,6 +293,72 @@ uint64_t VariantData::GetValueNum() {
     return members_.size();
 }
 
+std::string VariantData::ToJson() const {
+    std::string json = "{";
+    bool first = true;
+
+    for (const auto& [key, value] : members_) {
+        if (!first) json += ",";
+        first = false;
+
+        json += "\"" + key + "\":";
+
+        std::visit([&json](auto&& val) {
+            using T = std::decay_t<decltype(val)>;
+            if constexpr (std::is_same_v<T, bool>) {
+                json += val ? "true" : "false";
+            } else if constexpr (std::is_same_v<T, std::string>) {
+                json += "\"" + val + "\"";
+            } else if constexpr (std::is_same_v<T, int32_t> || std::is_same_v<T, int64_t> ||
+                               std::is_same_v<T, uint32_t> || std::is_same_v<T, uint64_t> ||
+                               std::is_same_v<T, int16_t> || std::is_same_v<T, uint16_t> ||
+                               std::is_same_v<T, int8_t> || std::is_same_v<T, uint8_t>) {
+                json += std::to_string(val);
+            } else if constexpr (std::is_same_v<T, float> || std::is_same_v<T, double>) {
+                json += std::to_string(val);
+            } else if constexpr (std::is_same_v<T, VariantData>) {
+                json += val.ToJson();
+            } else if constexpr (std::is_same_v<T, std::vector<int32_t>> ||
+                               std::is_same_v<T, std::vector<int64_t>> ||
+                               std::is_same_v<T, std::vector<uint32_t>> ||
+                               std::is_same_v<T, std::vector<uint64_t>>) {
+                json += "[";
+                for (size_t i = 0; i < val.size(); ++i) {
+                    if (i > 0) json += ",";
+                    json += std::to_string(val[i]);
+                }
+                json += "]";
+            } else if constexpr (std::is_same_v<T, std::vector<std::string>>) {
+                json += "[";
+                for (size_t i = 0; i < val.size(); ++i) {
+                    if (i > 0) json += ",";
+                    json += "\"" + val[i] + "\"";
+                }
+                json += "]";
+            } else if constexpr (std::is_same_v<T, std::vector<bool>>) {
+                json += "[";
+                for (size_t i = 0; i < val.size(); ++i) {
+                    if (i > 0) json += ",";
+                    json += val[i] ? "true" : "false";
+                }
+                json += "]";
+            } else if constexpr (std::is_same_v<T, std::vector<VariantData>>) {
+                json += "[";
+                for (size_t i = 0; i < val.size(); ++i) {
+                    if (i > 0) json += ",";
+                    json += val[i].ToJson();
+                }
+                json += "]";
+            } else {
+                json += "null";
+            }
+        }, value);
+    }
+
+    json += "}";
+    return json;
+}
+
 VariantValue::VariantValue() : type(typeid(void)) {}
 VariantValue::~VariantValue() {}
 

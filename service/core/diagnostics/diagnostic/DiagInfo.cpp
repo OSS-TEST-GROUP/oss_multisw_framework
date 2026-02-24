@@ -30,6 +30,22 @@ std::chrono::steady_clock::time_point DiagInfo::GetUpdateTime() {
     return update_time_;
 }
 
+void DiagInfo::SetSourceMessageName(const std::string& name) {
+    source_message_name_ = name;
+}
+
+std::string DiagInfo::GetSourceMessageName() const {
+    return source_message_name_;
+}
+
+void DiagInfo::SetRawData(const std::string& raw_data) {
+    raw_data_ = raw_data;
+}
+
+std::string DiagInfo::GetRawData() const {
+    return raw_data_;
+}
+
 bool DiagInfo::operator==(const DiagInfo& other) const {
     return diag_code_ == other.diag_code_ &&
             diag_name_ == other.diag_name_ &&

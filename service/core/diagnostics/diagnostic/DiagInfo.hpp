@@ -25,6 +25,13 @@ class DiagInfo {
     std::string GetMessage();
     std::chrono::steady_clock::time_point GetUpdateTime();
 
+    // 원본 메시지 데이터
+    void SetSourceMessageName(const std::string& name);
+    std::string GetSourceMessageName() const;
+
+    void SetRawData(const std::string& raw_data);
+    std::string GetRawData() const;
+
     bool operator==(const DiagInfo& other) const;
 
   private:
@@ -33,6 +40,10 @@ class DiagInfo {
     DiagInfoStatus status_;
     std::string message_;
     std::chrono::steady_clock::time_point update_time_;
+
+    // 원본 메시지 정보
+    std::string source_message_name_;
+    std::string raw_data_;
 };
 
 } // namespace diagnostic_manager

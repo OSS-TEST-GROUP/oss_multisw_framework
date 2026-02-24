@@ -87,6 +87,9 @@ class VariantData {
 
     uint64_t GetValueNum();
 
+    // JSON 변환
+    std::string ToJson() const;
+
   private:
     std::string name_;
     std::map<std::string, VariantType> members_;

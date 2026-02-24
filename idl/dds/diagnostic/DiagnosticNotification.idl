@@ -8,6 +8,8 @@ module diagnosticmgr {
         string diag_name;
         DiagnosticStatusType status;
         string message;
+        string source_message_name;  // 원본 메시지 이름 (e.g., "LifecycleDiagReport")
+        string raw_data;              // JSON 형태의 원본 데이터
     };
 
 };
