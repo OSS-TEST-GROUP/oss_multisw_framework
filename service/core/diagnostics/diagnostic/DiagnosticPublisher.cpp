@@ -148,7 +148,7 @@ std::shared_ptr<Message> DiagnosticPublisher::CreateDiagInfoToNotificationMessag
     std::shared_ptr<VariantData> msg_data = ConvertDiagInfoToVariantData(diag_info);
 
     std::shared_ptr<Message> msg = std::make_shared<Message>(
-            "mmf/diagnosticmgr/DiagnosticNotification",
+            "rt/mmf/diagnosticmgr/DiagnosticNotification",
             MessageProtocolType::DDS,
             msg_data->GetName(),
             msg_data
@@ -164,6 +164,9 @@ std::shared_ptr<VariantData> DiagnosticPublisher::ConvertDiagInfoToVariantData(s
     msg_data->SetValue("diag_name", diag_info->GetDiagName());
     msg_data->SetValue("status", (int32_t)diag_info->GetStatus());
     msg_data->SetValue("message", diag_info->GetMessage());
+    // 원본 메시지 정보 추가
+    msg_data->SetValue("source_message_name", diag_info->GetSourceMessageName());
+    msg_data->SetValue("raw_data", diag_info->GetRawData());
 
     return msg_data;
 }

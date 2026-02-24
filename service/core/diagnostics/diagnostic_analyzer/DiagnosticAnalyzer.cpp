@@ -96,7 +96,46 @@ std::vector<std::shared_ptr<DiagInfo>> DiagnosticAnalyzer::Analyze(std::shared_p
     for (auto& policy_rule : diag_policy->GetRules()) {
         bool evaluation_result = EvaluatePolicyRuleConditions(policy_rule.conditions, policy_rule.condition_operator);
         if (evaluation_result) {
-            diag_info.push_back(std::make_shared<DiagInfo>(diag_policy->GetDiagCode(), diag_policy->GetDiagName(), policy_rule.status, policy_rule.message));
+            auto info = std::make_shared<DiagInfo>(diag_policy->GetDiagCode(), diag_policy->GetDiagName(), policy_rule.status, policy_rule.message);
+
+            // 원본 메시지 데이터 설정
+            // 조건에서 메시지 이름 추출 (예: "LifecycleDiagReport.field_name" -> "LifecycleDiagReport")
+            if (!policy_rule.conditions.empty()) {
+                std::string first_condition = policy_rule.conditions[0];
+                size_t dot_pos = first_condition.find('.');
+                if (dot_pos != std::string::npos) {
+                    std::string msg_name = first_condition.substr(0, dot_pos);
+
+                    auto ref_msg = policy_manager_->GetReferenceMessage(msg_name);
+                    if (ref_msg) {
+                        info->SetSourceMessageName(msg_name);
+
+                        // 원본 데이터를 JSON으로 변환
+                        auto full = ref_msg->GetMessage(); // "mmf/lifecyclemgr/LifecycleDiagReport"
+                        auto source_data = data_manager_->GetData(full);
+
+                        if (source_data) {
+                            auto s = source_data->ToJson();
+                            LOG_DEBUG("this is raw data: " << s);
+
+                            // 길이/앞부분만 찍기
+                            LOG_DEBUG("raw json len=" << s.size() << " head=" << s.substr(0, 120));
+
+                            // UTF-8 검증(간단히: 제어문자/비정상 바이트 체크)
+                            for (unsigned char c : s) {
+                                if (c < 0x20 && c != '\n' && c != '\r' && c != '\t') {
+                                    LOG_DEBUG("raw json has control byte: 0x" << std::hex << (int)c);
+                                    break;
+                                }
+                            }
+                            info->SetRawData(s);
+                            //info->SetRawData(source_data->ToJson());
+                        }
+                    }
+                }
+            }
+
+            diag_info.push_back(info);
             break;
         }
     }

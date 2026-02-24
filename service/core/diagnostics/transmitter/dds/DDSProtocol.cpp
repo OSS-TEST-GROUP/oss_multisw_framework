@@ -346,6 +346,7 @@ bool DDSProtocol::DeserializeMessage(DynamicData::_ref_type dds_data, std::share
     for (auto& iter : members) {
         auto member = iter.second;
         auto name = member->get_name();
+        std::string key = name.c_str();
 
         MemberDescriptor::_ref_type member_desc = {traits<MemberDescriptor>::make_shared()};
         if (member->get_descriptor(member_desc) != RETCODE_OK) {
@@ -354,100 +355,102 @@ bool DDSProtocol::DeserializeMessage(DynamicData::_ref_type dds_data, std::share
         }
 
         auto type = member_desc->type()->get_kind();
+        
         switch (type) {
             case TK_BOOLEAN: {
                 bool value; dds_data->get_boolean_value(value, member->get_id());
-                variant_data->SetValue(name.c_str(), value);
+                variant_data->SetValue(key, value);
                 break;
             }
             case TK_CHAR8: {
                 char value; dds_data->get_char8_value(value, member->get_id());
-                variant_data->SetValue(name.c_str(), value);
+                variant_data->SetValue(key, value);
                 break;
             }
             case TK_CHAR16: {
                 wchar_t value; dds_data->get_char16_value(value, member->get_id());
-                variant_data->SetValue(name.c_str(), value);
+                variant_data->SetValue(key, value);
                 break;
             }
             case TK_BYTE:
             case TK_UINT8: {
                 uint8_t value; dds_data->get_uint8_value(value, member->get_id());
-                variant_data->SetValue(name.c_str(), value);
+                variant_data->SetValue(key, value);
                 break;
             }
             case TK_INT8: {
                 int8_t value; dds_data->get_int8_value(value, member->get_id());
-                variant_data->SetValue(name.c_str(), value);
+                variant_data->SetValue(key, value);
                 break;
             }
             case TK_INT16: {
                 int16_t value; dds_data->get_int16_value(value, member->get_id());
-                variant_data->SetValue(name.c_str(), value);
+                variant_data->SetValue(key, value);
                 break;
             }
             case TK_UINT16: {
                 uint16_t value; dds_data->get_uint16_value(value, member->get_id());
-                variant_data->SetValue(name.c_str(), value);
+                variant_data->SetValue(key, value);
                 break;
             }
             case TK_INT32: {
                 int32_t value; dds_data->get_int32_value(value, member->get_id());
-                variant_data->SetValue(name.c_str(), value);
+                variant_data->SetValue(key, value);
                 break;
             }
             case TK_UINT32: {
                 uint32_t value; dds_data->get_uint32_value(value, member->get_id());
-                variant_data->SetValue(name.c_str(), value);
+                variant_data->SetValue(key, value);
                 break;
             }
             case TK_INT64: {
                 int64_t value; dds_data->get_int64_value(value, member->get_id());
-                variant_data->SetValue(name.c_str(), value);
+                variant_data->SetValue(key, value);
                 break;
             }
             case TK_UINT64: {
                 uint64_t value; dds_data->get_uint64_value(value, member->get_id());
-                variant_data->SetValue(name.c_str(), value);
+                variant_data->SetValue(key, value);
                 break;
             }
             case TK_FLOAT32: {
                 float value; dds_data->get_float32_value(value, member->get_id());
-                variant_data->SetValue(name.c_str(), value);
+                variant_data->SetValue(key, value);
                 break;
             }
             case TK_FLOAT64: {
                 double value; dds_data->get_float64_value(value, member->get_id());
-                variant_data->SetValue(name.c_str(), value);
+                variant_data->SetValue(key, value);
                 break;
             }
             case TK_STRING8: {
                 std::string value; dds_data->get_string_value(value, member->get_id());
-                variant_data->SetValue(name.c_str(), value);
+                variant_data->SetValue(key, value);
                 break;
             }
             case TK_STRING16: {
                 std::wstring value; dds_data->get_wstring_value(value, member->get_id());
-                variant_data->SetValue(name.c_str(), value);
+                variant_data->SetValue(key, value);
                 break;
             }
             case TK_SEQUENCE: {
                 TypeDescriptor::_ref_type type_desc = {traits<TypeDescriptor>::make_shared()};
                 member_desc->type()->get_descriptor(type_desc);
                 if (type_desc == nullptr) {
-                    LOG_ERROR("No type descriptor for sequence. name=" << name.c_str());
+                    LOG_ERROR("No type descriptor for sequence. name=" << key);
                 }
                 auto seq_type = type_desc->element_type()->get_kind();
 
                 if (seq_type == TK_STRUCTURE){
                     std::shared_ptr<VariantData> child = std::make_shared<VariantData>();
-                    child->SetName(name.c_str());
+                    child->SetName(key);
 
                     LOG_DEBUG("Recursive sequence of struct. " << name);
                     DynamicData::_ref_type loan_data = dds_data->loan_value(member->get_id());
                     if (DeserializeMessage(loan_data, child)) {
-                        variant_data->SetValue(name.c_str(), std::move(*child));
+                        variant_data->SetValue(key, std::move(*child));
                     }
+                    //dds_data->return_loaned_value(loan_data);
                 }else if (!read_values_from_dynamic_data(dds_data, member, seq_type, variant_data)) {
                     LOG_ERROR("Not supported sequence type.");
                 }
@@ -455,11 +458,11 @@ bool DDSProtocol::DeserializeMessage(DynamicData::_ref_type dds_data, std::share
             }
             case TK_STRUCTURE: {
                 std::shared_ptr<VariantData> child = std::make_shared<VariantData>();
-                child->SetName(name.c_str());
+                child->SetName(key);
 
                 DynamicData::_ref_type loan_data = dds_data->loan_value(member->get_id());
                 if (DeserializeMessage(loan_data, child)) {
-                    variant_data->SetValue(name.c_str(), std::move(*child));
+                    variant_data->SetValue(key, std::move(*child));
                 }
                 dds_data->return_loaned_value(loan_data);
                 break;
@@ -616,42 +619,54 @@ bool DDSProtocol::register_type_object(std::shared_ptr<TopicInformation> topic_i
 
 bool DDSProtocol::register_type_object_from_discovery(std::shared_ptr<TopicInformation> topic_information) {
 
+    auto& reg = DomainParticipantFactory::get_instance()->type_object_registry();
+
     auto type_id_complete = topic_information->remote_type_information.complete().typeid_with_size().type_id();
     auto type_id_minimal = topic_information->remote_type_information.minimal().typeid_with_size().type_id();
     
-    auto ret_complete = DomainParticipantFactory::get_instance()->type_object_registry().get_type_object(
-                type_id_complete, topic_information->remote_type_object);
+    decltype(topic_information->remote_type_object) to_complete{};
+    decltype(topic_information->remote_type_object) to_minimal{};
 
-    auto ret_minimal = DomainParticipantFactory::get_instance()->type_object_registry().get_type_object(
-                type_id_minimal, topic_information->remote_type_object);
+    auto ret_complete = reg.get_type_object(type_id_complete, to_complete);
+    auto ret_minimal = reg.get_type_object(type_id_minimal, to_minimal);
 
-    if (RETCODE_OK != ret_complete)
-    {
-        LOG_DEBUG("register_type_object_from_discovery register_type_object complete " << topic_information->topic_name << ", type_id=" << ret_complete);
-        //return false;
-    }
-    if (RETCODE_OK != ret_minimal)
-    {
-        LOG_DEBUG("register_type_object_from_discovery register_type_object minimal " << topic_information->topic_name << ", type_id=" << ret_minimal);
-        //return false;
-    }
+    decltype(topic_information->remote_type_object) chosen{};
 
-    if (RETCODE_OK != DomainParticipantFactory::get_instance()->type_object_registry().get_type_object(
-            type_id_complete, topic_information->remote_type_object))
-    {
-        LOG_DEBUG("register_type_object_from_discovery get_type_object complete " << topic_information->topic_name << ", type_id=" << topic_information->remote_type);
+    if (ret_complete == RETCODE_OK) {
+        chosen = to_complete;
+    } else if (ret_minimal == RETCODE_OK) {
+        chosen = to_minimal;
+    } else {
         return false;
     }
-    if (RETCODE_OK != DomainParticipantFactory::get_instance()->type_object_registry().get_type_object(
-            type_id_minimal, topic_information->remote_type_object))
-    {
-        LOG_DEBUG("register_type_object_from_discovery get_type_object minimal " << topic_information->topic_name << ", type_id=" << topic_information->remote_type);
-        return false;
-    }
+
+    // if (RETCODE_OK != ret_complete)
+    // {
+    //     LOG_DEBUG("register_type_object_from_discovery register_type_object complete " << topic_information->topic_name << ", type_id=" << ret_complete);
+    //     //return false;
+    // }
+    // if (RETCODE_OK != ret_minimal)
+    // {
+    //     LOG_DEBUG("register_type_object_from_discovery register_type_object minimal " << topic_information->topic_name << ", type_id=" << ret_minimal);
+    //     //return false;
+    // }
+
+    // if (RETCODE_OK != DomainParticipantFactory::get_instance()->type_object_registry().get_type_object(
+    //         type_id_complete, topic_information->remote_type_object))
+    // {
+    //     LOG_DEBUG("register_type_object_from_discovery get_type_object complete " << topic_information->topic_name << ", type_id=" << topic_information->remote_type);
+    //     return false;
+    // }
+    // if (RETCODE_OK != DomainParticipantFactory::get_instance()->type_object_registry().get_type_object(
+    //         type_id_minimal, topic_information->remote_type_object))
+    // {
+    //     LOG_DEBUG("register_type_object_from_discovery get_type_object minimal " << topic_information->topic_name << ", type_id=" << topic_information->remote_type);
+    //     return false;
+    // }
 
     // Register remotely discovered type
     DynamicTypeBuilder::_ref_type type_builder = DynamicTypeBuilderFactory::get_instance()->create_type_w_type_object(
-        topic_information->remote_type_object);
+        chosen);
     if (!type_builder)
     {
         LOG_DEBUG("register_type_object_from_discovery create_type_w_type_object null for " << topic_information->topic_name);
