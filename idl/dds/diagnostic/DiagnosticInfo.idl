@@ -16,6 +16,8 @@ module diagnosticmgr {
         string diag_name;
         DiagnosticStatusType status;
         string message;
+        string source_message_name;
+        string raw_data;
     };
 
     /* TopicName - mmf/diagnosticmgr/DiagnosticInfoListRequest */
