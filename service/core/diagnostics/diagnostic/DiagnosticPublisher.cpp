@@ -79,8 +79,7 @@ void DiagnosticPublisher::HandleRequestGetDiagInfo(std::shared_ptr<VariantData> 
 
         msg_data->SetValue("source_message_name", diag_info->GetSourceMessageName());
         msg_data->SetValue("raw_data", diag_info->GetRawData());
-
-        LOG_DEBUG("send message: " << msg_data->GetValue<std::string>("source_message_name"));
+        
         msg_data->SetValue("ret_code", (int32_t)1L);
     } else {
         msg_data->SetValue("ret_code", (int32_t)2L);
