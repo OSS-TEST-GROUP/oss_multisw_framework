@@ -29,6 +29,8 @@ bool LifecycleManager::Initialize() {
 
     mw_service_manager_ = std::make_shared<MWServiceManager>();
     mw_service_manager_->Initialize();
+    is_k3s_mode_ = mw_service_manager_->IsK3sMode();
+    LOG_DEBUG("LifecycleManager::Initialize k3s_mode = " << is_k3s_mode_);
 
     msg_transmitter_ = std::make_shared<DDSTransmitter>();
     msg_transmitter_->Initialize();

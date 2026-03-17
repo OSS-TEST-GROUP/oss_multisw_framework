@@ -20,6 +20,7 @@ public:
     MOCK_METHOD(void, RunMWServiceManagement, (), ());
     MOCK_METHOD(pid_t, run_process, (const std::string exename, const std::string exepath, const std::vector<std::string>& args), ());
     MOCK_METHOD(bool, kill_process, (pid_t pid), ());
+    MOCK_METHOD(bool, IsK3sMode, (), (const));
 };
 
 inline MockMWServiceManager* Mock_MWServiceManager = nullptr;
@@ -68,6 +69,13 @@ pid_t MWServiceManager::run_process(const std::string exename, const std::string
 bool MWServiceManager::kill_process(pid_t pid) {
     if (Mock_MWServiceManager) {
         return Mock_MWServiceManager->kill_process(pid);
+    }
+    return false;
+}
+
+bool MWServiceManager::IsK3sMode() const {
+    if (Mock_MWServiceManager) {
+        return Mock_MWServiceManager->IsK3sMode();
     }
     return false;
 }

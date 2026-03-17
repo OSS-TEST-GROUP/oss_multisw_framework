@@ -43,6 +43,8 @@ class LifecycleManager {
     ManagerState GetState() { return manager_state_; }
     void SetState(ManagerState state);
 
+    bool IsK3sMode() const { return is_k3s_mode_; }
+
     // Unit test support: allow test subclasses to access dependency injection
   protected:
     std::shared_ptr<ServiceRegistry> service_registry_;
@@ -54,6 +56,7 @@ class LifecycleManager {
     EndPointFactory* endpoint_factory_;
 
     ManagerState     manager_state_;
+    bool             is_k3s_mode_{false};
 };
 
 } // namespace lifecycle_manager

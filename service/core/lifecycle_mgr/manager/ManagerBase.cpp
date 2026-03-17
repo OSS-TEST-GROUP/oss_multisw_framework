@@ -38,4 +38,8 @@ std::shared_ptr<Service> ManagerBase::GetService(std::string name){
     return lifecycle_.GetService(name);
 }
 
+bool ManagerBase::IsK3sMode(){
+    return lifecycle_.IsK3sMode();
+}
+
 } // namespace lifecycle_manager

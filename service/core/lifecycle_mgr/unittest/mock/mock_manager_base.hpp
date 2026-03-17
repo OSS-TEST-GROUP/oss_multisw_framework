@@ -18,6 +18,7 @@ public:
     MOCK_METHOD(std::shared_ptr<PolicyManager>, GetPolicy, (), ());
     MOCK_METHOD(const char*, GetTopic, (MessageType mtype), ());
     MOCK_METHOD(std::shared_ptr<StateManager>, GetStateManager, (), ());
+    MOCK_METHOD(bool, IsK3sMode, (), ());
 };
 
 inline MockManagerBase* Mock_ManagerBase = nullptr;
@@ -41,6 +42,10 @@ const char* ManagerBase::GetTopic(MessageType mtype) {
 }
 std::shared_ptr<StateManager> ManagerBase::GetStateManager() {
     return Mock_ManagerBase->GetStateManager();
+}
+
+bool ManagerBase::IsK3sMode() {
+    return Mock_ManagerBase->IsK3sMode();
 }
 
 } // namespace lifecycle_manager

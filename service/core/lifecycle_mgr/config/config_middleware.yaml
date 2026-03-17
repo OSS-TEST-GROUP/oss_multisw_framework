@@ -1,3 +1,6 @@
+lifecycle_mgr_config:
+  k3s_mode: false
+
 config_middleware:
   - code : 10
     name : lifecycle_mgr

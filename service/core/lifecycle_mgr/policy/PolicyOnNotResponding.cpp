@@ -37,7 +37,8 @@ ServiceControlAction PolicyOnNotResponding::Evaluate(std::shared_ptr<Service> se
         }break;
 
         case ServiceState::TERMINATING :{
-            action  = ServiceControlAction::START;
+            // Wait for termination to complete; NOT_RUNNING will trigger restart
+            action  = ServiceControlAction::NONE;
         }break;
     }
 

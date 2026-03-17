@@ -1,6 +1,8 @@
 #include <iostream>
+#include <map>
 
 #include "StateManager.hpp"
+#include "include/OsType.hpp"
 
 #include "manager/ManagerBase.hpp"
 #include "transmitter/DDSTransmitter.hpp"
@@ -87,9 +89,10 @@ void StateManager::ProcessServiceHandling(std::set<std::shared_ptr<Service>> ser
 
     std::shared_ptr<PolicyManager> policy_manager = GetPolicy();
 
-    start_request_.service_list().clear();
-    stop_request_.service_list().clear();
-    
+    // OsType별로 START/STOP 목록 분리
+    std::map<OsType, std::vector<std::string>> start_map;
+    std::map<OsType, std::vector<std::string>> stop_map;
+
     for( auto it_service = service_list.begin(); it_service != service_list.end(); ++it_service ){
 
         std::shared_ptr<Service> service = *it_service;
@@ -98,30 +101,44 @@ void StateManager::ProcessServiceHandling(std::set<std::shared_ptr<Service>> ser
         switch (action)
         {
         case ServiceControlAction::START:
-            /* code */
-            start_request_.service_list().push_back(service->GetName());
+            start_map[service->GetOsType()].push_back(service->GetName());
             break;
 
         case ServiceControlAction::STOP:
-            /* code */
-            stop_request_.service_list().push_back(service->GetName());
+            stop_map[service->GetOsType()].push_back(service->GetName());
             break;
 
         default:
             break;
         }
     }
-    std::shared_ptr<DDSTransmitter> transmitter = GetTransmitter();
 
-    if (transmitter != nullptr){
-        if (start_request_.service_list().size() > 0){
-            start_request_.is_group() = false;
-            transmitter->SendMessage(MessageType::START_SERVICE_REQUEST, reinterpret_cast<void*>(&start_request_));
-        }
-        if (stop_request_.service_list().size() > 0){
-            stop_request_.is_group() = false;
-            transmitter->SendMessage(MessageType::STOP_SERVICE_REQUEST, reinterpret_cast<void*>(&stop_request_));
-        }
+    if (IsK3sMode()) {
+        // K3S 모드: 향후 K3SInterface 호출로 교체
+        LOG_DEBUG("StateManager::ProcessServiceHandling - K3S mode (not implemented yet)");
+        return;
+    }
+
+    // Non-K3S 모드: adsw_manager에 DDS 명령 전송
+    std::shared_ptr<DDSTransmitter> transmitter = GetTransmitter();
+    if (transmitter == nullptr) return;
+
+    for (auto& entry : start_map){
+        start_request_.service_list() = entry.second;
+        start_request_.os_type() = TypeConvert::ToOsType(entry.first);
+        start_request_.is_group() = false;
+        LOG_DEBUG("StateManager: START " << entry.second.size() << " service(s) for OsType "
+                  << static_cast<int>(entry.first));
+        transmitter->SendMessage(MessageType::START_SERVICE_REQUEST, reinterpret_cast<void*>(&start_request_));
+    }
+
+    for (auto& entry : stop_map){
+        stop_request_.service_list() = entry.second;
+        stop_request_.os_type() = TypeConvert::ToOsType(entry.first);
+        stop_request_.is_group() = false;
+        LOG_DEBUG("StateManager: STOP " << entry.second.size() << " service(s) for OsType "
+                  << static_cast<int>(entry.first));
+        transmitter->SendMessage(MessageType::STOP_SERVICE_REQUEST, reinterpret_cast<void*>(&stop_request_));
     }
 }
 

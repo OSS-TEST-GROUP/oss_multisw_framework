@@ -20,7 +20,8 @@ class ManagerBase {
     std::shared_ptr<ServiceRegistry> GetRegistry();
     std::shared_ptr<PolicyManager> GetPolicy();
     std::shared_ptr<StateManager> GetStateManager();
-    
+    bool IsK3sMode();
+
     const char* GetTopic(MessageType mtype);
     
   private:
