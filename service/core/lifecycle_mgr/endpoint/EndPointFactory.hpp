@@ -9,7 +9,26 @@
 #include "transmitter/DDSTransmitter.hpp"
 #include "include/MessageType.hpp"
 
+// Forward declarations for IDL message types used in EndPointHandlers
+namespace lifecyclemgr {
+    class StartServiceResponse;
+    class StopServiceResponse;
+    class SetServiceModeRequest;
+    class GetServiceStateResponse;
+    class NotifyServiceState;
+    class UpdateServiceListRequest;
+}
+
 namespace lifecycle_manager {
+
+struct EndPointHandlers {
+    std::function<void(lifecyclemgr::StartServiceResponse*)>     on_start;
+    std::function<void(lifecyclemgr::StopServiceResponse*)>      on_stop;
+    std::function<void(lifecyclemgr::SetServiceModeRequest*)>    on_set_mode;
+    std::function<void(lifecyclemgr::GetServiceStateResponse*)>  on_get_state_resp;
+    std::function<void(lifecyclemgr::NotifyServiceState*)>       on_notify_state;
+    std::function<void(lifecyclemgr::UpdateServiceListRequest*)> on_update_list;
+};
 
 class EndPointFactory  {
   public:
@@ -18,7 +37,8 @@ class EndPointFactory  {
 
     int32_t Initialize();
 
-    int32_t CreateEndPoints(std::shared_ptr<DDSTransmitter> transmitter);
+    int32_t CreateEndPoints(std::shared_ptr<DDSTransmitter> transmitter,
+                            const EndPointHandlers& handlers = EndPointHandlers{});
 
     const char* GetTopic(MessageType mtype);
 

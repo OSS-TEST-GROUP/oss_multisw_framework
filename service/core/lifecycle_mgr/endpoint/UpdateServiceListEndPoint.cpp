@@ -1,15 +1,12 @@
 #include "UpdateServiceListEndPoint.hpp"
 
 #include "lifecycle/UpdateServiceListRequest.hpp"
-
-#include "manager/LifecycleFactory.hpp"
-#include "service/ServiceRegistry.hpp"
 #include "logger/Log.hpp"
 
 namespace lifecycle_manager {
 
-UpdateServiceListEndPoint::UpdateServiceListEndPoint(MessageType msgtype, std::string topic) 
-    : DDSMessageEndPoint(topic){
+UpdateServiceListEndPoint::UpdateServiceListEndPoint(MessageType msgtype, std::string topic, Callback cb) 
+    : DDSMessageEndPoint(topic), on_data_cb_(std::move(cb)){
 
     if (msgtype == MessageType::UPDATE_SERVICE_LIST_REQUEST){
         SetTypeSupport(std::make_shared<TypeSupport>(new UpdateServiceListRequestPubSubType()));
@@ -30,10 +27,8 @@ void UpdateServiceListEndPoint::OnDataAvailable(){
 
         UpdateServiceListRequest* message = reinterpret_cast<UpdateServiceListRequest*>(&data_);
 
-        std::shared_ptr<ServiceRegistry> manager = LifecycleFactory::GetInstance()->GetRegistry();
-
-        if (manager != nullptr){
-            manager->UpdateServiceList(message);            
+        if (on_data_cb_) {
+            on_data_cb_(message);
         }
     }
 }

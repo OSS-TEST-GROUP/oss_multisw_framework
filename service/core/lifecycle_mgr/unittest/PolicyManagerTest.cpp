@@ -190,10 +190,12 @@ TEST_F(PolicyManagerTest, Evaluate_OnFailurePolicy) {
     EXPECT_CALL(*Mock_Service, GetRecoveryPolicy()).WillRepeatedly(Return(RecoveryPolicy::ON_FAILURE));
     EXPECT_CALL(*Mock_Service, GetServiceMode()).WillRepeatedly(Return(ServiceMode::NORMAL));
     EXPECT_CALL(*Mock_Service, GetServiceState()).WillRepeatedly(Return(ServiceState::NOT_RUNNING));
+    // exit_code == -1 (never started) → treated as initial launch → START
+    EXPECT_CALL(*Mock_Service, GetExitCode()).WillRepeatedly(Return(-1));
 
     auto action = manager.Evaluate(service);
-    // PolicyOnFailure should return appropriate action
-    EXPECT_NE(action, ServiceControlAction::NONE);
+    // PolicyOnFailure: NOT_RUNNING with exit_code=-1 → START (initial launch)
+    EXPECT_EQ(action, ServiceControlAction::START);
 }
 
 // Test Evaluate with ON_SUCCESS recovery policy
@@ -421,13 +423,14 @@ TEST_F(PolicyManagerTest, PolicyOnFailure_TerminatingState) {
 
     auto service = std::make_shared<MockService>();
     Mock_Service = service.get();
-    
+
     EXPECT_CALL(*Mock_Service, GetRecoveryPolicy()).WillRepeatedly(Return(RecoveryPolicy::ON_FAILURE));
     EXPECT_CALL(*Mock_Service, GetServiceMode()).WillRepeatedly(Return(ServiceMode::NORMAL));
     EXPECT_CALL(*Mock_Service, GetServiceState()).WillRepeatedly(Return(ServiceState::TERMINATING));
 
     auto action = manager.Evaluate(service);
-    EXPECT_EQ(action, ServiceControlAction::START);
+    // TERMINATING → wait for NOT_RUNNING; exit code will be checked there.
+    EXPECT_EQ(action, ServiceControlAction::NONE);
 }
 
 // PolicyOnFailure: non-NORMAL ServiceMode branch
@@ -534,20 +537,22 @@ TEST_F(PolicyManagerTest, PolicyManual_NonNormalMode) {
 // Tests for PolicyOnSuccess - All ServiceState branches
 // ============================================================================
 
-// PolicyOnSuccess: NOT_RUNNING state branch
+// PolicyOnSuccess: NOT_RUNNING state branch (clean exit → restart)
 TEST_F(PolicyManagerTest, PolicyOnSuccess_NotRunningState) {
     PolicyManager manager;
     manager.Start();
 
     auto service = std::make_shared<MockService>();
     Mock_Service = service.get();
-    
+
     EXPECT_CALL(*Mock_Service, GetRecoveryPolicy()).WillRepeatedly(Return(RecoveryPolicy::ON_SUCCESS));
     EXPECT_CALL(*Mock_Service, GetServiceMode()).WillRepeatedly(Return(ServiceMode::NORMAL));
     EXPECT_CALL(*Mock_Service, GetServiceState()).WillRepeatedly(Return(ServiceState::NOT_RUNNING));
+    // exit_code == 0 (clean exit) → PolicyOnSuccess should restart
+    EXPECT_CALL(*Mock_Service, GetExitCode()).WillRepeatedly(Return(0));
 
     auto action = manager.Evaluate(service);
-    EXPECT_TRUE(action == ServiceControlAction::START || action == ServiceControlAction::NONE);
+    EXPECT_EQ(action, ServiceControlAction::START);
 }
 
 // PolicyOnSuccess: INITIALIZING state branch
@@ -589,14 +594,14 @@ TEST_F(PolicyManagerTest, PolicyOnSuccess_RunningNoResponseState) {
 
     auto service = std::make_shared<MockService>();
     Mock_Service = service.get();
-    
+
     EXPECT_CALL(*Mock_Service, GetRecoveryPolicy()).WillRepeatedly(Return(RecoveryPolicy::ON_SUCCESS));
     EXPECT_CALL(*Mock_Service, GetServiceMode()).WillRepeatedly(Return(ServiceMode::NORMAL));
     EXPECT_CALL(*Mock_Service, GetServiceState()).WillRepeatedly(Return(ServiceState::RUNNING_NO_RESPONSE));
 
     auto action = manager.Evaluate(service);
-    // PolicyOnSuccess handles RUNNING_NO_RESPONSE
-    EXPECT_TRUE(action == ServiceControlAction::STOP || action == ServiceControlAction::NONE);
+    // An unresponsive service has not exited successfully; OnSuccess takes no action.
+    EXPECT_EQ(action, ServiceControlAction::NONE);
 }
 
 // PolicyOnSuccess: TERMINATING state branch
@@ -606,13 +611,14 @@ TEST_F(PolicyManagerTest, PolicyOnSuccess_TerminatingState) {
 
     auto service = std::make_shared<MockService>();
     Mock_Service = service.get();
-    
+
     EXPECT_CALL(*Mock_Service, GetRecoveryPolicy()).WillRepeatedly(Return(RecoveryPolicy::ON_SUCCESS));
     EXPECT_CALL(*Mock_Service, GetServiceMode()).WillRepeatedly(Return(ServiceMode::NORMAL));
     EXPECT_CALL(*Mock_Service, GetServiceState()).WillRepeatedly(Return(ServiceState::TERMINATING));
 
     auto action = manager.Evaluate(service);
-    EXPECT_TRUE(action == ServiceControlAction::START || action == ServiceControlAction::NONE);
+    // TERMINATING → wait for NOT_RUNNING; exit code will be checked there.
+    EXPECT_EQ(action, ServiceControlAction::NONE);
 }
 
 // PolicyOnSuccess: non-NORMAL ServiceMode branch
@@ -635,20 +641,22 @@ TEST_F(PolicyManagerTest, PolicyOnSuccess_NonNormalMode) {
 // Tests for PolicyOnNotResponding - All ServiceState branches
 // ============================================================================
 
-// PolicyOnNotResponding: NOT_RUNNING state branch
+// PolicyOnNotResponding: NOT_RUNNING state branch — initial start (last == NOT_RUNNING)
 TEST_F(PolicyManagerTest, PolicyOnNotResponding_NotRunningState) {
     PolicyManager manager;
     manager.Start();
 
     auto service = std::make_shared<MockService>();
     Mock_Service = service.get();
-    
+
     EXPECT_CALL(*Mock_Service, GetRecoveryPolicy()).WillRepeatedly(Return(RecoveryPolicy::ON_NOT_RESPONDING));
     EXPECT_CALL(*Mock_Service, GetServiceMode()).WillRepeatedly(Return(ServiceMode::NORMAL));
     EXPECT_CALL(*Mock_Service, GetServiceState()).WillRepeatedly(Return(ServiceState::NOT_RUNNING));
+    // last == NOT_RUNNING means initial start → should start
+    EXPECT_CALL(*Mock_Service, GetLastServiceState()).WillRepeatedly(Return(ServiceState::NOT_RUNNING));
 
     auto action = manager.Evaluate(service);
-    EXPECT_TRUE(action == ServiceControlAction::START || action == ServiceControlAction::NONE);
+    EXPECT_EQ(action, ServiceControlAction::START);
 }
 
 // PolicyOnNotResponding: INITIALIZING state branch
@@ -706,13 +714,14 @@ TEST_F(PolicyManagerTest, PolicyOnNotResponding_TerminatingState) {
 
     auto service = std::make_shared<MockService>();
     Mock_Service = service.get();
-    
+
     EXPECT_CALL(*Mock_Service, GetRecoveryPolicy()).WillRepeatedly(Return(RecoveryPolicy::ON_NOT_RESPONDING));
     EXPECT_CALL(*Mock_Service, GetServiceMode()).WillRepeatedly(Return(ServiceMode::NORMAL));
     EXPECT_CALL(*Mock_Service, GetServiceState()).WillRepeatedly(Return(ServiceState::TERMINATING));
 
     auto action = manager.Evaluate(service);
-    EXPECT_TRUE(action == ServiceControlAction::START || action == ServiceControlAction::NONE);
+    // TERMINATING → wait for NOT_RUNNING.
+    EXPECT_EQ(action, ServiceControlAction::NONE);
 }
 
 // PolicyOnNotResponding: non-NORMAL ServiceMode branch
@@ -843,6 +852,131 @@ TEST_F(PolicyManagerTest, MultipleSequentialEvaluations) {
     EXPECT_EQ(manager.Evaluate(service), ServiceControlAction::NONE);
     EXPECT_EQ(manager.Evaluate(service), ServiceControlAction::STOP);
     EXPECT_EQ(manager.Evaluate(service), ServiceControlAction::NONE);
+}
+
+// ============================================================================
+// ISSUE-1: Exit-code-based policy differentiation tests
+// ============================================================================
+
+// PolicyOnFailure: NOT_RUNNING with exit_code==0 → NONE (clean exit, don't restart)
+TEST_F(PolicyManagerTest, PolicyOnFailure_NotRunning_CleanExit) {
+    PolicyManager manager;
+    manager.Start();
+
+    auto service = std::make_shared<MockService>();
+    Mock_Service = service.get();
+
+    EXPECT_CALL(*Mock_Service, GetRecoveryPolicy()).WillRepeatedly(Return(RecoveryPolicy::ON_FAILURE));
+    EXPECT_CALL(*Mock_Service, GetServiceMode()).WillRepeatedly(Return(ServiceMode::NORMAL));
+    EXPECT_CALL(*Mock_Service, GetServiceState()).WillRepeatedly(Return(ServiceState::NOT_RUNNING));
+    EXPECT_CALL(*Mock_Service, GetExitCode()).WillRepeatedly(Return(0)); // clean exit
+
+    auto action = manager.Evaluate(service);
+    EXPECT_EQ(action, ServiceControlAction::NONE);
+}
+
+// PolicyOnFailure: NOT_RUNNING with exit_code==1 → START (abnormal exit)
+TEST_F(PolicyManagerTest, PolicyOnFailure_NotRunning_ErrorExit) {
+    PolicyManager manager;
+    manager.Start();
+
+    auto service = std::make_shared<MockService>();
+    Mock_Service = service.get();
+
+    EXPECT_CALL(*Mock_Service, GetRecoveryPolicy()).WillRepeatedly(Return(RecoveryPolicy::ON_FAILURE));
+    EXPECT_CALL(*Mock_Service, GetServiceMode()).WillRepeatedly(Return(ServiceMode::NORMAL));
+    EXPECT_CALL(*Mock_Service, GetServiceState()).WillRepeatedly(Return(ServiceState::NOT_RUNNING));
+    EXPECT_CALL(*Mock_Service, GetExitCode()).WillRepeatedly(Return(1)); // error exit
+
+    auto action = manager.Evaluate(service);
+    EXPECT_EQ(action, ServiceControlAction::START);
+}
+
+// PolicyOnSuccess: NOT_RUNNING with exit_code==0 → START (clean exit, restart)
+TEST_F(PolicyManagerTest, PolicyOnSuccess_NotRunning_CleanExit) {
+    PolicyManager manager;
+    manager.Start();
+
+    auto service = std::make_shared<MockService>();
+    Mock_Service = service.get();
+
+    EXPECT_CALL(*Mock_Service, GetRecoveryPolicy()).WillRepeatedly(Return(RecoveryPolicy::ON_SUCCESS));
+    EXPECT_CALL(*Mock_Service, GetServiceMode()).WillRepeatedly(Return(ServiceMode::NORMAL));
+    EXPECT_CALL(*Mock_Service, GetServiceState()).WillRepeatedly(Return(ServiceState::NOT_RUNNING));
+    EXPECT_CALL(*Mock_Service, GetExitCode()).WillRepeatedly(Return(0)); // clean exit
+
+    auto action = manager.Evaluate(service);
+    EXPECT_EQ(action, ServiceControlAction::START);
+}
+
+// PolicyOnSuccess: NOT_RUNNING with exit_code==1 → NONE (error exit, don't restart)
+TEST_F(PolicyManagerTest, PolicyOnSuccess_NotRunning_ErrorExit) {
+    PolicyManager manager;
+    manager.Start();
+
+    auto service = std::make_shared<MockService>();
+    Mock_Service = service.get();
+
+    EXPECT_CALL(*Mock_Service, GetRecoveryPolicy()).WillRepeatedly(Return(RecoveryPolicy::ON_SUCCESS));
+    EXPECT_CALL(*Mock_Service, GetServiceMode()).WillRepeatedly(Return(ServiceMode::NORMAL));
+    EXPECT_CALL(*Mock_Service, GetServiceState()).WillRepeatedly(Return(ServiceState::NOT_RUNNING));
+    EXPECT_CALL(*Mock_Service, GetExitCode()).WillRepeatedly(Return(1)); // error exit
+
+    auto action = manager.Evaluate(service);
+    EXPECT_EQ(action, ServiceControlAction::NONE);
+}
+
+// PolicyOnSuccess: NOT_RUNNING with exit_code==-1 (initial) → START
+TEST_F(PolicyManagerTest, PolicyOnSuccess_NotRunning_InitialStart) {
+    PolicyManager manager;
+    manager.Start();
+
+    auto service = std::make_shared<MockService>();
+    Mock_Service = service.get();
+
+    EXPECT_CALL(*Mock_Service, GetRecoveryPolicy()).WillRepeatedly(Return(RecoveryPolicy::ON_SUCCESS));
+    EXPECT_CALL(*Mock_Service, GetServiceMode()).WillRepeatedly(Return(ServiceMode::NORMAL));
+    EXPECT_CALL(*Mock_Service, GetServiceState()).WillRepeatedly(Return(ServiceState::NOT_RUNNING));
+    EXPECT_CALL(*Mock_Service, GetExitCode()).WillRepeatedly(Return(-1)); // never started
+
+    auto action = manager.Evaluate(service);
+    EXPECT_EQ(action, ServiceControlAction::START);
+}
+
+// PolicyOnNotResponding: NOT_RUNNING with last==TERMINATING → START (watchdog restart)
+TEST_F(PolicyManagerTest, PolicyOnNotResponding_NotRunning_AfterWatchdogStop) {
+    PolicyManager manager;
+    manager.Start();
+
+    auto service = std::make_shared<MockService>();
+    Mock_Service = service.get();
+
+    EXPECT_CALL(*Mock_Service, GetRecoveryPolicy()).WillRepeatedly(Return(RecoveryPolicy::ON_NOT_RESPONDING));
+    EXPECT_CALL(*Mock_Service, GetServiceMode()).WillRepeatedly(Return(ServiceMode::NORMAL));
+    EXPECT_CALL(*Mock_Service, GetServiceState()).WillRepeatedly(Return(ServiceState::NOT_RUNNING));
+    // last == TERMINATING: service was stopped via STOP command (watchdog path)
+    EXPECT_CALL(*Mock_Service, GetLastServiceState()).WillRepeatedly(Return(ServiceState::TERMINATING));
+
+    auto action = manager.Evaluate(service);
+    EXPECT_EQ(action, ServiceControlAction::START);
+}
+
+// PolicyOnNotResponding: NOT_RUNNING with last==RUNNING → NONE (direct crash, not watchdog)
+TEST_F(PolicyManagerTest, PolicyOnNotResponding_NotRunning_DirectCrash) {
+    PolicyManager manager;
+    manager.Start();
+
+    auto service = std::make_shared<MockService>();
+    Mock_Service = service.get();
+
+    EXPECT_CALL(*Mock_Service, GetRecoveryPolicy()).WillRepeatedly(Return(RecoveryPolicy::ON_NOT_RESPONDING));
+    EXPECT_CALL(*Mock_Service, GetServiceMode()).WillRepeatedly(Return(ServiceMode::NORMAL));
+    EXPECT_CALL(*Mock_Service, GetServiceState()).WillRepeatedly(Return(ServiceState::NOT_RUNNING));
+    // last == RUNNING: service crashed without going through STOP/TERMINATING
+    EXPECT_CALL(*Mock_Service, GetLastServiceState()).WillRepeatedly(Return(ServiceState::RUNNING));
+
+    auto action = manager.Evaluate(service);
+    EXPECT_EQ(action, ServiceControlAction::NONE);
 }
 
 int main(int argc, char** argv) {

@@ -34,6 +34,11 @@ class Service {
     void IncreaseRecoveredCount();
     void ClearRecoveredCount();
 
+    // Exit code reported by the service agent when the process terminates.
+    // -1 = never started (initial); 0 = clean exit; >0 = error exit.
+    int32_t GetExitCode();
+    void SetExitCode(int32_t code);
+
     void Print();
 
     OsType GetOsType();
@@ -48,6 +53,7 @@ class Service {
     ServiceState service_state_;
     ServiceState service_state_last_;
     uint32_t recovered_count_;
+    int32_t exit_code_;
 
     OsType os_type_;
 

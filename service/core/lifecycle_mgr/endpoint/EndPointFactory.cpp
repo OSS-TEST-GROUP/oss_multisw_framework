@@ -67,7 +67,8 @@ int32_t EndPointFactory::Initialize(){
 
 }
 
-int32_t EndPointFactory::CreateEndPoints(std::shared_ptr<DDSTransmitter> transmitter){
+int32_t EndPointFactory::CreateEndPoints(std::shared_ptr<DDSTransmitter> transmitter,
+                                          const EndPointHandlers& handlers){
 
 
     DomainParticipant* participant = transmitter->GetDomain();
@@ -98,23 +99,23 @@ int32_t EndPointFactory::CreateEndPoints(std::shared_ptr<DDSTransmitter> transmi
                 break;
                 
                 case MessageType::GET_SERVICE_STATE_REQUEST :{
-                    std::shared_ptr<GetServiceStateEndPoint> set_svc_mode_req = std::make_shared<GetServiceStateEndPoint>(key, val);
+                    std::shared_ptr<GetServiceStateEndPoint> get_svc_state_req = std::make_shared<GetServiceStateEndPoint>(key, val);
 
-                    msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndPoint>(set_svc_mode_req);
+                    msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndPoint>(get_svc_state_req);
                     pubsub = PubSubTYpe::PUBLISH_ONLY;
                 }
                 break;     
 
                 case MessageType::GET_SERVICE_STATE_RESPONSE :{
-                    std::shared_ptr<GetServiceStateEndPoint> set_svc_mode_req  = std::make_shared<GetServiceStateEndPoint>(key, val);
+                    std::shared_ptr<GetServiceStateEndPoint> get_svc_state_resp = std::make_shared<GetServiceStateEndPoint>(key, val, handlers.on_get_state_resp);
 
-                    msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndPoint>(set_svc_mode_req);
+                    msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndPoint>(get_svc_state_resp);
                     pubsub = PubSubTYpe::SUBSCRIBE_ONLY;
                 }
                 break;     
 
                 case MessageType::NOTIFY_SERVICE_STATE :{
-                    std::shared_ptr<NotifyServiceStateEndPoint> notify_svc_state = std::make_shared<NotifyServiceStateEndPoint>(key, val);
+                    std::shared_ptr<NotifyServiceStateEndPoint> notify_svc_state = std::make_shared<NotifyServiceStateEndPoint>(key, val, handlers.on_notify_state);
 
                     msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndPoint>(notify_svc_state);
                     pubsub = PubSubTYpe::SUBSCRIBE_ONLY;
@@ -122,7 +123,7 @@ int32_t EndPointFactory::CreateEndPoints(std::shared_ptr<DDSTransmitter> transmi
                 break;     
 
                 case MessageType::SET_SERVICE_MODE_REQUST :{
-                    std::shared_ptr<SetServiceModeEndPoint> set_svc_mode_req = std::make_shared<SetServiceModeEndPoint>(key, val);
+                    std::shared_ptr<SetServiceModeEndPoint> set_svc_mode_req = std::make_shared<SetServiceModeEndPoint>(key, val, handlers.on_set_mode);
 
                     msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndPoint>(set_svc_mode_req);
                     pubsub = PubSubTYpe::SUBSCRIBE_ONLY;
@@ -146,7 +147,7 @@ int32_t EndPointFactory::CreateEndPoints(std::shared_ptr<DDSTransmitter> transmi
                 break; 
 
                 case MessageType::START_SERVICE_RESPONSE :{
-                    std::shared_ptr<StartServiceEndPoint> start_svc_resp = std::make_shared<StartServiceEndPoint>(key, val);
+                    std::shared_ptr<StartServiceEndPoint> start_svc_resp = std::make_shared<StartServiceEndPoint>(key, val, handlers.on_start);
 
                     msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndPoint>(start_svc_resp);
                     pubsub = PubSubTYpe::SUBSCRIBE_ONLY;
@@ -162,7 +163,7 @@ int32_t EndPointFactory::CreateEndPoints(std::shared_ptr<DDSTransmitter> transmi
                 break; 
 
                 case MessageType::STOP_SERVICE_RESPONSE :{
-                    std::shared_ptr<StopServiceEndPoint> stop_svc_resp = std::make_shared<StopServiceEndPoint>(key, val);
+                    std::shared_ptr<StopServiceEndPoint> stop_svc_resp = std::make_shared<StopServiceEndPoint>(key, val, handlers.on_stop);
 
                     msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndPoint>(stop_svc_resp);
                     pubsub = PubSubTYpe::SUBSCRIBE_ONLY;
@@ -170,7 +171,7 @@ int32_t EndPointFactory::CreateEndPoints(std::shared_ptr<DDSTransmitter> transmi
                 break;      
 
                 case MessageType::UPDATE_SERVICE_LIST_REQUEST :{
-                    std::shared_ptr<UpdateServiceListEndPoint> update_svc_req = std::make_shared<UpdateServiceListEndPoint>(key, val);
+                    std::shared_ptr<UpdateServiceListEndPoint> update_svc_req = std::make_shared<UpdateServiceListEndPoint>(key, val, handlers.on_update_list);
 
                     msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndPoint>(update_svc_req);
                     pubsub = PubSubTYpe::SUBSCRIBE_ONLY;

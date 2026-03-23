@@ -1,14 +1,12 @@
 #include "StopServiceEndPoint.hpp"
 
 #include "lifecycle/StopServiceRequest.hpp"
-#include "manager/LifecycleFactory.hpp"
-#include "state/StateManager.hpp"
 #include "logger/Log.hpp"
 
 namespace lifecycle_manager {
 
-StopServiceEndPoint::StopServiceEndPoint(MessageType msgtype, std::string topic) 
-    : DDSMessageEndPoint(topic){
+StopServiceEndPoint::StopServiceEndPoint(MessageType msgtype, std::string topic, Callback cb) 
+    : DDSMessageEndPoint(topic), on_data_cb_(std::move(cb)){
 
     if (msgtype == MessageType::STOP_SERVICE_REQUEST){
         SetTypeSupport(std::make_shared<TypeSupport>(new StopServiceRequestPubSubType()));
@@ -30,10 +28,8 @@ void StopServiceEndPoint::OnDataAvailable(){
 
         StopServiceResponse* message = reinterpret_cast<StopServiceResponse*>(&resp_);
 
-        std::shared_ptr<StateManager> manager = LifecycleFactory::GetInstance()->GetStateMgr();
-
-        if (manager != nullptr){
-            manager->OnStop(message);            
+        if (on_data_cb_) {
+            on_data_cb_(message);
         }
     }
 

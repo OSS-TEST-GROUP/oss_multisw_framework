@@ -1,15 +1,13 @@
 #include "StartServiceEndPoint.hpp"
 
 #include "lifecycle/StartServiceRequest.hpp"
-#include "manager/LifecycleFactory.hpp"
-#include "state/StateManager.hpp"
 #include "logger/Log.hpp"
 
 namespace lifecycle_manager {
 
 
-StartServiceEndPoint::StartServiceEndPoint(MessageType msgtype, std::string topic) 
-    : DDSMessageEndPoint(topic){
+StartServiceEndPoint::StartServiceEndPoint(MessageType msgtype, std::string topic, Callback cb) 
+    : DDSMessageEndPoint(topic), on_data_cb_(std::move(cb)){
         
     if (msgtype == MessageType::START_SERVICE_REQUEST){
         SetTypeSupport(std::make_shared<TypeSupport>(new StartServiceRequestPubSubType()));
@@ -31,10 +29,8 @@ void StartServiceEndPoint::OnDataAvailable(){
 
         StartServiceResponse* message = reinterpret_cast<StartServiceResponse*>(&resp_);
 
-        std::shared_ptr<StateManager> manager = LifecycleFactory::GetInstance()->GetStateMgr();
-
-        if (manager != nullptr){
-            manager->OnStart(message);            
+        if (on_data_cb_) {
+            on_data_cb_(message);
         }
     }
 

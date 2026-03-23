@@ -25,6 +25,8 @@ public:
     MOCK_METHOD(void, Print, (), ());
     MOCK_METHOD(OsType, GetOsType, (), ());
     MOCK_METHOD(int32_t, GetRecoveredCount, (), ());
+    MOCK_METHOD(int32_t, GetExitCode, (), ());
+    MOCK_METHOD(void, SetExitCode, (int32_t), ());
 
 private:
     int32_t recovered_count_;
@@ -92,6 +94,14 @@ void Service::Print() {
 
 OsType Service::GetOsType() {
     return Mock_Service->GetOsType();
+}
+
+int32_t Service::GetExitCode() {
+    return Mock_Service->GetExitCode();
+}
+
+void Service::SetExitCode(int32_t code) {
+    Mock_Service->SetExitCode(code);
 }
 
 } // namespace lifecycle_manager

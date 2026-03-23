@@ -5,6 +5,7 @@
 #include <string>
 #include <set>
 #include <memory>
+#include <functional>
 
 #include "transmitter/DDSMessageEndPoint.hpp"
 
@@ -16,7 +17,9 @@ using namespace lifecyclemgr;
 
 class UpdateServiceListEndPoint : public DDSMessageEndPoint {
   public:
-    UpdateServiceListEndPoint(MessageType msgtype, std::string topic);
+    using Callback = std::function<void(UpdateServiceListRequest*)>;
+
+    UpdateServiceListEndPoint(MessageType msgtype, std::string topic, Callback cb = nullptr);
     virtual ~UpdateServiceListEndPoint();
 
     virtual void  OnDataAvailable() override;
@@ -26,6 +29,7 @@ class UpdateServiceListEndPoint : public DDSMessageEndPoint {
 
   private:
     UpdateServiceListRequest data_;
+    Callback on_data_cb_;
 
 };
 

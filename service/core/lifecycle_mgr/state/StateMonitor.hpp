@@ -47,6 +47,11 @@ class StateMonitor : public ManagerBase {
     void updateServices(std::vector<std::string>* slist, std::vector<lifecyclemgr::ServiceState> *statelist);
     bool getServiceState(std::shared_ptr<Service> service, lifecyclemgr::ServiceStatus& entry);
 
+    // Polling interval (DESIGN-3): use named constants so the values are
+    // visible and can be moved to config in the future.
+    static constexpr int32_t kPollIntervalMs     = 10000; // state-query period
+    static constexpr int32_t kDiagReportInterval = 3;     // send diag every N polls
+
   private:
     std::set<std::shared_ptr<Service>> udpated_service_list_;
 

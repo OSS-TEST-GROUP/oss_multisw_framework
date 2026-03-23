@@ -168,13 +168,13 @@ void StateMonitor::RunThread()
 
     while(!stop_thread_)
 	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(10000));
+		std::this_thread::sleep_for(std::chrono::milliseconds(kPollIntervalMs));
 
         RequestGetState();
 
         loop_count_++;
 
-        if (loop_count_ > 2){
+        if (loop_count_ >= kDiagReportInterval){
             NotifyLifecycleDiagnosticInfo(true);
             loop_count_ = 0;
         }

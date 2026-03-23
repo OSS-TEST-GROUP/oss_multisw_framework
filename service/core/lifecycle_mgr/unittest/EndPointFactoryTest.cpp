@@ -871,57 +871,39 @@ TEST_F(EndPointFactoryTest, AllEndpoints_StressTest_RepeatedCalls) {
     }
 }
 
-// ==================== Tests for OnDataAvailable with Mocked LifecycleFactory ====================
-// These tests cover the branches where Read<> returns false and manager branches in all endpoint classes
+// ==================== Tests for OnDataAvailable with null callback ====================
+// These tests verify that OnDataAvailable does not crash when no callback is injected.
+// Endpoints are constructed without a callback (default nullptr), so the DDS handler
+// path is exercised safely without needing the LifecycleFactory singleton.
 
-// Test that OnDataAvailable handles null manager gracefully
 TEST_F(EndPointFactoryTest, NotifyServiceStateEndPoint_OnDataAvailable_NullMonitor) {
     NotifyServiceStateEndPoint endpoint(MessageType::NOTIFY_SERVICE_STATE, "test_topic");
-    
-    // Setup mock to return nullptr for GetMonitor
-    ON_CALL(*Mock_LifecycleFactory, GetMonitor()).WillByDefault(Return(nullptr));
-    
-    // OnDataAvailable should not crash even when manager is null
+    // No callback injected: OnDataAvailable must not crash
     EXPECT_NO_THROW(endpoint.OnDataAvailable());
 }
 
 TEST_F(EndPointFactoryTest, GetServiceStateEndPoint_OnDataAvailable_NullMonitor) {
     GetServiceStateEndPoint endpoint(MessageType::GET_SERVICE_STATE_RESPONSE, "test_topic");
-    
-    ON_CALL(*Mock_LifecycleFactory, GetMonitor()).WillByDefault(Return(nullptr));
-    
     EXPECT_NO_THROW(endpoint.OnDataAvailable());
 }
 
 TEST_F(EndPointFactoryTest, UpdateServiceListEndPoint_OnDataAvailable_NullRegistry) {
     UpdateServiceListEndPoint endpoint(MessageType::UPDATE_SERVICE_LIST_REQUEST, "test_topic");
-    
-    ON_CALL(*Mock_LifecycleFactory, GetRegistry()).WillByDefault(Return(nullptr));
-    
     EXPECT_NO_THROW(endpoint.OnDataAvailable());
 }
 
 TEST_F(EndPointFactoryTest, SetServiceModeEndPoint_OnDataAvailable_NullStateMgr) {
     SetServiceModeEndPoint endpoint(MessageType::SET_SERVICE_MODE_REQUST, "test_topic");
-    
-    ON_CALL(*Mock_LifecycleFactory, GetStateMgr()).WillByDefault(Return(nullptr));
-    
     EXPECT_NO_THROW(endpoint.OnDataAvailable());
 }
 
 TEST_F(EndPointFactoryTest, StartServiceEndPoint_OnDataAvailable_NullStateMgr) {
     StartServiceEndPoint endpoint(MessageType::START_SERVICE_RESPONSE, "test_topic");
-    
-    ON_CALL(*Mock_LifecycleFactory, GetStateMgr()).WillByDefault(Return(nullptr));
-    
     EXPECT_NO_THROW(endpoint.OnDataAvailable());
 }
 
 TEST_F(EndPointFactoryTest, StopServiceEndPoint_OnDataAvailable_NullStateMgr) {
     StopServiceEndPoint endpoint(MessageType::STOP_SERVICE_RESPONSE, "test_topic");
-    
-    ON_CALL(*Mock_LifecycleFactory, GetStateMgr()).WillByDefault(Return(nullptr));
-    
     EXPECT_NO_THROW(endpoint.OnDataAvailable());
 }
 
