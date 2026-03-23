@@ -438,26 +438,35 @@ bool ServiceRegistry::LoadServiceSaved(const std::string &path) {
         std::string deployFilePath =
             containerData["deploy-filepath"].as<std::string>("");
         std::string namespace_ = containerData["namespace"].as<std::string>("");
+        std::string containerTypeStr =
+            containerData["container-type"].as<std::string>("docker");
 
         if (namespace_.empty()) {
-          namespace_ = "default"; // Default namespace if not specified
+          namespace_ = "default";
           LOG_DEBUG("Using default namespace: " << namespace_);
         } else {
           LOG_DEBUG("Using specified namespace: " << namespace_);
         }
 
-        if (!groupname.empty() && !image.empty() && !deployFilePath.empty()) {
-          LOG_DEBUG("Container required fields valid ");
-          // create new container object
-          std::shared_ptr<Container> container = std::make_shared<Container>(
-              groupname, image, deployFilePath, namespace_);
-          // Add container to the registry or manage it as needed
-          LOG_DEBUG("Container created: "
-                    << groupname << " with image: " << image
-                    << " and deploy file: " << deployFilePath);
+        ContainerType containerType = ContainerType::DOCKER;
+        if (containerTypeStr == "k3s") {
+          containerType = ContainerType::K3S;
+        } else if (containerTypeStr == "docker-compose") {
+          containerType = ContainerType::DOCKER_COMPOSE;
+        } else {
+          containerType = ContainerType::DOCKER;
+        }
 
-          container_controller_->AddContainer(
-              container); // Ensure the container is registered
+        if (!groupname.empty() && !image.empty()) {
+          LOG_DEBUG("Container required fields valid");
+          std::shared_ptr<Container> container = std::make_shared<Container>(
+              groupname, image, deployFilePath, namespace_, containerType);
+          LOG_DEBUG("Container created: " << groupname
+                    << " image: " << image
+                    << " type: " << containerTypeStr
+                    << " deploy-filepath: " << deployFilePath);
+
+          container_controller_->AddContainer(container);
         }
 
         auto servicesNode = containerData["services"];

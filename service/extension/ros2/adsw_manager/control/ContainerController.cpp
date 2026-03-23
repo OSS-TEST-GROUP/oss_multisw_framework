@@ -7,216 +7,298 @@ namespace adsw_manager {
 const std::string ADSW_ROS2_CONTAINER_NAME = "oss-mmf-ext-ros2";
 
 ContainerController::ContainerController() {
-    // Constructor for ContainerController
-    // Initialize the deployment file path, pod name, namespace, and container name
-    // This is where you can set up any necessary configurations or resources
-    LOG_DEBUG("ContainerController create ");
+    LOG_DEBUG("ContainerController create");
 }
 
-ContainerController::~ContainerController(){
+ContainerController::~ContainerController() {}
 
-}
-
-bool ContainerController::Initialize(){
-    k3s_container_ = false;
+bool ContainerController::Initialize() {
     return true;
 }
 
-void ContainerController::Finalize(){
+void ContainerController::Finalize() {}
+
+// ─────────────────────────────────────────────────────────────
+// Public interface: dispatch to per-type implementation
+// ─────────────────────────────────────────────────────────────
+
+bool ContainerController::StartContainer(const std::string& container_name) {
+    LOG_DEBUG("ContainerController::StartContainer " << container_name);
+    std::shared_ptr<Container> container = GetContainer(container_name);
+    if (!container) return false;
+
+    switch (container->GetContainerType()) {
+        case ContainerType::K3S:            return StartK3sContainer(container);
+        case ContainerType::DOCKER:         return StartDockerContainer(container);
+        case ContainerType::DOCKER_COMPOSE: return StartDockerComposeContainer(container);
+        default:
+            LOG_ERROR("ContainerController::StartContainer unknown type: " << container_name);
+            return false;
+    }
 }
 
-bool ContainerController::StartContainer(const std::string& container_name){
-
-    // Start Container --> Means to start POD in Kubernetes
-    LOG_DEBUG("ContainerController::StartContainer start " << container_name);
-    
-    // Here we can use kubectl command to start the container
-    // For example, using system command to run kubectl
-
+bool ContainerController::StopContainer(const std::string& container_name) {
+    LOG_DEBUG("ContainerController::StopContainer " << container_name);
     std::shared_ptr<Container> container = GetContainer(container_name);
+    if (!container) return false;
 
-    if (container != nullptr){
-#ifdef ADSW_K3S_CONTAINER_SUPPORT
-        std::string command = "kubectl apply -f " + container->GetDeployFile();
-        int result = system(command.c_str());
-
-        if (result == 0) {
-            LOG_DEBUG("ContainerController::StartContainer success " << container_name);
-            return true;
-        } else {
-            LOG_ERROR("ContainerController::StartContainer failed " << container_name);
+    switch (container->GetContainerType()) {
+        case ContainerType::K3S:            return StopK3sContainer(container);
+        case ContainerType::DOCKER:         return StopDockerContainer(container);
+        case ContainerType::DOCKER_COMPOSE: return StopDockerComposeContainer(container);
+        default:
+            LOG_ERROR("ContainerController::StopContainer unknown type: " << container_name);
             return false;
-        }
-        LOG_DEBUG("ContainerController::StartContainer end " << container_name);
-        return true;
-#endif
-    }else{
-        LOG_ERROR("ContainerController::StartContainer not k3s support " << container_name);
     }
-    return false;
 }
 
-bool ContainerController::StopContainer(const std::string& container_name){
-
-    // Stop Container --> Means to stop POD in Kubernetes
-    LOG_DEBUG("ContainerController::StopContainer start " << container_name);
-    
-    // Here we can use kubectl command to stop the container
-    // For example, using system command to run kubectl
+bool ContainerController::RestartContainer(const std::string& container_name) {
+    LOG_DEBUG("ContainerController::RestartContainer " << container_name);
     std::shared_ptr<Container> container = GetContainer(container_name);
+    if (!container) return false;
 
-    if (container != nullptr){
-#ifdef ADSW_K3S_CONTAINER_SUPPORT
-        std::string command = "kubectl delete pod " + container_name;
-        int result = system(command.c_str());
-
-        if (result == 0) {
-            LOG_DEBUG("ContainerController::StopContainer success " << container_name);
-            return true;
-        } else {
-            LOG_ERROR("ContainerController::StopContainer failed " << container_name);
+    switch (container->GetContainerType()) {
+        case ContainerType::K3S:            return RestartK3sContainer(container);
+        case ContainerType::DOCKER:         return RestartDockerContainer(container);
+        case ContainerType::DOCKER_COMPOSE: return RestartDockerComposeContainer(container);
+        default:
+            LOG_ERROR("ContainerController::RestartContainer unknown type: " << container_name);
             return false;
-        }
-        LOG_DEBUG("ContainerController::StopContainer end " << container_name);
-        return true;
-#endif        
-    }else{
-        LOG_ERROR("ContainerController::StopContainer not k3s support " << container_name);
     }
-    return false;
 }
 
 bool ContainerController::GetContainerStatus(const std::string& container_name) {
-
     std::shared_ptr<Container> container = GetContainer(container_name);
+    if (!container) return false;
 
-    if (container != nullptr){
-#ifdef ADSW_K3S_CONTAINER_SUPPORT        
-        std::string command = "kubectl get pod " + container->GetPodName() + " -n " + container->GetNamespace() + " -o jsonpath='{.status.containerStatuses[?(@.name==\"" + container_name + "\")].state}'";
-
-        int result = system(command.c_str());
-
-        if (result == 0) {
-            LOG_DEBUG("ContainerController::GetContainerStatus success " << container_name);
-            return true;
-        } else {
-            LOG_ERROR("ContainerController::GetContainerStatus failed " << container_name);
+    std::string cmd;
+    switch (container->GetContainerType()) {
+        case ContainerType::K3S:
+            cmd = "kubectl get pod " + container->GetPodName()
+                + " -n " + container->GetNamespace()
+                + " -o jsonpath='{.status.phase}'";
+            break;
+        case ContainerType::DOCKER:
+        case ContainerType::DOCKER_COMPOSE:
+            cmd = "docker inspect --format='{{.State.Status}}' " + container_name;
+            break;
+        default:
             return false;
-        }      
-#endif
-    }else{
-        LOG_ERROR("ContainerController::GetContainerStatus not k3s support " << container_name);
     }
-    return false;
+    return RunCommand(cmd) == 0;
 }
 
 bool ContainerController::GetContainerLogs(const std::string& container_name) {
-
     std::shared_ptr<Container> container = GetContainer(container_name);
+    if (!container) return false;
 
-    if (container != nullptr){
-#ifdef ADSW_K3S_CONTAINER_SUPPORT
-        std::string command = "kubectl logs " + container->GetPodName() + " -n " + container->GetNamespace() + " -c " + container_name;
-
-        int result = system(command.c_str());
-
-        if (result == 0) {
-            LOG_DEBUG("ContainerController::GetContainerLogs success " << container_name);
-            return true;
-        } else {
-            LOG_ERROR("ContainerController::GetContainerLogs failed " << container_name);
+    std::string cmd;
+    switch (container->GetContainerType()) {
+        case ContainerType::K3S:
+            cmd = "kubectl logs " + container->GetPodName()
+                + " -n " + container->GetNamespace()
+                + " -c " + container_name;
+            break;
+        case ContainerType::DOCKER:
+        case ContainerType::DOCKER_COMPOSE:
+            cmd = "docker logs " + container_name;
+            break;
+        default:
             return false;
-        } 
-#endif      
-    }else{
-        LOG_ERROR("ContainerController::GetContainerLogs not k3s support " << container_name);
     }
+    return RunCommand(cmd) == 0;
+}
+
+// ─────────────────────────────────────────────────────────────
+// k3s (kubectl) implementations
+// ─────────────────────────────────────────────────────────────
+
+bool ContainerController::StartK3sContainer(std::shared_ptr<Container> container) {
+    std::string cmd = "kubectl apply -f " + container->GetDeployFile();
+    if (RunCommand(cmd) == 0) {
+        LOG_DEBUG("ContainerController::StartK3sContainer success " << container->GetName());
+        return true;
+    }
+    LOG_ERROR("ContainerController::StartK3sContainer failed " << container->GetName());
     return false;
 }
 
-std::shared_ptr<Container> ContainerController::GetContainer(const std::string& container_name) {
-        
-    if (k3s_container_ == false) {
-        LOG_ERROR("ContainerController::GetContainer not k3s support " << container_name);
-        return nullptr;
+bool ContainerController::StopK3sContainer(std::shared_ptr<Container> container) {
+    std::string cmd = "kubectl delete pod " + container->GetName()
+                    + " -n " + container->GetNamespace() + " --ignore-not-found";
+    if (RunCommand(cmd) == 0) {
+        LOG_DEBUG("ContainerController::StopK3sContainer success " << container->GetName());
+        return true;
     }
- #ifdef ADSW_K3S_CONTAINER_SUPPORT   
-    for (const auto& container : containers_) {
-            
-        if (container->GetName() == container_name) {
-                return container;
-        }
-    }
-#endif
-    LOG_ERROR("ContainerController::GetContainer not found " << container_name);
-    return nullptr; // Return nullptr if the container is not found
+    LOG_ERROR("ContainerController::StopK3sContainer failed " << container->GetName());
+    return false;
 }
 
-bool ContainerController::AddContainer(std::shared_ptr<Container> container){
-    if (container == nullptr) {
-        LOG_ERROR("ContainerController::AddContainer received null container.");
-        return false;
-    }
-
-    // Check if the container already exists
-    for (const auto& existing_container : containers_) {
-        if (existing_container->GetName() == container->GetName()) {
-            LOG_ERROR("ContainerController::AddContainer container already exists: " << container->GetName());
-            return false; // Container already exists
-        }
-    }
-
-    containers_.push_back(container);
-    LOG_DEBUG("ContainerController::AddContainer added container: " << container->GetName());
-    return true;
-
+bool ContainerController::RestartK3sContainer(std::shared_ptr<Container> container) {
+    // k3s pods are immutable: delete + re-apply
+    if (!StopK3sContainer(container)) return false;
+    return StartK3sContainer(container);
 }
 
+// ─────────────────────────────────────────────────────────────
+// docker run/stop implementations
+// ─────────────────────────────────────────────────────────────
 
+bool ContainerController::StartDockerContainer(std::shared_ptr<Container> container) {
+    // Try to start existing stopped container first, otherwise run a new one
+    std::string start_cmd = "docker start " + container->GetName() + " 2>/dev/null";
+    if (RunCommand(start_cmd) == 0) {
+        LOG_DEBUG("ContainerController::StartDockerContainer restarted existing " << container->GetName());
+        return true;
+    }
+
+    std::string run_cmd = "docker run -d --name " + container->GetName()
+                        + " " + container->GetImage();
+    if (RunCommand(run_cmd) == 0) {
+        LOG_DEBUG("ContainerController::StartDockerContainer new container " << container->GetName());
+        return true;
+    }
+    LOG_ERROR("ContainerController::StartDockerContainer failed " << container->GetName());
+    return false;
+}
+
+bool ContainerController::StopDockerContainer(std::shared_ptr<Container> container) {
+    std::string cmd = "docker stop " + container->GetName()
+                    + " && docker rm " + container->GetName();
+    if (RunCommand(cmd) == 0) {
+        LOG_DEBUG("ContainerController::StopDockerContainer success " << container->GetName());
+        return true;
+    }
+    LOG_ERROR("ContainerController::StopDockerContainer failed " << container->GetName());
+    return false;
+}
+
+bool ContainerController::RestartDockerContainer(std::shared_ptr<Container> container) {
+    std::string cmd = "docker restart " + container->GetName();
+    if (RunCommand(cmd) == 0) {
+        LOG_DEBUG("ContainerController::RestartDockerContainer success " << container->GetName());
+        return true;
+    }
+    LOG_ERROR("ContainerController::RestartDockerContainer failed " << container->GetName());
+    return false;
+}
+
+// ─────────────────────────────────────────────────────────────
+// docker compose implementations
+// ─────────────────────────────────────────────────────────────
+
+bool ContainerController::StartDockerComposeContainer(std::shared_ptr<Container> container) {
+    std::string cmd = "docker compose -f " + container->GetDeployFile() + " up -d";
+    if (RunCommand(cmd) == 0) {
+        LOG_DEBUG("ContainerController::StartDockerComposeContainer success " << container->GetName());
+        return true;
+    }
+    LOG_ERROR("ContainerController::StartDockerComposeContainer failed " << container->GetName());
+    return false;
+}
+
+bool ContainerController::StopDockerComposeContainer(std::shared_ptr<Container> container) {
+    std::string cmd = "docker compose -f " + container->GetDeployFile() + " down";
+    if (RunCommand(cmd) == 0) {
+        LOG_DEBUG("ContainerController::StopDockerComposeContainer success " << container->GetName());
+        return true;
+    }
+    LOG_ERROR("ContainerController::StopDockerComposeContainer failed " << container->GetName());
+    return false;
+}
+
+bool ContainerController::RestartDockerComposeContainer(std::shared_ptr<Container> container) {
+    std::string cmd = "docker compose -f " + container->GetDeployFile() + " restart";
+    if (RunCommand(cmd) == 0) {
+        LOG_DEBUG("ContainerController::RestartDockerComposeContainer success " << container->GetName());
+        return true;
+    }
+    LOG_ERROR("ContainerController::RestartDockerComposeContainer failed " << container->GetName());
+    return false;
+}
+
+// ─────────────────────────────────────────────────────────────
+// BaseCommand helpers (for exec into container)
+// ─────────────────────────────────────────────────────────────
 
 std::string ContainerController::BaseCommand(const std::string& container_name) {
-
-    if (container_name == ADSW_ROS2_CONTAINER_NAME){
-        LOG_DEBUG("Container is ADSW ROS2 : " << container_name);
-        return ""; // this shall be controlled as ros2 base command
-    }
+    if (container_name == ADSW_ROS2_CONTAINER_NAME) return "";
 
     std::shared_ptr<Container> container = GetContainer(container_name);
+    if (!container) return "";
 
-    if (container != nullptr){
-#ifdef ADSW_K3S_CONTAINER_SUPPORT        
-        std::string command = "kubectl exec -n " + container->GetNamespace() + " " + container->GetPodName() + " -- ";
-        LOG_DEBUG("Base command for container: " << command);
-        return command;
-#endif        
+    switch (container->GetContainerType()) {
+        case ContainerType::K3S:
+            return "kubectl exec -n " + container->GetNamespace()
+                 + " " + container->GetPodName() + " -- ";
+        case ContainerType::DOCKER:
+        case ContainerType::DOCKER_COMPOSE:
+            return "docker exec " + container_name + " ";
+        default:
+            return "";
     }
-    return "";
 }
 
 std::string ContainerController::BaseRos2Command(const std::string& container_name) {
+    if (container_name == ADSW_ROS2_CONTAINER_NAME) return "";
 
-    if (container_name == ADSW_ROS2_CONTAINER_NAME){
-        LOG_DEBUG("Container is ADSW ROS2 : " << container_name);        
-        return ""; // this shall be controlled as ros2 base command
-    }
+    std::string base = BaseCommand(container_name);
+    if (base.empty()) return "";
 
     std::shared_ptr<Container> container = GetContainer(container_name);
-
-    if (container != nullptr){
-#ifdef ADSW_K3S_CONTAINER_SUPPORT
-        std::string command = "kubectl exec -n " + container->GetNamespace() + " " + container->GetPodName() + " -- ";
-        command += "bash -c \"source /opt/ros/humble/setup.bash && ";
-        LOG_DEBUG("Base command for container: " << command);
-        return command;
-#endif
+    switch (container->GetContainerType()) {
+        case ContainerType::K3S:
+            return base + "bash -c \"source /opt/ros/humble/setup.bash && ";
+        case ContainerType::DOCKER:
+        case ContainerType::DOCKER_COMPOSE:
+            return base + "bash -c \"source /opt/ros/humble/setup.bash && ";
+        default:
+            return "";
     }
-    return "";
+}
+
+// ─────────────────────────────────────────────────────────────
+// Container registry management
+// ─────────────────────────────────────────────────────────────
+
+std::shared_ptr<Container> ContainerController::GetContainer(const std::string& container_name) {
+    for (const auto& container : containers_) {
+        if (container->GetName() == container_name) {
+            return container;
+        }
+    }
+    LOG_ERROR("ContainerController::GetContainer not found: " << container_name);
+    return nullptr;
+}
+
+bool ContainerController::AddContainer(std::shared_ptr<Container> container) {
+    if (!container) {
+        LOG_ERROR("ContainerController::AddContainer received null container.");
+        return false;
+    }
+    for (const auto& existing : containers_) {
+        if (existing->GetName() == container->GetName()) {
+            LOG_ERROR("ContainerController::AddContainer already exists: " << container->GetName());
+            return false;
+        }
+    }
+    containers_.push_back(container);
+    LOG_DEBUG("ContainerController::AddContainer added: " << container->GetName()
+              << " type=" << static_cast<int>(container->GetContainerType()));
+    return true;
 }
 
 bool ContainerController::ContainerSupported() {
-    // Check if the container is supported
-    // This can be based on the container name or other criteria
-    return k3s_container_;
+    return !containers_.empty();
+}
+
+// ─────────────────────────────────────────────────────────────
+// Internal helpers
+// ─────────────────────────────────────────────────────────────
+
+int ContainerController::RunCommand(const std::string& cmd) {
+    LOG_DEBUG("ContainerController::RunCommand: " << cmd);
+    return system(cmd.c_str());
 }
 
 } // namespace adsw_manager
