@@ -38,6 +38,9 @@ class Service {
     void SetPID(uint64_t pid);
     uint64_t GetPID();
 
+    void SetExitCode(int32_t code);
+    int32_t GetExitCode();
+
   private:
     std::string name_;
     ServiceType service_type_;
@@ -50,6 +53,7 @@ class Service {
     int32_t max_nodes_;
     int32_t current_nodes_;
     uint64_t pid_;
+    int32_t exit_code_;
 };
 
 } // namespace adsw_manager

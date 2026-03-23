@@ -20,6 +20,7 @@ bool ADSWManager::Initialize() {
     dds_transmitter_ = std::make_shared<DDSTransmitter>();
     service_registry_ = std::make_shared<ServiceRegistry>();
     service_monitor_ = std::make_shared<ServiceMonitor>();
+    container_health_monitor_ = std::make_shared<ContainerHealthMonitor>();
     service_controller_ = std::make_shared<ROSServiceController>();
     endpoint_factory_ = std::make_shared<EndPointFactory>();
 
@@ -48,18 +49,27 @@ bool ADSWManager::Start() {
     if (!service_registry_->LoadServiceList()) {
         return false;
     }
-    
+
+    // Auto-start containers and send initial state to lifecycle_mgr.
+    if (container_health_monitor_) {
+        container_health_monitor_->AutoStartContainers();
+        container_health_monitor_->Start();
+    }
+
     SetState(AdswState::ADSW_STARTED);
     return true;
 }
 
 void ADSWManager::Stop() {
+    if (container_health_monitor_) {
+        container_health_monitor_->Stop();
+    }
     if (service_controller_) {
         service_controller_->Finalize();
     }
     if (service_monitor_) {
         service_monitor_->Finalize();
-    }   
+    }
     if (dds_transmitter_) {
         dds_transmitter_->Finalize();
     }

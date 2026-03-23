@@ -25,6 +25,13 @@ class ContainerController {
     bool GetContainerStatus(const std::string& container_name);
     bool GetContainerLogs(const std::string& container_name);
 
+    // 런타임 상태 조회
+    std::string GetContainerStatusStr(const std::string& container_name);
+    int32_t     GetContainerExitCode(const std::string& container_name);
+    bool        IsContainerRunning(const std::string& container_name);
+
+    std::vector<std::shared_ptr<Container>> GetAllContainers();
+
     std::string BaseCommand(const std::string& container_name);
     std::string BaseRos2Command(const std::string& container_name);
 

@@ -14,6 +14,7 @@
 #include <cstdlib>
 #include <functional>
 #include <fstream>
+#include <set>
 
 namespace ros2 {
 namespace adsw_manager {
@@ -435,6 +436,27 @@ bool ROSServiceController::ProcessServiceStartRequest(lifecyclemgr::StartService
         else{
             int32_t count = 0;
             LOG_DEBUG("Starting services: " << (is_group ? "Group" : "Individual") << " - " << service_list.size() << " services.");
+
+            // Ensure the container hosting each service is running before starting the service.
+            if (container_controller_) {
+                std::shared_ptr<ServiceRegistry> registry = ADSWManager::Get()->GetServiceRegistry();
+                std::set<std::string> started_containers;
+                for (const auto& svc_name : service_list) {
+                    if (!registry) break;
+                    std::shared_ptr<Service> svc = registry->GetService(svc_name);
+                    if (!svc) continue;
+                    std::string container_name = registry->GetGroupNameByService(svc);
+                    if (container_name.empty()) continue;
+                    if (started_containers.count(container_name)) continue;  // already handled
+                    if (!container_controller_->IsContainerRunning(container_name)) {
+                        LOG_DEBUG("ROSServiceController: container " << container_name
+                                  << " not running, starting it for service " << svc_name);
+                        container_controller_->StartContainer(container_name);
+                    }
+                    started_containers.insert(container_name);
+                }
+            }
+
             if (is_group) {
                 for (const auto& service : service_list) {
                     if (StartGroup(service) == true) {

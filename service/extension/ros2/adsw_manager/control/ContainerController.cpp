@@ -258,6 +258,85 @@ std::string ContainerController::BaseRos2Command(const std::string& container_na
 }
 
 // ─────────────────────────────────────────────────────────────
+// Runtime status queries
+// ─────────────────────────────────────────────────────────────
+
+std::string ContainerController::GetContainerStatusStr(const std::string& container_name) {
+    std::shared_ptr<Container> container = GetContainer(container_name);
+    if (!container) return "unknown";
+
+    std::string cmd;
+    switch (container->GetContainerType()) {
+        case ContainerType::K3S:
+            cmd = "kubectl get pod " + container->GetPodName()
+                + " -n " + container->GetNamespace()
+                + " -o jsonpath='{.status.phase}' 2>/dev/null";
+            break;
+        case ContainerType::DOCKER:
+        case ContainerType::DOCKER_COMPOSE:
+            cmd = "docker inspect --format='{{.State.Status}}' " + container_name + " 2>/dev/null";
+            break;
+        default:
+            return "unknown";
+    }
+
+    FILE* pipe = popen(cmd.c_str(), "r");
+    if (!pipe) return "unknown";
+    char buf[64] = {};
+    fgets(buf, sizeof(buf), pipe);
+    pclose(pipe);
+
+    std::string result(buf);
+    // strip trailing newline and surrounding single-quotes added by shell
+    while (!result.empty() && (result.back() == '\n' || result.back() == '\'' || result.back() == '\r'))
+        result.pop_back();
+    if (!result.empty() && result.front() == '\'')
+        result.erase(0, 1);
+    return result.empty() ? "unknown" : result;
+}
+
+int32_t ContainerController::GetContainerExitCode(const std::string& container_name) {
+    std::shared_ptr<Container> container = GetContainer(container_name);
+    if (!container) return -1;
+
+    std::string cmd;
+    switch (container->GetContainerType()) {
+        case ContainerType::K3S:
+            cmd = "kubectl get pod " + container->GetPodName()
+                + " -n " + container->GetNamespace()
+                + " -o jsonpath='{.status.containerStatuses[0].state.terminated.exitCode}' 2>/dev/null";
+            break;
+        case ContainerType::DOCKER:
+        case ContainerType::DOCKER_COMPOSE:
+            cmd = "docker inspect --format='{{.State.ExitCode}}' " + container_name + " 2>/dev/null";
+            break;
+        default:
+            return -1;
+    }
+
+    FILE* pipe = popen(cmd.c_str(), "r");
+    if (!pipe) return -1;
+    char buf[32] = {};
+    fgets(buf, sizeof(buf), pipe);
+    pclose(pipe);
+
+    try {
+        return static_cast<int32_t>(std::stoi(std::string(buf)));
+    } catch (...) {
+        return -1;
+    }
+}
+
+bool ContainerController::IsContainerRunning(const std::string& container_name) {
+    std::string status = GetContainerStatusStr(container_name);
+    return (status == "running" || status == "Running");
+}
+
+std::vector<std::shared_ptr<Container>> ContainerController::GetAllContainers() {
+    return containers_;
+}
+
+// ─────────────────────────────────────────────────────────────
 // Container registry management
 // ─────────────────────────────────────────────────────────────
 

@@ -4,6 +4,7 @@
 #include "transmitter/DDSTransmitter.hpp"
 #include "service/ServiceRegistry.hpp"
 #include "monitor/ServiceMonitor.hpp"
+#include "monitor/ContainerHealthMonitor.hpp"
 #include "control/ROSServiceController.hpp"
 #include "monitor/ROSServiceDiscovery.hpp"
 #include "endpoint/EndPointFactory.hpp"
@@ -51,6 +52,7 @@ class ADSWManager {
     std::shared_ptr<DDSTransmitter> dds_transmitter_;
     std::shared_ptr<ServiceRegistry> service_registry_;
     std::shared_ptr<ServiceMonitor> service_monitor_;
+    std::shared_ptr<ContainerHealthMonitor> container_health_monitor_;
     std::shared_ptr<ROSServiceController> service_controller_;
     std::shared_ptr<EndPointFactory> endpoint_factory_;
 

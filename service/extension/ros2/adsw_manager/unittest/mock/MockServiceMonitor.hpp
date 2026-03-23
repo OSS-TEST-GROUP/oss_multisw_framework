@@ -27,6 +27,8 @@ public:
     MOCK_METHOD(int32_t, NodeCount, (std::string service), ());
     MOCK_METHOD(void, UpdateServiceState, (), ());
     MOCK_METHOD(void, NotifyAdswStatus, (int32_t status_code, std::string status_msg), ());
+    MOCK_METHOD(void, OnContainerStateChanged,
+                (const std::string& container_name, bool is_running, int32_t exit_code), ());
 
 };
 
@@ -65,6 +67,10 @@ void ServiceMonitor::UpdateServiceState() {
 }
 void ServiceMonitor::NotifyAdswStatus(int32_t status_code, std::string status_msg) {
     Mock_ServiceMonitor->NotifyAdswStatus(status_code, status_msg);
+}
+void ServiceMonitor::OnContainerStateChanged(const std::string& container_name,
+                                             bool is_running, int32_t exit_code) {
+    Mock_ServiceMonitor->OnContainerStateChanged(container_name, is_running, exit_code);
 }
 
 }

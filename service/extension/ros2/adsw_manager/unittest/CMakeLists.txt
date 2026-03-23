@@ -180,6 +180,22 @@ add_executable( ADSWContainerControllerTest ContinerControllerTest.cpp
                 ../service/Container.cpp
 )
 
+add_executable( ADSWContainerHealthMonitorTest ContainerHealthMonitorTest.cpp
+                ../monitor/ContainerHealthMonitor.cpp
+                ../service/Container.cpp
+                mock/MockADSWManager.cpp
+)
+
+# Docker 통합 테스트 (실제 Docker 데몬 필요)
+add_executable( ADSWContainerDockerIntegrationTest
+                ContainerControllerDockerIntegrationTest.cpp
+                ../control/ContainerController.cpp
+                ../monitor/ContainerHealthMonitor.cpp
+                ../service/Container.cpp
+                ../logger/Logger.cpp
+                mock/MockADSWManager.cpp
+)
+
 add_executable( ADSWROS2NodeControllerTest ROS2NodeControllerTest.cpp
                 ../control/ROS2NodeController.cpp
 )
@@ -214,6 +230,8 @@ gtest_discover_tests ( ADSWStopServiceEndpointTest )
 gtest_discover_tests ( ADSWUpdateServiceListEndpointTest )
 gtest_discover_tests ( ADSWConcreteEndpointIntegrationTest )
 gtest_discover_tests ( ADSWContainerControllerTest )
+gtest_discover_tests ( ADSWContainerHealthMonitorTest )
+gtest_discover_tests ( ADSWContainerDockerIntegrationTest )
 gtest_discover_tests ( ADSWROS2NodeControllerTest )
 gtest_discover_tests ( ADSWROS2LifecycleControllerTest )
 #gtest_discover_tests ( ADSWROSServiceControllerTest )
@@ -239,6 +257,8 @@ install ( TARGETS
           ADSWUpdateServiceListEndpointTest
           ADSWConcreteEndpointIntegrationTest
           ADSWContainerControllerTest
+          ADSWContainerHealthMonitorTest
+          ADSWContainerDockerIntegrationTest
           ADSWROS2NodeControllerTest
           ADSWROS2LifecycleControllerTest
     RUNTIME DESTINATION bin/unittest/adsw_manager
@@ -265,4 +285,12 @@ install(
     DESTINATION
         bin/unittest/adsw_manager
     FILES_MATCHING PATTERN "*.yaml"
+)
+
+# Docker 통합 테스트 파일 설치
+install(
+    DIRECTORY
+        docker
+    DESTINATION
+        bin/unittest/adsw_manager
 )

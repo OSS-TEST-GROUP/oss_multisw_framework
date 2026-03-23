@@ -111,71 +111,137 @@ TEST_F(ContainerControllerTest, GetContainer_AfterAdding) {
     auto container = std::make_shared<ros2::adsw_manager::Container>(
         "test-container", "test-image", "/path/to/deploy.yaml", "default");
     EXPECT_TRUE(controller->AddContainer(container));
-    
+
     auto retrieved = controller->GetContainer("test-container");
-    // k3s is disabled by default, so even after adding it returns nullptr
-    EXPECT_EQ(retrieved, nullptr);
+    ASSERT_NE(retrieved, nullptr);
+    EXPECT_EQ(retrieved->GetName(), "test-container");
 }
 
-TEST_F(ContainerControllerTest, BaseCommand_K3sDisabled) {
+// ─── BaseCommand / BaseRos2Command ────────────────────────────────────────────
+
+TEST_F(ContainerControllerTest, BaseCommand_UnknownContainer_ReturnsEmpty) {
     controller->Initialize();
-    EXPECT_EQ(controller->BaseCommand(""), "");
+    // 등록되지 않은 컨테이너는 빈 문자열
+    EXPECT_EQ(controller->BaseCommand("nonexistent"), "");
 }
 
-TEST_F(ContainerControllerTest, BaseRos2Command_K3sDisabled) {
+TEST_F(ContainerControllerTest, BaseRos2Command_UnknownContainer_ReturnsEmpty) {
     controller->Initialize();
-    EXPECT_EQ(controller->BaseRos2Command(""), "");
+    EXPECT_EQ(controller->BaseRos2Command("nonexistent"), "");
 }
 
-TEST_F(ContainerControllerTest, BaseCommand_AdswRos2Container) {
+TEST_F(ContainerControllerTest, BaseCommand_AdswRos2ContainerAlwaysEmpty) {
+    // ADSW_ROS2_CONTAINER_NAME 는 항상 "" 반환 (자기 자신이므로 exec 불필요)
     controller->Initialize();
     EXPECT_EQ(controller->BaseCommand("oss-mmf-ext-ros2"), "");
-}
-
-TEST_F(ContainerControllerTest, BaseRos2Command_AdswRos2Container) {
-    controller->Initialize();
     EXPECT_EQ(controller->BaseRos2Command("oss-mmf-ext-ros2"), "");
 }
 
-TEST_F(ContainerControllerTest, StartContainer_K3sDisabled) {
+TEST_F(ContainerControllerTest, BaseCommand_DockerContainer_ReturnsDockerExec) {
     controller->Initialize();
-    EXPECT_FALSE(controller->StartContainer("test-container"));
+    auto c = std::make_shared<ros2::adsw_manager::Container>(
+        "myapp", "myapp:latest", "", "", ros2::adsw_manager::ContainerType::DOCKER);
+    controller->AddContainer(c);
+
+    std::string cmd = controller->BaseCommand("myapp");
+    EXPECT_NE(cmd.find("docker exec myapp"), std::string::npos);
 }
 
-TEST_F(ContainerControllerTest, StopContainer_K3sDisabled) {
+TEST_F(ContainerControllerTest, BaseCommand_K3sContainer_ReturnsKubectl) {
     controller->Initialize();
-    EXPECT_FALSE(controller->StopContainer("test-container"));
+    auto c = std::make_shared<ros2::adsw_manager::Container>(
+        "mypod", "mypod:latest", "pod.yaml", "default", ros2::adsw_manager::ContainerType::K3S);
+    controller->AddContainer(c);
+
+    std::string cmd = controller->BaseCommand("mypod");
+    EXPECT_NE(cmd.find("kubectl exec"), std::string::npos);
+    EXPECT_NE(cmd.find("-n default"), std::string::npos);
 }
 
-TEST_F(ContainerControllerTest, GetContainerStatus_K3sDisabled) {
+TEST_F(ContainerControllerTest, BaseRos2Command_DockerContainer_ContainsSourceBash) {
     controller->Initialize();
-    EXPECT_FALSE(controller->GetContainerStatus("test-container"));
+    auto c = std::make_shared<ros2::adsw_manager::Container>(
+        "myapp", "myapp:latest", "", "", ros2::adsw_manager::ContainerType::DOCKER);
+    controller->AddContainer(c);
+
+    std::string cmd = controller->BaseRos2Command("myapp");
+    EXPECT_NE(cmd.find("source /opt/ros/humble/setup.bash"), std::string::npos);
 }
 
-TEST_F(ContainerControllerTest, GetContainerLogs_K3sDisabled) {
+// ─── 미등록 컨테이너에 대한 연산 ────────────────────────────────────────────
+
+TEST_F(ContainerControllerTest, StartContainer_NotRegistered_ReturnsFalse) {
     controller->Initialize();
-    EXPECT_FALSE(controller->GetContainerLogs("test-container"));
+    EXPECT_FALSE(controller->StartContainer("not-registered"));
 }
 
-// Test with empty container name
-TEST_F(ContainerControllerTest, StartContainer_EmptyName) {
+TEST_F(ContainerControllerTest, StopContainer_NotRegistered_ReturnsFalse) {
+    controller->Initialize();
+    EXPECT_FALSE(controller->StopContainer("not-registered"));
+}
+
+TEST_F(ContainerControllerTest, GetContainerStatus_NotRegistered_ReturnsFalse) {
+    controller->Initialize();
+    EXPECT_FALSE(controller->GetContainerStatus("not-registered"));
+}
+
+TEST_F(ContainerControllerTest, GetContainerLogs_NotRegistered_ReturnsFalse) {
+    controller->Initialize();
+    EXPECT_FALSE(controller->GetContainerLogs("not-registered"));
+}
+
+TEST_F(ContainerControllerTest, StartContainer_EmptyName_ReturnsFalse) {
     controller->Initialize();
     EXPECT_FALSE(controller->StartContainer(""));
 }
 
-TEST_F(ContainerControllerTest, StopContainer_EmptyName) {
+TEST_F(ContainerControllerTest, StopContainer_EmptyName_ReturnsFalse) {
     controller->Initialize();
     EXPECT_FALSE(controller->StopContainer(""));
 }
 
-TEST_F(ContainerControllerTest, GetContainerStatus_EmptyName) {
+// ─── 신규 상태 조회 메서드 ────────────────────────────────────────────────────
+
+TEST_F(ContainerControllerTest, GetContainerStatusStr_NotRegistered_ReturnsUnknown) {
     controller->Initialize();
-    EXPECT_FALSE(controller->GetContainerStatus(""));
+    EXPECT_EQ(controller->GetContainerStatusStr("nonexistent"), "unknown");
 }
 
-TEST_F(ContainerControllerTest, GetContainerLogs_EmptyName) {
+TEST_F(ContainerControllerTest, GetContainerExitCode_NotRegistered_ReturnsMinusOne) {
     controller->Initialize();
-    EXPECT_FALSE(controller->GetContainerLogs(""));
+    EXPECT_EQ(controller->GetContainerExitCode("nonexistent"), -1);
+}
+
+TEST_F(ContainerControllerTest, IsContainerRunning_NotRegistered_ReturnsFalse) {
+    controller->Initialize();
+    EXPECT_FALSE(controller->IsContainerRunning("nonexistent"));
+}
+
+TEST_F(ContainerControllerTest, GetAllContainers_Empty) {
+    controller->Initialize();
+    EXPECT_TRUE(controller->GetAllContainers().empty());
+}
+
+TEST_F(ContainerControllerTest, GetAllContainers_AfterAdd) {
+    controller->Initialize();
+    auto c1 = std::make_shared<ros2::adsw_manager::Container>(
+        "c1", "img1", "", "", ros2::adsw_manager::ContainerType::DOCKER);
+    auto c2 = std::make_shared<ros2::adsw_manager::Container>(
+        "c2", "img2", "compose.yaml", "", ros2::adsw_manager::ContainerType::DOCKER_COMPOSE);
+    controller->AddContainer(c1);
+    controller->AddContainer(c2);
+
+    auto all = controller->GetAllContainers();
+    EXPECT_EQ(all.size(), 2u);
+}
+
+TEST_F(ContainerControllerTest, ContainerSupported_TrueAfterAdd) {
+    controller->Initialize();
+    EXPECT_FALSE(controller->ContainerSupported());
+    auto c = std::make_shared<ros2::adsw_manager::Container>(
+        "c1", "img1", "", "", ros2::adsw_manager::ContainerType::DOCKER);
+    controller->AddContainer(c);
+    EXPECT_TRUE(controller->ContainerSupported());
 }
 
 // Additional tests for better coverage
