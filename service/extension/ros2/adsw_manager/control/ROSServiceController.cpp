@@ -448,14 +448,42 @@ bool ROSServiceController::ProcessServiceStartRequest(lifecyclemgr::StartService
                     std::string container_name = registry->GetGroupNameByService(svc);
                     if (container_name.empty()) continue;
                     if (started_containers.count(container_name)) continue;  // already handled
-                    if (container_controller_->IsContainerRunning(container_name)) {
+
+                    auto now = std::chrono::steady_clock::now();
+                    auto it = container_last_restart_.find(container_name);
+                    bool recently_restarted =
+                        (it != container_last_restart_.end()) &&
+                        (std::chrono::duration_cast<std::chrono::milliseconds>(
+                             now - it->second).count() < kContainerRestartCooldownMs);
+
+                    if (recently_restarted) {
+                        // Container was already restarted for a sibling service — skip.
+                        LOG_DEBUG("ROSServiceController: container " << container_name
+                                  << " recently restarted, skipping restart for service " << svc_name);
+                    } else if (container_controller_->IsContainerRunning(container_name)) {
                         LOG_DEBUG("ROSServiceController: container " << container_name
                                   << " running, restarting it for service " << svc_name);
                         container_controller_->RestartContainer(container_name);
+                        container_last_restart_[container_name] = now;
+
+                        // Mark all sibling services as NOT_RUNNING and notify lifecycle_mgr
+                        // immediately so their recovery requests are dispatched without
+                        // waiting for the next StateMonitor poll.
+                        std::vector<std::shared_ptr<Service>> siblings =
+                            registry->GetServicesByGroup(container_name);
+                        for (auto& sibling : siblings) {
+                            sibling->SetServiceState(ServiceState::NOT_RUNNING);
+                        }
+                        std::shared_ptr<ServiceMonitor> monitor =
+                            ADSWManager::Get()->GetServiceMonitor();
+                        if (monitor) {
+                            monitor->NotifyServiceState();
+                        }
                     } else {
                         LOG_DEBUG("ROSServiceController: container " << container_name
                                   << " not running, starting it for service " << svc_name);
                         container_controller_->StartContainer(container_name);
+                        container_last_restart_[container_name] = now;
                     }
                     started_containers.insert(container_name);
                 }
