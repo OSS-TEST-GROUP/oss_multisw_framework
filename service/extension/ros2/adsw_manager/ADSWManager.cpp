@@ -50,9 +50,10 @@ bool ADSWManager::Start() {
         return false;
     }
 
-    // Auto-start containers and send initial state to lifecycle_mgr.
+    // 초기 컨테이너 상태를 lifecycle_mgr에 보고 후 폴링 시작.
+    // 컨테이너 직접 시작 없이 lifecycle_mgr의 recovery policy가 재시작을 결정한다.
     if (container_health_monitor_) {
-        container_health_monitor_->AutoStartContainers();
+        container_health_monitor_->NotifyInitialContainerState();
         container_health_monitor_->Start();
     }
 

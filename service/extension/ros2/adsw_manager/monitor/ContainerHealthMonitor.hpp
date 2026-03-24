@@ -18,8 +18,9 @@ class ContainerHealthMonitor {
     void Start();
     void Stop();
 
-    // Start all configured containers and notify lifecycle_mgr on completion.
-    void AutoStartContainers();
+    // 초기 컨테이너 상태를 lifecycle_mgr에 보고 (직접 시작하지 않음).
+    // lifecycle_mgr이 StartServiceRequest를 통해 컨테이너 재시작을 결정한다.
+    void NotifyInitialContainerState();
 
   protected:
     // Overridable in tests to intercept state-change notifications.

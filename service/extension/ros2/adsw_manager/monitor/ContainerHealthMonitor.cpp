@@ -29,7 +29,9 @@ void ContainerHealthMonitor::Stop() {
     }
 }
 
-void ContainerHealthMonitor::AutoStartContainers() {
+void ContainerHealthMonitor::NotifyInitialContainerState() {
+    // 컨테이너를 직접 시작하지 않고 현재 상태를 lifecycle_mgr에 보고한다.
+    // lifecycle_mgr의 recovery policy가 StartServiceRequest를 통해 재시작을 결정한다.
     if (!ADSWManager::Get()) return;
     auto controller = ADSWManager::Get()->GetServiceController();
     if (!controller) return;
@@ -40,22 +42,15 @@ void ContainerHealthMonitor::AutoStartContainers() {
     auto containers = container_ctrl->GetAllContainers();
     for (const auto& container : containers) {
         const std::string& name = container->GetName();
+        bool is_running = container_ctrl->IsContainerRunning(name);
+        int32_t exit_code = is_running ? 0 : container_ctrl->GetContainerExitCode(name);
 
-        if (!container_ctrl->IsContainerRunning(name)) {
-            LOG_DEBUG("ContainerHealthMonitor::AutoStartContainers starting: " << name);
-            if (container_ctrl->StartContainer(name)) {
-                LOG_DEBUG("ContainerHealthMonitor::AutoStartContainers started: " << name);
-                prev_state_[name] = true;
-                NotifyContainerState(name, true, 0);
-            } else {
-                LOG_ERROR("ContainerHealthMonitor::AutoStartContainers failed to start: " << name);
-                prev_state_[name] = false;
-            }
-        } else {
-            LOG_DEBUG("ContainerHealthMonitor::AutoStartContainers already running: " << name);
-            prev_state_[name] = true;
-            NotifyContainerState(name, true, 0);
-        }
+        LOG_DEBUG("ContainerHealthMonitor::NotifyInitialContainerState "
+                  << name << " running=" << (is_running ? "true" : "false")
+                  << " exit_code=" << exit_code);
+
+        prev_state_[name] = is_running;
+        NotifyContainerState(name, is_running, exit_code);
     }
 }
 
