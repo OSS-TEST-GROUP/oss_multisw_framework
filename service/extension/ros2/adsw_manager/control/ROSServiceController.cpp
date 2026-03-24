@@ -448,7 +448,11 @@ bool ROSServiceController::ProcessServiceStartRequest(lifecyclemgr::StartService
                     std::string container_name = registry->GetGroupNameByService(svc);
                     if (container_name.empty()) continue;
                     if (started_containers.count(container_name)) continue;  // already handled
-                    if (!container_controller_->IsContainerRunning(container_name)) {
+                    if (container_controller_->IsContainerRunning(container_name)) {
+                        LOG_DEBUG("ROSServiceController: container " << container_name
+                                  << " running, restarting it for service " << svc_name);
+                        container_controller_->RestartContainer(container_name);
+                    } else {
                         LOG_DEBUG("ROSServiceController: container " << container_name
                                   << " not running, starting it for service " << svc_name);
                         container_controller_->StartContainer(container_name);
