@@ -78,14 +78,38 @@ void ADSWManager::Stop() {
 
 void ADSWManager::Process(){
 
-	if (GetState() == AdswState::ADSW_STARTED){
-        if (service_registry_->ProcessUpdateServiceListRequest() == true){
-    	    SetState(AdswState::ADSW_RUNNING);
+    if (GetState() == AdswState::ADSW_STARTED) {
+        auto now = std::chrono::steady_clock::now();
+
+        bool should_send = !update_list_sent_;
+        if (update_list_sent_) {
+            auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                now - last_update_list_sent_).count();
+            if (elapsed_ms >= kUpdateListRetryMs) {
+                LOG_DEBUG("UpdateServiceListRequest: no response for "
+                          << elapsed_ms << "ms, retrying...");
+                should_send = true;
+            }
         }
-        if (service_monitor_ != nullptr){
+
+        if (should_send) {
+            if (service_registry_->ProcessUpdateServiceListRequest()) {
+                last_update_list_sent_ = now;
+                update_list_sent_ = true;
+            }
+        }
+    }
+}
+
+void ADSWManager::ConfirmUpdateServiceList() {
+    if (GetState() == AdswState::ADSW_STARTED) {
+        LOG_DEBUG("UpdateServiceListResponse received — transitioning to ADSW_RUNNING");
+        SetState(AdswState::ADSW_RUNNING);
+        update_list_sent_ = false;
+        if (service_monitor_ != nullptr) {
             service_monitor_->NotifyAdswStatus(1, "ADSW start completed");
         }
-	}
+    }
 }
 
 std::shared_ptr<DDSTransmitter> ADSWManager::GetTransmitter() {

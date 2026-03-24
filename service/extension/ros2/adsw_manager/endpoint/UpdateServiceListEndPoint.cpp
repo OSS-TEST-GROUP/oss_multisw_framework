@@ -40,8 +40,10 @@ void UpdateServiceListEndPoint::OnDataAvailable(){
 
         UpdateServiceListResponse* message = reinterpret_cast<UpdateServiceListResponse*>(&resp_);
 
-        LOG_DEBUG("Update Response : " << static_cast<int32_t>(message->ret_code()));
+        LOG_DEBUG("UpdateServiceListResponse received, ret_code="
+                  << static_cast<int32_t>(message->ret_code()));
 
+        ADSWManager::Get()->ConfirmUpdateServiceList();
     }
 
 }

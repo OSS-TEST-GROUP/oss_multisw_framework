@@ -1,6 +1,8 @@
 #ifndef ROS2_ADSW_MANAGER_ADSW_MANAGER_HPP_
 #define ROS2_ADSW_MANAGER_ADSW_MANAGER_HPP_
 
+#include <chrono>
+
 #include "transmitter/DDSTransmitter.hpp"
 #include "service/ServiceRegistry.hpp"
 #include "monitor/ServiceMonitor.hpp"
@@ -44,6 +46,9 @@ class ADSWManager {
     void SetState(AdswState state);
     AdswState GetState();
 
+    // UpdateServiceListResponse 수신 시 호출 — ADSW_RUNNING 전환
+    void ConfirmUpdateServiceList();
+
   private:
     static std::shared_ptr<ADSWManager> getShared();
     static void SetShared(std::shared_ptr<ADSWManager> instance);
@@ -57,6 +62,11 @@ class ADSWManager {
     std::shared_ptr<EndPointFactory> endpoint_factory_;
 
     AdswState adsw_state_;
+
+    // UpdateServiceListRequest 재전송 제어
+    static constexpr int32_t kUpdateListRetryMs = 5000;  // 5초마다 재시도
+    std::chrono::steady_clock::time_point last_update_list_sent_;
+    bool update_list_sent_{false};
 
 };
 
