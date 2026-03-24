@@ -34,6 +34,7 @@ set ( SERVICE_SRC
 
 set ( MONITOR_SRC
     monitor/ServiceMonitor.cpp
+    monitor/ContainerHealthMonitor.cpp
     monitor/ROSServiceDiscovery.cpp
     monitor/UpdateServiceInfo.cpp
 )
