@@ -50,32 +50,47 @@ specs:
       #       enabled: "true"
       #       max: "0"
 
-      - name : oss-mmf-ext-ros2
-        image: "oss-mmf-ext-ros2:latest"
-        container-type: "docker-compose"             # k3s | docker | docker-compose
-        deploy-filepath: "oss-mmf-ext-ros2-speclist.yaml"
+      # ── oss-mmf-ext-ros2 (실제 배포용, docker-compose + speclist 파일 필요) ──
+      # - name: oss-mmf-ext-ros2
+      #   image: "oss-mmf-ext-ros2:latest"
+      #   container-type: "docker-compose"
+      #   deploy-filepath: "oss-mmf-ext-ros2-speclist.yaml"
+      #   services:
+      #     - package: "ota_client"
+      #       name: "ota_client"
+      #       launchfile: ""
+      #       type: "NORMAL"
+      #       recovery: "ALWAYS"
+      #       enabled: "true"
+      #       max: "0"
+      #     - package: "security_client"
+      #       name: "security_client"
+      #       launchfile: ""
+      #       type: "NORMAL"
+      #       recovery: "ALWAYS"
+      #       enabled: "true"
+      #       max: "0"
+      #     - package: "extension_communication"
+      #       name: "extension_communication"
+      #       launchfile: ""
+      #       type: "NORMAL"
+      #       recovery: "ALWAYS"
+      #       enabled: "true"
+      #       max: "0"
+
+      # ── 로컬 테스트용 샘플 컨테이너 (adsw-test-app:latest 이미지 필요) ──
+      # 이미지 빌드: docker build -t adsw-test-app:latest unittest/docker/
+      - name: adsw-test-docker
+        image: "adsw-test-app:latest"
+        container-type: "docker"
         services:
-          - package: "ota_client"
-            name: "ota_client"
+          - package: "test_pkg"
+            name: "test_service"
             launchfile: ""
             type: "NORMAL"
             recovery: "ALWAYS"
-            enabled: "false"
+            enabled: "true"
             max: "0"
-          # - package: "security_client"
-          #   name: "security_client"
-          #   launchfile: ""
-          #   type: "NORMAL"
-          #   recovery: "ALWAYS"
-          #   enabled: "true"
-          #   max: "0"
-          # - package: "extension_communication"
-          #   name: "extension_communication"
-          #   launchfile: ""
-          #   type: "NORMAL"
-          #   recovery: "ALWAYS"
-          #   enabled: "true"
-          #   max: "0"
 
 
 
