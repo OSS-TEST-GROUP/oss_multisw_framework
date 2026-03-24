@@ -1,10 +1,8 @@
 #ifndef ROS2_ADSW_MANAGER_CONTROL_ROSSERVICE_CONTROLLER_HPP_
 #define ROS2_ADSW_MANAGER_CONTROL_ROSSERVICE_CONTROLLER_HPP_
 
-#include <chrono>
 #include <memory>
 #include <string>
-#include <unordered_map>
 
 #include "ServiceController.hpp"
 #include "ROS2NodeController.hpp"
@@ -67,10 +65,6 @@ class ROSServiceController  : public ServiceController {
     bool KillProcessAndChildren(uint64_t pid);
     std::string FindExecutablePath(const std::string& packageName);
 
-    // Container restart cooldown — prevents re-restarting the same container
-    // when sibling services send recovery requests after a container restart.
-    static constexpr int32_t kContainerRestartCooldownMs = 30000;
-    std::unordered_map<std::string, std::chrono::steady_clock::time_point> container_last_restart_;
 };
 
 } // namespace adsw_manager
