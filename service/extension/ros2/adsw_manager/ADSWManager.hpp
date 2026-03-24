@@ -64,8 +64,8 @@ class ADSWManager {
     AdswState adsw_state_;
 
     // UpdateServiceListRequest 재전송 제어
-    static constexpr int32_t kUpdateListRetryMs  = 5000;   // ADSW_STARTED: 5초마다 재시도
-    static constexpr int32_t kUpdateListResyncMs = 30000;  // ADSW_RUNNING: 30초마다 재동기화
+    static constexpr int32_t kUpdateListRetryMs  = 3000;   // ADSW_STARTED: 3초마다 재시도
+    static constexpr int32_t kUpdateListResyncMs = 10000;  // ADSW_RUNNING: 10초마다 재동기화
     std::chrono::steady_clock::time_point last_update_list_sent_;
     bool update_list_sent_{false};
 
