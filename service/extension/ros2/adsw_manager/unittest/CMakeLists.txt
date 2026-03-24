@@ -175,6 +175,10 @@ add_executable( ADSWConcreteEndpointIntegrationTest ConcreteEndpointIntegrationT
 )
 
 # Control directory tests
+add_executable( ADSWContainerTest ContainerTest.cpp
+                ../service/Container.cpp
+)
+
 add_executable( ADSWContainerControllerTest ContinerControllerTest.cpp
                 ../control/ContainerController.cpp
                 ../service/Container.cpp
@@ -229,6 +233,7 @@ gtest_discover_tests ( ADSWStartServiceEndpointTest )
 gtest_discover_tests ( ADSWStopServiceEndpointTest )
 gtest_discover_tests ( ADSWUpdateServiceListEndpointTest )
 gtest_discover_tests ( ADSWConcreteEndpointIntegrationTest )
+gtest_discover_tests ( ADSWContainerTest )
 gtest_discover_tests ( ADSWContainerControllerTest )
 gtest_discover_tests ( ADSWContainerHealthMonitorTest )
 gtest_discover_tests ( ADSWContainerDockerIntegrationTest )
@@ -256,6 +261,7 @@ install ( TARGETS
           ADSWStopServiceEndpointTest
           ADSWUpdateServiceListEndpointTest
           ADSWConcreteEndpointIntegrationTest
+          ADSWContainerTest
           ADSWContainerControllerTest
           ADSWContainerHealthMonitorTest
           ADSWContainerDockerIntegrationTest
@@ -293,4 +299,12 @@ install(
         docker
     DESTINATION
         bin/unittest/adsw_manager
+)
+
+# Docker 통합 테스트 실행 스크립트 설치
+install(
+    PROGRAMS
+        test/run_docker_integration_test.sh
+    DESTINATION
+        bin/unittest/adsw_manager/test
 )
