@@ -78,9 +78,11 @@ void ADSWManager::Stop() {
 
 void ADSWManager::Process(){
 
-    if (GetState() == AdswState::ADSW_STARTED) {
-        auto now = std::chrono::steady_clock::now();
+    auto now = std::chrono::steady_clock::now();
+    auto state = GetState();
 
+    if (state == AdswState::ADSW_STARTED) {
+        // Response 수신 전까지 kUpdateListRetryMs 간격으로 재전송
         bool should_send = !update_list_sent_;
         if (update_list_sent_) {
             auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -98,17 +100,33 @@ void ADSWManager::Process(){
                 update_list_sent_ = true;
             }
         }
+    } else if (state == AdswState::ADSW_RUNNING) {
+        // lifecycle_mgr 재시작 대비: kUpdateListResyncMs 간격으로 서비스 리스트 재동기화
+        auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+            now - last_update_list_sent_).count();
+        if (elapsed_ms >= kUpdateListResyncMs) {
+            LOG_DEBUG("UpdateServiceListRequest: periodic resync");
+            if (service_registry_->ProcessUpdateServiceListRequest()) {
+                last_update_list_sent_ = now;
+            }
+        }
     }
 }
 
 void ADSWManager::ConfirmUpdateServiceList() {
+    auto now = std::chrono::steady_clock::now();
     if (GetState() == AdswState::ADSW_STARTED) {
         LOG_DEBUG("UpdateServiceListResponse received — transitioning to ADSW_RUNNING");
         SetState(AdswState::ADSW_RUNNING);
         update_list_sent_ = false;
+        last_update_list_sent_ = now;
         if (service_monitor_ != nullptr) {
             service_monitor_->NotifyAdswStatus(1, "ADSW start completed");
         }
+    } else if (GetState() == AdswState::ADSW_RUNNING) {
+        // lifecycle_mgr 재시작 후 resync 완료 — 타임스탬프 갱신
+        LOG_DEBUG("UpdateServiceListResponse received (resync) — service list updated");
+        last_update_list_sent_ = now;
     }
 }
 

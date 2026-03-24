@@ -10,7 +10,7 @@ namespace adsw_manager {
 class MockContainer : public Container {
 public:
     MockContainer()
-        : Container("mock_name", "mock_image", "mock_deploy_file", "mock_namespace") {}
+        : Container("mock_name", "mock_image", "mock_deploy_file", "mock_namespace", ContainerType::DOCKER) {}
     ~MockContainer() override = default;
 
     MOCK_METHOD(std::string, GetName, (), (const));
@@ -24,11 +24,12 @@ public:
 
 MockContainer* Mock_Container;
 
-Container::Container(const std::string& name, const std::string& image, const std::string& deploy_file, const std::string& namespace_)
+Container::Container(const std::string& name, const std::string& image, const std::string& deploy_file, const std::string& namespace_, ContainerType type)
     : name_(name),
       image_(image),
       deploy_file_(deploy_file),
-      namespace_(namespace_){
+      namespace_(namespace_),
+      container_type_(type) {
 }
 
 Container::~Container() {

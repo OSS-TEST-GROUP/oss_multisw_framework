@@ -458,7 +458,7 @@ do_start_build_mmf()
 
 	mkdir -p .build
 	mkdir -p output
-	docker run --rm -it \
+	docker run --rm -i \
 		--name mmf-builder \
 		-u 1000:1000 \
 		-w /home/ossuser/workspace \

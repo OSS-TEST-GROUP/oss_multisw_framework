@@ -74,6 +74,10 @@ namespace adsw_manager {
         return result;
     }
 
+    void ADSWManager::ConfirmUpdateServiceList() {
+        Mock_ADSWManager->ConfirmUpdateServiceList();
+    }
+
     void ADSWManager::SetShared(std::shared_ptr<ADSWManager> instance) {
         std::cerr << "MockADSWManager::SetShared() called with " << (instance ? "valid" : "NULL") << " instance" << std::endl;
         shared_instance_ = instance;

@@ -39,7 +39,12 @@ bool ServiceRegistry::UpdateServiceList(UpdateServiceListRequest* update){
         std::shared_ptr<Service> service = GetService(svc->name());
 
         if (service != nullptr){
-            // update service;
+            // Update mutable properties — recovery policy, type, and enabled flag may
+            // change when adsw_manager restarts with a new saved-service-list.yaml.
+            service->SetServiceType(TypeConvert::ToServiceType(svc->service_type()));
+            service->SetRecoveryPolicy(TypeConvert::ToRecoveryPolicy(svc->recovery_policy()));
+            service->SetEnabled(svc->is_enabled());
+            LOG_DEBUG("ServiceRegistry: updated service " << svc->name());
         }else{
             // create new service
             service = std::make_shared<Service>(svc->name(),

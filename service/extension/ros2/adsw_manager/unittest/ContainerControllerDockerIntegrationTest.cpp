@@ -283,7 +283,7 @@ protected:
 
         monitor_ = std::make_unique<TestableHealthMonitor>(controller_.get());
         // 초기 상태: 중지
-        monitor_->SetPrevState(kContainerName, false);
+        monitor_->prev_state_[kContainerName] = false;
     }
 
     void TearDown() override {

@@ -13,7 +13,7 @@ public:
 
     // Only mock virtual methods
     MOCK_METHOD(int, Initialize, (), ());
-    MOCK_METHOD(int, CreateEndPoints, (std::shared_ptr<DDSTransmitter>), ());
+    MOCK_METHOD(int32_t, CreateEndPoints, (std::shared_ptr<DDSTransmitter>, const EndPointHandlers&), ());
     MOCK_METHOD(const char*, GetTopic, (MessageType mtype), ());
 };
 
@@ -27,8 +27,9 @@ int EndPointFactory::Initialize() {
     return Mock_EndPointFactory->Initialize();
 }
 
-int EndPointFactory::CreateEndPoints(std::shared_ptr<DDSTransmitter> transmitter) {
-    return Mock_EndPointFactory->CreateEndPoints(transmitter);
+int32_t EndPointFactory::CreateEndPoints(std::shared_ptr<DDSTransmitter> transmitter,
+                                         const EndPointHandlers& handlers) {
+    return Mock_EndPointFactory->CreateEndPoints(transmitter, handlers);
 }
 const char* EndPointFactory::GetTopic(MessageType mtype) {
     return Mock_EndPointFactory->GetTopic(mtype);

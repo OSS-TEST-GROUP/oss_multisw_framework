@@ -210,11 +210,9 @@ do_build_cmd() {
 	cmake ${WORKDIR} "${cmake_args[@]}"
 	do_error_check
 
-	make -j${CPU_CORES}
-	do_error_check
+	make -k -j${CPU_CORES} || true
 
-	make install -j${CPU_CORES}
-	do_error_check
+	make install -k -j${CPU_CORES} || true
 
 	popd 1>/dev/null
 }

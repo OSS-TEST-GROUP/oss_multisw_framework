@@ -375,7 +375,7 @@ TEST_F(LifecycleManagerTest, Initialize_Success_ReturnsTrue) {
     EXPECT_CALL(*mw_service_manager, Initialize()).WillOnce(Return(true));
     EXPECT_CALL(*dds_transmitter, Initialize()).WillOnce(Return(true));
     EXPECT_CALL(*endpoint_factory, Initialize()).WillOnce(Return(0));
-    EXPECT_CALL(*endpoint_factory, CreateEndPoints(_)).WillOnce(Return(0));
+    EXPECT_CALL(*endpoint_factory, CreateEndPoints(_, _)).WillOnce(Return(0));
     
     // Call Initialize on a fresh LifecycleManager
     TestableLifecycleManager fresh_mgr;
@@ -416,7 +416,7 @@ TEST_F(LifecycleManagerTest, Initialize_CreatesAllComponents) {
     EXPECT_CALL(*mw_service_manager, Initialize()).WillOnce(Return(true));
     EXPECT_CALL(*dds_transmitter, Initialize()).WillOnce(Return(true));
     EXPECT_CALL(*endpoint_factory, Initialize()).WillOnce(Return(0));
-    EXPECT_CALL(*endpoint_factory, CreateEndPoints(_)).WillOnce(Return(0));
+    EXPECT_CALL(*endpoint_factory, CreateEndPoints(_, _)).WillOnce(Return(0));
     
     TestableLifecycleManager fresh_mgr;
     EXPECT_TRUE(fresh_mgr.Initialize());
@@ -449,7 +449,7 @@ TEST_F(LifecycleManagerTest, Initialize_ThenStart_FullLifecycle) {
     EXPECT_CALL(*mw_service_manager, Initialize()).WillOnce(Return(true));
     EXPECT_CALL(*dds_transmitter, Initialize()).WillOnce(Return(true));
     EXPECT_CALL(*endpoint_factory, Initialize()).WillOnce(Return(0));
-    EXPECT_CALL(*endpoint_factory, CreateEndPoints(_)).WillOnce(Return(0));
+    EXPECT_CALL(*endpoint_factory, CreateEndPoints(_, _)).WillOnce(Return(0));
     
     // Create fresh manager and initialize
     TestableLifecycleManager fresh_mgr;
@@ -510,7 +510,7 @@ TEST_F(LifecycleManagerTest, Initialize_MWServiceManagerInitializeFails_StillRet
     EXPECT_CALL(*mw_service_manager, Initialize()).WillOnce(Return(false));
     EXPECT_CALL(*dds_transmitter, Initialize()).WillOnce(Return(true));
     EXPECT_CALL(*endpoint_factory, Initialize()).WillOnce(Return(0));
-    EXPECT_CALL(*endpoint_factory, CreateEndPoints(_)).WillOnce(Return(0));
+    EXPECT_CALL(*endpoint_factory, CreateEndPoints(_, _)).WillOnce(Return(0));
     
     TestableLifecycleManager fresh_mgr;
     // Initialize always returns true in current implementation
@@ -540,7 +540,7 @@ TEST_F(LifecycleManagerTest, Initialize_DDSTransmitterInitializeFails_StillRetur
     EXPECT_CALL(*mw_service_manager, Initialize()).WillOnce(Return(true));
     EXPECT_CALL(*dds_transmitter, Initialize()).WillOnce(Return(false));
     EXPECT_CALL(*endpoint_factory, Initialize()).WillOnce(Return(0));
-    EXPECT_CALL(*endpoint_factory, CreateEndPoints(_)).WillOnce(Return(0));
+    EXPECT_CALL(*endpoint_factory, CreateEndPoints(_, _)).WillOnce(Return(0));
     
     TestableLifecycleManager fresh_mgr;
     EXPECT_TRUE(fresh_mgr.Initialize());
@@ -569,7 +569,7 @@ TEST_F(LifecycleManagerTest, Initialize_EndPointFactoryInitializeFails_StillRetu
     EXPECT_CALL(*mw_service_manager, Initialize()).WillOnce(Return(true));
     EXPECT_CALL(*dds_transmitter, Initialize()).WillOnce(Return(true));
     EXPECT_CALL(*endpoint_factory, Initialize()).WillOnce(Return(-1));
-    EXPECT_CALL(*endpoint_factory, CreateEndPoints(_)).WillOnce(Return(0));
+    EXPECT_CALL(*endpoint_factory, CreateEndPoints(_, _)).WillOnce(Return(0));
     
     TestableLifecycleManager fresh_mgr;
     EXPECT_TRUE(fresh_mgr.Initialize());
@@ -598,7 +598,7 @@ TEST_F(LifecycleManagerTest, Initialize_CreateEndPointsFails_StillReturnsTrue) {
     EXPECT_CALL(*mw_service_manager, Initialize()).WillOnce(Return(true));
     EXPECT_CALL(*dds_transmitter, Initialize()).WillOnce(Return(true));
     EXPECT_CALL(*endpoint_factory, Initialize()).WillOnce(Return(0));
-    EXPECT_CALL(*endpoint_factory, CreateEndPoints(_)).WillOnce(Return(-1));
+    EXPECT_CALL(*endpoint_factory, CreateEndPoints(_, _)).WillOnce(Return(-1));
     
     TestableLifecycleManager fresh_mgr;
     EXPECT_TRUE(fresh_mgr.Initialize());

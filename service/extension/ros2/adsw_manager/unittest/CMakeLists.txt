@@ -176,7 +176,6 @@ add_executable( ADSWConcreteEndpointIntegrationTest ConcreteEndpointIntegrationT
 
 # Control directory tests
 add_executable( ADSWContainerTest ContainerTest.cpp
-                ../service/Container.cpp
 )
 
 add_executable( ADSWContainerControllerTest ContinerControllerTest.cpp

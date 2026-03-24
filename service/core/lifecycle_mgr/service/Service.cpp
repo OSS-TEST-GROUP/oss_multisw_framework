@@ -30,12 +30,24 @@ ServiceType Service::GetServiceType(){
     return service_type_;
 }
 
+void Service::SetServiceType(ServiceType type){
+    service_type_ = type;
+}
+
 RecoveryPolicy Service::GetRecoveryPolicy(){
     return recovery_policy_;
 }
 
+void Service::SetRecoveryPolicy(RecoveryPolicy policy){
+    recovery_policy_ = policy;
+}
+
 bool Service::isEnabled(){
     return is_enabled_;
+}
+
+void Service::SetEnabled(bool enabled){
+    is_enabled_ = enabled;
 }
 
 ServiceMode Service::GetServiceMode(){

@@ -20,8 +20,11 @@ class Service {
 
     std::string GetName();
     ServiceType GetServiceType();
+    void SetServiceType(ServiceType type);
     RecoveryPolicy GetRecoveryPolicy();
+    void SetRecoveryPolicy(RecoveryPolicy policy);
     bool isEnabled();
+    void SetEnabled(bool enabled);
 
     ServiceMode GetServiceMode();
     void SetServiceMode(ServiceMode mode);
