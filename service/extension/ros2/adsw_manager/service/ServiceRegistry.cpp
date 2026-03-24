@@ -297,12 +297,37 @@ bool ServiceRegistry::ProcessGetServiceStateRequest(
   return true;
 }
 
+bool ServiceRegistry::HasRecoveryChanged() const {
+  for (const auto& kv : services_) {
+    const std::string& name = kv.first;
+    RecoveryPolicy current = kv.second->GetRecoveryPolicy();
+    auto it = last_sent_recovery_.find(name);
+    // 처음 전송이거나 값이 달라진 경우
+    if (it == last_sent_recovery_.end() || it->second != current) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void ServiceRegistry::UpdateLastSentRecovery() {
+  for (const auto& kv : services_) {
+    last_sent_recovery_[kv.first] = kv.second->GetRecoveryPolicy();
+  }
+}
+
 bool ServiceRegistry::ProcessUpdateServiceListRequest() {
   LOG_DEBUG("Processing UpdateServiceListRequest");
 
   if (ready_service_list_ == false) {
     LOG_ERROR("Service list not ready  ");
     return false;
+  }
+
+  // recovery 값이 변경된 경우에만 전송 (최초 전송은 항상 실행)
+  if (!HasRecoveryChanged()) {
+    LOG_DEBUG("UpdateServiceListRequest skipped: no recovery policy changes.");
+    return true;
   }
 
   lifecyclemgr::UpdateServiceListRequest message;
@@ -333,6 +358,7 @@ bool ServiceRegistry::ProcessUpdateServiceListRequest() {
     endpoint->Write(&message);
     LOG_DEBUG("UpdateServiceListRequest sent with "
               << message.service_list().size() << " services.");
+    UpdateLastSentRecovery();
     return true;
   }
 
