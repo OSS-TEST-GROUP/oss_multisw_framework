@@ -3,6 +3,7 @@
 #include <set>
 
 #include "ServiceRegistry.hpp"
+#include "logger/Log.hpp"
 #include "include/TypeConvert.hpp"
 #include "manager/LifecycleFactory.hpp"
 #include "state/StateManager.hpp"
