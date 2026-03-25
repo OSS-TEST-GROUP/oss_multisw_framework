@@ -63,7 +63,8 @@ endif()
 # (Optional) Install targets
 # install(TARGETS OtamMain DESTINATION lib) # Example for library installation
 add_executable ( ${PROJECT_NAME} main.cc )
-target_link_libraries(${PROJECT_NAME} PRIVATE 
+target_link_libraries(${PROJECT_NAME} PRIVATE
+    OtamLogger
     OtamMain
     OtamClientService
     OtamServerService

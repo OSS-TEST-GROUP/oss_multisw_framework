@@ -4,6 +4,7 @@
 #include <atomic>
 
 #include "otam_main.h"
+#include "otam_common/otam_logger.h"
 
 static std::atomic<bool> g_shutdown_requested{false};
 
@@ -17,6 +18,7 @@ int main(int argc, char* argv[]) {
     std::signal(SIGINT,  SignalHandler);
     std::signal(SIGTERM, SignalHandler);
 
+    OtamLogger::Init();  // log to OTAM_LOG_FILE or logs/otamanager.log
     OtamMain manager;
 
     try {
@@ -30,5 +32,6 @@ int main(int argc, char* argv[]) {
         std::cerr << "OtaManager: fatal error: " << e.what() << std::endl;
     }
     manager.Stop();
+    OtamLogger::Shutdown();
     return 0;
 }

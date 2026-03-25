@@ -32,6 +32,12 @@ set(OTAM_CLIENT_DDS_IMPL_SRCS
 message(STATUS "Configuring OtamDdsImpl static library.")
 add_library(OtamDdsImpl STATIC ${OTAM_CLIENT_DDS_IMPL_SRCS})
 
+# --- OtamLogger Library ---
+add_library(OtamLogger STATIC otam_logger.cc)
+target_include_directories(OtamLogger PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
 # target_include_directories(OtamDdsImpl PUBLIC
 #     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}> # For otam_client_service.h
 #     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/..> # For header files in otam_common
