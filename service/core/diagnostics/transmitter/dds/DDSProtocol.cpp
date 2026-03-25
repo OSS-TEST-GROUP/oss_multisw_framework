@@ -175,6 +175,11 @@ bool DDSProtocol::PublishMessage(std::shared_ptr<Message> message) {
                     if (idl_iter != parsed_dynamic_type_supports_.end()) {
                         topic_info->remote_type = idl_iter->second->dyn_type;
                         topic_info->type_support = idl_iter->second->type_support;
+                        // Re-register under the ROS2 DDS type name so create_topic() can find it
+                        auto rc = topic_info->type_support->register_type(participant_, ros2_dds_type);
+                        if (rc == RETCODE_OK || rc == RETCODE_PRECONDITION_NOT_MET) {
+                            topic_info->topic_type = ros2_dds_type;
+                        }
                         LOG_INFO("Fixed cached topic info with type_support for ROS topic: " << message->GetName());
                     }
                 } else {
@@ -499,7 +504,15 @@ void DDSProtocol::load_dds_dynamic_idl(const std::string& path) {
         }
         
         parsed_dynamic_type_supports_[type_name] = iter;
-        LOG_DEBUG("Loaded and registered dynamic type: " << type_name);
+        // Also index by simple name (last component after "::") for unqualified lookups
+        auto sep = type_name.rfind("::");
+        if (sep != std::string::npos) {
+            std::string simple_name = type_name.substr(sep + 2);
+            parsed_dynamic_type_supports_[simple_name] = iter;
+            LOG_DEBUG("Loaded and registered dynamic type: " << type_name << " (also as '" << simple_name << "')");
+        } else {
+            LOG_DEBUG("Loaded and registered dynamic type: " << type_name);
+        }
     }
 
     LOG_INFO("loaded " << type_support_list.size() << " dynamic types.");

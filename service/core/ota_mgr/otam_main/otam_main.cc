@@ -1,5 +1,7 @@
+#include <chrono>
 #include <iostream>
 #include <stdexcept> // For std::runtime_error
+#include <thread>
 
 #include "otam_main.h"
 #include "otam_client_service/otam_client_service.h"
@@ -113,9 +115,64 @@ void OtamMain::Start() {
       }
     }
   }
+
+  // Snapshot initial states and launch monitor thread.
+  if (diagnostic_service_) {
+    for (const auto& unit : units_) {
+      last_states_[unit->Name()] = unit->State();
+    }
+    monitor_stop_.store(false);
+    monitor_thread_ = std::thread(&OtamMain::MonitorLoop, this);
+    std::cout << "OtamMain: State monitor thread started." << std::endl;
+  }
+}
+
+void OtamMain::MonitorLoop() {
+  int seconds_since_heartbeat = 0;
+
+  while (!monitor_stop_.load()) {
+    for (int i = 0; i < kPollIntervalSec && !monitor_stop_.load(); ++i) {
+      std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+    if (monitor_stop_.load()) break;
+
+    seconds_since_heartbeat += kPollIntervalSec;
+    bool heartbeat_due = (seconds_since_heartbeat >= kHeartbeatIntervalSec);
+
+    for (const auto& unit : units_) {
+      ServiceState current = unit->State();
+      ServiceState last    = last_states_[unit->Name()];
+      bool changed         = (current != last);
+
+      if (changed || heartbeat_due) {
+        int32_t err_code = (current == ServiceState::ERROR)
+            ? static_cast<int32_t>(OtamError::FAILED)
+            : static_cast<int32_t>(OtamError::SUCCEEDED);
+        std::string msg = unit->Name() + " " + ServiceStateToString(current);
+        if (changed) {
+          msg += " (changed from " + ServiceStateToString(last) + ")";
+        }
+        diagnostic_service_->PublishOtaMgrInfo(err_code, msg);
+        if (changed) {
+          last_states_[unit->Name()] = current;
+        }
+      }
+    }
+
+    if (heartbeat_due) {
+      seconds_since_heartbeat = 0;
+    }
+  }
 }
 
 void OtamMain::Stop() {
+  // Stop monitor thread before tearing down units.
+  if (monitor_thread_.joinable()) {
+    monitor_stop_.store(true);
+    monitor_thread_.join();
+    std::cout << "OtamMain: State monitor thread stopped." << std::endl;
+  }
+
   std::cout << "OtamMain: Stopping all units." << std::endl;
   for (const auto& unit : units_) {
     try {
