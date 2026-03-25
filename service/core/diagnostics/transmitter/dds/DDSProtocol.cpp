@@ -585,7 +585,11 @@ void DDSProtocol::on_data_writer_discovery(DomainParticipant* participant,
         topic_info->topic_type = info.type_name.to_string();
 
         // Get remote type information and use it to retrieve the type object
-        topic_info->remote_type_information = info.type_information.type_information;
+        // Only copy if type_information is assigned; unassigned state has uninitialized internals
+        // that cause std::bad_array_new_length when copied (corrupted vector size/capacity).
+        if (info.type_information.assigned()) {
+            topic_info->remote_type_information = info.type_information.type_information;
+        }
 
         discovered_topic_[topic_info->topic_name] = topic_info;
 
