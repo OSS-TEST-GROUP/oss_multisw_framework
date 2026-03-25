@@ -214,19 +214,35 @@ void OtamDdsImpl<MessageType>::Destroy() {
 
     std::cout << "OtamDdsImpl: Destroy called. Cleaning up DDS entities." << std::endl;
 
-    // Only delete DDS participant and its contained entities
-    // They will be cleaned up automatically by the destructor
+    // Delete contained entities first (DataWriter, DataReader, Publisher,
+    // Subscriber, Topic) before deleting the participant.
+    // delete_participant() returns RETCODE_PRECONDITION_NOT_MET if any
+    // contained entity still exists, leaving the participant alive and
+    // SHM transport files in an inconsistent state (zombie ports on restart).
     if (participant_) {
-        // participant_->delete_contained_entities();
+        eprosima::fastdds::dds::ReturnCode_t ret =
+            participant_->delete_contained_entities();
+        if (ret != eprosima::fastdds::dds::RETCODE_OK) {
+            std::cerr << "OtamDdsImpl: Warning - delete_contained_entities failed: "
+                      << ret << std::endl;
+        }
+        // Null out all raw pointers - they are now invalid
+        writer_    = nullptr;
+        reader_    = nullptr;
+        publisher_ = nullptr;
+        subscriber_ = nullptr;
+        topic_     = nullptr;
+
         auto factory = eprosima::fastdds::dds::DomainParticipantFactory::get_instance();
         if (factory) {
-            eprosima::fastdds::dds::ReturnCode_t ret = factory->delete_participant(participant_);
+            ret = factory->delete_participant(participant_);
             if (ret != eprosima::fastdds::dds::RETCODE_OK) {
-                std::cerr << "Warning: Failed to delete DomainParticipant" << std::endl;
+                std::cerr << "OtamDdsImpl: Warning - delete_participant failed: "
+                          << ret << std::endl;
             }
         }
         participant_ = nullptr;
-        std::cout << "Deleted participant_" << std::endl;
+        std::cout << "OtamDdsImpl: Deleted participant and all contained entities." << std::endl;
     }
 
     // Mark as destroyed to prevent double deletion
@@ -241,12 +257,25 @@ void OtamDdsImpl<MessageType>::Create(const std::string& topic, std::shared_ptr<
 
     std::cout << "TypeSupport!!!!!" << type.get() << std::endl;
 
-    // IMPORTANT: Store the shared_ptr to keep PubSubType alive
-    // The TypeSupport will use the raw pointer but won't manage lifetime
+    // IMPORTANT: Store the shared_ptr to keep PubSubType alive.
+    // type_ptr_ is the single owner of the TopicDataType object.
     type_ptr_ = type;
 
-    // Create TypeSupport from the stored type
-    eprosima::fastdds::dds::TypeSupport type_support = eprosima::fastdds::dds::TypeSupport(static_cast<eprosima::fastdds::dds::TopicDataType*>(type_ptr_.get()));
+    // Construct TypeSupport with a no-op deleter so that when the
+    // DomainParticipant releases its copy (via delete_participant /
+    // delete_contained_entities), it does NOT free the raw pointer.
+    // type_ptr_ is the sole owner and will free the object when it
+    // goes out of scope (preventing the double-free / SIGABRT that
+    // would otherwise occur with two independent ownership chains).
+    //
+    // TypeSupport only exposes TypeSupport(TopicDataType*) which takes
+    // sole ownership.  We work around this by default-constructing and
+    // then resetting the underlying shared_ptr via the base-class reset()
+    // with a no-op deleter.
+    auto* raw_type = static_cast<eprosima::fastdds::dds::TopicDataType*>(type_ptr_.get());
+    eprosima::fastdds::dds::TypeSupport type_support;
+    static_cast<std::shared_ptr<eprosima::fastdds::dds::TopicDataType>&>(type_support)
+        .reset(raw_type, [](eprosima::fastdds::dds::TopicDataType*) {});
 
     // Store listener shared_ptr to keep it alive
     listener_ptr_ = listener;

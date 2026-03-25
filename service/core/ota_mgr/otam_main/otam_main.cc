@@ -55,6 +55,11 @@ OtamMain::OtamMain() {
   actor_service_adapter->GetActorService()->SetOtamClientService(client_service.get());
   actor_service_adapter->GetActorService()->SetOtamVehicleService(vehicle_service.get());
 
+  // Connect diagnostic service to other services for error reporting
+  client_service->SetOtamDiagnosticService(diagnostic_service_.get());
+  vehicle_service->SetOtamDiagnosticService(diagnostic_service_.get());
+  server_service->SetOtamDiagnosticService(diagnostic_service_.get());
+
   units_.push_back(server_service);
   units_.push_back(client_service);
   units_.push_back(vehicle_service);
@@ -68,16 +73,25 @@ OtamMain::~OtamMain() {
 void OtamMain::Initialize() {
   std::cout << "OtamMain: Initializing all units." << std::endl;
 
-  diagnostic_service_->Initialize();
-  diagnostic_service_->Start();
+  // diagnostic_service_ is null when the vector constructor is used (test mode).
+  if (diagnostic_service_) {
+    diagnostic_service_->Initialize();
+    diagnostic_service_->Start();
+  }
 
   for (const auto& unit : units_) {
     try {
       unit->Initialize(); // Creates and initializes all units.
-      std::string err_msg = unit->Name() + " " + ServiceStateToString(unit->State());
-      diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::SUCCEEDED), err_msg);
+      if (diagnostic_service_) {
+        std::string err_msg = unit->Name() + " " + ServiceStateToString(unit->State());
+        diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::SUCCEEDED), err_msg);
+      }
     } catch (const std::exception& e) {
-      std::cerr << "Error during initialize of a unit: " << e.what() << std::endl;
+      std::string err_msg = "Failed to initialize " + unit->Name() + ": " + e.what();
+      std::cerr << "OtamMain: " << err_msg << std::endl;
+      if (diagnostic_service_) {
+        diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), err_msg);
+      }
     }
   }
 }
@@ -87,10 +101,16 @@ void OtamMain::Start() {
   for (const auto& unit : units_) {
     try {
       unit->Start(); // Starts functionality of all units.
-      std::string err_msg = unit->Name() + " " + ServiceStateToString(unit->State());
-      diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::SUCCEEDED), err_msg);
+      if (diagnostic_service_) {
+        std::string err_msg = unit->Name() + " " + ServiceStateToString(unit->State());
+        diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::SUCCEEDED), err_msg);
+      }
     } catch (const std::exception& e) {
-      std::cerr << "Error during start of a unit: " << e.what() << std::endl;
+      std::string err_msg = "Failed to start " + unit->Name() + ": " + e.what();
+      std::cerr << "OtamMain: " << err_msg << std::endl;
+      if (diagnostic_service_) {
+        diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), err_msg);
+      }
     }
   }
 }
@@ -100,12 +120,20 @@ void OtamMain::Stop() {
   for (const auto& unit : units_) {
     try {
       unit->Stop(); // Terminates all units and returns resources.
-      std::string err_msg = unit->Name() + " " + ServiceStateToString(unit->State());
-      diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::SUCCEEDED), err_msg);
+      if (diagnostic_service_) {
+        std::string err_msg = unit->Name() + " " + ServiceStateToString(unit->State());
+        diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::SUCCEEDED), err_msg);
+      }
     } catch (const std::exception& e) {
       // For Stop, just report the error and continue stopping other units.
-      std::cerr << "Error during stop of a unit: " << e.what() << std::endl;
+      std::string err_msg = "Failed to stop " + unit->Name() + ": " + e.what();
+      std::cerr << "OtamMain: " << err_msg << std::endl;
+      if (diagnostic_service_) {
+        diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), err_msg);
+      }
     }
   }
-  diagnostic_service_->Stop();
+  if (diagnostic_service_) {
+    diagnostic_service_->Stop();
+  }
 }

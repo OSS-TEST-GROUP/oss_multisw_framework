@@ -1,4 +1,5 @@
 #include "otam_vehicle_service.h"
+#include "otam_diagnostic_service/otam_diagnostic_service.h"
 
 #include <iostream>
 #include <utility>
@@ -10,6 +11,10 @@ constexpr const char*
     OtamVehicleService::kVehicleInfoResponseTopic;
 
 OtamVehicleService::OtamVehicleService() {}
+
+void OtamVehicleService::SetOtamDiagnosticService(OtamDiagnosticService* svc) {
+  diagnostic_service_ = svc;
+}
 
 void OtamVehicleService::Initialize() {
   if (state_ != ServiceState::UNINITIALIZED) {
@@ -68,15 +73,21 @@ void OtamVehicleService::RequestVehicleInfo(
     int32_t request_id,
     const std::string& name) {
   if (state_ != ServiceState::STARTED) {
-    std::cerr << "Service not initialized. Call Initialize() first"
-              << std::endl;
+    std::string err_msg = "Failed: RequestVehicleInfo called before service is started";
+    std::cerr << "OtamVehicleService: " << err_msg << std::endl;
+    if (diagnostic_service_) {
+      diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), err_msg);
+    }
     return;
   }
 
   auto dds = GetDds(kVissRequestTopic);
   if (!dds) {
-    std::cerr << "DDS not found for topic: "
-              << kVissRequestTopic << std::endl;
+    std::string err_msg = std::string("Failed: DDS not found for topic: ") + kVissRequestTopic;
+    std::cerr << "OtamVehicleService: " << err_msg << std::endl;
+    if (diagnostic_service_) {
+      diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), err_msg);
+    }
     return;
   }
 
@@ -134,8 +145,11 @@ void OtamVehicleService::OnVehicleInfoResponseReceived(
       }
     }
   } else {
-    std::cerr << "Failed to retrieve vehicle info: empty name or value"
-              << std::endl;
+    std::string err_msg = "Failed: VISS response has empty name or value (request_id=" + std::to_string(request_id) + ")";
+    std::cerr << "OtamVehicleService: " << err_msg << std::endl;
+    if (diagnostic_service_) {
+      diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), err_msg);
+    }
   }
 }
 
@@ -209,9 +223,17 @@ void OtamVehicleService::ResponseListener::on_data_available(eprosima::fastdds::
                     service_->OnVehicleInfoResponseReceived(id, path, value);
 
                 } catch (const nlohmann::json::parse_error& e) {
-                    std::cerr << "ResponseListener: JSON parse error: " << e.what() << std::endl;
+                    std::string err_msg = "ResponseListener: JSON parse error: " + std::string(e.what());
+                    std::cerr << err_msg << std::endl;
+                    if (service_->diagnostic_service_) {
+                        service_->diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), err_msg);
+                    }
                 } catch (const std::exception& e) {
-                    std::cerr << "ResponseListener: Error processing response: " << e.what() << std::endl;
+                    std::string err_msg = "ResponseListener: Error processing response: " + std::string(e.what());
+                    std::cerr << err_msg << std::endl;
+                    if (service_->diagnostic_service_) {
+                        service_->diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), err_msg);
+                    }
                 }
             } else {
                 std::cout << "ResponseListener: Received invalid data sample" << std::endl;
@@ -221,6 +243,10 @@ void OtamVehicleService::ResponseListener::on_data_available(eprosima::fastdds::
         }
     }
     catch (const std::exception& e) {
-        std::cerr << "ResponseListener: Exception in data callback: " << e.what() << std::endl;
+        std::string err_msg = "ResponseListener: Exception in data callback: " + std::string(e.what());
+        std::cerr << err_msg << std::endl;
+        if (service_->diagnostic_service_) {
+            service_->diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), err_msg);
+        }
     }
 }

@@ -1,6 +1,7 @@
 #include "otam_server_service.h"
 #include "otam_server_api_client_impl.h"
 #include "otam_app_settings.h"
+#include "otam_diagnostic_service/otam_diagnostic_service.h"
 
 #include <curl/curl.h>
 #include <nlohmann/json.hpp>
@@ -9,6 +10,10 @@
 #include <cstdlib>
 
 using json = nlohmann::json;
+
+void OtamServerService::SetOtamDiagnosticService(OtamDiagnosticService* svc) {
+    diagnostic_service_ = svc;
+}
 
 // ===== Lifecycle =====
 void OtamServerService::Initialize() {
@@ -48,12 +53,20 @@ void OtamServerService::Start() {
         // Create OTA session (ArgoCD token)
         SessionResult session_result = CreateOtaSession();
         if (session_result.ret_code != ReturnValue::SUCCESS) {
-            std::cout << "[OtamServerService] Failed to create OTA session.\n";
+            std::string err_msg = "Failed: OtamServerService could not create OTA session (ArgoCD auth failed)";
+            std::cout << "[OtamServerService] " << err_msg << "\n";
+            if (diagnostic_service_) {
+                diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), err_msg);
+            }
             state_ = ServiceState::UNINITIALIZED;
             return;
         }
     } catch (const std::exception& e) {
-        std::cout << "[OtamServerService] Start failed: " << e.what() << "\n";
+        std::string err_msg = "Failed: OtamServerService Start exception: " + std::string(e.what());
+        std::cout << "[OtamServerService] " << err_msg << "\n";
+        if (diagnostic_service_) {
+            diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), err_msg);
+        }
         state_ = ServiceState::UNINITIALIZED;
     }
 }
@@ -376,7 +389,11 @@ OtamServerConfig OtamServerService::LoadConfigFromFile(const std::string& path) 
             if (s.contains("password"))  cfg.password  = s["password"].get<std::string>();
         }
     } catch (const std::exception& e) {
-        std::cout << "[OtamServerService] Failed to parse config: " << e.what() << "\n";
+        std::string err_msg = "Failed: OtamServerService config parse error: " + std::string(e.what());
+        std::cout << "[OtamServerService] " << err_msg << "\n";
+        if (diagnostic_service_) {
+            diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), err_msg);
+        }
     }
 
     return cfg;

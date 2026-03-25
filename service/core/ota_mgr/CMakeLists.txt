@@ -50,7 +50,7 @@ add_subdirectory(otam_actor_service)
 # option(BUILD_UNITTEST "Build the unit tests" ON) # Default to ON for development
 
 if(BUILD_UNITTEST)
-#    add_subdirectory(unittest)
+    add_subdirectory(unittest)
 endif()
 
 # Add test application directory for integration testing

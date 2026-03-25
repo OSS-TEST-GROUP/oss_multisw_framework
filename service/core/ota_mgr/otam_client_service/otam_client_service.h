@@ -9,6 +9,8 @@
   #include <vector>
   #include <functional>
 
+class OtamDiagnosticService;
+
   /**
    * @file otam_client_service.h
    * @brief OTA Manager Client Service implementation
@@ -102,6 +104,12 @@
        * @note This should be called after successful service initialization
        */
       void NotifyManagerReady();
+
+      /**
+       * @brief Sets the diagnostic service for error reporting
+       * @param svc Pointer to OtamDiagnosticService
+       */
+      void SetOtamDiagnosticService(OtamDiagnosticService* svc);
 
       /**
        * @brief Handles incoming client registration messages
@@ -262,6 +270,9 @@
       /** @brief Flag indicating if an OTA session is currently active */
       bool is_session_active_;
 
+      /** @brief Pointer to diagnostic service for error reporting */
+      OtamDiagnosticService* diagnostic_service_{nullptr};
+
       /** @brief List of currently registered applications */
       std::map<int32_t, OtaClientInfo> ota_client_info_list_;
 
@@ -288,7 +299,7 @@
        * 
        * @param error_message Description of the error that occurred
        */
-      void ReportErrorToDiagnosticService(const std::string& error_message) {}
+      void ReportErrorToDiagnosticService(int32_t err_code, const std::string& error_message);
   };
 
   #endif // OTAM_CLIENT_SERVICE_H_
