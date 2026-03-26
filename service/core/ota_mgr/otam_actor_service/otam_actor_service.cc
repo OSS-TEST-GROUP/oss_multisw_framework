@@ -126,8 +126,11 @@ void OtamActorService::Initialize() {
     std::cout << "OtamActorService: All DDS topics initialized"
               << std::endl;
   } catch (const std::exception& e) {
-    std::cerr << "OtamActorService: Initialization failed: "
-              << e.what() << std::endl;
+    std::string err_msg = "OtamActorService: Initialization failed: " + std::string(e.what());
+    std::cerr << err_msg << std::endl;
+    if (otam_diagnostic_service_) {
+      otam_diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), err_msg);
+    }
     throw;
   }
   state_ = ServiceState::INITIALIZED;
@@ -348,8 +351,11 @@ void OtamActorService::SendSetServiceModeRequest(int32_t request_id) {
 
   auto it = dds_registry_.find(kTopicSetServiceModeRequest);
   if (it == dds_registry_.end()) {
-    std::cerr << "OtamActorService: DDS not found for topic: "
-              << kTopicSetServiceModeRequest << std::endl;
+    std::string err_msg = std::string("Failed: DDS not found for topic: ") + kTopicSetServiceModeRequest;
+    std::cerr << "OtamActorService: " << err_msg << std::endl;
+    if (otam_diagnostic_service_) {
+      otam_diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), err_msg);
+    }
     return;
   }
 
@@ -644,8 +650,11 @@ void OtamActorService::PublishAppUpdateSettingsResponse(
     ReturnValue code) {
   auto it = dds_registry_.find(kTopicGetAppUpdateSettingsResponse);
   if (it == dds_registry_.end()) {
-    std::cerr << "OtamActorService: DDS not found for topic: "
-              << kTopicGetAppUpdateSettingsResponse << std::endl;
+    std::string err_msg = std::string("Failed: DDS not found for topic: ") + kTopicGetAppUpdateSettingsResponse;
+    std::cerr << "OtamActorService: " << err_msg << std::endl;
+    if (otam_diagnostic_service_) {
+      otam_diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), err_msg);
+    }
     return;
   }
 
@@ -667,8 +676,11 @@ void OtamActorService::PublishSetAppUpdateSettingsResponse(
   auto it = dds_registry_.find(
       kTopicSetAppUpdateSettingsResponse);
   if (it == dds_registry_.end()) {
-    std::cerr << "OtamActorService: DDS not found for topic: "
-              << kTopicSetAppUpdateSettingsResponse << std::endl;
+    std::string err_msg = std::string("Failed: DDS not found for topic: ") + kTopicSetAppUpdateSettingsResponse;
+    std::cerr << "OtamActorService: " << err_msg << std::endl;
+    if (otam_diagnostic_service_) {
+      otam_diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), err_msg);
+    }
     return;
   }
 
@@ -690,8 +702,11 @@ void OtamActorService::PublishAppUpdateStateResponse(
     ReturnValue code) {
   auto it = dds_registry_.find(kTopicGetAppUpdateStateResponse);
   if (it == dds_registry_.end()) {
-    std::cerr << "OtamActorService: DDS not found for topic: "
-              << kTopicGetAppUpdateStateResponse << std::endl;
+    std::string err_msg = std::string("Failed: DDS not found for topic: ") + kTopicGetAppUpdateStateResponse;
+    std::cerr << "OtamActorService: " << err_msg << std::endl;
+    if (otam_diagnostic_service_) {
+      otam_diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), err_msg);
+    }
     return;
   }
 
@@ -713,8 +728,11 @@ void OtamActorService::PublishSetAppUpdateResponse(
     ReturnValue code) {
   auto it = dds_registry_.find(kTopicSetAppUpdateResponse);
   if (it == dds_registry_.end()) {
-    std::cerr << "OtamActorService: DDS not found for topic: "
-              << kTopicSetAppUpdateResponse << std::endl;
+    std::string err_msg = std::string("Failed: DDS not found for topic: ") + kTopicSetAppUpdateResponse;
+    std::cerr << "OtamActorService: " << err_msg << std::endl;
+    if (otam_diagnostic_service_) {
+      otam_diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), err_msg);
+    }
     return;
   }
 
@@ -752,8 +770,11 @@ void OtamActorService::PublishSetAppUpdateResponse(
                 operation_state = state_json["operationState"].get<std::string>();
               }
             } catch (const nlohmann::json::exception& e) {
-              std::cerr << "OtamActorService: Failed to parse operationState: "
-                        << e.what() << std::endl;
+              std::string err_msg = "Failed to parse operationState in background thread: " + std::string(e.what());
+              std::cerr << "OtamActorService: " << err_msg << std::endl;
+              if (otam_diagnostic_service_) {
+                otam_diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), err_msg);
+              }
             }
           }
 
@@ -782,8 +803,11 @@ void OtamActorService::PublishSetAppUpdateResponse(
           }
         }
       } catch (const std::exception& e) {
-        std::cerr << "OtamActorService: Background notification failed: "
-                  << e.what() << std::endl;
+        std::string err_msg = "Background notification failed: " + std::string(e.what());
+        std::cerr << "OtamActorService: " << err_msg << std::endl;
+        if (otam_diagnostic_service_) {
+          otam_diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), err_msg);
+        }
       }
     }).detach();
   }
@@ -808,7 +832,11 @@ void OtamActorService::GetAppUpdateSettingsListener::on_data_available(eprosima:
         }
     }
     catch (const std::exception& e) {
-        std::cerr << "GetAppUpdateSettingsListener: Exception in data callback: " << e.what() << std::endl;
+        std::string err_msg = "GetAppUpdateSettingsListener: Exception in data callback: " + std::string(e.what());
+        std::cerr << err_msg << std::endl;
+        if (service_->otam_diagnostic_service_) {
+            service_->otam_diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), err_msg);
+        }
     }
 }
 
@@ -831,7 +859,11 @@ void OtamActorService::SetAppUpdateSettingsListener::on_data_available(eprosima:
         }
     }
     catch (const std::exception& e) {
-        std::cerr << "SetAppUpdateSettingsListener: Exception in data callback: " << e.what() << std::endl;
+        std::string err_msg = "SetAppUpdateSettingsListener: Exception in data callback: " + std::string(e.what());
+        std::cerr << err_msg << std::endl;
+        if (service_->otam_diagnostic_service_) {
+            service_->otam_diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), err_msg);
+        }
     }
 }
 
@@ -854,7 +886,11 @@ void OtamActorService::GetAppUpdateStateListener::on_data_available(eprosima::fa
         }
     }
     catch (const std::exception& e) {
-        std::cerr << "GetAppUpdateStateListener: Exception in data callback: " << e.what() << std::endl;
+        std::string err_msg = "GetAppUpdateStateListener: Exception in data callback: " + std::string(e.what());
+        std::cerr << err_msg << std::endl;
+        if (service_->otam_diagnostic_service_) {
+            service_->otam_diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), err_msg);
+        }
     }
 }
 
@@ -877,7 +913,11 @@ void OtamActorService::SetAppUpdateListener::on_data_available(eprosima::fastdds
         }
     }
     catch (const std::exception& e) {
-        std::cerr << "SetAppUpdateListener: Exception in data callback: " << e.what() << std::endl;
+        std::string err_msg = "SetAppUpdateListener: Exception in data callback: " + std::string(e.what());
+        std::cerr << err_msg << std::endl;
+        if (service_->otam_diagnostic_service_) {
+            service_->otam_diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), err_msg);
+        }
     }
 }
 
@@ -900,6 +940,10 @@ void OtamActorService::SetServiceModeResponseListener::on_data_available(eprosim
         }
     }
     catch (const std::exception& e) {
-        std::cerr << "SetServiceModeResponseListener: Exception in data callback: " << e.what() << std::endl;
+        std::string err_msg = "SetServiceModeResponseListener: Exception in data callback: " + std::string(e.what());
+        std::cerr << err_msg << std::endl;
+        if (service_->otam_diagnostic_service_) {
+            service_->otam_diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), err_msg);
+        }
     }
 }

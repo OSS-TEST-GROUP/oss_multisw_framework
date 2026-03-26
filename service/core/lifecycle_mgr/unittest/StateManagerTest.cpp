@@ -280,15 +280,14 @@ TEST_F(StateManagerTest, SetServiceMode_MultipleServices) {
 
 TEST_F(StateManagerTest, ProcessServiceHandling_NoAction) {
 
-    auto mock_policy_ptr = std::make_shared<MockPolicyManager>();
     auto mock_service = std::make_shared<MockService>();
     Mock_Service = mock_service.get();
     ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("TestService"));
 
     std::set<std::shared_ptr<lifecycle_manager::Service>> services = {mock_service};
 
-    EXPECT_CALL(*Mock_ManagerBase, GetPolicy()).WillRepeatedly(Return(mock_policy_ptr));
-    EXPECT_CALL(*mock_policy_ptr, Evaluate(_)).WillOnce(Return(lifecycle_manager::ServiceControlAction::NONE));
+    // PolicyManager::Evaluate() is non-virtual — calls forward through Mock_PolicyManager global
+    EXPECT_CALL(*Mock_PolicyManager, Evaluate(_)).WillOnce(Return(lifecycle_manager::ServiceControlAction::NONE));
 
     ins->ProcessServiceHandling(services);
 }
@@ -303,7 +302,6 @@ TEST_F(StateManagerTest, ProcessServiceHandling_EmptyServiceList) {
 TEST_F(StateManagerTest, ProcessServiceHandling_NullTransmitter) {
     StateManager* state_mgr = new StateManager(*Mock_LifecycleManager);
 
-    auto mock_policy_ptr = std::make_shared<MockPolicyManager>();
     auto mock_service = std::make_shared<MockService>();
     Mock_Service = mock_service.get();
     ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("TestService"));
@@ -311,12 +309,12 @@ TEST_F(StateManagerTest, ProcessServiceHandling_NullTransmitter) {
 
     std::set<std::shared_ptr<lifecycle_manager::Service>> services = {mock_service};
 
-    EXPECT_CALL(*Mock_ManagerBase, GetPolicy()).WillRepeatedly(Return(mock_policy_ptr));
-    EXPECT_CALL(*mock_policy_ptr, Evaluate(_)).WillOnce(Return(lifecycle_manager::ServiceControlAction::START));
+    // PolicyManager::Evaluate() is non-virtual — calls forward through Mock_PolicyManager global
+    EXPECT_CALL(*Mock_PolicyManager, Evaluate(_)).WillOnce(Return(lifecycle_manager::ServiceControlAction::START));
     EXPECT_CALL(*Mock_ManagerBase, GetTransmitter()).WillOnce(Return(nullptr));
 
     EXPECT_NO_THROW(state_mgr->ProcessServiceHandling(services));
-    
+
     delete state_mgr;
 }
 
@@ -578,11 +576,7 @@ TEST_F(StateManagerTest, OnStop_FailedReturnCode) {
 
 // Test multiple sequential StartService calls
 TEST_F(StateManagerTest, StartService_MultipleCalls) {
-    auto mock_service2 = std::make_shared<MockService>();
-    
-    ON_CALL(*mock_service2, GetName()).WillByDefault(Return("SecondService"));
-    ON_CALL(*mock_service2, GetOsType()).WillByDefault(Return(lifecycle_manager::OsType::ROS2));
-
+    // Service::GetName()/GetOsType() are non-virtual — both calls route through Mock_Service global
     // First call
     EXPECT_CALL(*mock_service, GetName()).WillOnce(Return("FirstService"));
     EXPECT_CALL(*mock_service, GetOsType()).WillOnce(Return(lifecycle_manager::OsType::ROS2));
@@ -591,20 +585,16 @@ TEST_F(StateManagerTest, StartService_MultipleCalls) {
     EXPECT_TRUE(ins->StartService(mock_service));
 
     // Second call - should clear and repopulate service_list
-    EXPECT_CALL(*mock_service2, GetName()).WillOnce(Return("SecondService"));
-    EXPECT_CALL(*mock_service2, GetOsType()).WillOnce(Return(lifecycle_manager::OsType::ROS2));
+    EXPECT_CALL(*mock_service, GetName()).WillOnce(Return("SecondService"));
+    EXPECT_CALL(*mock_service, GetOsType()).WillOnce(Return(lifecycle_manager::OsType::ROS2));
     EXPECT_CALL(*Mock_ManagerBase, GetTransmitter()).WillOnce(Return(mock_transmitter));
     EXPECT_CALL(*mock_transmitter, SendMessage(_, _)).WillOnce(Return(true));
-    EXPECT_TRUE(ins->StartService(mock_service2));
+    EXPECT_TRUE(ins->StartService(mock_service));
 }
 
 // Test multiple sequential StopService calls
 TEST_F(StateManagerTest, StopService_MultipleCalls) {
-    auto mock_service2 = std::make_shared<MockService>();
-    
-    ON_CALL(*mock_service2, GetName()).WillByDefault(Return("SecondService"));
-    ON_CALL(*mock_service2, GetOsType()).WillByDefault(Return(lifecycle_manager::OsType::ROS2));
-
+    // Service::GetName()/GetOsType() are non-virtual — both calls route through Mock_Service global
     // First call
     EXPECT_CALL(*mock_service, GetName()).WillOnce(Return("FirstService"));
     EXPECT_CALL(*mock_service, GetOsType()).WillOnce(Return(lifecycle_manager::OsType::ROS2));
@@ -613,11 +603,11 @@ TEST_F(StateManagerTest, StopService_MultipleCalls) {
     ins->StopService(mock_service);
 
     // Second call - should clear and repopulate service_list
-    EXPECT_CALL(*mock_service2, GetName()).WillOnce(Return("SecondService"));
-    EXPECT_CALL(*mock_service2, GetOsType()).WillOnce(Return(lifecycle_manager::OsType::ROS2));
+    EXPECT_CALL(*mock_service, GetName()).WillOnce(Return("SecondService"));
+    EXPECT_CALL(*mock_service, GetOsType()).WillOnce(Return(lifecycle_manager::OsType::ROS2));
     EXPECT_CALL(*Mock_ManagerBase, GetTransmitter()).WillOnce(Return(mock_transmitter));
     EXPECT_CALL(*mock_transmitter, SendMessage(_, _)).WillOnce(Return(true));
-    ins->StopService(mock_service2);
+    ins->StopService(mock_service);
 }
 
 int main(int argc, char** argv) {

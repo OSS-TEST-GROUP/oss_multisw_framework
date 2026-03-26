@@ -1,15 +1,12 @@
 #include "SetServiceModeEndPoint.hpp"
 
 #include "lifecycle/SetServiceModeRequest.hpp"
-
-#include "manager/LifecycleFactory.hpp"
-#include "state/StateManager.hpp"
 #include "logger/Log.hpp"
 
 namespace lifecycle_manager {
     
-SetServiceModeEndPoint::SetServiceModeEndPoint(MessageType msgtype, std::string topic) 
-    : DDSMessageEndPoint(topic){
+SetServiceModeEndPoint::SetServiceModeEndPoint(MessageType msgtype, std::string topic, Callback cb) 
+    : DDSMessageEndPoint(topic), on_data_cb_(std::move(cb)){
     
     if (msgtype == MessageType::SET_SERVICE_MODE_REQUST){
         SetTypeSupport(std::make_shared<TypeSupport>(new SetServiceModeRequestPubSubType()));
@@ -31,10 +28,8 @@ void SetServiceModeEndPoint::OnDataAvailable(){
 
         SetServiceModeRequest* message = reinterpret_cast<SetServiceModeRequest*>(&data_);
 
-        std::shared_ptr<StateManager> manager = LifecycleFactory::GetInstance()->GetStateMgr();
-
-        if (manager != nullptr){
-            manager->SetServiceMode(message);            
+        if (on_data_cb_) {
+            on_data_cb_(message);
         }
     }
 

@@ -36,9 +36,7 @@ bool MWServiceManager::Initialize(){
 
     std::string config_path = getEnv("MMF_CONFIG_PATH").value_or("config");
     config_path.append("/config_middleware.yaml");
-    LoadMWConfig(config_path);
-
-    return false;
+    return LoadMWConfig(config_path);
 }
 
 bool MWServiceManager::Start(){
@@ -66,6 +64,15 @@ bool MWServiceManager::LoadMWConfig(std::string path){
         // Failed to open or parse the YAML file
         LOG_ERROR("LoadConfig path " << path << ", error = " << e.msg);
         return false;
+    }
+
+    // Parse lifecycle_mgr_config
+    if (root["lifecycle_mgr_config"]) {
+        YAML::Node lcConfig = root["lifecycle_mgr_config"];
+        if (lcConfig["k3s_mode"]) {
+            k3s_mode_ = lcConfig["k3s_mode"].as<bool>();
+        }
+        LOG_DEBUG("LoadConfig k3s_mode = " << k3s_mode_);
     }
 
     // Parse diagnostic policies
@@ -193,6 +200,10 @@ pid_t MWServiceManager::run_process(const std::string exename, const std::string
     }
     // In parent process
     return pid;
+}
+
+bool MWServiceManager::IsK3sMode() const {
+    return k3s_mode_;
 }
 
 bool MWServiceManager::kill_process(pid_t pid) {

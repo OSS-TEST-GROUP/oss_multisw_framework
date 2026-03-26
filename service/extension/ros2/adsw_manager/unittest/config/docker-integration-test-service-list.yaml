@@ -1,0 +1,30 @@
+# adsw_manager 컨테이너 통합 테스트용 서비스 목록
+version: 0.1
+specs:
+  - containers:
+      # ── Docker run 타입 테스트 컨테이너 ─────────────────────────────────────
+      - name: adsw-test-docker
+        image: "adsw-test-app:latest"
+        container-type: "docker"
+        services:
+          - package: "adsw_sample_service"
+            name: "adsw_sample_service"
+            launchfile: ""
+            type: "NORMAL"
+            recovery: "ALWAYS"
+            enabled: "true"
+            max: "0"
+
+      # ── Docker Compose 타입 테스트 컨테이너 ──────────────────────────────────
+      - name: adsw-test-compose
+        image: "adsw-test-app:latest"
+        container-type: "docker-compose"
+        deploy-filepath: "docker-compose.test.yaml"
+        services:
+          - package: "adsw_sample_service"
+            name: "adsw_compose_service"
+            launchfile: ""
+            type: "NORMAL"
+            recovery: "ALWAYS"
+            enabled: "true"
+            max: "0"

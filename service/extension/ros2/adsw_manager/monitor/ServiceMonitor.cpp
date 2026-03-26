@@ -155,6 +155,34 @@ int32_t ServiceMonitor::NodeCount(std::string service){
 }
 
 
+void ServiceMonitor::OnContainerStateChanged(const std::string& container_name,
+                                             bool is_running,
+                                             int32_t exit_code) {
+    LOG_DEBUG("ServiceMonitor::OnContainerStateChanged container=" << container_name
+              << " running=" << (is_running ? "true" : "false")
+              << " exit_code=" << exit_code);
+
+    std::shared_ptr<ServiceRegistry> registry = ADSWManager::Get()->GetServiceRegistry();
+    if (!registry) return;
+
+    std::vector<std::shared_ptr<Service>> services = registry->GetServicesByGroup(container_name);
+    if (services.empty()) {
+        LOG_DEBUG("ServiceMonitor::OnContainerStateChanged no services in group: " << container_name);
+        return;
+    }
+
+    ServiceState new_state = is_running ? ServiceState::INITIALIZING : ServiceState::NOT_RUNNING;
+
+    for (auto& svc : services) {
+        svc->SetServiceState(new_state);
+        svc->SetExitCode(exit_code);
+        LOG_DEBUG("ServiceMonitor::OnContainerStateChanged service=" << svc->GetName()
+                  << " -> state=" << static_cast<int>(new_state));
+    }
+
+    NotifyServiceState();
+}
+
 void ServiceMonitor::UpdateServiceState(){
     LOG_DEBUG("ServiceMonitor::UpdateServiceState start ");
     

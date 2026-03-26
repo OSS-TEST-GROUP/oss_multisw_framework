@@ -297,12 +297,37 @@ bool ServiceRegistry::ProcessGetServiceStateRequest(
   return true;
 }
 
+bool ServiceRegistry::HasRecoveryChanged() const {
+  for (const auto& kv : services_) {
+    const std::string& name = kv.first;
+    RecoveryPolicy current = kv.second->GetRecoveryPolicy();
+    auto it = last_sent_recovery_.find(name);
+    // 처음 전송이거나 값이 달라진 경우
+    if (it == last_sent_recovery_.end() || it->second != current) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void ServiceRegistry::UpdateLastSentRecovery() {
+  for (const auto& kv : services_) {
+    last_sent_recovery_[kv.first] = kv.second->GetRecoveryPolicy();
+  }
+}
+
 bool ServiceRegistry::ProcessUpdateServiceListRequest() {
   LOG_DEBUG("Processing UpdateServiceListRequest");
 
   if (ready_service_list_ == false) {
     LOG_ERROR("Service list not ready  ");
     return false;
+  }
+
+  // recovery 값이 변경된 경우에만 전송 (최초 전송은 항상 실행)
+  if (!HasRecoveryChanged()) {
+    LOG_DEBUG("UpdateServiceListRequest skipped: no recovery policy changes.");
+    return true;
   }
 
   lifecyclemgr::UpdateServiceListRequest message;
@@ -333,6 +358,7 @@ bool ServiceRegistry::ProcessUpdateServiceListRequest() {
     endpoint->Write(&message);
     LOG_DEBUG("UpdateServiceListRequest sent with "
               << message.service_list().size() << " services.");
+    UpdateLastSentRecovery();
     return true;
   }
 
@@ -438,26 +464,35 @@ bool ServiceRegistry::LoadServiceSaved(const std::string &path) {
         std::string deployFilePath =
             containerData["deploy-filepath"].as<std::string>("");
         std::string namespace_ = containerData["namespace"].as<std::string>("");
+        std::string containerTypeStr =
+            containerData["container-type"].as<std::string>("docker");
 
         if (namespace_.empty()) {
-          namespace_ = "default"; // Default namespace if not specified
+          namespace_ = "default";
           LOG_DEBUG("Using default namespace: " << namespace_);
         } else {
           LOG_DEBUG("Using specified namespace: " << namespace_);
         }
 
-        if (!groupname.empty() && !image.empty() && !deployFilePath.empty()) {
-          LOG_DEBUG("Container required fields valid ");
-          // create new container object
-          std::shared_ptr<Container> container = std::make_shared<Container>(
-              groupname, image, deployFilePath, namespace_);
-          // Add container to the registry or manage it as needed
-          LOG_DEBUG("Container created: "
-                    << groupname << " with image: " << image
-                    << " and deploy file: " << deployFilePath);
+        ContainerType containerType = ContainerType::DOCKER;
+        if (containerTypeStr == "k3s") {
+          containerType = ContainerType::K3S;
+        } else if (containerTypeStr == "docker-compose") {
+          containerType = ContainerType::DOCKER_COMPOSE;
+        } else {
+          containerType = ContainerType::DOCKER;
+        }
 
-          container_controller_->AddContainer(
-              container); // Ensure the container is registered
+        if (!groupname.empty() && !image.empty()) {
+          LOG_DEBUG("Container required fields valid");
+          std::shared_ptr<Container> container = std::make_shared<Container>(
+              groupname, image, deployFilePath, namespace_, containerType);
+          LOG_DEBUG("Container created: " << groupname
+                    << " image: " << image
+                    << " type: " << containerTypeStr
+                    << " deploy-filepath: " << deployFilePath);
+
+          container_controller_->AddContainer(container);
         }
 
         auto servicesNode = containerData["services"];

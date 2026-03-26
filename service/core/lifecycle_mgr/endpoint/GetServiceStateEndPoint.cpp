@@ -1,15 +1,13 @@
 #include "GetServiceStateEndPoint.hpp"
 
 #include "lifecycle/GetServiceStateRequest.hpp"
-#include "manager/LifecycleFactory.hpp"
-#include "state/StateMonitor.hpp"
 #include "logger/Log.hpp"
 
 namespace lifecycle_manager {
 
 
-GetServiceStateEndPoint::GetServiceStateEndPoint(MessageType msgtype, std::string topic) 
-    : DDSMessageEndPoint(topic){
+GetServiceStateEndPoint::GetServiceStateEndPoint(MessageType msgtype, std::string topic, Callback cb) 
+    : DDSMessageEndPoint(topic), on_data_cb_(std::move(cb)){
 
     if (msgtype == MessageType::GET_SERVICE_STATE_REQUEST){
         SetTypeSupport(std::make_shared<TypeSupport>(new GetServiceStateRequestPubSubType()));
@@ -29,10 +27,8 @@ void GetServiceStateEndPoint::OnDataAvailable(){
 
         GetServiceStateResponse* response = reinterpret_cast<GetServiceStateResponse*>(&resp_);
 
-        std::shared_ptr<StateMonitor> manager = LifecycleFactory::GetInstance()->GetMonitor();
-
-        if (manager != nullptr){
-            manager->UpdateServicesState(response);            
+        if (on_data_cb_) {
+            on_data_cb_(response);
         }
     }
 }

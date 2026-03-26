@@ -109,7 +109,47 @@ TEST_F(ContainerTest, PodNameMatchesContainerName_TC011) {
     EXPECT_EQ(c1.GetPodName(), c1.GetName());
 }
 
-TEST_F(ContainerTest, MultipleContainers_TC012) {
+// ─── ContainerType 테스트 (TC013~) ──────────────────────────────────────────
+
+TEST_F(ContainerTest, DefaultContainerType_IsDocker_TC013) {
+    // 5번째 인자 생략 시 기본값 DOCKER
+    Container c("c1", "img", "file", "ns");
+    EXPECT_EQ(c.GetContainerType(), ContainerType::DOCKER);
+}
+
+TEST_F(ContainerTest, SetContainerType_DockerCompose_TC014) {
+    Container c("c1", "img", "docker-compose.yaml", "ns", ContainerType::DOCKER_COMPOSE);
+    EXPECT_EQ(c.GetContainerType(), ContainerType::DOCKER_COMPOSE);
+}
+
+TEST_F(ContainerTest, SetContainerType_K3S_TC015) {
+    Container c("c1", "img", "pod.yaml", "default", ContainerType::K3S);
+    EXPECT_EQ(c.GetContainerType(), ContainerType::K3S);
+}
+
+TEST_F(ContainerTest, SetContainerType_Unknown_TC016) {
+    Container c("c1", "img", "", "", ContainerType::UNKNOWN);
+    EXPECT_EQ(c.GetContainerType(), ContainerType::UNKNOWN);
+}
+
+TEST_F(ContainerTest, SetContainerType_Mutate_TC017) {
+    Container c("c1", "img", "", "", ContainerType::DOCKER);
+    EXPECT_EQ(c.GetContainerType(), ContainerType::DOCKER);
+
+    c.SetContainerType(ContainerType::K3S);
+    EXPECT_EQ(c.GetContainerType(), ContainerType::K3S);
+
+    c.SetContainerType(ContainerType::DOCKER_COMPOSE);
+    EXPECT_EQ(c.GetContainerType(), ContainerType::DOCKER_COMPOSE);
+}
+
+TEST_F(ContainerTest, AllContainerTypes_Distinct_TC018) {
+    EXPECT_NE(ContainerType::UNKNOWN, ContainerType::DOCKER);
+    EXPECT_NE(ContainerType::DOCKER, ContainerType::DOCKER_COMPOSE);
+    EXPECT_NE(ContainerType::DOCKER_COMPOSE, ContainerType::K3S);
+}
+
+TEST_F(ContainerTest, MultipleContainers_TC019) {
     Container c1("container1", "img1", "file1", "ns1");
     Container c2("container2", "img2", "file2", "ns2");
     Container c3("container3", "img3", "file3", "ns3");

@@ -17,8 +17,13 @@ public:
     MOCK_METHOD(void, Finalize, (), ());
     MOCK_METHOD(bool, StartContainer, (const std::string& container_name), ());
     MOCK_METHOD(bool, StopContainer, (const std::string& container_name), ());
+    MOCK_METHOD(bool, RestartContainer, (const std::string& container_name), ());
     MOCK_METHOD(bool, GetContainerStatus, (const std::string& container_name), ());
     MOCK_METHOD(bool, GetContainerLogs, (const std::string& container_name), ());
+    MOCK_METHOD(std::string, GetContainerStatusStr, (const std::string& container_name), ());
+    MOCK_METHOD(int32_t, GetContainerExitCode, (const std::string& container_name), ());
+    MOCK_METHOD(bool, IsContainerRunning, (const std::string& container_name), ());
+    MOCK_METHOD(std::vector<std::shared_ptr<Container>>, GetAllContainers, (), ());
     MOCK_METHOD(std::string, BaseCommand, (const std::string& container_name), ());
     MOCK_METHOD(std::string, BaseRos2Command, (const std::string& container_name), ());
     MOCK_METHOD(bool, ContainerSupported, (), ());
@@ -47,12 +52,32 @@ bool ContainerController::StopContainer(const std::string& container_name) {
     return Mock_ContainerController->StopContainer(container_name);
 }
 
+bool ContainerController::RestartContainer(const std::string& container_name) {
+    return Mock_ContainerController->RestartContainer(container_name);
+}
+
 bool ContainerController::GetContainerStatus(const std::string& container_name) {
     return Mock_ContainerController->GetContainerStatus(container_name);
 }
 
 bool ContainerController::GetContainerLogs(const std::string& container_name) {
     return Mock_ContainerController->GetContainerLogs(container_name);
+}
+
+std::string ContainerController::GetContainerStatusStr(const std::string& container_name) {
+    return Mock_ContainerController->GetContainerStatusStr(container_name);
+}
+
+int32_t ContainerController::GetContainerExitCode(const std::string& container_name) {
+    return Mock_ContainerController->GetContainerExitCode(container_name);
+}
+
+bool ContainerController::IsContainerRunning(const std::string& container_name) {
+    return Mock_ContainerController->IsContainerRunning(container_name);
+}
+
+std::vector<std::shared_ptr<Container>> ContainerController::GetAllContainers() {
+    return Mock_ContainerController->GetAllContainers();
 }
 
 std::string ContainerController::BaseCommand(const std::string& container_name) {

@@ -4,6 +4,7 @@
 #include <string>
 #include <set>
 #include <memory>
+#include <functional>
 
 #include "transmitter/DDSMessageEndPoint.hpp"
 
@@ -15,7 +16,9 @@ using namespace lifecyclemgr;
 
 class StopServiceEndPoint : public DDSMessageEndPoint {
   public:
-    StopServiceEndPoint(MessageType msgtype, std::string topic);
+    using Callback = std::function<void(StopServiceResponse*)>;
+
+    StopServiceEndPoint(MessageType msgtype, std::string topic, Callback cb = nullptr);
     virtual ~StopServiceEndPoint();
 
     virtual void  OnDataAvailable() override;
@@ -25,6 +28,7 @@ class StopServiceEndPoint : public DDSMessageEndPoint {
   private:
     StopServiceRequest req_;
     StopServiceResponse resp_;
+    Callback on_data_cb_;
 
 };
 

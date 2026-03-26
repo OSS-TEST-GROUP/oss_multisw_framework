@@ -32,6 +32,11 @@ class ServiceMonitor {
 
     void UpdateServiceState();
 
+    // Called by ContainerHealthMonitor when a container's running state changes.
+    void OnContainerStateChanged(const std::string& container_name,
+                                 bool is_running,
+                                 int32_t exit_code);
+
   private:
     std::shared_ptr<ROSServiceDiscovery> ros_service_discovery_;
     std::map<std::string, std::vector<std::string>> ros_service_node_list_;

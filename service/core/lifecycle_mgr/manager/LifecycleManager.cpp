@@ -29,13 +29,36 @@ bool LifecycleManager::Initialize() {
 
     mw_service_manager_ = std::make_shared<MWServiceManager>();
     mw_service_manager_->Initialize();
+    is_k3s_mode_ = mw_service_manager_->IsK3sMode();
+    LOG_DEBUG("LifecycleManager::Initialize k3s_mode = " << is_k3s_mode_);
 
     msg_transmitter_ = std::make_shared<DDSTransmitter>();
     msg_transmitter_->Initialize();
 
     endpoint_factory_ = new EndPointFactory();
     endpoint_factory_->Initialize();
-    endpoint_factory_->CreateEndPoints(msg_transmitter_);
+
+    EndPointHandlers handlers;
+    handlers.on_start = [this](lifecyclemgr::StartServiceResponse* msg) {
+        if (state_manager_) state_manager_->OnStart(msg);
+    };
+    handlers.on_stop = [this](lifecyclemgr::StopServiceResponse* msg) {
+        if (state_manager_) state_manager_->OnStop(msg);
+    };
+    handlers.on_set_mode = [this](lifecyclemgr::SetServiceModeRequest* msg) {
+        if (state_manager_) state_manager_->SetServiceMode(msg);
+    };
+    handlers.on_get_state_resp = [this](lifecyclemgr::GetServiceStateResponse* msg) {
+        if (state_monitor_) state_monitor_->UpdateServicesState(msg);
+    };
+    handlers.on_notify_state = [this](lifecyclemgr::NotifyServiceState* msg) {
+        if (state_monitor_) state_monitor_->UpdateServicesState(msg);
+    };
+    handlers.on_update_list = [this](lifecyclemgr::UpdateServiceListRequest* msg) {
+        if (service_registry_) service_registry_->UpdateServiceList(msg);
+    };
+
+    endpoint_factory_->CreateEndPoints(msg_transmitter_, handlers);
 
     return true;
 }

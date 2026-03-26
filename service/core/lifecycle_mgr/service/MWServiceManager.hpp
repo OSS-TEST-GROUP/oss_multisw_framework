@@ -27,12 +27,15 @@ class MWServiceManager {
 
     void RunMWServiceManagement();
 
+    bool IsK3sMode() const;
+
   private :
     pid_t run_process(const std::string exename, const std::string exepath, const std::vector<std::string>& args);
     bool kill_process(pid_t pid);
 
   private:
-     std::map<std::string, std::shared_ptr<MWService>> mw_services_;
+    std::map<std::string, std::shared_ptr<MWService>> mw_services_;
+    bool k3s_mode_{false};
 };
 
 } // namespace lifecycle_manager

@@ -4,11 +4,14 @@
 namespace ros2 {
 namespace adsw_manager {
 
-Container::Container(const std::string& name, const std::string& image, const std::string& deploy_file, const std::string& namespace_)
+Container::Container(const std::string& name, const std::string& image,
+                     const std::string& deploy_file, const std::string& namespace_,
+                     ContainerType type)
     : name_(name),
       image_(image),
       deploy_file_(deploy_file),
-      namespace_(namespace_)
+      namespace_(namespace_),
+      container_type_(type)
 {
 }
 
@@ -27,8 +30,15 @@ std::string Container::GetNamespace() const {
     return namespace_;
 }
 std::string Container::GetPodName() const {
-    // Example pod name generation logic
-    return name_; // This can be customized as needed
+    return name_;
+}
+
+ContainerType Container::GetContainerType() const {
+    return container_type_;
+}
+
+void Container::SetContainerType(ContainerType type) {
+    container_type_ = type;
 }
 
 } // namespace adsw_manager

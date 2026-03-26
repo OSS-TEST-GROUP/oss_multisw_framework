@@ -10,6 +10,7 @@
 #include "otam_server_result_types.h"
 
 class OtamServerApiClientImpl;
+class OtamDiagnosticService;
 
 struct OtamServerConfig {
     std::string config_path;
@@ -29,6 +30,7 @@ public:
     void Stop() override;
 
     void SetConfigPath(std::string path);
+    void SetOtamDiagnosticService(OtamDiagnosticService* svc);
 
     // === ArgoCD Token 생성 ===
     SessionResult CreateOtaSession(); // now calls ArgoCD API
@@ -48,6 +50,7 @@ private:
     std::unique_ptr<OtamServerApiClient>           api_client_;
     std::string                          config_path_{"config/otam_config.json"};
     OtamServerConfig                     config_;
+    OtamDiagnosticService*               diagnostic_service_{nullptr};
 };
 
 #endif //OTAM_SERVER_SERVICE_H_

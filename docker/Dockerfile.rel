@@ -1,4 +1,3 @@
-
 ###################################################################################
 # Runtime
 ###################################################################################
@@ -45,11 +44,41 @@ ENV FASTDDS_DEFAULT_PROFILES_FILE=/oss/fastdds-profile.xml
 ENV FASTDDS_LOG_LEVEL=Error
 
 ###################################################################################
-# Aarch64
+# Core - x86_64
 ###################################################################################
-# Core
+FROM runtime AS runtime-mmf-core-x86_64
+
+ARG BUILD_TYPE=Release
+
+COPY --chown=ossuser:ossuser output/x86_64/${BUILD_TYPE}/core/bin /oss/bin
+COPY --chown=ossuser:ossuser output/x86_64/lib /oss/lib
+COPY --chown=ossuser:ossuser output/x86_64/${BUILD_TYPE}/core/lib /tmp/lib
+
+# Generate unique machin_id
+RUN if [ ! -s /etc/machine-id ]; then \
+    echo "$(cat /proc/sys/kernel/random/uuid | tr -d '-')" > /etc/machine-id; \
+    fi
+
+WORKDIR /oss
+USER ossuser
+
+RUN cp -rpa /tmp/lib/*.so* /oss/lib/ \
+    && rm -rf /tmp/lib
+
+RUN sed -e "s#./#/oss/bin/#g" -i /oss/bin/config/config_middleware.yaml
+
+ENV LD_LIBRARY_PATH=/oss/lib
+ENV MMF_CONFIG_PATH=/oss/bin/config
+ENV DIAG_CONFIG_PATH=/oss/bin/config
+ENV VEHICLE_CONFIG_PATH=/oss/bin/config
+ENV DIAG_IDL_PATH=/oss/bin/idl
+
+ENTRYPOINT ["/oss/bin/lifecycle_mgr"]
+
 ###################################################################################
-FROM runtime AS runtime-mmf-core
+# Core - aarch64
+###################################################################################
+FROM runtime AS runtime-mmf-core-aarch64
 
 ARG BUILD_TYPE=Release
 
@@ -79,11 +108,66 @@ ENV DIAG_IDL_PATH=/oss/bin/idl
 ENTRYPOINT ["/oss/bin/lifecycle_mgr"]
 
 ###################################################################################
-# Extension - ROS2
+# Core - Multi-arch selector
 ###################################################################################
-FROM runtime AS runtime-mmf-ext-ros2
+FROM runtime-mmf-core-${TARGETARCH} AS runtime-mmf-core
+
+###################################################################################
+# Extension ROS2 - x86_64
+###################################################################################
+FROM runtime AS runtime-mmf-ext-ros2-x86_64
 
 ARG BUILD_TYPE=Release
+
+# Install ROS2 Humble and rosbridge-server
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    gnupg2 \
+    lsb-release \
+    && curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/ros2.list > /dev/null \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+    ros-humble-rosbridge-server \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --chown=ossuser:ossuser docker/entrypoint/ros2_entrypoint.sh /oss/entrypoint.sh
+COPY --chown=ossuser:ossuser output/x86_64/${BUILD_TYPE}/extension/ros2/bin /oss/bin
+COPY --chown=ossuser:ossuser output/x86_64/lib /oss/lib
+
+# Generate unique machin_id
+RUN if [ ! -s /etc/machine-id ]; then \
+    echo "$(cat /proc/sys/kernel/random/uuid | tr -d '-')" > /etc/machine-id; \
+    fi
+
+RUN chmod +x /oss/entrypoint.sh
+
+WORKDIR /oss
+USER ossuser
+
+ENV LD_LIBRARY_PATH=/oss/lib
+ENV SAVED_REGISTRY_BACKUP=/oss/bin/config
+
+ENTRYPOINT ["/oss/entrypoint.sh"]
+
+###################################################################################
+# Extension ROS2 - aarch64
+###################################################################################
+FROM runtime AS runtime-mmf-ext-ros2-aarch64
+
+ARG BUILD_TYPE=Release
+
+# Install ROS2 Humble and rosbridge-server
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    gnupg2 \
+    lsb-release \
+    && curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/ros2.list > /dev/null \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+    ros-humble-rosbridge-server \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY --chown=ossuser:ossuser docker/entrypoint/ros2_entrypoint.sh /oss/entrypoint.sh
 COPY --chown=ossuser:ossuser output/aarch64/${BUILD_TYPE}/extension/ros2/bin /oss/bin
@@ -105,9 +189,39 @@ ENV SAVED_REGISTRY_BACKUP=/oss/bin/config
 ENTRYPOINT ["/oss/entrypoint.sh"]
 
 ###################################################################################
-# Extension - AGL
+# Extension ROS2 - Multi-arch selector
 ###################################################################################
-FROM runtime AS runtime-mmf-ext-agl
+FROM runtime-mmf-ext-ros2-${TARGETARCH} AS runtime-mmf-ext-ros2
+
+###################################################################################
+# Extension AGL - x86_64
+###################################################################################
+FROM runtime AS runtime-mmf-ext-agl-x86_64
+
+ARG BUILD_TYPE=Release
+
+COPY --chown=ossuser:ossuser docker/entrypoint/agl_entrypoint.sh /oss/entrypoint.sh
+COPY --chown=ossuser:ossuser output/x86_64/${BUILD_TYPE}/extension/agl/bin /oss/bin
+COPY --chown=ossuser:ossuser output/x86_64/lib /oss/lib
+
+# Generate unique machin_id
+RUN if [ ! -s /etc/machine-id ]; then \
+    echo "$(cat /proc/sys/kernel/random/uuid | tr -d '-')" > /etc/machine-id; \
+    fi
+
+RUN chmod +x /oss/entrypoint.sh
+
+WORKDIR /oss
+USER ossuser
+
+ENV LD_LIBRARY_PATH=/oss/lib
+
+ENTRYPOINT ["/oss/entrypoint.sh"]
+
+###################################################################################
+# Extension AGL - aarch64
+###################################################################################
+FROM runtime AS runtime-mmf-ext-agl-aarch64
 
 ARG BUILD_TYPE=Release
 
@@ -128,3 +242,8 @@ USER ossuser
 ENV LD_LIBRARY_PATH=/oss/lib
 
 ENTRYPOINT ["/oss/entrypoint.sh"]
+
+###################################################################################
+# Extension AGL - Multi-arch selector
+###################################################################################
+FROM runtime-mmf-ext-agl-${TARGETARCH} AS runtime-mmf-ext-agl

@@ -32,6 +32,7 @@ namespace adsw_manager {
         MOCK_METHOD(const char*, GetTopic, (ros2::adsw_manager::MessageType topic), ());
         MOCK_METHOD(void, SetState, (ros2::adsw_manager::AdswState state), ());
         MOCK_METHOD(ros2::adsw_manager::AdswState, GetState, (), ());
+        MOCK_METHOD(void, ConfirmUpdateServiceList, (), ());
 
         // Note: Get() is not mocked - it directly returns shared_instance_.get()
     

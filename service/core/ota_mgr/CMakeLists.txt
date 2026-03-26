@@ -50,7 +50,7 @@ add_subdirectory(otam_actor_service)
 # option(BUILD_UNITTEST "Build the unit tests" ON) # Default to ON for development
 
 if(BUILD_UNITTEST)
-#    add_subdirectory(unittest)
+    add_subdirectory(unittest)
 endif()
 
 # Add test application directory for integration testing
@@ -63,7 +63,8 @@ endif()
 # (Optional) Install targets
 # install(TARGETS OtamMain DESTINATION lib) # Example for library installation
 add_executable ( ${PROJECT_NAME} main.cc )
-target_link_libraries(${PROJECT_NAME} PRIVATE 
+target_link_libraries(${PROJECT_NAME} PRIVATE
+    OtamLogger
     OtamMain
     OtamClientService
     OtamServerService

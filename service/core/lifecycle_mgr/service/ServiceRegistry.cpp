@@ -3,6 +3,7 @@
 #include <set>
 
 #include "ServiceRegistry.hpp"
+#include "logger/Log.hpp"
 #include "include/TypeConvert.hpp"
 #include "manager/LifecycleFactory.hpp"
 #include "state/StateManager.hpp"
@@ -18,20 +19,38 @@ bool ServiceRegistry::UpdateServiceList(UpdateServiceListRequest* update){
     std::vector<lifecyclemgr::Service> *slist = &update->service_list();
     std::set<std::shared_ptr<Service>> service_set;
 
-    std::string group = newGroup();
-
-    AddGroup(group);
+    // Reuse the existing group if any service in the list is already registered.
+    // Allocating a new group on every call would cause unbounded group growth
+    // and StateMonitor would send redundant GetServiceState requests for empty
+    // groups (DESIGN-1 fix).
+    std::string group;
+    for (auto svc = slist->begin(); svc != slist->end(); ++svc) {
+        std::shared_ptr<Service> existing = GetService(svc->name());
+        if (existing) {
+            group = GetGroupNameByService(existing);
+            if (!group.empty()) break;
+        }
+    }
+    if (group.empty()) {
+        group = newGroup();
+        AddGroup(group);
+    }
 
     for( auto svc = slist->begin(); svc != slist->end(); ++svc ){
         std::shared_ptr<Service> service = GetService(svc->name());
 
         if (service != nullptr){
-            // update service;
+            // Update mutable properties — recovery policy, type, and enabled flag may
+            // change when adsw_manager restarts with a new saved-service-list.yaml.
+            service->SetServiceType(TypeConvert::ToServiceType(svc->service_type()));
+            service->SetRecoveryPolicy(TypeConvert::ToRecoveryPolicy(svc->recovery_policy()));
+            service->SetEnabled(svc->is_enabled());
+            LOG_DEBUG("ServiceRegistry: updated service " << svc->name());
         }else{
             // create new service
-            service = std::make_shared<Service>(svc->name(), 
-                                                TypeConvert::ToServiceType(svc->service_type()), 
-                                                TypeConvert::ToRecoveryPolicy(svc->recovery_policy()), 
+            service = std::make_shared<Service>(svc->name(),
+                                                TypeConvert::ToServiceType(svc->service_type()),
+                                                TypeConvert::ToRecoveryPolicy(svc->recovery_policy()),
                                                 svc->is_enabled(),
                                                 TypeConvert::ToOsType(svc->os_type()));
             // New Service Add to Registry

@@ -7,7 +7,6 @@
 #include "include/TypeConvert.hpp"
 #include "logger/Log.hpp"
 
-#include "manager/LifecycleFactory.hpp"
 
 namespace lifecycle_manager {
 
@@ -95,12 +94,13 @@ void StateMonitor::NotifyLifecycleDiagnosticInfo(bool all){
 
     diag_report_.service_list().clear();
     diag_report_.is_started() = true;
-    diag_report_.total_services_num() = GetRegistry()->GetServiceNum();
 
     if (transmitter != nullptr)
     {
+        std::shared_ptr<ServiceRegistry> registry = GetRegistry();
+        diag_report_.total_services_num() = registry ? registry->GetServiceNum() : 0;
+
         if (all == true){
-            std::shared_ptr<ServiceRegistry> registry = GetRegistry();
 
             if (registry){
                 std::vector<std::shared_ptr<Service>> list = registry->GetServicesByGroup("");
@@ -168,23 +168,16 @@ void StateMonitor::RunThread()
 
     while(!stop_thread_)
 	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(10000));
+		std::this_thread::sleep_for(std::chrono::milliseconds(kPollIntervalMs));
 
         RequestGetState();
 
-        // Test Code Start :: Stop Service
-
         loop_count_++;
 
-        if (loop_count_ > 2){
+        if (loop_count_ >= kDiagReportInterval){
             NotifyLifecycleDiagnosticInfo(true);
-            // Test for stop request
-            std::shared_ptr<LifecycleManager> manager  = LifecycleFactory::GetInstance()->GetManager();
-
             loop_count_ = 0;
-            manager->SetState(ManagerState::MANAGER_RUNNING);
         }
-        // Test Code End :: Stop Service
 	}
 }
 
@@ -232,8 +225,9 @@ void StateMonitor::updateServices(std::vector<std::string>* slist, std::vector<l
     }
 
     std::set<std::shared_ptr<Service>> service_list;
+    size_t count = std::min(slist->size(), statelist->size());
 
-    for (size_t idx=0; idx < slist->size(); ++idx){
+    for (size_t idx=0; idx < count; ++idx){
             
         std::string sname = slist->at(idx);
         lifecyclemgr::ServiceState state = statelist->at(idx);

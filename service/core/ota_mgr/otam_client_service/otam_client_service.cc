@@ -1,4 +1,5 @@
   #include "otam_client_service.h"
+  #include "otam_diagnostic_service/otam_diagnostic_service.h"
   #include <iostream>
 
   /**
@@ -9,6 +10,17 @@
   OtamClientService::OtamClientService()
       : is_session_active_(false) {
       // Constructor: Initialize service state
+  }
+
+  void OtamClientService::SetOtamDiagnosticService(OtamDiagnosticService* svc) {
+      diagnostic_service_ = svc;
+  }
+
+  void OtamClientService::ReportErrorToDiagnosticService(int32_t err_code, const std::string& error_message) {
+      std::cerr << "OtamClientService: " << error_message << std::endl;
+      if (diagnostic_service_) {
+          diagnostic_service_->PublishOtaMgrInfo(err_code, error_message);
+      }
   }
 
   OtamClientService::~OtamClientService() {
@@ -186,7 +198,7 @@
       }
       catch (const std::exception& e) {
           std::string error_msg = "Failed to publish manager ready notification: " + std::string(e.what());
-          ReportErrorToDiagnosticService(error_msg);
+          ReportErrorToDiagnosticService(static_cast<int32_t>(OtamError::FAILED), error_msg);
           throw std::runtime_error("DDS Exception during NotifyManagerReady: " + error_msg);
       }
   }
@@ -207,6 +219,10 @@
 
           // Send registration response back to the client
           ReturnValue ret_code = (client_id >= 0) ? ReturnValue::SUCCESS : ReturnValue::FAIL;
+          if (client_id < 0) {
+              ReportErrorToDiagnosticService(static_cast<int32_t>(OtamError::FAILED),
+                  "Failed: Client ID allocation exhausted for client '" + registration_data.client_name() + "'");
+          }
           PublishRegistrationResponse(client_id, ret_code);
 
           std::cout << "OtamClientService: Client registration processed. Result: "
@@ -214,7 +230,7 @@
       }
       catch (const std::exception& e) {
           std::string error_msg = "Error processing client registration: " + std::string(e.what());
-          ReportErrorToDiagnosticService(error_msg);
+          ReportErrorToDiagnosticService(static_cast<int32_t>(OtamError::FAILED), error_msg);
 
           // Send failure response
           try {
@@ -246,7 +262,7 @@
       }
       catch (const std::exception& e) {
           std::string error_msg = "Failed to publish registration response: " + std::string(e.what());
-          std::cerr << "OtamClientService: " << error_msg << std::endl;
+          ReportErrorToDiagnosticService(static_cast<int32_t>(OtamError::FAILED), error_msg);
           throw std::runtime_error(error_msg);
       }
   }
@@ -265,7 +281,8 @@
             status_message->app_name(app_name);
             status_message->status(status);
           } else {
-              std::cerr << "OtamClientService: No client has the app = " << app_name <<  std::endl;
+              ReportErrorToDiagnosticService(static_cast<int32_t>(OtamError::FAILED),
+                  "Failed: No registered client found for app '" + app_name + "'");
           }
 
           // Publish the status using app_status_dds_
@@ -280,7 +297,7 @@
       }
       catch (const std::exception& e) {
           std::string error_msg = "Failed to notify app update status: " + std::string(e.what());
-          std::cerr << "OtamClientService: " << error_msg << std::endl;
+          ReportErrorToDiagnosticService(static_cast<int32_t>(OtamError::FAILED), error_msg);
           throw std::runtime_error(error_msg);
       }
   }
@@ -304,6 +321,7 @@
           }
       }
       catch (const std::exception& e) {
-          std::cerr << "RegistrationListener: Exception in data callback: " << e.what() << std::endl;
+          service_->ReportErrorToDiagnosticService(static_cast<int32_t>(OtamError::FAILED),
+              "RegistrationListener: Exception in data callback: " + std::string(e.what()));
       }
   }

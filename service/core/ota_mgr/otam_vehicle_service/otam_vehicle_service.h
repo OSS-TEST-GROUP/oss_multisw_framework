@@ -5,6 +5,8 @@
 #include "otam_common/otam_dds_impl.h"
 #include "otam_common/otam_dds_idl.h"
 
+class OtamDiagnosticService;
+
 #include <map>
 #include <memory>
 #include <string>
@@ -25,6 +27,8 @@ class OtamVehicleService : public OtamService {
 
   // Initialize the vehicle service and DDS entities
   void Initialize();
+
+  void SetOtamDiagnosticService(OtamDiagnosticService* svc);
   void Start() override;
   void Stop() override;
 
@@ -89,6 +93,8 @@ class OtamVehicleService : public OtamService {
 
   // Registered callbacks for vehicle info responses
   std::vector<VehicleInfoCallback> callbacks_;
+
+  OtamDiagnosticService* diagnostic_service_{nullptr};
 };
 
 #endif  // OTAM_VEHICLE_SERVICE_H_

@@ -104,6 +104,7 @@ class TypeConvert {
             case lifecyclemgr::OsType::AGL : return OsType::AGL;
             case lifecyclemgr::OsType::AUTOSAR : return OsType::AUTOSAR;
         }
+        return OsType::ROS2;
     }
     static lifecyclemgr::OsType ToOsType(OsType os){
         switch (os) {
@@ -111,6 +112,7 @@ class TypeConvert {
             case OsType::AGL : return lifecyclemgr::OsType::AGL;
             case OsType::AUTOSAR : return lifecyclemgr::OsType::AUTOSAR;
         }
+        return lifecyclemgr::OsType::ROS2;
     }
 
     

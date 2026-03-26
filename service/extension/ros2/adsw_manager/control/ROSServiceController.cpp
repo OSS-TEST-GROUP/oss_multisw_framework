@@ -14,6 +14,7 @@
 #include <cstdlib>
 #include <functional>
 #include <fstream>
+#include <set>
 
 namespace ros2 {
 namespace adsw_manager {
@@ -158,7 +159,7 @@ bool ROSServiceController::StartService(std::shared_ptr<Service> service){
         LOG_DEBUG("Using container/ROS2 orchestration execution");
         std::string basecommand = GetContainer()->BaseRos2Command("");
         if (launchFile.empty()){
-            command = basecommand + "bash -c \" ros2 run " + service->GetPackage() + " " + service->GetPackage() + " 2>&1 & \"";
+            command = basecommand + "bash -c \" ros2 run " + service->GetPackage() + " " + service->GetName() + " 2>&1 & \"";
         }else{
             command = basecommand + "bash -c \" ros2 launch " + service->GetPackage() + " " + service->GetLaunchFile() + " 2>&1 & \"";
         }
@@ -435,6 +436,32 @@ bool ROSServiceController::ProcessServiceStartRequest(lifecyclemgr::StartService
         else{
             int32_t count = 0;
             LOG_DEBUG("Starting services: " << (is_group ? "Group" : "Individual") << " - " << service_list.size() << " services.");
+
+            // 컨테이너가 실행 중이 아닐 때만 시작한다.
+            // 서비스 상태에 의한 컨테이너 재시작은 하지 않는다.
+            if (container_controller_) {
+                std::shared_ptr<ServiceRegistry> registry = ADSWManager::Get()->GetServiceRegistry();
+                std::set<std::string> started_containers;
+                for (const auto& svc_name : service_list) {
+                    if (!registry) break;
+                    std::shared_ptr<Service> svc = registry->GetService(svc_name);
+                    if (!svc) continue;
+                    std::string container_name = registry->GetGroupNameByService(svc);
+                    if (container_name.empty()) continue;
+                    if (started_containers.count(container_name)) continue;
+
+                    if (!container_controller_->IsContainerRunning(container_name)) {
+                        LOG_DEBUG("ROSServiceController: container " << container_name
+                                  << " not running, starting it for service " << svc_name);
+                        container_controller_->StartContainer(container_name);
+                    } else {
+                        LOG_DEBUG("ROSServiceController: container " << container_name
+                                  << " already running, starting service only: " << svc_name);
+                    }
+                    started_containers.insert(container_name);
+                }
+            }
+
             if (is_group) {
                 for (const auto& service : service_list) {
                     if (StartGroup(service) == true) {

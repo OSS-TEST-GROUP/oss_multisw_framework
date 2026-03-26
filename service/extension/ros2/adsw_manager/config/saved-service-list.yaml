@@ -1,56 +1,96 @@
 version: 0.1
 specs:
   - containers:
+      # ── Docker Compose 예시 (Autoware) ───────────────────────────────────
       # - name: autoware
-      #   image: "your-docker-registry/autoware:latest"  # Use your Autoware build with all required components
-      #   deploy-filepath: "partition_ros2_test.yaml"  # container apply pod file
+      #   image: "autoware-universe:latest"
+      #   container-type: "docker-compose"           # k3s | docker | docker-compose
+      #   deploy-filepath: "docker-compose.autoware.yaml"
       #   services:
-      #     - package: "<YOUR_VEHICLE_SENSOR_LAUNCH_PKG>"
+      #     - package: "autoware_launch"
       #       name: "sensing"
       #       launchfile: "sensing.launch.xml"
       #       type: "NORMAL"
       #       recovery: "MANUAL"
       #       enabled: "true"
       #       max: "0"
-      #     - package: "<YOUR_VEHICLE_INTERFACE_LAUNCH_PKG>"
-      #       name: "vehicle_interface"
-      #       launchfile: "vehicle_interface.launch.xml"
-      #       type: "NORMAL"
-      #       recovery: "MANUAL"
-      #       enabled: "true"
-      #       max: "0"
       #     - package: "autoware_launch"
-      #       name: "map_launch"
-      #       launchfile: "map.launch.xml"
+      #       name: "localization"
+      #       launchfile: "localization.launch.xml"
       #       type: "NORMAL"
       #       recovery: "MANUAL"
       #       enabled: "true"
       #       max: "0"
-      - name : oss-mmf-ext-ros2
-        image: "oss-mmf-ext-ros2:latest"  # Your own sample_app image
-        deploy-filepath: "oss-mmf-ext-ros2-speclist.yaml"  # container apply
+
+      # ── Docker run 예시 ───────────────────────────────────────────────────
+      # - name: my_ros2_app
+      #   image: "my_ros2_app:latest"
+      #   container-type: "docker"                   # deploy-filepath 불필요
+      #   services:
+      #     - package: "my_package"
+      #       name: "my_service"
+      #       launchfile: "my.launch.xml"
+      #       type: "NORMAL"
+      #       recovery: "ALWAYS"
+      #       enabled: "true"
+      #       max: "0"
+
+      # ── k3s (kubectl) 예시 ───────────────────────────────────────────────
+      # - name: autoware
+      #   image: "autoware-universe:latest"
+      #   container-type: "k3s"
+      #   deploy-filepath: "autoware-pod.yaml"
+      #   namespace: "autoware"
+      #   services:
+      #     - package: "autoware_launch"
+      #       name: "autoware"
+      #       launchfile: "autoware.launch.xml"
+      #       type: "NORMAL"
+      #       recovery: "MANUAL"
+      #       enabled: "true"
+      #       max: "0"
+
+      # ── oss-mmf-ext-ros2 (실제 배포용, docker-compose + speclist 파일 필요) ──
+      # - name: oss-mmf-ext-ros2
+      #   image: "oss-mmf-ext-ros2:latest"
+      #   container-type: "docker-compose"
+      #   deploy-filepath: "oss-mmf-ext-ros2-speclist.yaml"
+      #   services:
+      #     - package: "ota_client"
+      #       name: "ota_client"
+      #       launchfile: ""
+      #       type: "NORMAL"
+      #       recovery: "ALWAYS"
+      #       enabled: "true"
+      #       max: "0"
+      #     - package: "security_client"
+      #       name: "security_client"
+      #       launchfile: ""
+      #       type: "NORMAL"
+      #       recovery: "ALWAYS"
+      #       enabled: "true"
+      #       max: "0"
+      #     - package: "extension_communication"
+      #       name: "extension_communication"
+      #       launchfile: ""
+      #       type: "NORMAL"
+      #       recovery: "ALWAYS"
+      #       enabled: "true"
+      #       max: "0"
+
+      # ── 로컬 테스트용 샘플 컨테이너 (adsw-test-app:latest 이미지 필요) ──
+      # 이미지 빌드: docker build -t adsw-test-app:latest unittest/docker/
+      - name: adsw-test-docker
+        image: "adsw-test-app:latest"
+        container-type: "docker"
         services:
-          - package: "ota_client"
-            name: "ota_client"
+          - package: "test_pkg"
+            name: "test_service"
             launchfile: ""
             type: "NORMAL"
             recovery: "ALWAYS"
-            enabled: "false"
+            enabled: "true"
             max: "0"
-          # - package: "security_client"
-          #   name: "security_client"
-          #   launchfile: ""
-          #   type: "NORMAL"
-          #   recovery: "ALWAYS"
-          #   enabled: "true"
-          #   max: "0"
-          # - package: "extension_communication"
-          #   name: "extension_communication"
-          #   launchfile: ""
-          #   type: "NORMAL"
-          #   recovery: "ALWAYS"
-          #   enabled: "true"
-          #   max: "0"
 
 
 

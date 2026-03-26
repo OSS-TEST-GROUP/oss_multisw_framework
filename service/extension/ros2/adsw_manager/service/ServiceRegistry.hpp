@@ -54,12 +54,19 @@ public:
   bool LoadServiceSaved(const std::string &path);
 
 private:
+  // recovery 값 변경 여부 확인: 마지막으로 lifecycle_mgr에 전송한 값과 비교
+  bool HasRecoveryChanged() const;
+  void UpdateLastSentRecovery();
+
   std::unordered_map<std::string, std::shared_ptr<Service>> services_;
   std::unordered_map<std::string, std::set<std::shared_ptr<Service>>> group_;
 
   lifecyclemgr::GetServiceStateResponse get_service_response_;
   bool ready_service_list_;
   std::string yaml_path_;
+
+  // 마지막으로 lifecycle_mgr에 전송한 recovery policy 값
+  std::unordered_map<std::string, RecoveryPolicy> last_sent_recovery_;
 };
 
 } // namespace adsw_manager

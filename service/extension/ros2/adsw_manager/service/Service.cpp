@@ -13,7 +13,8 @@ Service::Service(const std::string& name, ServiceType service_type, RecoveryPoli
       launch_file_(""),
       max_nodes_(0),
       current_nodes_(0),
-      pid_(0)
+      pid_(0),
+      exit_code_(-1)
 {
     
 }
@@ -90,6 +91,14 @@ void Service::SetPID(uint64_t pid){
 
 uint64_t Service::GetPID(){
     return pid_;
+}
+
+void Service::SetExitCode(int32_t code) {
+    exit_code_ = code;
+}
+
+int32_t Service::GetExitCode() {
+    return exit_code_;
 }
 
 } // namespace adsw_manager

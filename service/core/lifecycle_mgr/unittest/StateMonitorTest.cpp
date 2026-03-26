@@ -128,11 +128,13 @@ TEST_F(StateMonitorTest, getServiceStateFillsEntry) {
     MockLifecycleManager mgr;
     StateMonitor monitor(mgr);
 
-    auto service = std::make_shared<MockService>("svc", 
+    auto service = std::make_shared<MockService>("svc",
         lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ALWAYS, true, lifecycle_manager::OsType::ROS2);
-    
-    // This test just verifies mock service can be created with proper values
-    // The actual getServiceState is a private method
+
+    // MockService methods are GMock mocks; wire up expected return values explicitly
+    ON_CALL(*service, GetName()).WillByDefault(Return("svc"));
+    ON_CALL(*service, GetServiceType()).WillByDefault(Return(lifecycle_manager::ServiceType::NORMAL));
+
     EXPECT_EQ(service->GetName(), "svc");
     EXPECT_EQ(service->GetServiceType(), lifecycle_manager::ServiceType::NORMAL);
 }
@@ -830,14 +832,15 @@ TEST_F(StateMonitorTest, UpdateServices_MixedServiceAvailability) {
 TEST_F(StateMonitorTest, GetStateManager_Accessor) {
     MockLifecycleManager mgr;
     StateMonitor monitor(mgr);
-    
+
     auto mockStateManager = std::make_shared<MockStateManager>(mgr);
-    
+
     EXPECT_CALL(*Mock_ManagerBase, GetStateManager())
         .WillOnce(Return(mockStateManager));
-    
+
     // GetStateManager is inherited from ManagerBase
-    // This test verifies it can be called
+    auto result = monitor.GetStateManager();
+    EXPECT_EQ(result, mockStateManager);
 }
 
 // Test with empty group list in RequestGetState

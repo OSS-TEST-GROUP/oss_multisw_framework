@@ -1,14 +1,12 @@
 #include "NotifyServiceStateEndPoint.hpp"
 
 #include "lifecycle/NotifyServiceState.hpp"
-#include "manager/LifecycleFactory.hpp"
-#include "state/StateMonitor.hpp"
 #include "logger/Log.hpp"
 
 namespace lifecycle_manager {
 
-NotifyServiceStateEndPoint::NotifyServiceStateEndPoint(MessageType msgtype, std::string topic) 
-    : DDSMessageEndPoint(topic){
+NotifyServiceStateEndPoint::NotifyServiceStateEndPoint(MessageType msgtype, std::string topic, Callback cb) 
+    : DDSMessageEndPoint(topic), on_data_cb_(std::move(cb)){
 
     if (msgtype == MessageType::NOTIFY_SERVICE_STATE){
         SetTypeSupport(std::make_shared<TypeSupport>(new NotifyServiceStatePubSubType()));
@@ -28,10 +26,8 @@ void NotifyServiceStateEndPoint::OnDataAvailable(){
 
         NotifyServiceState* message = reinterpret_cast<NotifyServiceState*>(&data_);
 
-        std::shared_ptr<StateMonitor> manager = LifecycleFactory::GetInstance()->GetMonitor();
-
-        if (manager != nullptr){
-            manager->UpdateServicesState(message);            
+        if (on_data_cb_) {
+            on_data_cb_(message);
         }
     }
 

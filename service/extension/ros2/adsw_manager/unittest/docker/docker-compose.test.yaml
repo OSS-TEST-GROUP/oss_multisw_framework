@@ -1,0 +1,9 @@
+# adsw_manager docker-compose 타입 컨테이너 통합 테스트용
+version: "3.8"
+
+services:
+  adsw-test-compose-svc:
+    image: adsw-test-app:latest
+    container_name: adsw-test-compose
+    restart: "no"
+    stop_grace_period: 5s

@@ -7,14 +7,14 @@
 namespace lifecycle_manager {
 
 Service::Service() : name_(""), service_type_(ServiceType::ONESHOT), recovery_policy_(RecoveryPolicy::R_DEFAULT), is_enabled_(false),
-    service_mode_(ServiceMode::NORMAL), service_state_(ServiceState::NOT_RUNNING), 
-    service_state_last_(ServiceState::NOT_RUNNING), recovered_count_(0), os_type_(OsType::ROS2)
+    service_mode_(ServiceMode::NORMAL), service_state_(ServiceState::NOT_RUNNING),
+    service_state_last_(ServiceState::NOT_RUNNING), recovered_count_(0), exit_code_(-1), os_type_(OsType::ROS2)
 {}
 
 Service::Service(const std::string& name, const ServiceType type, const RecoveryPolicy policy, const bool enabled, const OsType os)
     : name_(name), service_type_(type), recovery_policy_(policy), is_enabled_(enabled),
-    service_mode_(ServiceMode::NORMAL), service_state_(ServiceState::NOT_RUNNING), 
-    service_state_last_(ServiceState::NOT_RUNNING), recovered_count_(0), os_type_(os)
+    service_mode_(ServiceMode::NORMAL), service_state_(ServiceState::NOT_RUNNING),
+    service_state_last_(ServiceState::NOT_RUNNING), recovered_count_(0), exit_code_(-1), os_type_(os)
 {
 
 }
@@ -30,12 +30,24 @@ ServiceType Service::GetServiceType(){
     return service_type_;
 }
 
+void Service::SetServiceType(ServiceType type){
+    service_type_ = type;
+}
+
 RecoveryPolicy Service::GetRecoveryPolicy(){
     return recovery_policy_;
 }
 
+void Service::SetRecoveryPolicy(RecoveryPolicy policy){
+    recovery_policy_ = policy;
+}
+
 bool Service::isEnabled(){
     return is_enabled_;
+}
+
+void Service::SetEnabled(bool enabled){
+    is_enabled_ = enabled;
 }
 
 ServiceMode Service::GetServiceMode(){
@@ -75,6 +87,13 @@ void Service::ClearRecoveredCount(){
     recovered_count_ = 0;
 }
 
+int32_t Service::GetExitCode(){
+    return exit_code_;
+}
+
+void Service::SetExitCode(int32_t code){
+    exit_code_ = code;
+}
 
 void Service::Print(){
     
