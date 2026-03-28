@@ -16,12 +16,9 @@
 #include "generated/idl/ota_mgr/OtamActorServiceMsg.hpp"
 #include "generated/idl/ota_mgr/OtamActorServiceMsgPubSubTypes.hpp"
 
-// Common ReturnValue enum (assuming this is shared across the project)
-// It's good practice to define this in a common header or namespace.
-// enum ReturnValue {
-//     kUnknown = 0,
-//     kSuccess = 1,
-//     kFail = 2,
-//   };
+// Namespace alias: IDL module was renamed from OtaManager to ota_manager::msg
+// to match ROS2/rosbridge DDS type naming convention.
+// This alias allows all existing C++ code using OtaManager:: to compile unchanged.
+namespace OtaManager = ota_manager::msg;
 
 #endif  // OTA_MGR_COMMON_ENUM_H_
