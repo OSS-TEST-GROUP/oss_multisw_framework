@@ -8,3 +8,17 @@ CMakeFiles
 Makefile
 out
 CMakeCache*
+
+# Log files
+*.log
+*.log.*
+logs/
+
+# Backup / patch artifacts
+*.orig
+*.bak
+*.bak.*
+*.backup
+*~
+*.swp
+*.swo
