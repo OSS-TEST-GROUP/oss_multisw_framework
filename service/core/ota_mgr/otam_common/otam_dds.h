@@ -30,7 +30,7 @@ class OtamDds {
    * @exception DDS Exception
    * @cycle Once [cite: 39]
    */
-  virtual void Create(const std::string& topic, std::shared_ptr<void> type, std::shared_ptr<void> listener) = 0;
+  virtual void Create(const std::string& topic, std::shared_ptr<void> type, std::shared_ptr<void> listener, bool transient_local = false) = 0;
 
   /**
    * @brief Changes the QoS (Quality of Service) settings from default to specified. [cite: 40]

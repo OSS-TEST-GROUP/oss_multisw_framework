@@ -185,6 +185,8 @@ class OtamDiagnosticService;
        * about application update progress.
        */
       std::unique_ptr<OtamDds> app_status_dds_;
+      /** @brief ROS2/rosbridge 채널 NotifyAppUpdateStatus 발행자 */
+      std::unique_ptr<OtamDds> app_status_dds_ros_;
 
       std::shared_ptr<OtaManager::SetOtaClientRegistrationPubSubType> set_ota_client_reg_;
       std::shared_ptr<OtaManager::SetOtaClientRegistrationResponsePubSubType> set_ota_client_reg_res_;
@@ -259,13 +261,16 @@ class OtamDiagnosticService;
       static constexpr const char* TOPIC_REGISTRATION = "/mmf/otamanager/otaclient_service/SetOtaClientRegistration";
 
       /** @brief Topic name for registration response messages */
-      static constexpr const char* TOPIC_REGISTRATION_RESPONSE = "/mmf/otamanager/vehicleinfo_service/SetOtaClientRegistrationResponse";
+      static constexpr const char* TOPIC_REGISTRATION_RESPONSE = "/mmf/otamanager/otaclient_service/SetOtaClientRegistrationResponse";
 
       /** @brief Topic name for manager ready notifications */
       static constexpr const char* TOPIC_MANAGER_READY = "/mmf/otamanager/otaclient_service/NotifyOtaManagerReady";
 
       /** @brief Topic name for application status notifications */
       static constexpr const char* TOPIC_APP_STATUS = "/mmf/otamanager/otaclient_service/NotifyAppUpdateStatus";
+
+      /** @brief ROS2/rosbridge 호환 토픽 (rt/ prefix) */
+      static constexpr const char* TOPIC_ROS_APP_STATUS = "rt/mmf/otamanager/otaclient_service/NotifyAppUpdateStatus";
 
       /** @brief Flag indicating if an OTA session is currently active */
       bool is_session_active_;

@@ -1,13 +1,34 @@
 #include <thread>
+#include <cstdlib>
+#include <string>
 
 #include "otac_main/OtacMain.hpp"
 
 using namespace ota_client::agl;
 
+static std::string resolve_config_path(int argc, char* argv[]) {
+    // Priority: --config <path> > OTA_CLIENT_CONFIG env > default path
+    for (int i = 1; i < argc - 1; ++i) {
+        if (std::string(argv[i]) == "--config") {
+            return std::string(argv[i + 1]);
+        }
+    }
+
+    const char* env = std::getenv("OTA_CLIENT_CONFIG");
+    if (env && env[0] != '\0') {
+        return std::string(env);
+    }
+
+    return "config/ota_client_config.json";
+}
+
 int main(int argc, char* argv[]) {
 
+    std::string config_path = resolve_config_path(argc, argv);
+    fprintf(stderr, "[ota_client] config path: %s\n", config_path.c_str());
+
     OtacMain otac_main_;
-    if (otac_main_.Initialize()) {
+    if (otac_main_.Initialize(config_path)) {
         otac_main_.Start();
     } else {
         otac_main_.Stop();

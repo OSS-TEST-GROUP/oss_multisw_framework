@@ -9,10 +9,19 @@
 #include "service_controller/AppController.hpp"
 
 #include <memory>
+#include <chrono>
+#include <string>
 
 #include <fastdds/dds/domain/DomainParticipant.hpp>
 
 namespace adsw_manager::agl {
+
+    enum class AdswState {
+        ADSW_INIT,
+        ADSW_STARTED,
+        ADSW_RUNNING,
+        ADSW_TERMINATE
+    };
 
     class ADSWManager {
 
@@ -24,22 +33,26 @@ namespace adsw_manager::agl {
                         std::shared_ptr<DDSManager> dds_manager,
                         std::shared_ptr<MessageTransmitter> transmitter,
                         std::shared_ptr<ServiceMonitor> monitor);
-        
-            bool Initialize();
+
+            bool Initialize(const std::string& config_path = "");
             bool StartService();
             bool StopService();
+            void Process();
+
+            void ConfirmUpdateServiceList();
 
         private:
             eprosima::fastdds::dds::DomainParticipant* participant_ {nullptr};
-            
+
             std::shared_ptr<ServiceRegistry> service_registry_;
             std::shared_ptr<AppController> app_controller_;
             std::shared_ptr<ServiceController> service_controller_;
             std::shared_ptr<DDSManager> dds_manager_;
             std::shared_ptr<MessageTransmitter> message_transmitter_;
             std::shared_ptr<ServiceMonitor> service_monitor_;
-            
 
+            AdswState state_ {AdswState::ADSW_INIT};
+            std::chrono::steady_clock::time_point last_publish_time_;
     };
 
 } // namespace adsw_manager::agl

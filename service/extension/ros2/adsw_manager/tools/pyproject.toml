@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "adsw-config"
+version = "0.1.0"
+description = "CLI tool to manage adsw_manager saved-service-list.yaml"
+requires-python = ">=3.9"
+dependencies = [
+    "click>=8.1",
+    "ruamel.yaml>=0.18",
+    "rich>=13.0",
+    "pydantic>=2.0",
+]
+
+[project.scripts]
+adsw-config = "adsw_config.cli:cli"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["adsw_config*"]

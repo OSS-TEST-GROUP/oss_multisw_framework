@@ -43,6 +43,9 @@ target_link_libraries(mock_lifecycle_service PRIVATE
     yaml-cpp
 )
 
+# TC-3 테스트용 NotifyAppUpdateStatus publisher
+add_subdirectory(notify_status_publisher)
+
 # Installation
 install(TARGETS test_otam_actor_service mock_viss_server mock_lifecycle_service
     RUNTIME DESTINATION bin/test

@@ -3,6 +3,7 @@
 
 #include "otam_dds.h"
 #include <iostream>
+#include <mutex>
 #include <fastdds/dds/domain/DomainParticipant.hpp>
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp>
 #include <fastdds/dds/publisher/Publisher.hpp>
@@ -17,147 +18,154 @@
 /**
  * @file otam_dds_impl.h
  * @brief Implementation of DDS communication using FastDDS for OTA Manager
- * @author OTA Manager Team
- * @date 2024
+ *
+ * Refactored to use a shared DomainParticipant/Publisher/Subscriber singleton.
+ * Previously each OtamDdsImpl created its own DomainParticipant, causing
+ * excessive resource usage when many topics are registered simultaneously.
+ *
+ * Design:
+ *   OtamDdsParticipant (singleton)
+ *     └── DomainParticipant (1개, domain 0)
+ *           ├── Publisher (1개, 공유)
+ *           └── Subscriber (1개, 공유)
+ *
+ *   OtamDdsImpl<T> (토픽당 1개)
+ *     ├── Topic
+ *     ├── DataWriter
+ *     └── DataReader
  */
+
+// ============================================================================
+// OtamDdsParticipant: Shared DomainParticipant Singleton
+// ============================================================================
+
+/**
+ * @class OtamDdsParticipant
+ * @brief Singleton that owns the single DomainParticipant, Publisher, Subscriber
+ *        shared by all OtamDdsImpl instances.
+ */
+class OtamDdsParticipant {
+public:
+    /**
+     * @brief Get the singleton instance (thread-safe)
+     */
+    static OtamDdsParticipant& GetInstance() {
+        static OtamDdsParticipant instance;
+        return instance;
+    }
+
+    /**
+     * @brief Ensure the participant is created (idempotent)
+     * @throws std::runtime_error on failure
+     */
+    void EnsureCreated() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (participant_) return;
+
+        auto factory = eprosima::fastdds::dds::DomainParticipantFactory::get_instance();
+        participant_ = factory->create_participant(0, eprosima::fastdds::dds::PARTICIPANT_QOS_DEFAULT);
+        if (!participant_) {
+            throw std::runtime_error("OtamDdsParticipant: Failed to create shared DomainParticipant");
+        }
+
+        publisher_ = participant_->create_publisher(eprosima::fastdds::dds::PUBLISHER_QOS_DEFAULT, nullptr);
+        if (!publisher_) {
+            factory->delete_participant(participant_);
+            participant_ = nullptr;
+            throw std::runtime_error("OtamDdsParticipant: Failed to create shared Publisher");
+        }
+
+        subscriber_ = participant_->create_subscriber(eprosima::fastdds::dds::SUBSCRIBER_QOS_DEFAULT, nullptr);
+        if (!subscriber_) {
+            participant_->delete_contained_entities();
+            factory->delete_participant(participant_);
+            participant_ = nullptr;
+            publisher_   = nullptr;
+            throw std::runtime_error("OtamDdsParticipant: Failed to create shared Subscriber");
+        }
+
+        std::cout << "OtamDdsParticipant: Shared DomainParticipant created." << std::endl;
+    }
+
+    eprosima::fastdds::dds::DomainParticipant* GetParticipant() const { return participant_; }
+    eprosima::fastdds::dds::Publisher*         GetPublisher()   const { return publisher_;   }
+    eprosima::fastdds::dds::Subscriber*        GetSubscriber()  const { return subscriber_;  }
+
+    /**
+     * @brief Destroy the shared participant (call only during shutdown)
+     *        All OtamDdsImpl instances must have called Destroy() first.
+     */
+    void Shutdown() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!participant_) return;
+        participant_->delete_contained_entities();
+        eprosima::fastdds::dds::DomainParticipantFactory::get_instance()
+            ->delete_participant(participant_);
+        participant_ = nullptr;
+        publisher_   = nullptr;
+        subscriber_  = nullptr;
+        std::cout << "OtamDdsParticipant: Shared DomainParticipant destroyed." << std::endl;
+    }
+
+private:
+    OtamDdsParticipant() : participant_(nullptr), publisher_(nullptr), subscriber_(nullptr) {}
+    ~OtamDdsParticipant() { Shutdown(); }
+
+    // Non-copyable
+    OtamDdsParticipant(const OtamDdsParticipant&) = delete;
+    OtamDdsParticipant& operator=(const OtamDdsParticipant&) = delete;
+
+    std::mutex mutex_;
+    eprosima::fastdds::dds::DomainParticipant* participant_;
+    eprosima::fastdds::dds::Publisher*         publisher_;
+    eprosima::fastdds::dds::Subscriber*        subscriber_;
+};
+
+// ============================================================================
+// OtamDdsImpl: Per-topic Topic/DataWriter/DataReader wrapper
+// ============================================================================
 
 /**
  * @class OtamDdsImpl
- * @brief Concrete implementation of DDS communication using FastDDS
+ * @brief Concrete implementation of DDS communication using FastDDS.
  *
- * This class inherits from DdsAbstraction and provides concrete implementations
- * for DDS functionalities tailored for the OTA Manager system. It manages
- * the lifecycle of FastDDS entities including DomainParticipant, Publisher,
- * Subscriber, Topic, DataWriter, and DataReader.
+ * Uses the shared OtamDdsParticipant singleton instead of creating a new
+ * DomainParticipant per topic. Each instance manages only:
+ *   - Topic
+ *   - DataWriter
+ *   - DataReader
  *
- * @tparam MessageType The DDS message type to be used for communication
- * @see DdsAbstraction
+ * @tparam MessageType The DDS message type
  */
 template<typename MessageType>
 class OtamDdsImpl : public OtamDds {
 public:
-    /**
-     * @brief Default constructor
-     *
-     * Initializes all DDS entity pointers to nullptr.
-     * Actual DDS entities are created in the Create() method.
-     */
     OtamDdsImpl();
-
-    /**
-     * @brief Virtual destructor
-     *
-     * Cleans up all DDS entities in reverse order of creation.
-     * Ensures proper resource cleanup to prevent memory leaks.
-     */
     ~OtamDdsImpl() override;
 
-    /**
-     * @brief Creates necessary FastDDS entities for communication
-     *
-     * Creates DomainParticipant, Publisher, Subscriber, Topic, DataWriter,
-     * and DataReader for the specified topic. Registers the provided type
-     * and sets up the listener if provided.
-     *
-     * @param topic The DDS topic name for communication
-     * @param type Shared pointer to TypeSupport for message serialization
-     * @param listener Shared pointer to DataReaderListener for message reception
-     * @throws std::runtime_error if any DDS entity creation fails
-     *
-     * @note This method should be called only once per instance
-     */
-    void Create(const std::string& topic, std::shared_ptr<void> type, std::shared_ptr<void> listener) override;
-
-    /**
-     * @brief Sets Quality of Service (QoS) policies for DDS entities
-     *
-     * Configures QoS settings for both DataWriter and DataReader.
-     * Currently supports reliability policy configuration.
-     *
-     * @param qos QoS configuration value (1 = Reliable, 0 = Best Effort)
-     * @throws std::runtime_error if QoS setting fails
-     *
-     * @note Must be called after Create() method
-     */
+    void Create(const std::string& topic, std::shared_ptr<void> type, std::shared_ptr<void> listener, bool transient_local = false) override;
     void SetQos(uint32_t qos) override;
-
-    /**
-     * @brief Writes a DDS message to the network
-     *
-     * Publishes the provided message using the configured DataWriter.
-     * The message is serialized and sent to all subscribers of the topic.
-     *
-     * @param message Shared pointer to the message to be published
-     * @throws std::runtime_error if DataWriter is not created or write operation fails
-     *
-     * @note The message type must match the registered TypeSupport
-     */
     void Write(std::shared_ptr<void> message) override;
-
-    /**
-     * @brief Reads a DDS message from the network
-     *
-     * Attempts to read the next available message from the DataReader.
-     * This method is typically used for polling-based message reception.
-     * For event-driven reception, use DataReaderListener callbacks instead.
-     *
-     * @param message Shared pointer where the received message will be stored
-     * @throws std::runtime_error if DataReader is not created
-     *
-     * @note For event-driven systems, prefer using DataReaderListener
-     */
     void Read(std::shared_ptr<void> message) override;
-
     void Destroy() override;
 
-    /**
-     * @brief Gets the DomainParticipant instance
-     * @return Pointer to the DomainParticipant, nullptr if not created
-     */
-    eprosima::fastdds::dds::DomainParticipant* GetParticipant() const { return participant_; }
-
-    /**
-     * @brief Gets the Publisher instance
-     * @return Pointer to the Publisher, nullptr if not created
-     */
-    eprosima::fastdds::dds::Publisher* GetPublisher() const { return publisher_; }
-
-    /**
-     * @brief Gets the Subscriber instance
-     * @return Pointer to the Subscriber, nullptr if not created
-     */
-    eprosima::fastdds::dds::Subscriber* GetSubscriber() const { return subscriber_; }
-
-    /**
-     * @brief Gets the Topic instance
-     * @return Pointer to the Topic, nullptr if not created
-     */
-    eprosima::fastdds::dds::Topic* GetTopic() const { return topic_; }
-
-    /**
-     * @brief Gets the DataWriter instance
-     * @return Pointer to the DataWriter, nullptr if not created
-     */
-    eprosima::fastdds::dds::DataWriter* GetWriter() const { return writer_; }
-
-    /**
-     * @brief Gets the DataReader instance
-     * @return Pointer to the DataReader, nullptr if not created
-     */
-    eprosima::fastdds::dds::DataReader* GetReader() const { return reader_; }
+    // Accessors (participant/publisher/subscriber now come from singleton)
+    eprosima::fastdds::dds::DomainParticipant* GetParticipant() const {
+        return OtamDdsParticipant::GetInstance().GetParticipant();
+    }
+    eprosima::fastdds::dds::Publisher*  GetPublisher()  const {
+        return OtamDdsParticipant::GetInstance().GetPublisher();
+    }
+    eprosima::fastdds::dds::Subscriber* GetSubscriber() const {
+        return OtamDdsParticipant::GetInstance().GetSubscriber();
+    }
+    eprosima::fastdds::dds::Topic*      GetTopic()      const { return topic_;   }
+    eprosima::fastdds::dds::DataWriter* GetWriter()     const { return writer_;  }
+    eprosima::fastdds::dds::DataReader* GetReader()     const { return reader_;  }
 
 private:
-    /** @brief FastDDS domain participant for DDS communication */
-    eprosima::fastdds::dds::DomainParticipant* participant_;
-
-    /** @brief FastDDS publisher for outgoing messages */
-    eprosima::fastdds::dds::Publisher* publisher_;
-
-    /** @brief FastDDS subscriber for incoming messages */
-    eprosima::fastdds::dds::Subscriber* subscriber_;
-
     /** @brief FastDDS topic for message routing */
-    eprosima::fastdds::dds::Topic* topic_;
+    eprosima::fastdds::dds::Topic*      topic_;
 
     /** @brief FastDDS data writer for message publishing */
     eprosima::fastdds::dds::DataWriter* writer_;
@@ -168,16 +176,16 @@ private:
     /** @brief Listener for data reception callbacks */
     eprosima::fastdds::dds::DataReaderListener* listener_;
 
-    /** @brief Stored topic name for internal reference */
+    /** @brief Stored topic name */
     std::string topic_name_;
 
-    /** @brief Stored type shared_ptr to keep PubSubType alive - DECLARED FIRST to be destroyed LAST */
+    /** @brief Keeps the PubSubType object alive */
     std::shared_ptr<void> type_ptr_;
 
-    /** @brief Stored listener shared_ptr to keep listener alive */
+    /** @brief Keeps the listener object alive */
     std::shared_ptr<void> listener_ptr_;
 
-    /** @brief Flag to track if Destroy() has been called */
+    /** @brief Flag to prevent double Destroy() */
     bool destroyed_;
 };
 
@@ -187,17 +195,11 @@ private:
 
 template<typename MessageType>
 OtamDdsImpl<MessageType>::OtamDdsImpl()
-    : participant_(nullptr),
-      publisher_(nullptr),
-      subscriber_(nullptr),
-      topic_(nullptr),
+    : topic_(nullptr),
       writer_(nullptr),
       reader_(nullptr),
       listener_(nullptr),
-      destroyed_(false) {
-    // Constructor: All members initialized to nullptr
-    // DDS entities are created in the Create method
-}
+      destroyed_(false) {}
 
 template<typename MessageType>
 OtamDdsImpl<MessageType>::~OtamDdsImpl() {
@@ -206,7 +208,6 @@ OtamDdsImpl<MessageType>::~OtamDdsImpl() {
 
 template<typename MessageType>
 void OtamDdsImpl<MessageType>::Destroy() {
-    // Check if already destroyed to make this function idempotent
     if (destroyed_) {
         std::cout << "OtamDdsImpl: Already destroyed, skipping." << std::endl;
         return;
@@ -214,71 +215,46 @@ void OtamDdsImpl<MessageType>::Destroy() {
 
     std::cout << "OtamDdsImpl: Destroy called. Cleaning up DDS entities." << std::endl;
 
-    // Delete contained entities first (DataWriter, DataReader, Publisher,
-    // Subscriber, Topic) before deleting the participant.
-    // delete_participant() returns RETCODE_PRECONDITION_NOT_MET if any
-    // contained entity still exists, leaving the participant alive and
-    // SHM transport files in an inconsistent state (zombie ports on restart).
-    if (participant_) {
-        eprosima::fastdds::dds::ReturnCode_t ret =
-            participant_->delete_contained_entities();
-        if (ret != eprosima::fastdds::dds::RETCODE_OK) {
-            std::cerr << "OtamDdsImpl: Warning - delete_contained_entities failed: "
-                      << ret << std::endl;
-        }
-        // Null out all raw pointers - they are now invalid
-        writer_    = nullptr;
-        reader_    = nullptr;
-        publisher_ = nullptr;
-        subscriber_ = nullptr;
-        topic_     = nullptr;
+    auto& shared = OtamDdsParticipant::GetInstance();
+    auto* participant = shared.GetParticipant();
+    auto* publisher   = shared.GetPublisher();
+    auto* subscriber  = shared.GetSubscriber();
 
-        auto factory = eprosima::fastdds::dds::DomainParticipantFactory::get_instance();
-        if (factory) {
-            ret = factory->delete_participant(participant_);
-            if (ret != eprosima::fastdds::dds::RETCODE_OK) {
-                std::cerr << "OtamDdsImpl: Warning - delete_participant failed: "
-                          << ret << std::endl;
-            }
-        }
-        participant_ = nullptr;
-        std::cout << "OtamDdsImpl: Deleted participant and all contained entities." << std::endl;
+    // Delete DataReader
+    if (reader_ && subscriber) {
+        subscriber->delete_datareader(reader_);
+        reader_ = nullptr;
     }
 
-    // Mark as destroyed to prevent double deletion
+    // Delete DataWriter
+    if (writer_ && publisher) {
+        publisher->delete_datawriter(writer_);
+        writer_ = nullptr;
+    }
+
+    // Delete Topic
+    if (topic_ && participant) {
+        participant->delete_topic(topic_);
+        topic_ = nullptr;
+    }
+
     destroyed_ = true;
+    std::cout << "OtamDdsImpl: Deleted participant and all contained entities." << std::endl;
     std::cout << "OtamDdsImpl: Destroy completed successfully." << std::endl;
 }
 
 template<typename MessageType>
-void OtamDdsImpl<MessageType>::Create(const std::string& topic, std::shared_ptr<void> type, std::shared_ptr<void> listener) {
+void OtamDdsImpl<MessageType>::Create(const std::string& topic,
+                                      std::shared_ptr<void> type,
+                                      std::shared_ptr<void> listener,
+                                      bool transient_local) {
     std::cout << "OtamDdsImpl: Creating DDS entities for topic: " << topic << std::endl;
     topic_name_ = topic;
 
     std::cout << "TypeSupport!!!!!" << type.get() << std::endl;
-
-    // IMPORTANT: Store the shared_ptr to keep PubSubType alive.
-    // type_ptr_ is the single owner of the TopicDataType object.
-    type_ptr_ = type;
-
-    // Construct TypeSupport with a no-op deleter so that when the
-    // DomainParticipant releases its copy (via delete_participant /
-    // delete_contained_entities), it does NOT free the raw pointer.
-    // type_ptr_ is the sole owner and will free the object when it
-    // goes out of scope (preventing the double-free / SIGABRT that
-    // would otherwise occur with two independent ownership chains).
-    //
-    // TypeSupport only exposes TypeSupport(TopicDataType*) which takes
-    // sole ownership.  We work around this by default-constructing and
-    // then resetting the underlying shared_ptr via the base-class reset()
-    // with a no-op deleter.
-    auto* raw_type = static_cast<eprosima::fastdds::dds::TopicDataType*>(type_ptr_.get());
-    eprosima::fastdds::dds::TypeSupport type_support;
-    static_cast<std::shared_ptr<eprosima::fastdds::dds::TopicDataType>&>(type_support)
-        .reset(raw_type, [](eprosima::fastdds::dds::TopicDataType*) {});
-
-    // Store listener shared_ptr to keep it alive
+    type_ptr_     = type;
     listener_ptr_ = listener;
+
     if (listener) {
         listener_ = std::static_pointer_cast<eprosima::fastdds::dds::DataReaderListener>(listener).get();
     } else {
@@ -286,73 +262,72 @@ void OtamDdsImpl<MessageType>::Create(const std::string& topic, std::shared_ptr<
     }
     std::cout << "DataReaderListener!!!!! listener_=" << listener_ << std::endl;
 
+    // Ensure the shared participant is ready
+    OtamDdsParticipant::GetInstance().EnsureCreated();
+
+    auto* participant = OtamDdsParticipant::GetInstance().GetParticipant();
+    auto* publisher   = OtamDdsParticipant::GetInstance().GetPublisher();
+    auto* subscriber  = OtamDdsParticipant::GetInstance().GetSubscriber();
+
+    // Build TypeSupport with no-op deleter (type_ptr_ owns the object)
+    auto* raw_type = static_cast<eprosima::fastdds::dds::TopicDataType*>(type_ptr_.get());
+    eprosima::fastdds::dds::TypeSupport type_support;
+    static_cast<std::shared_ptr<eprosima::fastdds::dds::TopicDataType>&>(type_support)
+        .reset(raw_type, [](eprosima::fastdds::dds::TopicDataType*) {});
+
+    std::cout << "Create DomainParticipant!!!!!" << std::endl;  // 기존 로그 유지 (파싱 의존 코드 호환)
+
     try {
-        // Step 1: Create DomainParticipant
-        // The DomainParticipant represents the local DDS domain entity
-        participant_ = eprosima::fastdds::dds::DomainParticipantFactory::get_instance()
-            ->create_participant(0, eprosima::fastdds::dds::PARTICIPANT_QOS_DEFAULT);
-        if (!participant_) {
-            throw std::runtime_error("DDS Exception: Failed to create DomainParticipant.");
-        }
-        std::cout << "Create DomainParticipant!!!!!" << std::endl;
-
-        // Step 2: Register TypeSupport
-        // Register the message type with the participant for serialization
-
-        type_support.register_type(participant_);
+        // Register TypeSupport with shared participant
+        // (이미 등록된 타입명이면 FastDDS가 기존 것을 재사용 - 안전함)
+        type_support.register_type(participant);
 
         std::cout << "Register TypeSupport!!!!! " << type_support.get() << std::endl;
-
-        // Step 3: Create Topic
-        // The topic defines the data type and name for communication
         std::cout << "type_support.get_type_name() = " << type_support.get_type_name() << std::endl;
 
-        topic_ = participant_->create_topic(topic_name_, type_support.get_type_name(),
+        // Create Topic
+        topic_ = participant->create_topic(topic_name_, type_support.get_type_name(),
             eprosima::fastdds::dds::TOPIC_QOS_DEFAULT);
         if (!topic_) {
-            throw std::runtime_error("DDS Exception: Failed to create Topic.");
+            throw std::runtime_error("DDS Exception: Failed to create Topic: " + topic_name_);
         }
         std::cout << "Create Topic!!!!!" << std::endl;
 
-        // Step 4: Create Publisher
-        // Publisher manages DataWriters for outgoing messages
-        publisher_ = participant_->create_publisher(eprosima::fastdds::dds::PUBLISHER_QOS_DEFAULT, nullptr);
-        if (!publisher_) {
-            throw std::runtime_error("DDS Exception: Failed to create Publisher.");
-        }
-        std::cout << "Create Publisher!!!!!" << std::endl;
+        std::cout << "Create Publisher!!!!!" << std::endl;  // 기존 로그 유지
 
-        // Step 5: Create DataWriter
-        // DataWriter is responsible for publishing messages to the topic
+        // Create DataWriter on shared Publisher
         eprosima::fastdds::dds::DataWriterQos writer_qos = eprosima::fastdds::dds::DATAWRITER_QOS_DEFAULT;
         writer_qos.reliability().kind = eprosima::fastdds::dds::RELIABLE_RELIABILITY_QOS;
-        writer_ = publisher_->create_datawriter(topic_, writer_qos);
+        if (transient_local) {
+            writer_qos.durability().kind = eprosima::fastdds::dds::TRANSIENT_LOCAL_DURABILITY_QOS;
+        }
+        writer_ = publisher->create_datawriter(topic_, writer_qos);
         if (!writer_) {
-            throw std::runtime_error("DDS Exception: Failed to create DataWriter.");
+            throw std::runtime_error("DDS Exception: Failed to create DataWriter for: " + topic_name_);
         }
-        std::cout << "Create Writer!!!!! (RELIABLE QoS)" << std::endl;
+        std::cout << "Create Writer!!!!! (RELIABLE QoS"
+                  << (transient_local ? ", TRANSIENT_LOCAL" : "") << ")" << std::endl;
 
-        // Step 6: Create Subscriber
-        // Subscriber manages DataReaders for incoming messages
-        subscriber_ = participant_->create_subscriber(eprosima::fastdds::dds::SUBSCRIBER_QOS_DEFAULT, nullptr);
-        if (!subscriber_) {
-            throw std::runtime_error("DDS Exception: Failed to create Subscriber.");
-        }
-        std::cout << "Create Subscriber!!!!!" << std::endl;
+        std::cout << "Create Subscriber!!!!!" << std::endl;  // 기존 로그 유지
 
-        // Step 7: Create DataReader
-        // DataReader is responsible for receiving messages from the topic
+        // Create DataReader on shared Subscriber
+        // Durability: VOLATILE - FastDDS 기본값 유지 (TRANSIENT_LOCAL publisher와도 매칭됨)
+        // DDS QoS 호환 규칙: VOLATILE subscriber는 TRANSIENT_LOCAL publisher로부터도 메시지 수신 가능
         eprosima::fastdds::dds::DataReaderQos reader_qos = eprosima::fastdds::dds::DATAREADER_QOS_DEFAULT;
         reader_qos.reliability().kind = eprosima::fastdds::dds::RELIABLE_RELIABILITY_QOS;
-        reader_ = subscriber_->create_datareader(topic_, reader_qos, listener_);
+        reader_ = subscriber->create_datareader(topic_, reader_qos, listener_);
         if (!reader_) {
-            throw std::runtime_error("DDS Exception: Failed to create DataReader.");
+            throw std::runtime_error("DDS Exception: Failed to create DataReader for: " + topic_name_);
         }
         std::cout << "Create Reader!!!!! (RELIABLE QoS)" << std::endl;
 
         std::cout << "OtamDdsImpl: All DDS entities created successfully." << std::endl;
     }
     catch (const std::exception& e) {
+        // 생성된 엔티티 정리
+        if (reader_ && subscriber)  { subscriber->delete_datareader(reader_); reader_ = nullptr; }
+        if (writer_ && publisher)   { publisher->delete_datawriter(writer_);  writer_ = nullptr; }
+        if (topic_ && participant)  { participant->delete_topic(topic_);       topic_  = nullptr; }
         std::cerr << "OtamDdsImpl: Exception during DDS entity creation: " << e.what() << std::endl;
         throw;
     }
@@ -362,75 +337,37 @@ template<typename MessageType>
 void OtamDdsImpl<MessageType>::SetQos(uint32_t qos) {
     std::cout << "OtamDdsImpl: Setting QoS to " << qos << std::endl;
 
+    auto reliability_kind = (qos == 1)
+        ? eprosima::fastdds::dds::RELIABLE_RELIABILITY_QOS
+        : eprosima::fastdds::dds::BEST_EFFORT_RELIABILITY_QOS;
+
+    auto* publisher  = OtamDdsParticipant::GetInstance().GetPublisher();
+    auto* subscriber = OtamDdsParticipant::GetInstance().GetSubscriber();
+
     try {
-        // Prepare QoS configuration
-        eprosima::fastdds::dds::ReliabilityQosPolicyKind reliability_kind;
-        if (qos == 1) {
-            reliability_kind = eprosima::fastdds::dds::RELIABLE_RELIABILITY_QOS;
-        } else {
-            reliability_kind = eprosima::fastdds::dds::BEST_EFFORT_RELIABILITY_QOS;
-        }
-
-        // Recreate DataWriter with new QoS
-        if (writer_ && publisher_ && topic_) {
-            std::cout << "OtamDdsImpl: Recreating DataWriter with new QoS" << std::endl;
-            std::cout << "OtamDdsImpl: writer_=" << writer_ << ", publisher_=" << publisher_ << ", topic_=" << topic_ << std::endl;
-
-            // Delete existing DataWriter
-            if (publisher_->delete_datawriter(writer_) != eprosima::fastdds::dds::RETCODE_OK) {
-                throw std::runtime_error("DDS Exception: Failed to delete DataWriter.");
-            }
+        if (writer_ && publisher && topic_) {
+            publisher->delete_datawriter(writer_);
             writer_ = nullptr;
-            std::cout << "OtamDdsImpl: DataWriter deleted successfully" << std::endl;
 
-            // Create new DataWriter with updated QoS
             eprosima::fastdds::dds::DataWriterQos writer_qos = eprosima::fastdds::dds::DATAWRITER_QOS_DEFAULT;
             writer_qos.reliability().kind = reliability_kind;
-
-            writer_ = publisher_->create_datawriter(topic_, writer_qos);
-            if (!writer_) {
-                throw std::runtime_error("DDS Exception: Failed to recreate DataWriter.");
-            }
-
-            std::cout << "OtamDdsImpl: DataWriter recreated successfully. writer_=" << writer_
-                      << ", Reliability: "
-                      << (reliability_kind == eprosima::fastdds::dds::RELIABLE_RELIABILITY_QOS ? "RELIABLE" : "BEST_EFFORT")
-                      << std::endl;
-        } else {
-            std::cout << "OtamDdsImpl: Skipping DataWriter recreation (writer_=" << writer_
-                      << ", publisher_=" << publisher_ << ", topic_=" << topic_ << ")" << std::endl;
+            writer_ = publisher->create_datawriter(topic_, writer_qos);
+            if (!writer_) throw std::runtime_error("DDS Exception: Failed to recreate DataWriter.");
+            std::cout << "OtamDdsImpl: DataWriter recreated with new QoS. writer_=" << writer_ << std::endl;
         }
 
-        // Recreate DataReader with new QoS
-        if (reader_ && subscriber_ && topic_) {
-            std::cout << "OtamDdsImpl: Recreating DataReader with new QoS" << std::endl;
-
-            // Delete existing DataReader
-            if (subscriber_->delete_datareader(reader_) != eprosima::fastdds::dds::RETCODE_OK) {
-                throw std::runtime_error("DDS Exception: Failed to delete DataReader.");
-            }
+        if (reader_ && subscriber && topic_) {
+            subscriber->delete_datareader(reader_);
             reader_ = nullptr;
-            std::cout << "OtamDdsImpl: DataReader deleted successfully" << std::endl;
 
-            // Create new DataReader with updated QoS
             eprosima::fastdds::dds::DataReaderQos reader_qos = eprosima::fastdds::dds::DATAREADER_QOS_DEFAULT;
             reader_qos.reliability().kind = reliability_kind;
-
-            reader_ = subscriber_->create_datareader(topic_, reader_qos, listener_);
-            if (!reader_) {
-                throw std::runtime_error("DDS Exception: Failed to recreate DataReader.");
-            }
-
-            std::cout << "OtamDdsImpl: DataReader recreated successfully. reader_=" << reader_
-                      << ", Reliability: "
-                      << (reliability_kind == eprosima::fastdds::dds::RELIABLE_RELIABILITY_QOS ? "RELIABLE" : "BEST_EFFORT")
-                      << std::endl;
-        } else {
-            std::cout << "OtamDdsImpl: Skipping DataReader recreation (reader_=" << reader_
-                      << ", subscriber_=" << subscriber_ << ", topic_=" << topic_ << ")" << std::endl;
+            reader_ = subscriber->create_datareader(topic_, reader_qos, listener_);
+            if (!reader_) throw std::runtime_error("DDS Exception: Failed to recreate DataReader.");
+            std::cout << "OtamDdsImpl: DataReader recreated with new QoS. reader_=" << reader_ << std::endl;
         }
 
-        std::cout << "OtamDdsImpl: SetQos completed successfully" << std::endl;
+        std::cout << "OtamDdsImpl: SetQos completed successfully." << std::endl;
     }
     catch (const std::exception& e) {
         std::cerr << "OtamDdsImpl: Exception during QoS configuration: " << e.what() << std::endl;
@@ -443,21 +380,12 @@ void OtamDdsImpl<MessageType>::Write(std::shared_ptr<void> message) {
     std::cout << "OtamDdsImpl: Writing DDS message." << std::endl;
     std::cout << "OtamDdsImpl: writer_=" << writer_ << ", message.get()=" << message.get() << std::endl;
 
-    if (!writer_) {
-        throw std::runtime_error("DDS Exception: DataWriter not created. Cannot write message.");
-    }
-
-    if (!message) {
-        throw std::runtime_error("DDS Exception: Message is null. Cannot write message.");
-    }
+    if (!writer_) throw std::runtime_error("DDS Exception: DataWriter not created.");
+    if (!message) throw std::runtime_error("DDS Exception: Message is null.");
 
     try {
         std::cout << "OtamDdsImpl: Calling writer_->write()..." << std::endl;
-        // Cast to MessageType for type safety
         auto typed_message = std::static_pointer_cast<MessageType>(message);
-
-        // Publish the message using FastDDS DataWriter
-        // The message is serialized automatically based on the registered TypeSupport
         eprosima::fastdds::dds::ReturnCode_t ret = writer_->write(typed_message.get());
         std::cout << "OtamDdsImpl: writer_->write() returned: " << ret << std::endl;
 
@@ -476,18 +404,12 @@ template<typename MessageType>
 void OtamDdsImpl<MessageType>::Read(std::shared_ptr<void> message) {
     std::cout << "OtamDdsImpl: Reading DDS message (polling mode)." << std::endl;
 
-    if (!reader_) {
-        throw std::runtime_error("DDS Exception: DataReader not created. Cannot read message.");
-    }
+    if (!reader_) throw std::runtime_error("DDS Exception: DataReader not created.");
 
     try {
         eprosima::fastdds::dds::SampleInfo info;
-
-        // Cast to MessageType for type safety
         auto typed_message = std::static_pointer_cast<MessageType>(message);
 
-        // Attempt to read the next available sample
-        // Note: For event-driven systems, prefer using DataReaderListener callbacks
         if (reader_->take_next_sample(typed_message.get(), &info) == eprosima::fastdds::dds::RETCODE_OK) {
             if (info.valid_data) {
                 std::cout << "OtamDdsImpl: Read message successfully" << std::endl;

@@ -1,4 +1,5 @@
 #include "AppController.hpp"
+#include "service_registry/ServiceRegistry.hpp"
 #include <iostream>
 #include <vector>
 #include <string>
@@ -37,6 +38,10 @@ namespace adsw_manager::agl::testhook {
 namespace adsw_manager::agl
 {
 
+    void AppController::SetServiceRegistry(ServiceRegistry* registry) {
+        service_registry_ = registry;
+    }
+
     bool AppController::Initialize()
     {
 
@@ -55,18 +60,31 @@ namespace adsw_manager::agl
             int rc = RunDocker({"start", app_name});
             return (rc >= 0 && WIFEXITED(rc) && WEXITSTATUS(rc) == 0);
         }
-        
-        int rc = RunDocker({
-            "run", "-d",
-            "--name", app_name,
+
+        // Build docker run args from registry or fallback to hardcoded defaults
+        std::string image = "registry.obigo.com/oss/oss-hmi-agl-aarch64:latest";
+        std::vector<std::string> extra_args = {
             "--net=host",
-            "--device", "/dev/dri:/dev/dri",
-            "-v", "/run/user/1001:/run/user/1001",
-            "-v", "$(pwd)/config.json:/etc/adsw/config.json:ro",
-            "-e", "ADSW_CONFIG=/etc/adsw/config.json",
-            "--privileged",
-            "registry.obigo.com/oss/oss-hmi-agl-aarch64:latest" 
-        });
+            "--device=/dev/dri:/dev/dri",
+            "-v=/run/user/1001:/run/user/1001",
+            "--privileged"
+        };
+
+        if (service_registry_) {
+            auto info = service_registry_->GetDockerInfo(app_name);
+            if (info && !info->image.empty()) {
+                image = info->image;
+                extra_args = info->extra_args;
+            }
+        }
+
+        std::vector<std::string> run_args = {"run", "-d", "--name", app_name};
+        for (const auto& arg : extra_args) {
+            run_args.push_back(arg);
+        }
+        run_args.push_back(image);
+
+        int rc = RunDocker(run_args);
 
         return (rc >= 0 && WIFEXITED(rc) && WEXITSTATUS(rc) == 0);
 

@@ -4,7 +4,7 @@
 
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp>
 
-using namespace OtaManager;
+using namespace ota_manager::msg;
 using namespace eprosima::fastdds::dds;
 
 namespace ota_client::agl
@@ -71,11 +71,11 @@ namespace ota_client::agl
         {
             return false;
         }
-        if (!registration_response_dds_->Create("/mmf/otamanager/otaclient_service/SetOtaClientRegistrationResponse", false, true))
+        if (!registration_response_dds_->Create("/mmf/otamanager/otaclient_service/SetOtaClientRegistrationResponse", false, true, true))
         {
             return false;
         }
-        if (!manager_ready_dds_->Create("/mmf/otamanager/otaclient_service/NotifyOtaManagerReady", false, true))
+        if (!manager_ready_dds_->Create("/mmf/otamanager/otaclient_service/NotifyOtaManagerReady", false, true, true))
         {
             return false;
         }
@@ -115,7 +115,7 @@ namespace ota_client::agl
         //     return false;
         // }
 
-        auto reg = std::make_shared<OtaManager::SetOtaClientRegistration>();
+        auto reg = std::make_shared<ota_manager::msg::SetOtaClientRegistration>();
         reg->client_name(std::move(client_name));
 
         auto &seq = reg->app_list();
@@ -140,7 +140,7 @@ namespace ota_client::agl
 
         std::cout << "Ota Manager is ready!\nCall PublishClientRegistration()\n";
 
-        if (PublishClientRegistration("agl_ota_client", app_list))
+        if (PublishClientRegistration(status_store_->GetClientName(), app_list))
             std::cout << "Successfully Call Publish.\n";
     }
 

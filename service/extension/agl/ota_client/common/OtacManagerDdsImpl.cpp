@@ -10,7 +10,7 @@ namespace ota_client::agl
     OtacManagerDdsImpl::OtacManagerDdsImpl(DomainParticipant *participant, Publisher *publisher, Subscriber *subscriber, TypeSupport type)
         : participant_(participant), publisher_(publisher), subscriber_(subscriber), type_(type) {}
 
-    bool OtacManagerDdsImpl::Create(const std::string &topic, bool create_writer, bool create_reader)
+    bool OtacManagerDdsImpl::Create(const std::string &topic, bool create_writer, bool create_reader, bool transient_local)
     {
 
         type_.register_type(participant_);
@@ -40,14 +40,22 @@ namespace ota_client::agl
 
         if (create_writer)
         {
-            data_writer_ = publisher_->create_datawriter(topic_, DATAWRITER_QOS_DEFAULT, nullptr);
+            DataWriterQos writer_qos = DATAWRITER_QOS_DEFAULT;
+            if (transient_local) {
+                writer_qos.durability().kind = TRANSIENT_LOCAL_DURABILITY_QOS;
+            }
+            data_writer_ = publisher_->create_datawriter(topic_, writer_qos, nullptr);
             if (data_writer_ == nullptr)
                 return false;
         }
         if (create_reader)
         {
+            DataReaderQos reader_qos = DATAREADER_QOS_DEFAULT;
+            if (transient_local) {
+                reader_qos.durability().kind = TRANSIENT_LOCAL_DURABILITY_QOS;
+            }
             listener_ = std::make_unique<ReaderListener>(*this);
-            data_reader_ = subscriber_->create_datareader(topic_, DATAREADER_QOS_DEFAULT, listener_.get());
+            data_reader_ = subscriber_->create_datareader(topic_, reader_qos, listener_.get());
             if (!data_reader_)
                 return false;
         }

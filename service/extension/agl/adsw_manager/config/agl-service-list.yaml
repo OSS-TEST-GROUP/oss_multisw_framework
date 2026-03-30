@@ -1,0 +1,28 @@
+services:
+  - name: adsw_monitor
+    service_type: NORMAL
+    recovery_policy: ALWAYS
+    is_enabled: true
+    os_type: AGL
+    init_state: NOT_RUNNING
+    image: adsw-test-app:latest
+    extra_args:
+      - --net=host
+  - name: map
+    service_type: NORMAL
+    recovery_policy: R_DEFAULT
+    is_enabled: true
+    os_type: AGL
+    init_state: NOT_RUNNING
+    image: adsw-test-app:latest
+    extra_args:
+      - --net=host
+  - name: radio
+    service_type: NORMAL
+    recovery_policy: R_DEFAULT
+    is_enabled: true
+    os_type: AGL
+    init_state: NOT_RUNNING
+    image: adsw-test-app:latest
+    extra_args:
+      - --net=host

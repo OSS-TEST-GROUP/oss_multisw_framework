@@ -3,6 +3,7 @@
 
 #include "service_registry/ServiceRegistry.hpp"
 #include "message_transmitter/MessageTransmitter.hpp"
+#include "service_controller/AppController.hpp"
 #include "AppStateReader.hpp"
 
 #include <memory>
@@ -17,12 +18,15 @@ namespace adsw_manager::agl {
     class ServiceMonitor {
 
         public:
-            virtual bool Initialize(eprosima::fastdds::dds::DomainParticipant* participant, 
-                            std::shared_ptr<ServiceRegistry> registry, 
-                            std::shared_ptr<MessageTransmitter> transmitter);
+            virtual bool Initialize(eprosima::fastdds::dds::DomainParticipant* participant,
+                            std::shared_ptr<ServiceRegistry> registry,
+                            std::shared_ptr<MessageTransmitter> transmitter,
+                            AppController* app_controller = nullptr);
             virtual void StartMonitoring();
             virtual void StopMonitoring();
             void CheckAppState();
+
+            void SetDockerFallback(bool enabled) { use_docker_fallback_ = enabled; }
 
             virtual ~ServiceMonitor() = default;
 
@@ -34,8 +38,11 @@ namespace adsw_manager::agl {
             std::shared_ptr<MessageTransmitter> message_transmitter_{nullptr};
 
             eprosima::fastdds::dds::DomainParticipant* participant_{nullptr};
+            AppController* app_controller_{nullptr};
 
-            std::chrono::seconds timeout_{std::chrono::seconds(5)}; 
+            std::chrono::seconds timeout_{std::chrono::seconds(5)};
+
+            bool use_docker_fallback_{true};
 
             std::thread monitoring_thread_;
             std::atomic<bool> running_{false};

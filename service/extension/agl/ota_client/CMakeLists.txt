@@ -3,6 +3,7 @@ project(agl_ota_client)
 
 find_package(fastcdr REQUIRED)
 find_package(fastdds REQUIRED)
+find_package(nlohmann_json QUIET)
 
 set(GENERATED_OTA_DIR ${CMAKE_INSTALL_PREFIX}/generated/idl)
 file(GLOB GENERATED_OTA_FILES "${GENERATED_OTA_DIR}/ota_mgr/*.cxx")
@@ -26,6 +27,10 @@ target_link_libraries(agl_ota_core PUBLIC
                       fastcdr
                       fastdds)
 
+if(nlohmann_json_FOUND)
+    target_link_libraries(agl_ota_core PUBLIC nlohmann_json::nlohmann_json)
+endif()
+
 add_executable(${PROJECT_NAME} main.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE agl_ota_core)
 
@@ -38,4 +43,8 @@ install ( TARGETS ${PROJECT_NAME}
     RUNTIME DESTINATION bin
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
+)
+
+install ( FILES config/ota_client_config.json
+    DESTINATION config
 )

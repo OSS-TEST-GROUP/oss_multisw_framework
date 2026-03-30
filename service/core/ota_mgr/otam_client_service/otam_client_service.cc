@@ -30,6 +30,7 @@
       registration_response_dds_.reset();
       manager_ready_dds_.reset();
       app_status_dds_.reset();
+      app_status_dds_ros_.reset();
   }
 
   void OtamClientService::Initialize() {
@@ -84,6 +85,10 @@
           std::cout << "OtamClientService: Destroying app_status_dds_" << std::endl;
           app_status_dds_->Destroy();
       }
+      if (app_status_dds_ros_) {
+          std::cout << "OtamClientService: Destroying app_status_dds_ros_" << std::endl;
+          app_status_dds_ros_->Destroy();
+      }
       state_ = ServiceState::UNINITIALIZED;
   }
 
@@ -94,7 +99,8 @@
       registration_dds_ = std::make_unique<OtamDdsImpl<OtaManager::SetOtaClientRegistration>>();
       registration_response_dds_ = std::make_unique<OtamDdsImpl<OtaManager::SetOtaClientRegistrationResponse>>();
       manager_ready_dds_ = std::make_unique<OtamDdsImpl<OtaManager::NotifyOtaManagerReady>>();
-      app_status_dds_ = std::make_unique<OtamDdsImpl<OtaManager::NotifyAppUpdateStatus>>();
+      app_status_dds_     = std::make_unique<OtamDdsImpl<OtaManager::NotifyAppUpdateStatus>>();
+      app_status_dds_ros_ = std::make_unique<OtamDdsImpl<OtaManager::NotifyAppUpdateStatus>>();
 
       // Create listener for incoming registration messages
       registration_listener_ = std::make_shared<RegistrationListener>(this);
@@ -105,21 +111,24 @@
                                std::static_pointer_cast<void>(set_ota_client_reg_),
                                std::static_pointer_cast<void>(registration_listener_));
 
-      // SetOtaClientRegistrationResponse
+      // SetOtaClientRegistrationResponse (TRANSIENT_LOCAL: late-join 클라이언트가 수신 가능)
       set_ota_client_reg_res_ = std::make_shared<OtaManager::SetOtaClientRegistrationResponsePubSubType>();
       registration_response_dds_->Create(TOPIC_REGISTRATION_RESPONSE,
                                std::static_pointer_cast<void>(set_ota_client_reg_res_),
-                               nullptr);
+                               nullptr, true);
 
-      // NotifyOtaManagerReady
+      // NotifyOtaManagerReady (TRANSIENT_LOCAL: late-join 클라이언트가 수신 가능)
       notify_ota_mgr_ready_ = std::make_shared<OtaManager::NotifyOtaManagerReadyPubSubType>();
       manager_ready_dds_->Create(TOPIC_MANAGER_READY,
                                std::static_pointer_cast<void>(notify_ota_mgr_ready_),
-                               nullptr);
+                               nullptr, true);
 
-      // NotifyAppUpdateStatus
+      // NotifyAppUpdateStatus (raw DDS + ROS2/rosbridge)
       notify_app_update_status_ = std::make_shared<OtaManager::NotifyAppUpdateStatusPubSubType>();
       app_status_dds_->Create(TOPIC_APP_STATUS,
+                               std::static_pointer_cast<void>(notify_app_update_status_),
+                               nullptr);
+      app_status_dds_ros_->Create(TOPIC_ROS_APP_STATUS,
                                std::static_pointer_cast<void>(notify_app_update_status_),
                                nullptr);
 
@@ -285,14 +294,17 @@
                   "Failed: No registered client found for app '" + app_name + "'");
           }
 
-          // Publish the status using app_status_dds_
+          // Publish the status (raw DDS + ROS2/rosbridge)
           if (app_status_dds_) {
               app_status_dds_->Write(std::static_pointer_cast<void>(status_message));
-              
               std::cout << "OtamClientService: Notified app update status - id: " << client_id << ", App: " 
                         << app_name << ", Status: " << status << std::endl;
           } else {
               throw std::runtime_error("App status DDS publisher not initialized");
+          }
+          // ROS2/rosbridge 채널에도 동일 메시지 발행
+          if (app_status_dds_ros_) {
+              app_status_dds_ros_->Write(std::static_pointer_cast<void>(status_message));
           }
       }
       catch (const std::exception& e) {

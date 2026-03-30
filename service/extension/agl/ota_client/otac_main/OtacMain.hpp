@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <memory>
+#include <string>
 
 #include "OtacManagerService.hpp"
 #include "OtacStatusStore.hpp"
@@ -11,7 +12,7 @@ namespace ota_client::agl {
 
     class OtacMain {
         public:
-            bool Initialize();
+            bool Initialize(const std::string& config_path = "");
             void Start();
             void Stop();
 

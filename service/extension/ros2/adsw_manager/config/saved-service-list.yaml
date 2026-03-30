@@ -1,6 +1,6 @@
 version: 0.1
 specs:
-  - containers:
+- containers:
       # ── Docker Compose 예시 (Autoware) ───────────────────────────────────
       # - name: autoware
       #   image: "autoware-universe:latest"
@@ -80,17 +80,17 @@ specs:
 
       # ── 로컬 테스트용 샘플 컨테이너 (adsw-test-app:latest 이미지 필요) ──
       # 이미지 빌드: docker build -t adsw-test-app:latest unittest/docker/
-      - name: adsw-test-docker
-        image: "adsw-test-app:latest"
-        container-type: "docker"
-        services:
-          - package: "test_pkg"
-            name: "test_service"
-            launchfile: ""
-            type: "NORMAL"
-            recovery: "ALWAYS"
-            enabled: "true"
-            max: "0"
+  - name: adsw-test-docker
+    image: "adsw-test-app:latest"
+    container-type: "docker"
+    services:
+    - package: "test_pkg"
+      name: "test_service"
+      launchfile: ""
+      type: "NORMAL"
+      recovery: "ALWAYS"
+      enabled: "true"
+      max: "0"
 
 
 
