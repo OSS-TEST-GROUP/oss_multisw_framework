@@ -18,6 +18,8 @@ struct OtamServerConfig {
     std::string username;
     std::string password;
     std::map<std::string, std::string> headers;
+    // vehicle_info_mgr 차량 상태 조회 활성화 여부 (기본: 비활성화)
+    bool vehicle_info_enabled{false};
 };
 
 class OtamServerService : public OtamService {
@@ -31,6 +33,8 @@ public:
 
     void SetConfigPath(std::string path);
     void SetOtamDiagnosticService(OtamDiagnosticService* svc);
+
+    bool IsVehicleInfoEnabled() const { return config_.vehicle_info_enabled; }
 
     // === ArgoCD Token 생성 ===
     SessionResult CreateOtaSession(); // now calls ArgoCD API

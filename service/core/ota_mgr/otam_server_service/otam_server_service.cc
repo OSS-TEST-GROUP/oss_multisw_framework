@@ -33,6 +33,8 @@ void OtamServerService::Initialize() {
     config_ = LoadConfigFromFile(config_path_);
     std::cout << "[OtamServerService] Loaded ArgoCD config: "
               << config_.server_url << " user=" << config_.username << "\n";
+    std::cout << "[OtamServerService] vehicle_info_enabled: "
+              << (config_.vehicle_info_enabled ? "true" : "false") << "\n";
 
     state_ = ServiceState::INITIALIZED;
     std::cout << "OtamServerService Initialized." << std::endl;
@@ -387,6 +389,9 @@ OtamServerConfig OtamServerService::LoadConfigFromFile(const std::string& path) 
             if (s.contains("url"))       cfg.server_url = s["url"].get<std::string>();
             if (s.contains("username"))  cfg.username  = s["username"].get<std::string>();
             if (s.contains("password"))  cfg.password  = s["password"].get<std::string>();
+        }
+        if (j.contains("vehicle_info_enabled")) {
+            cfg.vehicle_info_enabled = j["vehicle_info_enabled"].get<bool>();
         }
     } catch (const std::exception& e) {
         std::string err_msg = "Failed: OtamServerService config parse error: " + std::string(e.what());

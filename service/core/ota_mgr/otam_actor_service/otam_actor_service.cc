@@ -447,11 +447,15 @@ void OtamActorService::OnSetServiceModeResponseReceived(
           static_cast<int32_t>(OtamError::SUCCEEDED), "Success: Service mode changed to OTA_MODE");
     }
 
-    if (otam_vehicle_service_) {
+    const bool vehicle_info_enabled =
+        otam_server_service_ && otam_server_service_->IsVehicleInfoEnabled();
+
+    if (vehicle_info_enabled && otam_vehicle_service_) {
       // Vehicle 정보 요청 — lock 유지 상태로 호출 (map은 아직 유효)
+      std::cout << "OtamActorService: Requesting vehicle info (vehicle_info_enabled=true)" << std::endl;
       otam_vehicle_service_->RequestVehicleInfo(target_key, "Vehicle.LowVoltageSystemState");
       otam_vehicle_service_->RequestVehicleInfo(target_key, "Vehicle.Speed");
-    } else {
+    } else if (vehicle_info_enabled && !otam_vehicle_service_) {
       std::cerr << "OtamActorService: OtamVehicleService not available" << std::endl;
       pending_updates_.erase(target_key);
       lock.unlock();
@@ -460,6 +464,14 @@ void OtamActorService::OnSetServiceModeResponseReceived(
             static_cast<int32_t>(OtamError::FAILED), "Failed: OtamVehicleService not available");
       }
       PublishSetAppUpdateResponse(msg_id, app_name, ReturnValue::FAIL);
+    } else {
+      // vehicle_info_enabled == false: 차량 상태 조회 생략, 바로 업데이트 진행
+      std::cout << "OtamActorService: Vehicle info check disabled, skipping to update (request_id: "
+                << target_key << ")" << std::endl;
+      PendingUpdateRequest request_copy = pending_updates_.at(target_key);
+      pending_updates_.erase(target_key);
+      lock.unlock();
+      ProcessPendingUpdate(request_copy);
     }
   } else {
     std::cerr << "OtamActorService: SetServiceModeResponse FAIL (request_id: "
@@ -496,8 +508,10 @@ void OtamActorService::OnAppUpdateRequested(
     return;
   }
 
-  // Check if OtamVehicleService is available
-  if (!otam_vehicle_service_) {
+  // Check if OtamVehicleService is available (vehicle_info_enabled 시에만 필수)
+  const bool vehicle_info_enabled =
+      otam_server_service_ && otam_server_service_->IsVehicleInfoEnabled();
+  if (vehicle_info_enabled && !otam_vehicle_service_) {
     std::cerr << "OtamActorService: OtamVehicleService not available" << std::endl;
 
     // Publish diagnostic info
@@ -596,28 +610,35 @@ void OtamActorService::ProcessPendingUpdate(const PendingUpdateRequest& request)
   std::cout << "OtamActorService: Vehicle state: " << vehicle_state
             << ", Vehicle speed: " << vehicle_speed << std::endl;
 
-  // Check vehicle condition before running OTA update
-  // Condition: vehicle_state == "acc" || (vehicle_state == "ignition" && vehicle_speed == "0")
-  if (vehicle_state == "acc") {
-    std::cout << "OtamActorService: Vehicle is in ACC state - OTA update allowed" << std::endl;
-  } else if (vehicle_state == "ignition" && vehicle_speed == "0") {
-    std::cout << "OtamActorService: Vehicle is in IGNITION state with speed 0 - OTA update allowed" << std::endl;
-  } else {
-    std::cerr << "OtamActorService: Vehicle condition not met for OTA update"
-              << " (state: " << vehicle_state << ", speed: " << vehicle_speed << ")" << std::endl;
+  // vehicle_info_enabled == false 이면 차량 상태 조건 체크 생략
+  const bool vehicle_info_enabled =
+      otam_server_service_ && otam_server_service_->IsVehicleInfoEnabled();
 
-    // Publish diagnostic info
-    if (otam_diagnostic_service_) {
-      std::string err_msg = "Failed: Vehicle condition not met for OTA update (state: "
-                            + vehicle_state + ", speed: " + vehicle_speed + ")";
-      otam_diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), err_msg);
+  if (vehicle_info_enabled) {
+    // Check vehicle condition before running OTA update
+    // Condition: vehicle_state == "acc" || (vehicle_state == "ignition" && vehicle_speed == "0")
+    if (vehicle_state == "acc") {
+      std::cout << "OtamActorService: Vehicle is in ACC state - OTA update allowed" << std::endl;
+    } else if (vehicle_state == "ignition" && vehicle_speed == "0") {
+      std::cout << "OtamActorService: Vehicle is in IGNITION state with speed 0 - OTA update allowed" << std::endl;
+    } else {
+      std::cerr << "OtamActorService: Vehicle condition not met for OTA update"
+                << " (state: " << vehicle_state << ", speed: " << vehicle_speed << ")" << std::endl;
+
+      if (otam_diagnostic_service_) {
+        std::string err_msg = "Failed: Vehicle condition not met for OTA update (state: "
+                              + vehicle_state + ", speed: " + vehicle_speed + ")";
+        otam_diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), err_msg);
+      }
+
+      PublishSetAppUpdateResponse(
+          request.msg_id,
+          request.app_name,
+          ReturnValue::FAIL);
+      return;
     }
-
-    PublishSetAppUpdateResponse(
-        request.msg_id,
-        request.app_name,
-        ReturnValue::FAIL);
-    return;
+  } else {
+    std::cout << "OtamActorService: Vehicle info check disabled - OTA update allowed without vehicle state check" << std::endl;
   }
 
   // Call OtamServerService to run OTA update
