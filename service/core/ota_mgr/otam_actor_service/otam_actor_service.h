@@ -15,6 +15,9 @@
 #include <mutex>
 #include <set>
 #include <functional>
+#include <thread>
+#include <vector>
+#include <atomic>
 
 // Forward declaration
 class OtamServerService;
@@ -221,7 +224,22 @@ class OtamActorService: public OtamService {
    */
   int32_t next_request_id_{1000};
 
-  // Topic name constants
+  /**
+   * @brief Background notification threads (managed, not detached)
+   */
+  std::vector<std::thread> notify_threads_;
+
+  /**
+   * @brief Flag to stop background threads on shutdown
+   */
+  std::atomic<bool> stopping_{false};
+
+  /**
+   * @brief Mutex to protect notify_threads_
+   */
+  std::mutex notify_threads_mutex_;
+
+  // Topic name constants (raw DDS)
   static constexpr const char* kTopicGetAppUpdateSettings =
       "/mmf/otamanager/otaactor_service/GetAppUpdateSettings";
   static constexpr const char* kTopicGetAppUpdateSettingsResponse =
@@ -245,6 +263,24 @@ class OtamActorService: public OtamService {
       "mmf/lifecyclemgr/SetServiceModeRequest";
   static constexpr const char* kTopicSetServiceModeResponse =
       "mmf/lifecyclemgr/SetServiceModeResponse";
+
+  // ROS2/rosbridge compatible topic constants (rt/ prefix follows rosbridge DDS topic naming convention)
+  static constexpr const char* kTopicRosGetAppUpdateSettings =
+      "rt/mmf/otamanager/otaactor_service/GetAppUpdateSettings";
+  static constexpr const char* kTopicRosGetAppUpdateSettingsResponse =
+      "rt/mmf/otamanager/otaactor_service/GetAppUpdateSettingsResponse";
+  static constexpr const char* kTopicRosSetAppUpdateSettings =
+      "rt/mmf/otamanager/otaactor_service/SetAppUpdateSettings";
+  static constexpr const char* kTopicRosSetAppUpdateSettingsResponse =
+      "rt/mmf/otamanager/otaactor_service/SetAppUpdateSettingsResponse";
+  static constexpr const char* kTopicRosGetAppUpdateState =
+      "rt/mmf/otamanager/otaactor_service/GetAppUpdateState";
+  static constexpr const char* kTopicRosGetAppUpdateStateResponse =
+      "rt/mmf/otamanager/otaactor_service/GetAppUpdateStateResponse";
+  static constexpr const char* kTopicRosSetAppUpdate =
+      "rt/mmf/otamanager/otaactor_service/SetAppUpdate";
+  static constexpr const char* kTopicRosSetAppUpdateResponse =
+      "rt/mmf/otamanager/otaactor_service/SetAppUpdateResponse";
 
   /**
    * @brief DDS registry mapping topic names to DDS implementations

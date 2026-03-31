@@ -11,15 +11,21 @@
 
 namespace adsw_manager::agl {
 
+    struct AppDockerInfo {
+        std::string image;
+        std::vector<std::string> extra_args;
+    };
+
     class ServiceRegistry {
 
         public:
-            virtual bool Initialize();
-            
+            virtual bool Initialize(const std::string& config_path = "");
+
             virtual std::vector<lifecyclemgr::Service> GetAppList() const;
             virtual std::optional<std::pair<lifecyclemgr::Service, lifecyclemgr::ServiceState>> GetAppInfo(const std::string& app_name) const;
             virtual std::vector<std::pair<std::string, lifecyclemgr::ServiceState>> GetNameStatePairs() const;
             virtual lifecyclemgr::ServiceState GetAppState(const std::string& app_name) const;
+            virtual std::optional<AppDockerInfo> GetDockerInfo(const std::string& app_name) const;
 
             void AddApp(const lifecyclemgr::Service& info);
             void AddApp(const lifecyclemgr::Service& info, lifecyclemgr::ServiceState init_state);
@@ -29,8 +35,10 @@ namespace adsw_manager::agl {
             virtual ~ServiceRegistry() = default;
 
         private:
-            //std::vector<lifecyclemgr::Service> app_list_;
             std::map<lifecyclemgr::Service, lifecyclemgr::ServiceState> app_list_;
+            std::map<std::string, AppDockerInfo> docker_info_;
+
+            bool LoadFromYaml(const std::string& path);
 
     };
 

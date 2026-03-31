@@ -24,7 +24,7 @@ namespace ros2::ota_client {
                                eprosima::fastdds::dds::Publisher* publisher,
                                eprosima::fastdds::dds::Subscriber* subscriber,
                                eprosima::fastdds::dds::TypeSupport type);
-            bool Create(const std::string& topic, bool create_writer = true, bool create_reader = true) override;
+            bool Create(const std::string& topic, bool create_writer = true, bool create_reader = true, bool transient_local = false) override;
             void SetQos(uint32_t qos) override;
             bool Write(std::shared_ptr<void> message) override;
             // void Read(std::shared_ptr<void> message) override;

@@ -1,35 +1,97 @@
 #include "ServiceRegistry.hpp"
+#include "logger/Log.hpp"
 
-#include <iostream>
 #include <algorithm>
+#include <yaml-cpp/yaml.h>
 
 using namespace lifecyclemgr;
 
 namespace adsw_manager::agl {
 
-    bool ServiceRegistry::Initialize() {
+    bool ServiceRegistry::LoadFromYaml(const std::string& path) {
+        try {
+            YAML::Node config = YAML::LoadFile(path);
+            if (!config["services"]) {
+                fprintf(stderr, "[ServiceRegistry] No 'services' key in YAML: %s\n", path.c_str());
+                return false;
+            }
 
-        // app_list_.try_emplace(Service{"adsw_monitor", ServiceType::NORMAL,  RecoveryPolicy::R_DEFAULT, true,  OsType::AGL},
-        //                       ServiceState::NOT_RUNNING);
+            for (const auto& entry : config["services"]) {
+                std::string name = entry["name"].as<std::string>();
 
-        // app_list_.try_emplace(Service{"map", ServiceType::NORMAL,  RecoveryPolicy::R_DEFAULT, true,  OsType::AGL},
-        //                       ServiceState::NOT_RUNNING);
+                std::string st_str = entry["service_type"] ? entry["service_type"].as<std::string>() : "NORMAL";
+                std::string rp_str = entry["recovery_policy"] ? entry["recovery_policy"].as<std::string>() : "R_DEFAULT";
+                bool is_enabled    = entry["is_enabled"]      ? entry["is_enabled"].as<bool>()          : true;
+                std::string os_str = entry["os_type"]         ? entry["os_type"].as<std::string>()       : "AGL";
+                std::string is_str = entry["init_state"]      ? entry["init_state"].as<std::string>()    : "NOT_RUNNING";
 
-        // app_list_.try_emplace(Service{"radio", ServiceType::NORMAL,  RecoveryPolicy::R_DEFAULT, true,  OsType::AGL},
-        //                       ServiceState::NOT_RUNNING);
+                ServiceType service_type = ServiceType::NORMAL;
+                if (st_str == "NORMAL")    service_type = ServiceType::NORMAL;
 
-        // return true;
+                RecoveryPolicy recovery_policy = RecoveryPolicy::R_DEFAULT;
+                if      (rp_str == "R_DEFAULT")        recovery_policy = RecoveryPolicy::R_DEFAULT;
+                else if (rp_str == "ALWAYS")           recovery_policy = RecoveryPolicy::ALWAYS;
+                else if (rp_str == "ON_FAILURE")       recovery_policy = RecoveryPolicy::ON_FAILURE;
+                else if (rp_str == "ON_SUCCESS")       recovery_policy = RecoveryPolicy::ON_SUCCESS;
+                else if (rp_str == "ON_NOT_RESPONDING")recovery_policy = RecoveryPolicy::ON_NOT_RESPONDING;
+                else if (rp_str == "MANUAL")           recovery_policy = RecoveryPolicy::MANUAL;
 
+                OsType os_type = OsType::AGL;
+                if (os_str == "AGL")       os_type = OsType::AGL;
+                else if (os_str == "ROS2") os_type = OsType::ROS2;
+
+                ServiceState init_state = ServiceState::NOT_RUNNING;
+                if (is_str == "RUNNING")   init_state = ServiceState::RUNNING;
+
+                AppDockerInfo docker;
+                if (entry["image"]) {
+                    docker.image = entry["image"].as<std::string>();
+                }
+                if (entry["extra_args"]) {
+                    for (const auto& arg : entry["extra_args"]) {
+                        docker.extra_args.push_back(arg.as<std::string>());
+                    }
+                }
+                docker_info_.emplace(name, std::move(docker));
+
+                Service svc;
+                svc.name(name);
+                svc.service_type(service_type);
+                svc.recovery_policy(recovery_policy);
+                svc.is_enabled(is_enabled);
+                svc.os_type(os_type);
+
+                app_list_.try_emplace(std::move(svc), init_state);
+            }
+
+            fprintf(stdout, "[ServiceRegistry] Loaded %zu service(s) from %s\n",
+                    app_list_.size(), path.c_str());
+            return true;
+        } catch (const YAML::Exception& e) {
+            fprintf(stderr, "[ServiceRegistry] YAML parse error (%s): %s\n", path.c_str(), e.what());
+            return false;
+        }
+    }
+
+    bool ServiceRegistry::Initialize(const std::string& config_path) {
         app_list_.clear();
+        docker_info_.clear();
+
+        if (!config_path.empty()) {
+            if (LoadFromYaml(config_path)) {
+                return true;
+            }
+            fprintf(stderr, "[ServiceRegistry] Falling back to hardcoded list\n");
+        }
 
         auto add = [this](std::string name,
                           ServiceType type,
                           RecoveryPolicy policy,
                           bool enabled,
                           OsType os,
-                          ServiceState init_state){ 
-            Service svc;       // 기본 생성
-            svc.name(std::move(name));       // 각 필드 setter로 설정
+                          ServiceState init_state) {
+            Service svc;
+            svc.name(std::move(name));
             svc.service_type(type);
             svc.recovery_policy(policy);
             svc.is_enabled(enabled);
@@ -54,16 +116,12 @@ namespace adsw_manager::agl {
     }
 
     std::vector<Service> ServiceRegistry::GetAppList() const {
-
         std::vector<Service> out;
         out.reserve(app_list_.size());
-        
         for (const auto& [svc, state] : app_list_) {
             out.push_back(svc);
         }
-        
         return out;
-
     }
 
     std::optional<std::pair<Service, ServiceState>>
@@ -72,7 +130,7 @@ namespace adsw_manager::agl {
             [&](auto const& kv){ return kv.first.name() == app_name; });
 
         if (it == app_list_.end()) {
-            std::cerr << "[ServiceRegistry] " << app_name << " does not exist." << std::endl;
+            LOG_ERROR("[ServiceRegistry] " << app_name << " does not exist.");
             return std::nullopt;
         }
 
@@ -80,14 +138,11 @@ namespace adsw_manager::agl {
     }
 
     std::vector<std::pair<std::string, ServiceState>> ServiceRegistry::GetNameStatePairs() const {
-         // std::lock_guard<std::mutex> lk(mtx_); 
         std::vector<std::pair<std::string, ServiceState>> out;
         out.reserve(app_list_.size());
-        
         for (const auto& [svc, state] : app_list_) {
-            out.emplace_back(svc.name(), state); 
+            out.emplace_back(svc.name(), state);
         }
-        
         return out;
     }
 
@@ -96,7 +151,7 @@ namespace adsw_manager::agl {
             [&](auto const& kv){ return kv.first.name() == app_name; });
 
         if (it == app_list_.end()) {
-            std::cerr << "[ServiceRegistry] App not found: " << app_name << std::endl;
+            LOG_ERROR("[ServiceRegistry] App not found: " << app_name);
             return ServiceState::NOT_RUNNING;
         }
 
@@ -108,11 +163,11 @@ namespace adsw_manager::agl {
     }
 
     void ServiceRegistry::AddApp(const Service& info, ServiceState init_state) {
-        auto it = std::find_if(app_list_.begin(), app_list_.end(), 
-                        [&](auto const& kv){ return kv.first.name() == info.name(); });
+        auto it = std::find_if(app_list_.begin(), app_list_.end(),
+                    [&](auto const& kv){ return kv.first.name() == info.name(); });
 
         if (it != app_list_.end()) {
-            std::cerr << "[ServiceRegistry] App already exists: " << info.name() << std::endl;
+            LOG_WARN("[ServiceRegistry] App already exists: " << info.name());
             return;
         }
 
@@ -124,11 +179,19 @@ namespace adsw_manager::agl {
             [&](auto const& kv){ return kv.first.name() == app_name; });
 
         if (it == app_list_.end()) {
-            std::cerr << "[ServiceRegistry] App not found: " << app_name << std::endl;
+            LOG_ERROR("[ServiceRegistry] App not found: " << app_name);
             return;
         }
 
         app_list_.erase(it);
+    }
+
+    std::optional<AppDockerInfo> ServiceRegistry::GetDockerInfo(const std::string& app_name) const {
+        auto it = docker_info_.find(app_name);
+        if (it == docker_info_.end()) {
+            return std::nullopt;
+        }
+        return it->second;
     }
 
     void ServiceRegistry::UpdateAppState(const std::string& app_name, ServiceState state) {
@@ -136,11 +199,11 @@ namespace adsw_manager::agl {
             [&](auto const& kv){ return kv.first.name() == app_name; });
 
         if (it == app_list_.end()) {
-            std::cerr << "[ServiceRegistry] App not found in registry >>>> " << app_name << std::endl;
+            LOG_ERROR("[ServiceRegistry] App not found in registry: " << app_name);
             return;
         }
 
         it->second = state;
     }
 
-}
+} // namespace adsw_manager::agl

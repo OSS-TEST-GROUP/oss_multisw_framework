@@ -124,7 +124,7 @@ class OtamActorServiceTester {
       printf("[DEBUG] Before fgets()\n");
       fflush(stdout);
 
-      // C 스타일 입력 처리
+      // C-style input handling
       int choice = -1;
       if (fgets(buffer, sizeof(buffer), stdin) == NULL) {
           fprintf(stderr, "[ERROR] Failed to read input!\n");
@@ -135,10 +135,10 @@ class OtamActorServiceTester {
       printf("[DEBUG] After fgets(), buffer=[%s]\n", buffer);
       fflush(stdout);
 
-      // buffer에서 개행 문자 제거
+      // Strip trailing newline from buffer
       buffer[strcspn(buffer, "\n")] = 0;
 
-      // string을 int로 변환
+      // Convert string to int
       if (sscanf(buffer, "%d", &choice) != 1) {
           printf("Invalid input. Please enter a number (0-4).\n");
           continue;
@@ -278,7 +278,7 @@ class OtamActorServiceTester {
       fprintf(stderr, "Error: Failed to read input\n");
       return;
     }
-    buffer[strcspn(buffer, "\n")] = 0;  // 개행 문자 제거
+    buffer[strcspn(buffer, "\n")] = 0;  // strip trailing newline
 
     std::string app_name(buffer);
 
@@ -314,7 +314,7 @@ class OtamActorServiceTester {
       fprintf(stderr, "Error: Failed to read input\n");
       return;
     }
-    buffer[strcspn(buffer, "\n")] = 0;  // 개행 문자 제거
+    buffer[strcspn(buffer, "\n")] = 0;  // strip trailing newline
     std::string app_name(buffer);
 
     printf("Enter settings (JSON format): ");
@@ -324,7 +324,7 @@ class OtamActorServiceTester {
       fprintf(stderr, "Error: Failed to read input\n");
       return;
     }
-    buffer[strcspn(buffer, "\n")] = 0;  // 개행 문자 제거
+    buffer[strcspn(buffer, "\n")] = 0;  // strip trailing newline
     std::string settings(buffer);
 
     auto it = dds_registry_.find(kTopicSetAppUpdateSettings);
@@ -361,7 +361,7 @@ class OtamActorServiceTester {
       fprintf(stderr, "Error: Failed to read input\n");
       return;
     }
-    buffer[strcspn(buffer, "\n")] = 0;  // 개행 문자 제거
+    buffer[strcspn(buffer, "\n")] = 0;  // strip trailing newline
 
     std::string app_name(buffer);
 
@@ -397,7 +397,7 @@ class OtamActorServiceTester {
       fprintf(stderr, "Error: Failed to read input\n");
       return;
     }
-    buffer[strcspn(buffer, "\n")] = 0;  // 개행 문자 제거
+    buffer[strcspn(buffer, "\n")] = 0;  // strip trailing newline
 
     std::string app_name(buffer);
 

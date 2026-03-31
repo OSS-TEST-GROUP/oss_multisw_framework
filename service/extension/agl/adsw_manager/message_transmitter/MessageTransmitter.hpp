@@ -9,6 +9,7 @@
 #include "lifecycle/LifecycleDiagReport.hpp"
 
 #include <memory>
+#include <functional>
 
 namespace adsw_manager::agl {
 
@@ -26,13 +27,19 @@ namespace adsw_manager::agl {
             virtual void PublishAppState();
             virtual void PublishAppList();
 
+            void SetOnUpdateListConfirm(std::function<void()> cb) {
+                on_update_list_confirm_ = std::move(cb);
+            }
+
             virtual ~MessageTransmitter() = default;
 
         private:
             std::shared_ptr<DDSManager> dds_manager_;
             std::shared_ptr<ServiceRegistry> service_registry_;
             std::shared_ptr<ServiceController> service_controller_;
-            
+
+            std::function<void()> on_update_list_confirm_;
+
             void HandleGetAppStateRequest(const lifecyclemgr::GetServiceStateRequest& req);
             void HandleStartAppRequest(const lifecyclemgr::StartServiceRequest& req);
             void HandleStopAppRequest(const lifecyclemgr::StopServiceRequest& req);

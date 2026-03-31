@@ -1,4 +1,5 @@
 #include "MessageTransmitter.hpp"
+#include "logger/Log.hpp"
 
 using namespace eprosima::fastdds::dds;
 using namespace lifecyclemgr;
@@ -7,7 +8,7 @@ namespace adsw_manager::agl {
 
     bool MessageTransmitter::Initialize(DomainParticipant* participant) {
 
-        if(!dds_manager_->Initialize(participant)){
+        if (!dds_manager_->Initialize(participant)) {
             return false;
         }
 
@@ -31,7 +32,7 @@ namespace adsw_manager::agl {
                 this->HandleUpdateListResponse(res);
             }
         );
-        
+
         return true;
     }
 
@@ -52,28 +53,24 @@ namespace adsw_manager::agl {
         }
 
         dds_manager_->PublishNotifyAppState(msg);
-
     }
 
     void MessageTransmitter::PublishAppList() {
 
         UpdateServiceListRequest msg;
-
         msg.service_list(service_registry_->GetAppList());
-
         dds_manager_->PublishUpdateAppList(msg);
-
     }
 
     void MessageTransmitter::HandleGetAppStateRequest(const GetServiceStateRequest& req) {
 
         if (req.os_type() == OsType::AGL) {
-            
+
             std::vector<std::string> app_list;
             std::vector<ServiceState> app_state_list;
             app_list.reserve(req.service_list().size());
             app_state_list.reserve(req.service_list().size());
-    
+
             for (const auto& app_name : req.service_list()) {
                 app_list.emplace_back(app_name);
                 app_state_list.emplace_back(service_registry_->GetAppState(app_name));
@@ -84,9 +81,7 @@ namespace adsw_manager::agl {
             res.service_state_list(std::move(app_state_list));
 
             dds_manager_->GetAppStateHandler()->PublishResponse(res);
-
         }
-
     }
 
     void MessageTransmitter::HandleStartAppRequest(const StartServiceRequest& req) {
@@ -94,53 +89,49 @@ namespace adsw_manager::agl {
         if (req.os_type() == OsType::AGL) {
 
             StartServiceResponse res;
-
             res.ret_code(ReturnCode::SUCCESS);
 
             for (const auto& app_name : req.service_list()) {
                 bool result = service_controller_->StartService(app_name);
-
                 if (!result) {
-                    // std::cerr << "[StartAppHandler] Failed to start app: " << app_name << std::endl;
                     res.ret_code(ReturnCode::FAILED);
-                    break;  // 하나라도 실패하면 루프 중단
+                    break;
                 }
             }
 
             dds_manager_->GetStartAppHandler()->PublishResponse(res);
-
         }
     }
 
     void MessageTransmitter::HandleStopAppRequest(const StopServiceRequest& req) {
 
         if (req.os_type() == OsType::AGL) {
-            
-            StopServiceResponse res;
 
+            StopServiceResponse res;
             res.ret_code(ReturnCode::SUCCESS);
 
             for (const auto& app_name : req.service_list()) {
                 bool result = service_controller_->StopService(app_name);
-
                 if (!result) {
-                    // std::cerr << "[StartAppHandler] Failed to stop app: " << app_name << std::endl;
                     res.ret_code(ReturnCode::FAILED);
-                    break;  // 하나라도 실패하면 루프 중단
+                    break;
                 }
             }
 
             dds_manager_->GetStopAppHandler()->PublishResponse(res);
-
         }
     }
 
     void MessageTransmitter::HandleUpdateListResponse(const UpdateServiceListResponse& res) {
 
         if (res.ret_code() == ReturnCode::SUCCESS) {
-            std::cout << "Update App List Success./n";
+            LOG_INFO("[MessageTransmitter] UpdateServiceList confirmed by manager.");
+            if (on_update_list_confirm_) {
+                on_update_list_confirm_();
+            }
+        } else {
+            LOG_WARN("[MessageTransmitter] UpdateServiceList response: FAILED");
         }
-
     }
-    
-}
+
+} // namespace adsw_manager::agl

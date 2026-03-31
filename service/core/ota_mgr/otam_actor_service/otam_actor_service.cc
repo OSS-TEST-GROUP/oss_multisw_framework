@@ -58,55 +58,70 @@ void OtamActorService::Initialize() {
 
     try {
 
-    // Initialize GetAppUpdateSettings (Request)
+    // Initialize GetAppUpdateSettings (Request) - raw DDS + ROS2/rosbridge
     auto get_settings_type =
         std::make_shared<OtaManager::GetAppUpdateSettingsPubSubType>();
     get_app_update_settings_listener_ = std::make_shared<GetAppUpdateSettingsListener>(this);
     CreateDdsForTopic<OtaManager::GetAppUpdateSettings>(kTopicGetAppUpdateSettings,
                       get_settings_type, get_app_update_settings_listener_);
+    CreateDdsForTopic<OtaManager::GetAppUpdateSettings>(kTopicRosGetAppUpdateSettings,
+                      get_settings_type, get_app_update_settings_listener_);
 
-    // Initialize GetAppUpdateSettingsResponse (Response)
+    // Initialize GetAppUpdateSettingsResponse (Response) - raw DDS + ROS2/rosbridge
     auto get_settings_resp_type =
         std::make_shared<OtaManager::GetAppUpdateSettingsResponsePubSubType>();
     CreateDdsForTopic<OtaManager::GetAppUpdateSettingsResponse>(kTopicGetAppUpdateSettingsResponse,
                       get_settings_resp_type);
+    CreateDdsForTopic<OtaManager::GetAppUpdateSettingsResponse>(kTopicRosGetAppUpdateSettingsResponse,
+                      get_settings_resp_type);
 
-    // Initialize SetAppUpdateSettings (Request)
+    // Initialize SetAppUpdateSettings (Request) - raw DDS + ROS2/rosbridge
     auto set_settings_type =
         std::make_shared<OtaManager::SetAppUpdateSettingsPubSubType>();
     set_app_update_settings_listener_ = std::make_shared<SetAppUpdateSettingsListener>(this);
     CreateDdsForTopic<OtaManager::SetAppUpdateSettings>(kTopicSetAppUpdateSettings,
                       set_settings_type, set_app_update_settings_listener_);
+    CreateDdsForTopic<OtaManager::SetAppUpdateSettings>(kTopicRosSetAppUpdateSettings,
+                      set_settings_type, set_app_update_settings_listener_);
 
-    // Initialize SetAppUpdateSettingsResponse (Response)
+    // Initialize SetAppUpdateSettingsResponse (Response) - raw DDS + ROS2/rosbridge
     auto set_settings_resp_type =
         std::make_shared<OtaManager::SetAppUpdateSettingsResponsePubSubType>();
     CreateDdsForTopic<OtaManager::SetAppUpdateSettingsResponse>(kTopicSetAppUpdateSettingsResponse,
                       set_settings_resp_type);
+    CreateDdsForTopic<OtaManager::SetAppUpdateSettingsResponse>(kTopicRosSetAppUpdateSettingsResponse,
+                      set_settings_resp_type);
 
-    // Initialize GetAppUpdateState (Request)
+    // Initialize GetAppUpdateState (Request) - raw DDS + ROS2/rosbridge
     auto get_state_type =
         std::make_shared<OtaManager::GetAppUpdateStatePubSubType>();
     get_app_update_state_listener_ = std::make_shared<GetAppUpdateStateListener>(this);
     CreateDdsForTopic<OtaManager::GetAppUpdateState>(kTopicGetAppUpdateState, get_state_type,
                       get_app_update_state_listener_);
+    CreateDdsForTopic<OtaManager::GetAppUpdateState>(kTopicRosGetAppUpdateState, get_state_type,
+                      get_app_update_state_listener_);
 
-    // Initialize GetAppUpdateStateResponse (Response)
+    // Initialize GetAppUpdateStateResponse (Response) - raw DDS + ROS2/rosbridge
     auto get_state_resp_type =
         std::make_shared<OtaManager::GetAppUpdateStateResponsePubSubType>();
     CreateDdsForTopic<OtaManager::GetAppUpdateStateResponse>(kTopicGetAppUpdateStateResponse,
                       get_state_resp_type);
+    CreateDdsForTopic<OtaManager::GetAppUpdateStateResponse>(kTopicRosGetAppUpdateStateResponse,
+                      get_state_resp_type);
 
-    // Initialize SetAppUpdate (Request)
+    // Initialize SetAppUpdate (Request) - raw DDS + ROS2/rosbridge
     auto set_update_type =
         std::make_shared<OtaManager::SetAppUpdatePubSubType>();
     set_app_update_listener_ = std::make_shared<SetAppUpdateListener>(this);
     CreateDdsForTopic<OtaManager::SetAppUpdate>(kTopicSetAppUpdate, set_update_type, set_app_update_listener_);
+    CreateDdsForTopic<OtaManager::SetAppUpdate>(kTopicRosSetAppUpdate, set_update_type, set_app_update_listener_);
 
-    // Initialize SetAppUpdateResponse (Response)
+    // Initialize SetAppUpdateResponse (Response) - raw DDS + ROS2/rosbridge
     auto set_update_resp_type =
         std::make_shared<OtaManager::SetAppUpdateResponsePubSubType>();
     CreateDdsForTopic<OtaManager::SetAppUpdateResponse>(kTopicSetAppUpdateResponse,
+                      set_update_resp_type);
+    CreateDdsForTopic<OtaManager::SetAppUpdateResponse>(kTopicRosSetAppUpdateResponse,
                       set_update_resp_type);
 
     // Initialize SetServiceModeRequest (Publisher for lifecycle management)
@@ -143,6 +158,16 @@ void OtamActorService::Start() {
 
 void OtamActorService::Stop() {
     std::cout << "OtamActorService: Stopping OtamActorService." << std::endl;
+
+    // Signal background notification threads to stop, then join them
+    stopping_.store(true);
+    {
+        std::lock_guard<std::mutex> lk(notify_threads_mutex_);
+        for (auto& t : notify_threads_) {
+            if (t.joinable()) t.join();
+        }
+        notify_threads_.clear();
+    }
 
     // Destroy all DDS instances
     for (auto& pair : dds_registry_) {
@@ -392,70 +417,72 @@ void OtamActorService::OnSetServiceModeResponseReceived(
   std::cout << "OtamActorService: SetServiceModeResponse received - ret_code: "
             << static_cast<int>(msg.ret_code()) << std::endl;
 
-  std::lock_guard<std::mutex> lock(pending_updates_mutex_);
-
   // Find pending request waiting for SetServiceModeResponse
+  // Use unique_lock so we can safely unlock before calling Publish after erase
+  std::unique_lock<std::mutex> lock(pending_updates_mutex_);
+
+  int32_t target_key = -1;
+  int32_t msg_id = -1;
+  std::string app_name;
+  bool success = false;
+
   for (auto& pair : pending_updates_) {
-    PendingUpdateRequest& request = pair.second;
-
-    if (request.service_mode_pending) {
-      request.service_mode_pending = false;
-
-      // Check the return code
-      if (msg.ret_code() == lifecyclemgr::ReturnCode::SUCCESS) {
-        std::cout << "OtamActorService: SetServiceModeResponse SUCCESS - "
-                  << "proceeding with vehicle info request for request_id: "
-                  << pair.first << std::endl;
-
-        // Publish diagnostic info
-        if (otam_diagnostic_service_) {
-          otam_diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::SUCCEEDED), "Success: Service mode changed to OTA_MODE");
-        }
-
-        // Now request vehicle info
-        if (otam_vehicle_service_) {
-          otam_vehicle_service_->RequestVehicleInfo(pair.first, "Vehicle.LowVoltageSystemState");
-          otam_vehicle_service_->RequestVehicleInfo(pair.first, "Vehicle.Speed");
-        } else {
-          std::cerr << "OtamActorService: OtamVehicleService not available" << std::endl;
-
-          // Publish diagnostic info
-          if (otam_diagnostic_service_) {
-            otam_diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), "Failed: OtamVehicleService not available");
-          }
-
-          // Send failure response
-          PublishSetAppUpdateResponse(
-              request.msg_id,
-              request.app_name,
-              ReturnValue::FAIL);
-
-          // Remove from pending
-          pending_updates_.erase(pair.first);
-        }
-      } else {
-        std::cerr << "OtamActorService: SetServiceModeResponse FAIL - "
-                  << "cannot proceed with OTA update for request_id: "
-                  << pair.first << std::endl;
-
-        // Publish diagnostic info
-        if (otam_diagnostic_service_) {
-          otam_diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), "Failed: Service mode change to OTA_MODE failed");
-        }
-
-        // Send failure response
-        PublishSetAppUpdateResponse(
-            request.msg_id,
-            request.app_name,
-            ReturnValue::FAIL);
-
-        // Remove from pending
-        pending_updates_.erase(pair.first);
-      }
-
-      // We only expect one pending SetServiceModeRequest at a time
+    if (pair.second.service_mode_pending) {
+      target_key = pair.first;
+      msg_id     = pair.second.msg_id;
+      app_name   = pair.second.app_name;
+      pair.second.service_mode_pending = false;
+      success = (msg.ret_code() == lifecyclemgr::ReturnCode::SUCCESS);
       break;
     }
+  }
+
+  if (target_key < 0) return;  // no pending request waiting for this response
+
+  if (success) {
+    std::cout << "OtamActorService: SetServiceModeResponse SUCCESS (request_id: "
+              << target_key << ")" << std::endl;
+    if (otam_diagnostic_service_) {
+      otam_diagnostic_service_->PublishOtaMgrInfo(
+          static_cast<int32_t>(OtamError::SUCCEEDED), "Success: Service mode changed to OTA_MODE");
+    }
+
+    const bool vehicle_info_enabled =
+        otam_server_service_ && otam_server_service_->IsVehicleInfoEnabled();
+
+    if (vehicle_info_enabled && otam_vehicle_service_) {
+      // Request vehicle info — called while holding the lock (map still valid)
+      std::cout << "OtamActorService: Requesting vehicle info (vehicle_info_enabled=true)" << std::endl;
+      otam_vehicle_service_->RequestVehicleInfo(target_key, "Vehicle.LowVoltageSystemState");
+      otam_vehicle_service_->RequestVehicleInfo(target_key, "Vehicle.Speed");
+    } else if (vehicle_info_enabled && !otam_vehicle_service_) {
+      std::cerr << "OtamActorService: OtamVehicleService not available" << std::endl;
+      pending_updates_.erase(target_key);
+      lock.unlock();
+      if (otam_diagnostic_service_) {
+        otam_diagnostic_service_->PublishOtaMgrInfo(
+            static_cast<int32_t>(OtamError::FAILED), "Failed: OtamVehicleService not available");
+      }
+      PublishSetAppUpdateResponse(msg_id, app_name, ReturnValue::FAIL);
+    } else {
+      // vehicle_info_enabled == false: skip vehicle state query, proceed directly to update
+      std::cout << "OtamActorService: Vehicle info check disabled, skipping to update (request_id: "
+                << target_key << ")" << std::endl;
+      PendingUpdateRequest request_copy = pending_updates_.at(target_key);
+      pending_updates_.erase(target_key);
+      lock.unlock();
+      ProcessPendingUpdate(request_copy);
+    }
+  } else {
+    std::cerr << "OtamActorService: SetServiceModeResponse FAIL (request_id: "
+              << target_key << ")" << std::endl;
+    pending_updates_.erase(target_key);
+    lock.unlock();
+    if (otam_diagnostic_service_) {
+      otam_diagnostic_service_->PublishOtaMgrInfo(
+          static_cast<int32_t>(OtamError::FAILED), "Failed: Service mode change to OTA_MODE failed");
+    }
+    PublishSetAppUpdateResponse(msg_id, app_name, ReturnValue::FAIL);
   }
 }
 
@@ -481,8 +508,10 @@ void OtamActorService::OnAppUpdateRequested(
     return;
   }
 
-  // Check if OtamVehicleService is available
-  if (!otam_vehicle_service_) {
+  // Check if OtamVehicleService is available (required only when vehicle_info_enabled)
+  const bool vehicle_info_enabled =
+      otam_server_service_ && otam_server_service_->IsVehicleInfoEnabled();
+  if (vehicle_info_enabled && !otam_vehicle_service_) {
     std::cerr << "OtamActorService: OtamVehicleService not available" << std::endl;
 
     // Publish diagnostic info
@@ -538,17 +567,19 @@ void OtamActorService::OnVehicleInfoReceived(
     std::cout << "OtamActorService: All vehicle info collected for request "
               << request_id << ", processing update..." << std::endl;
 
-    // Make a copy of the request for processing
+    // Copy request data before erasing to avoid iterator invalidation
     PendingUpdateRequest request_copy = request;
-
-    // Remove from pending map
     pending_updates_.erase(it);
 
-    // Process the update (unlock happens automatically when lock goes out of scope)
-    // We need to unlock before calling ProcessPendingUpdate to avoid deadlock
-    pending_updates_mutex_.unlock();
-    ProcessPendingUpdate(request_copy);
-    pending_updates_mutex_.lock();
+    // Call ProcessPendingUpdate without holding the mutex to avoid deadlock;
+    // explicitly control the unique_lock scope
+    {
+      std::unique_lock<std::mutex> release_lock(pending_updates_mutex_, std::adopt_lock);
+      release_lock.unlock();
+      ProcessPendingUpdate(request_copy);
+      // No need to re-lock when release_lock goes out of scope — returning immediately
+      return;
+    }
   } else {
     std::cout << "OtamActorService: Still waiting for vehicle info: ";
     for (const auto& pending : request.pending_info) {
@@ -579,28 +610,35 @@ void OtamActorService::ProcessPendingUpdate(const PendingUpdateRequest& request)
   std::cout << "OtamActorService: Vehicle state: " << vehicle_state
             << ", Vehicle speed: " << vehicle_speed << std::endl;
 
-  // Check vehicle condition before running OTA update
-  // Condition: vehicle_state == "acc" || (vehicle_state == "ignition" && vehicle_speed == "0")
-  if (vehicle_state == "acc") {
-    std::cout << "OtamActorService: Vehicle is in ACC state - OTA update allowed" << std::endl;
-  } else if (vehicle_state == "ignition" && vehicle_speed == "0") {
-    std::cout << "OtamActorService: Vehicle is in IGNITION state with speed 0 - OTA update allowed" << std::endl;
-  } else {
-    std::cerr << "OtamActorService: Vehicle condition not met for OTA update"
-              << " (state: " << vehicle_state << ", speed: " << vehicle_speed << ")" << std::endl;
+  // Skip vehicle condition check when vehicle_info_enabled == false
+  const bool vehicle_info_enabled =
+      otam_server_service_ && otam_server_service_->IsVehicleInfoEnabled();
 
-    // Publish diagnostic info
-    if (otam_diagnostic_service_) {
-      std::string err_msg = "Failed: Vehicle condition not met for OTA update (state: "
-                            + vehicle_state + ", speed: " + vehicle_speed + ")";
-      otam_diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), err_msg);
+  if (vehicle_info_enabled) {
+    // Check vehicle condition before running OTA update
+    // Condition: vehicle_state == "acc" || (vehicle_state == "ignition" && vehicle_speed == "0")
+    if (vehicle_state == "acc") {
+      std::cout << "OtamActorService: Vehicle is in ACC state - OTA update allowed" << std::endl;
+    } else if (vehicle_state == "ignition" && vehicle_speed == "0") {
+      std::cout << "OtamActorService: Vehicle is in IGNITION state with speed 0 - OTA update allowed" << std::endl;
+    } else {
+      std::cerr << "OtamActorService: Vehicle condition not met for OTA update"
+                << " (state: " << vehicle_state << ", speed: " << vehicle_speed << ")" << std::endl;
+
+      if (otam_diagnostic_service_) {
+        std::string err_msg = "Failed: Vehicle condition not met for OTA update (state: "
+                              + vehicle_state + ", speed: " + vehicle_speed + ")";
+        otam_diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), err_msg);
+      }
+
+      PublishSetAppUpdateResponse(
+          request.msg_id,
+          request.app_name,
+          ReturnValue::FAIL);
+      return;
     }
-
-    PublishSetAppUpdateResponse(
-        request.msg_id,
-        request.app_name,
-        ReturnValue::FAIL);
-    return;
+  } else {
+    std::cout << "OtamActorService: Vehicle info check disabled - OTA update allowed without vehicle state check" << std::endl;
   }
 
   // Call OtamServerService to run OTA update
@@ -668,6 +706,12 @@ void OtamActorService::PublishAppUpdateSettingsResponse(
   std::cout << "OtamActorService: Published "
             << "GetAppUpdateSettingsResponse - id: " << id
             << std::endl;
+
+  // Publish the same response on the ROS2/rosbridge channel
+  auto ros_it = dds_registry_.find(kTopicRosGetAppUpdateSettingsResponse);
+  if (ros_it != dds_registry_.end()) {
+    ros_it->second->Write(std::static_pointer_cast<void>(response));
+  }
 }
 
 void OtamActorService::PublishSetAppUpdateSettingsResponse(
@@ -693,6 +737,12 @@ void OtamActorService::PublishSetAppUpdateSettingsResponse(
   std::cout << "OtamActorService: Published "
             << "SetAppUpdateSettingsResponse - id: " << id
             << std::endl;
+
+  // Publish the same response on the ROS2/rosbridge channel
+  auto ros_it = dds_registry_.find(kTopicRosSetAppUpdateSettingsResponse);
+  if (ros_it != dds_registry_.end()) {
+    ros_it->second->Write(std::static_pointer_cast<void>(response));
+  }
 }
 
 void OtamActorService::PublishAppUpdateStateResponse(
@@ -720,6 +770,12 @@ void OtamActorService::PublishAppUpdateStateResponse(
   std::cout << "OtamActorService: Published "
             << "GetAppUpdateStateResponse - id: " << id
             << std::endl;
+
+  // Publish the same response on the ROS2/rosbridge channel
+  auto ros_it = dds_registry_.find(kTopicRosGetAppUpdateStateResponse);
+  if (ros_it != dds_registry_.end()) {
+    ros_it->second->Write(std::static_pointer_cast<void>(response));
+  }
 }
 
 void OtamActorService::PublishSetAppUpdateResponse(
@@ -745,23 +801,28 @@ void OtamActorService::PublishSetAppUpdateResponse(
   std::cout << "OtamActorService: Published "
             << "SetAppUpdateResponse - id: " << id << std::endl;
 
-  // If update was successfully triggered, notify client service in a separate thread
+  // Publish the same response on the ROS2/rosbridge channel
+  auto ros_it = dds_registry_.find(kTopicRosSetAppUpdateResponse);
+  if (ros_it != dds_registry_.end()) {
+    ros_it->second->Write(std::static_pointer_cast<void>(response));
+  }
+
+  // If the update started successfully, poll status in a background thread and notify clients.
+  // Store the thread in notify_threads_ instead of detaching, so Stop() can safely join it.
   if (code == ReturnValue::SUCCESS && otam_client_service_ && otam_server_service_) {
-    std::thread([this, app_name]() {
+    std::lock_guard<std::mutex> lk(notify_threads_mutex_);
+    notify_threads_.emplace_back([this, app_name]() {
       try {
         std::cout << "OtamActorService: Starting background notification thread for "
                   << app_name << std::endl;
 
-        // Record start time for timeout handling
         auto start_time = std::chrono::steady_clock::now();
         const auto timeout_duration = std::chrono::seconds(10);
 
         bool keep_polling = true;
-        while (keep_polling) {
-          // Get update state from OtamServerService
+        while (keep_polling && !stopping_.load()) {
           AppUpdateStateResult result = otam_server_service_->GetOtaUpdateState(app_name);
 
-          // Parse operationState from app_state_info JSON
           std::string operation_state = "Unknown";
           if (result.ret_code == ReturnValue::SUCCESS && !result.app_state_info.empty()) {
             try {
@@ -770,46 +831,45 @@ void OtamActorService::PublishSetAppUpdateResponse(
                 operation_state = state_json["operationState"].get<std::string>();
               }
             } catch (const nlohmann::json::exception& e) {
-              std::string err_msg = "Failed to parse operationState in background thread: " + std::string(e.what());
+              std::string err_msg = "Failed to parse operationState: " + std::string(e.what());
               std::cerr << "OtamActorService: " << err_msg << std::endl;
               if (otam_diagnostic_service_) {
-                otam_diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), err_msg);
+                otam_diagnostic_service_->PublishOtaMgrInfo(
+                    static_cast<int32_t>(OtamError::FAILED), err_msg);
               }
             }
           }
 
-          // Notify client service with the operation state
           otam_client_service_->NotifyAppUpdateStatus(app_name, operation_state);
-
           std::cout << "OtamActorService: Notified client for " << app_name
                     << " with state: " << operation_state << std::endl;
 
-          // If operationState is "Running", check timeout and wait 500ms
           if (operation_state == "Running") {
-            // Check if timeout exceeded
-            auto elapsed_time = std::chrono::steady_clock::now() - start_time;
-            if (elapsed_time >= timeout_duration) {
-              std::cerr << "OtamActorService: Timeout exceeded (10 seconds) for "
-                        << app_name << ", stopping polling" << std::endl;
+            auto elapsed = std::chrono::steady_clock::now() - start_time;
+            if (elapsed >= timeout_duration) {
+              std::cerr << "OtamActorService: Timeout (10s) for " << app_name << std::endl;
               keep_polling = false;
             } else {
-              std::this_thread::sleep_for(std::chrono::milliseconds(500));
+              // Sleep in 50ms slices to react to the stopping_ flag promptly
+              for (int i = 0; i < 10 && !stopping_.load(); ++i) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+              }
             }
           } else {
-            // For any other state, stop polling
             keep_polling = false;
             std::cout << "OtamActorService: Background notification completed for "
-                      << app_name << " with final state: " << operation_state << std::endl;
+                      << app_name << " final state: " << operation_state << std::endl;
           }
         }
       } catch (const std::exception& e) {
         std::string err_msg = "Background notification failed: " + std::string(e.what());
         std::cerr << "OtamActorService: " << err_msg << std::endl;
         if (otam_diagnostic_service_) {
-          otam_diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), err_msg);
+          otam_diagnostic_service_->PublishOtaMgrInfo(
+              static_cast<int32_t>(OtamError::FAILED), err_msg);
         }
       }
-    }).detach();
+    });
   }
 }
 

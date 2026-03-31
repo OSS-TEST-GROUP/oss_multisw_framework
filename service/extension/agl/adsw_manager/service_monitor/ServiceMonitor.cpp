@@ -7,13 +7,14 @@ using namespace lifecyclemgr;
 
 namespace adsw_manager::agl {
 
-    bool ServiceMonitor::Initialize(DomainParticipant* participant, std::shared_ptr<ServiceRegistry> registry, std::shared_ptr<MessageTransmitter> transmitter) {
+    bool ServiceMonitor::Initialize(DomainParticipant* participant, std::shared_ptr<ServiceRegistry> registry, std::shared_ptr<MessageTransmitter> transmitter, AppController* app_controller) {
 
         participant_ = participant;
         service_registry_ = registry;
         message_transmitter_ = transmitter;
+        app_controller_ = app_controller;
 
-        return true; 
+        return true;
     }
 
     void ServiceMonitor::StartMonitoring() {
@@ -49,10 +50,18 @@ namespace adsw_manager::agl {
 
         for (auto& [app_name, reader] : readers_) {
             const auto last_time = reader->GetLastReceivedTime();
+            const bool heartbeat_ok = (now - last_time <= timeout_);
 
-            const ServiceState expected =
-                (now - last_time > timeout_) ? ServiceState::NOT_RUNNING
-                                             : ServiceState::RUNNING;
+            ServiceState expected;
+            if (heartbeat_ok) {
+                expected = ServiceState::RUNNING;
+            } else if (use_docker_fallback_ && app_controller_) {
+                expected = app_controller_->IsAppRunning(app_name)
+                               ? ServiceState::RUNNING
+                               : ServiceState::NOT_RUNNING;
+            } else {
+                expected = ServiceState::NOT_RUNNING;
+            }
 
             auto info = service_registry_->GetAppInfo(app_name);
 

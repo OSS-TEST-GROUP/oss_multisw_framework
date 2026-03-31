@@ -1,0 +1,6 @@
+{
+  "client_name": "agl_ota_client",
+  "apps": [
+    { "name": "adsw_monitor", "status": "installed" }
+  ]
+}

@@ -3,6 +3,7 @@ project(agl_adsw_manager)
 
 find_package(fastcdr REQUIRED)
 find_package(fastdds REQUIRED)
+find_package(yaml-cpp REQUIRED)
 
 set(MESSAGE_TRANSMITTER
 	message_transmitter/MessageTransmitter.cpp
@@ -28,6 +29,10 @@ set(SERVICE_REGISTRY
     service_registry/ServiceRegistry.cpp
 )
 
+set(LOGGER
+    logger/Logger.cpp
+)
+
 set(GENERATED_IDL_DIR ${CMAKE_INSTALL_PREFIX}/generated/idl)
 
 file(GLOB GENERATED_LIFECYCLE_FILES "${GENERATED_IDL_DIR}/lifecycle/*.cxx")
@@ -39,12 +44,14 @@ add_library(agl_adsw_core STATIC
 			${SERVICE_CONTROLLER}
 			${SERVICE_MONITOR}
 			${SERVICE_REGISTRY}
+			${LOGGER}
 			${GENERATED_LIFECYCLE_FILES}
 			${GENERATED_AGL_FILES}
 )
 
 target_include_directories(agl_adsw_core PUBLIC
 							.
+							logger
 							service_registry
 							message_transmitter
 							service_controller
@@ -52,7 +59,8 @@ target_include_directories(agl_adsw_core PUBLIC
 
 target_link_libraries(agl_adsw_core PUBLIC
 						fastcdr
-						fastdds)
+						fastdds
+						yaml-cpp)
 
 add_executable(${PROJECT_NAME} main.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE agl_adsw_core)
@@ -69,9 +77,6 @@ install(TARGETS ${PROJECT_NAME}
 	ARCHIVE DESTINATION lib
 )
 
-# install(DIRECTORY
-# 	${CMAKE_SOURCE_DIR}/idl/dds/common
-# 	${CMAKE_SOURCE_DIR}/idl/lifecycle
-#	${CMAKE_SOURCE_DIR}/idl/agl
-# 	DESTINATION bin/idl
-# )
+install(FILES config/agl-service-list.yaml
+	DESTINATION bin/config
+)

@@ -50,7 +50,7 @@ protected:
         // ON_CALL(*mock_registry, Initialize()).WillByDefault(Return(true));
         // ON_CALL(*mock_controller, Initialize()).WillByDefault(Return(true));
         // ON_CALL(*mock_transmitter, Initialize(_)).WillByDefault(Return(true));
-        // ON_CALL(*mock_monitor, Initialize(_,_,_)).WillByDefault(Return(true));
+        // ON_CALL(*mock_monitor, Initialize(_,_,_,_)).WillByDefault(Return(true));
     }
 
     void TearDown() override {
@@ -68,7 +68,7 @@ TEST_F(ADSWManagerTestFixture, Initialize_NullParticipant) {
     EXPECT_CALL(*mock_registry, Initialize()).Times(0);
     EXPECT_CALL(*mock_controller, Initialize()).Times(0);
     EXPECT_CALL(*mock_transmitter, Initialize(_)).Times(0);
-    EXPECT_CALL(*mock_monitor, Initialize(_,_,_)).Times(0);
+    EXPECT_CALL(*mock_monitor, Initialize(_,_,_,_)).Times(0);
     
     ADSWManager manager(nullptr, mock_registry, mock_app_controller, 
         mock_controller, mock_ddsmanager, mock_transmitter, mock_monitor);
@@ -79,7 +79,7 @@ TEST_F(ADSWManagerTestFixture, Initialize_NullRegistry) {
     EXPECT_CALL(*mock_registry, Initialize()).Times(0);
     EXPECT_CALL(*mock_controller, Initialize()).Times(0);
     EXPECT_CALL(*mock_transmitter, Initialize(_)).Times(0);
-    EXPECT_CALL(*mock_monitor, Initialize(_,_,_)).Times(0);
+    EXPECT_CALL(*mock_monitor, Initialize(_,_,_,_)).Times(0);
 
     ADSWManager manager(participant, nullptr, mock_app_controller, 
         mock_controller, mock_ddsmanager, mock_transmitter, mock_monitor);
@@ -90,7 +90,7 @@ TEST_F(ADSWManagerTestFixture, Initialize_NullAppController) {
     EXPECT_CALL(*mock_registry, Initialize()).Times(0);
     EXPECT_CALL(*mock_controller, Initialize()).Times(0);
     EXPECT_CALL(*mock_transmitter, Initialize(_)).Times(0);
-    EXPECT_CALL(*mock_monitor, Initialize(_,_,_)).Times(0);
+    EXPECT_CALL(*mock_monitor, Initialize(_,_,_,_)).Times(0);
 
     ADSWManager manager(participant, mock_registry, nullptr, 
         mock_controller, mock_ddsmanager, mock_transmitter, mock_monitor);
@@ -101,7 +101,7 @@ TEST_F(ADSWManagerTestFixture, Initialize_NullServiceController) {
     EXPECT_CALL(*mock_registry, Initialize()).Times(0);
     EXPECT_CALL(*mock_controller, Initialize()).Times(0);
     EXPECT_CALL(*mock_transmitter, Initialize(_)).Times(0);
-    EXPECT_CALL(*mock_monitor, Initialize(_,_,_)).Times(0);
+    EXPECT_CALL(*mock_monitor, Initialize(_,_,_,_)).Times(0);
 
     ADSWManager manager(participant, mock_registry, mock_app_controller, 
         nullptr, mock_ddsmanager, mock_transmitter, mock_monitor);
@@ -112,7 +112,7 @@ TEST_F(ADSWManagerTestFixture, Initialize_NullDDSManager) {
     EXPECT_CALL(*mock_registry, Initialize()).Times(0);
     EXPECT_CALL(*mock_controller, Initialize()).Times(0);
     EXPECT_CALL(*mock_transmitter, Initialize(_)).Times(0);
-    EXPECT_CALL(*mock_monitor, Initialize(_,_,_)).Times(0);
+    EXPECT_CALL(*mock_monitor, Initialize(_,_,_,_)).Times(0);
 
     ADSWManager manager(participant, mock_registry, mock_app_controller, 
         mock_controller, nullptr, mock_transmitter, mock_monitor);
@@ -123,7 +123,7 @@ TEST_F(ADSWManagerTestFixture, Initialize_NullTransmitter) {
     EXPECT_CALL(*mock_registry, Initialize()).Times(0);
     EXPECT_CALL(*mock_controller, Initialize()).Times(0);
     EXPECT_CALL(*mock_transmitter, Initialize(_)).Times(0);
-    EXPECT_CALL(*mock_monitor, Initialize(_,_,_)).Times(0);
+    EXPECT_CALL(*mock_monitor, Initialize(_,_,_,_)).Times(0);
 
     ADSWManager manager(participant, mock_registry, mock_app_controller, 
         mock_controller, mock_ddsmanager, nullptr, mock_monitor);
@@ -134,7 +134,7 @@ TEST_F(ADSWManagerTestFixture, Initialize_NullMonitor) {
     EXPECT_CALL(*mock_registry, Initialize()).Times(0);
     EXPECT_CALL(*mock_controller, Initialize()).Times(0);
     EXPECT_CALL(*mock_transmitter, Initialize(_)).Times(0);
-    EXPECT_CALL(*mock_monitor, Initialize(_,_,_)).Times(0);
+    EXPECT_CALL(*mock_monitor, Initialize(_,_,_,_)).Times(0);
 
     ADSWManager manager(participant, mock_registry, mock_app_controller, 
         mock_controller, mock_ddsmanager, mock_transmitter, nullptr);
@@ -166,7 +166,7 @@ TEST_F(ADSWManagerTestFixture, Initialize_Success_WiresEverythingInOrder) {
     std::shared_ptr<ServiceRegistry> passed_reg;
     std::shared_ptr<MessageTransmitter> passed_tx;
 
-    EXPECT_CALL(*mock_monitor, Initialize(_, _, _))
+    EXPECT_CALL(*mock_monitor, Initialize(_, _, _, _))
         .Times(1)
         .WillOnce(DoAll(SaveArg<0>(&p_to_mon),
                         SaveArg<1>(&passed_reg),
@@ -195,7 +195,7 @@ TEST_F(ADSWManagerTestFixture, Initialize_Fails_WhenServiceRegistryInitFails) {
 
     EXPECT_CALL(*mock_controller, Initialize()).Times(0);
     EXPECT_CALL(*mock_transmitter, Initialize(_)).Times(0);
-    EXPECT_CALL(*mock_monitor, Initialize(_,_,_)).Times(0);
+    EXPECT_CALL(*mock_monitor, Initialize(_,_,_,_)).Times(0);
 
     EXPECT_FALSE(manager.Initialize());
 }
@@ -210,7 +210,7 @@ TEST_F(ADSWManagerTestFixture, Initialize_Fails_WhenServiceControllerInitFails) 
     EXPECT_CALL(*mock_controller, Initialize()).WillOnce(Return(false));
 
     EXPECT_CALL(*mock_transmitter, Initialize(_)).Times(0);
-    EXPECT_CALL(*mock_monitor, Initialize(_,_,_)).Times(0);
+    EXPECT_CALL(*mock_monitor, Initialize(_,_,_,_)).Times(0);
 
     EXPECT_FALSE(manager.Initialize());
 }
@@ -225,7 +225,7 @@ TEST_F(ADSWManagerTestFixture, Initialize_Fails_WhenMessageTransmitterInitFails)
     EXPECT_CALL(*mock_controller, Initialize()).WillOnce(Return(true));
     EXPECT_CALL(*mock_transmitter, Initialize(_)).WillOnce(Return(false));
 
-    EXPECT_CALL(*mock_monitor, Initialize(_,_,_)).Times(0);
+    EXPECT_CALL(*mock_monitor, Initialize(_,_,_,_)).Times(0);
 
     EXPECT_FALSE(manager.Initialize());
 }
@@ -239,7 +239,7 @@ TEST_F(ADSWManagerTestFixture, Initialize_Fails_WhenServiceMonitorInitFails) {
     EXPECT_CALL(*mock_registry, Initialize()).WillOnce(Return(true));
     EXPECT_CALL(*mock_controller, Initialize()).WillOnce(Return(true));
     EXPECT_CALL(*mock_transmitter, Initialize(_)).WillOnce(Return(true));
-    EXPECT_CALL(*mock_monitor, Initialize(_,_,_)).WillOnce(Return(false));
+    EXPECT_CALL(*mock_monitor, Initialize(_,_,_,_)).WillOnce(Return(false));
 
     EXPECT_FALSE(manager.Initialize());
 }

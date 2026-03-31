@@ -3,5 +3,6 @@
     "url": "http://localhost:10000",
     "username": "admin",
     "password": "start$44"
-  }
+  },
+  "vehicle_info_enabled": false
 }

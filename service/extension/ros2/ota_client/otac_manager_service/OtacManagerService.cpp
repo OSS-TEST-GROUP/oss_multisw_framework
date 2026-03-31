@@ -4,7 +4,7 @@
 
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp>
 
-using namespace OtaManager;
+using namespace ota_manager::msg;
 using namespace eprosima::fastdds::dds;
 
 namespace ros2::ota_client
@@ -71,11 +71,11 @@ namespace ros2::ota_client
         {
             return false;
         }
-        if (!registration_response_dds_->Create("/mmf/otamanager/otaclient_service/SetOtaClientRegistrationResponse", false, true))
+        if (!registration_response_dds_->Create("/mmf/otamanager/otaclient_service/SetOtaClientRegistrationResponse", false, true, true))
         {
             return false;
         }
-        if (!manager_ready_dds_->Create("/mmf/otamanager/otaclient_service/NotifyOtaManagerReady", false, true))
+        if (!manager_ready_dds_->Create("/mmf/otamanager/otaclient_service/NotifyOtaManagerReady", false, true, true))
         {
             return false;
         }
@@ -115,7 +115,7 @@ namespace ros2::ota_client
         //     return false;
         // }
 
-        auto reg = std::make_shared<OtaManager::SetOtaClientRegistration>();
+        auto reg = std::make_shared<ota_manager::msg::SetOtaClientRegistration>();
         reg->client_name(std::move(client_name));
 
         auto &seq = reg->app_list();

@@ -4,6 +4,7 @@ project ( "ota_client" )
 
 find_package(fastcdr REQUIRED)
 find_package(fastdds REQUIRED)
+find_package(nlohmann_json QUIET)
 
 ## Source
 
@@ -40,6 +41,10 @@ target_link_libraries(ota_client_core PUBLIC
                       fastcdr
                       fastdds)
 
+if(nlohmann_json_FOUND)
+    target_link_libraries(ota_client_core PUBLIC nlohmann_json::nlohmann_json)
+endif()
+
                       
 add_executable ( ${PROJECT_NAME} ${MAIN_SRC} )
 target_link_libraries(${PROJECT_NAME} PRIVATE ota_client_core)
@@ -49,6 +54,10 @@ install ( TARGETS ${PROJECT_NAME}
     RUNTIME DESTINATION bin
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
+)
+
+install ( FILES config/ota_client_config.json
+    DESTINATION config
 )
 
 option(BUILD_UNITTEST "Build unit tests" OFF)
