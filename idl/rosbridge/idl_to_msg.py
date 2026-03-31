@@ -179,16 +179,9 @@ def main():
 
     # IDL files to skip:
     # - agl/ros2/Gid* : already covered by rmw_dds_common
-    # - diagnostic/*  : already covered by the 'diagnosticmgr' ROS2 package
-    #                   (avoids duplicate type definitions that confuse rosbridge)
-    # - common/Common.idl : CommonStatusType is part of diagnosticmgr
     skip_files = {"String_.idl", "Gid.idl", "NodeEntitiesInfo.idl", "ParticipantEntitiesInfo.idl"}
-    skip_dirs  = {"diagnostic", "common"}
 
-    idl_files = [
-        f for f in idl_root.rglob("*.idl")
-        if f.name not in skip_files and f.parent.name not in skip_dirs
-    ]
+    idl_files = [f for f in idl_root.rglob("*.idl") if f.name not in skip_files]
 
     generated = []
     for idl_path in sorted(idl_files):

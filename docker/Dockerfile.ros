@@ -58,17 +58,6 @@ RUN apt-get -o Acquire::AllowReleaseInfoChange=true update \
     python3-colcon-common-extensions \
     && rm -rf /var/lib/apt/lists/*
 
-RUN curl -v -u "builder:obigo@se" \
-    -o /tmp/diagnosticmgr.tar.gz \
-    https://repo.obigo.com/repository/ai2/oss/ros2/diagnosticmgr.tar.gz \
-    && cd /tmp && tar xvf diagnosticmgr.tar.gz \
-    && cd diagnosticmgr \
-    && /bin/bash -c " \
-    source /opt/ros/humble/setup.bash \
-    && colcon build --install-base /opt/ros/humble/share/diagnosticmgr \
-    && cd /tmp && rm -rf /tmp/diagnosticmgr* \
-    "
-
 RUN wget -O /tmp/tier4_autoware_msgs.tar.gz \
     https://github.com/tier4/tier4_autoware_msgs/archive/refs/tags/v0.58.0.tar.gz \
     && cd /tmp && tar xvf tier4_autoware_msgs.tar.gz \
