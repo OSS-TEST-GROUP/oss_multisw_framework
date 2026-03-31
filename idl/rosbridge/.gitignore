@@ -1,0 +1,8 @@
+# colcon build artifacts
+build/
+install/
+log/
+
+# Auto-generated from DDS IDL via idl_to_msg.py
+# Regenerated automatically on each colcon build
+msg/

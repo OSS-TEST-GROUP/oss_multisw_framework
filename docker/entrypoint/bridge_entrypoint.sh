@@ -5,6 +5,7 @@ set -e
 source /opt/ros/humble/setup.bash
 source /opt/ros/humble/share/tier4_autoware/setup.bash
 source /opt/ros/humble/share/diagnosticmgr/setup.bash
+source /opt/ros/humble/share/mmf_interfaces/setup.bash
 
 ros2 launch rosbridge_server rosbridge_websocket_launch.xml
 

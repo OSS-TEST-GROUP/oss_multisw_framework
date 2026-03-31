@@ -79,6 +79,15 @@ RUN wget -O /tmp/tier4_autoware_msgs.tar.gz \
     && cd /tmp && rm -rf tier4_autoware_msgs* \
     "
 
+# Build mmf_interfaces (generated from idl/dds via idl_to_msg.py)
+COPY idl/ /tmp/mmf_ws/idl/
+RUN /bin/bash -c " \
+    source /opt/ros/humble/setup.bash \
+    && cd /tmp/mmf_ws/idl/rosbridge \
+    && colcon build --install-base /opt/ros/humble/share/mmf_interfaces \
+    && rm -rf /tmp/mmf_ws \
+    "
+
 # setup entrypoint
 COPY ./docker/entrypoint/bridge_entrypoint.sh /ros_entrypoint.sh
 RUN chmod a+x /ros_entrypoint.sh 
