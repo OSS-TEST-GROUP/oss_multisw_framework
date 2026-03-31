@@ -1,13 +1,10 @@
-module ota_manager {
-module msg {
-
 /**
-[Topic] "/mmf/otamanager/diagnostic_service/NotifyOtaMgrInfo"
+[Topic] “/mmf/otamanager/diagnostic_service/NotifyOtaMgrInfo”
 **/
-struct NotifyOtaMgrInfo {
-    long err_code;
-    string err_msg;
-};
 
-}; // module msg
-}; // module ota_manager
+module OtaManager {
+    struct NotifyOtaMgrInfo {
+        long err_code;
+        string err_msg;
+    };
+};

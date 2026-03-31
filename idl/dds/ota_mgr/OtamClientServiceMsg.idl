@@ -1,38 +1,41 @@
 #include "common/ReturnValue.idl"
 
-module ota_manager {
-module msg {
-
-/**
-[Topic] "/mmf/otamanager/otaclient_service/SetOtaClientRegistration"
+/** 
+[Topic] “/mmf/otamanager/otaclient_service/SetOtaClientRegistration”
 **/
-struct SetOtaClientRegistration {
-    string client_name;
-    sequence<string> app_list;
+module OtaManager {
+    struct SetOtaClientRegistration {
+        string client_name;
+        sequence<string> app_list;
+    };
 };
 
-/**
-[Topic] "/mmf/otamanager/otaclient_service/SetOtaClientRegistrationResponse"
+/** 
+[Topic] “/mmf/otamanager/otaclient_service/SetOtaClientRegistrationResponse
 **/
-struct SetOtaClientRegistrationResponse {
-    long client_id;
-    ReturnValue ret_code;
+module OtaManager {
+    struct SetOtaClientRegistrationResponse {
+        long client_id;
+        ReturnValue ret_code;
+    };
 };
 
-/**
-[Topic] "/mmf/otamanager/otaclient_service/NotifyOtaManagerReady"
+/** 
+[Topic] “/mmf/otamanager/otaclient_service/NotifyOtaManagerReady”
 **/
-struct NotifyOtaManagerReady {
+module OtaManager {
+    struct NotifyOtaManagerReady {
+    };
 };
 
-/**
-[Topic] "/mmf/otamanager/otaclient_service/NotifyAppUpdateStatus"
+/** 
+[Topic] “/mmf/otamanager/otaclient_service/NotifyAppUpdateStatus”
 **/
-struct NotifyAppUpdateStatus {
-    @key long client_id;
-    string app_name;
-    string status;
-};
 
-}; // module msg
-}; // module ota_manager
+module OtaManager {
+    struct NotifyAppUpdateStatus {
+        @key long client_id;
+        string app_name;
+        string status;
+    };
+};

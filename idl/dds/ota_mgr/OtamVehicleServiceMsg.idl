@@ -1,25 +1,23 @@
 #include "common/ReturnValue.idl"
 
-module ota_manager {
-module msg {
-
 /**
-[Topic] "/mmf/otamanager/vehicleinfo_service/GetVehicleInfo"
+[Topic] “/mmf/otamanager/vehicleinfo_service/GetVehicleInfo”
 **/
-struct GetVehicleInfo {
-    @key long id; //Request ID
-    string name;
+module OtaManager {
+    struct GetVehicleInfo {
+        @key long id; //Request ID
+        string name;
+    };
 };
 
 /**
-[Topic] "/mmf/otamanager/vehicleinfo_service/GetVehicleInfoResponse"
+[Topic] “/mmf/otamanager/vehicleinfo_service/GetVehicleInfoResponse”
 **/
-struct GetVehicleInfoResponse {
-    @key long id; // Response ID (matching the Request ID)
-    string name;
-    string value;
-    ReturnValue ret_code;
+module OtaManager {
+    struct GetVehicleInfoResponse {
+        @key long id; // Response ID (matching the Request ID)
+        string name;
+        string value;
+        ReturnValue ret_code;
+    };
 };
-
-}; // module msg
-}; // module ota_manager
