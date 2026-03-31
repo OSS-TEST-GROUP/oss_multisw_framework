@@ -25,11 +25,11 @@
  *
  * Design:
  *   OtamDdsParticipant (singleton)
- *     └── DomainParticipant (1개, domain 0)
- *           ├── Publisher (1개, 공유)
- *           └── Subscriber (1개, 공유)
+ *     └── DomainParticipant (1 instance, domain 0)
+ *           ├── Publisher (1 instance, shared)
+ *           └── Subscriber (1 instance, shared)
  *
- *   OtamDdsImpl<T> (토픽당 1개)
+ *   OtamDdsImpl<T> (1 instance per topic)
  *     ├── Topic
  *     ├── DataWriter
  *     └── DataReader
@@ -275,11 +275,11 @@ void OtamDdsImpl<MessageType>::Create(const std::string& topic,
     static_cast<std::shared_ptr<eprosima::fastdds::dds::TopicDataType>&>(type_support)
         .reset(raw_type, [](eprosima::fastdds::dds::TopicDataType*) {});
 
-    std::cout << "Create DomainParticipant!!!!!" << std::endl;  // 기존 로그 유지 (파싱 의존 코드 호환)
+    std::cout << "Create DomainParticipant!!!!!" << std::endl;  // keep legacy log (used by log-parsing consumers)
 
     try {
         // Register TypeSupport with shared participant
-        // (이미 등록된 타입명이면 FastDDS가 기존 것을 재사용 - 안전함)
+        // If the type name is already registered, FastDDS reuses it safely.
         type_support.register_type(participant);
 
         std::cout << "Register TypeSupport!!!!! " << type_support.get() << std::endl;
@@ -293,7 +293,7 @@ void OtamDdsImpl<MessageType>::Create(const std::string& topic,
         }
         std::cout << "Create Topic!!!!!" << std::endl;
 
-        std::cout << "Create Publisher!!!!!" << std::endl;  // 기존 로그 유지
+        std::cout << "Create Publisher!!!!!" << std::endl;  // keep legacy log
 
         // Create DataWriter on shared Publisher
         eprosima::fastdds::dds::DataWriterQos writer_qos = eprosima::fastdds::dds::DATAWRITER_QOS_DEFAULT;
@@ -308,11 +308,11 @@ void OtamDdsImpl<MessageType>::Create(const std::string& topic,
         std::cout << "Create Writer!!!!! (RELIABLE QoS"
                   << (transient_local ? ", TRANSIENT_LOCAL" : "") << ")" << std::endl;
 
-        std::cout << "Create Subscriber!!!!!" << std::endl;  // 기존 로그 유지
+        std::cout << "Create Subscriber!!!!!" << std::endl;  // keep legacy log
 
         // Create DataReader on shared Subscriber
-        // Durability: VOLATILE - FastDDS 기본값 유지 (TRANSIENT_LOCAL publisher와도 매칭됨)
-        // DDS QoS 호환 규칙: VOLATILE subscriber는 TRANSIENT_LOCAL publisher로부터도 메시지 수신 가능
+        // Durability: VOLATILE - keeps FastDDS default (also matches TRANSIENT_LOCAL publishers)
+        // DDS QoS compatibility rule: VOLATILE subscriber can receive from TRANSIENT_LOCAL publisher
         eprosima::fastdds::dds::DataReaderQos reader_qos = eprosima::fastdds::dds::DATAREADER_QOS_DEFAULT;
         reader_qos.reliability().kind = eprosima::fastdds::dds::RELIABLE_RELIABILITY_QOS;
         reader_ = subscriber->create_datareader(topic_, reader_qos, listener_);
@@ -324,7 +324,7 @@ void OtamDdsImpl<MessageType>::Create(const std::string& topic,
         std::cout << "OtamDdsImpl: All DDS entities created successfully." << std::endl;
     }
     catch (const std::exception& e) {
-        // 생성된 엔티티 정리
+        // Clean up any entities that were created before the exception
         if (reader_ && subscriber)  { subscriber->delete_datareader(reader_); reader_ = nullptr; }
         if (writer_ && publisher)   { publisher->delete_datawriter(writer_);  writer_ = nullptr; }
         if (topic_ && participant)  { participant->delete_topic(topic_);       topic_  = nullptr; }

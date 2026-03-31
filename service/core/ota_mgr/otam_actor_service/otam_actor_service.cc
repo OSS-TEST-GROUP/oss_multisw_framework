@@ -159,7 +159,7 @@ void OtamActorService::Start() {
 void OtamActorService::Stop() {
     std::cout << "OtamActorService: Stopping OtamActorService." << std::endl;
 
-    // 백그라운드 알림 스레드들이 종료되도록 플래그 설정 후 join
+    // Signal background notification threads to stop, then join them
     stopping_.store(true);
     {
         std::lock_guard<std::mutex> lk(notify_threads_mutex_);
@@ -418,7 +418,7 @@ void OtamActorService::OnSetServiceModeResponseReceived(
             << static_cast<int>(msg.ret_code()) << std::endl;
 
   // Find pending request waiting for SetServiceModeResponse
-  // unique_lock 사용: erase 후 안전하게 unlock하고 Publish 호출 가능
+  // Use unique_lock so we can safely unlock before calling Publish after erase
   std::unique_lock<std::mutex> lock(pending_updates_mutex_);
 
   int32_t target_key = -1;
@@ -437,7 +437,7 @@ void OtamActorService::OnSetServiceModeResponseReceived(
     }
   }
 
-  if (target_key < 0) return;  // 대기 중인 요청 없음
+  if (target_key < 0) return;  // no pending request waiting for this response
 
   if (success) {
     std::cout << "OtamActorService: SetServiceModeResponse SUCCESS (request_id: "
@@ -451,7 +451,7 @@ void OtamActorService::OnSetServiceModeResponseReceived(
         otam_server_service_ && otam_server_service_->IsVehicleInfoEnabled();
 
     if (vehicle_info_enabled && otam_vehicle_service_) {
-      // Vehicle 정보 요청 — lock 유지 상태로 호출 (map은 아직 유효)
+      // Request vehicle info — called while holding the lock (map still valid)
       std::cout << "OtamActorService: Requesting vehicle info (vehicle_info_enabled=true)" << std::endl;
       otam_vehicle_service_->RequestVehicleInfo(target_key, "Vehicle.LowVoltageSystemState");
       otam_vehicle_service_->RequestVehicleInfo(target_key, "Vehicle.Speed");
@@ -465,7 +465,7 @@ void OtamActorService::OnSetServiceModeResponseReceived(
       }
       PublishSetAppUpdateResponse(msg_id, app_name, ReturnValue::FAIL);
     } else {
-      // vehicle_info_enabled == false: 차량 상태 조회 생략, 바로 업데이트 진행
+      // vehicle_info_enabled == false: skip vehicle state query, proceed directly to update
       std::cout << "OtamActorService: Vehicle info check disabled, skipping to update (request_id: "
                 << target_key << ")" << std::endl;
       PendingUpdateRequest request_copy = pending_updates_.at(target_key);
@@ -508,7 +508,7 @@ void OtamActorService::OnAppUpdateRequested(
     return;
   }
 
-  // Check if OtamVehicleService is available (vehicle_info_enabled 시에만 필수)
+  // Check if OtamVehicleService is available (required only when vehicle_info_enabled)
   const bool vehicle_info_enabled =
       otam_server_service_ && otam_server_service_->IsVehicleInfoEnabled();
   if (vehicle_info_enabled && !otam_vehicle_service_) {
@@ -567,17 +567,17 @@ void OtamActorService::OnVehicleInfoReceived(
     std::cout << "OtamActorService: All vehicle info collected for request "
               << request_id << ", processing update..." << std::endl;
 
-    // Copy request data before erasing (iterator 무효화 방지)
+    // Copy request data before erasing to avoid iterator invalidation
     PendingUpdateRequest request_copy = request;
     pending_updates_.erase(it);
 
-    // mutex를 해제한 상태로 ProcessPendingUpdate 호출 (deadlock 방지)
-    // unique_lock의 스코프를 명시적으로 제어
+    // Call ProcessPendingUpdate without holding the mutex to avoid deadlock;
+    // explicitly control the unique_lock scope
     {
       std::unique_lock<std::mutex> release_lock(pending_updates_mutex_, std::adopt_lock);
       release_lock.unlock();
       ProcessPendingUpdate(request_copy);
-      // lock_guard가 소멸될 때 다시 잠금 필요 없음 — 함수 종료 직전이므로 return
+      // No need to re-lock when release_lock goes out of scope — returning immediately
       return;
     }
   } else {
@@ -610,7 +610,7 @@ void OtamActorService::ProcessPendingUpdate(const PendingUpdateRequest& request)
   std::cout << "OtamActorService: Vehicle state: " << vehicle_state
             << ", Vehicle speed: " << vehicle_speed << std::endl;
 
-  // vehicle_info_enabled == false 이면 차량 상태 조건 체크 생략
+  // Skip vehicle condition check when vehicle_info_enabled == false
   const bool vehicle_info_enabled =
       otam_server_service_ && otam_server_service_->IsVehicleInfoEnabled();
 
@@ -707,7 +707,7 @@ void OtamActorService::PublishAppUpdateSettingsResponse(
             << "GetAppUpdateSettingsResponse - id: " << id
             << std::endl;
 
-  // ROS2/rosbridge 채널에도 동일 응답 발행
+  // Publish the same response on the ROS2/rosbridge channel
   auto ros_it = dds_registry_.find(kTopicRosGetAppUpdateSettingsResponse);
   if (ros_it != dds_registry_.end()) {
     ros_it->second->Write(std::static_pointer_cast<void>(response));
@@ -738,7 +738,7 @@ void OtamActorService::PublishSetAppUpdateSettingsResponse(
             << "SetAppUpdateSettingsResponse - id: " << id
             << std::endl;
 
-  // ROS2/rosbridge 채널에도 동일 응답 발행
+  // Publish the same response on the ROS2/rosbridge channel
   auto ros_it = dds_registry_.find(kTopicRosSetAppUpdateSettingsResponse);
   if (ros_it != dds_registry_.end()) {
     ros_it->second->Write(std::static_pointer_cast<void>(response));
@@ -771,7 +771,7 @@ void OtamActorService::PublishAppUpdateStateResponse(
             << "GetAppUpdateStateResponse - id: " << id
             << std::endl;
 
-  // ROS2/rosbridge 채널에도 동일 응답 발행
+  // Publish the same response on the ROS2/rosbridge channel
   auto ros_it = dds_registry_.find(kTopicRosGetAppUpdateStateResponse);
   if (ros_it != dds_registry_.end()) {
     ros_it->second->Write(std::static_pointer_cast<void>(response));
@@ -801,14 +801,14 @@ void OtamActorService::PublishSetAppUpdateResponse(
   std::cout << "OtamActorService: Published "
             << "SetAppUpdateResponse - id: " << id << std::endl;
 
-  // ROS2/rosbridge 채널에도 동일 응답 발행
+  // Publish the same response on the ROS2/rosbridge channel
   auto ros_it = dds_registry_.find(kTopicRosSetAppUpdateResponse);
   if (ros_it != dds_registry_.end()) {
     ros_it->second->Write(std::static_pointer_cast<void>(response));
   }
 
-  // 업데이트가 성공적으로 시작된 경우 백그라운드 스레드에서 상태를 폴링하여 클라이언트에 알림
-  // detach() 대신 notify_threads_에 보관하여 Stop() 시 안전하게 join
+  // If the update started successfully, poll status in a background thread and notify clients.
+  // Store the thread in notify_threads_ instead of detaching, so Stop() can safely join it.
   if (code == ReturnValue::SUCCESS && otam_client_service_ && otam_server_service_) {
     std::lock_guard<std::mutex> lk(notify_threads_mutex_);
     notify_threads_.emplace_back([this, app_name]() {
@@ -850,7 +850,7 @@ void OtamActorService::PublishSetAppUpdateResponse(
               std::cerr << "OtamActorService: Timeout (10s) for " << app_name << std::endl;
               keep_polling = false;
             } else {
-              // 50ms 단위로 쪼개어 stopping_ 플래그에 즉시 반응
+              // Sleep in 50ms slices to react to the stopping_ flag promptly
               for (int i = 0; i < 10 && !stopping_.load(); ++i) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(50));
               }

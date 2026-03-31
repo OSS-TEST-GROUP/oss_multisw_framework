@@ -9,9 +9,9 @@
 
 static std::atomic<bool> g_shutdown_requested{false};
 
-// FastDDS(boost::asio)가 내부적으로 SIGINT/SIGTERM signal_set을 등록하여
-// std::signal() 핸들러를 무효화하는 문제를 방지.
-// main 스레드에서 시그널을 블로킹한 뒤 전용 스레드에서 sigwait()으로 수신.
+// Prevent FastDDS (boost::asio) from internally registering a signal_set for
+// SIGINT/SIGTERM that would override the std::signal() handler.
+// Block signals in the main thread and receive them via sigwait() in a dedicated thread.
 static void SignalThreadFn() {
     sigset_t wait_set;
     sigemptyset(&wait_set);
@@ -27,7 +27,7 @@ static void SignalThreadFn() {
 int main(int argc, char* argv[]) {
     std::cout << "Starting OtaManager" << std::endl;
 
-    // SIGINT/SIGTERM을 모든 스레드에서 블로킹한 뒤 전용 스레드에서만 수신
+    // Block SIGINT/SIGTERM in all threads; receive them only in the dedicated signal thread
     {
         sigset_t block_set;
         sigemptyset(&block_set);

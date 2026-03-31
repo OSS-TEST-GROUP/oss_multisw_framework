@@ -81,7 +81,7 @@ void OtamServerService::Stop() {
     std::cout << "OtamServerService Stopped." << std::endl;
 }
 
-// ===== ArgoCD Token 생성 =====
+// ===== ArgoCD Token Creation =====
 SessionResult OtamServerService::CreateOtaSession() {
     SessionResult result;
     result.ret_code = ReturnValue::FAIL;
@@ -212,9 +212,9 @@ AppUpdateStateResult OtamServerService::GetOtaUpdateState(
             j["status"]["sync"].contains("status")) {
             std::string sync_status = j["status"]["sync"]["status"].get<std::string>();
 
-            // Synced: Git 상태와 클러스터 리소스가 일치함
-            // OutOfSync: 클러스터 리소스가 Git과 불일치
-            // Unknown: 아직 Sync 상태 계산 중
+            // Synced: cluster resources match the desired state in Git
+            // OutOfSync: cluster resources diverge from Git
+            // Unknown: sync status not yet computed
 
             // Extract revision from .status.sync.revision
             std::string revision = "Unknown";

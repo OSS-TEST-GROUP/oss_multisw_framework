@@ -264,7 +264,7 @@ class OtamActorService: public OtamService {
   static constexpr const char* kTopicSetServiceModeResponse =
       "mmf/lifecyclemgr/SetServiceModeResponse";
 
-  // ROS2/rosbridge 호환 토픽 상수 (rt/ prefix — rosbridge DDS topic name 규칙)
+  // ROS2/rosbridge compatible topic constants (rt/ prefix follows rosbridge DDS topic naming convention)
   static constexpr const char* kTopicRosGetAppUpdateSettings =
       "rt/mmf/otamanager/otaactor_service/GetAppUpdateSettings";
   static constexpr const char* kTopicRosGetAppUpdateSettingsResponse =

@@ -111,13 +111,13 @@
                                std::static_pointer_cast<void>(set_ota_client_reg_),
                                std::static_pointer_cast<void>(registration_listener_));
 
-      // SetOtaClientRegistrationResponse (TRANSIENT_LOCAL: late-join 클라이언트가 수신 가능)
+      // SetOtaClientRegistrationResponse (TRANSIENT_LOCAL: late-joining clients can receive it)
       set_ota_client_reg_res_ = std::make_shared<OtaManager::SetOtaClientRegistrationResponsePubSubType>();
       registration_response_dds_->Create(TOPIC_REGISTRATION_RESPONSE,
                                std::static_pointer_cast<void>(set_ota_client_reg_res_),
                                nullptr, true);
 
-      // NotifyOtaManagerReady (TRANSIENT_LOCAL: late-join 클라이언트가 수신 가능)
+      // NotifyOtaManagerReady (TRANSIENT_LOCAL: late-joining clients can receive it)
       notify_ota_mgr_ready_ = std::make_shared<OtaManager::NotifyOtaManagerReadyPubSubType>();
       manager_ready_dds_->Create(TOPIC_MANAGER_READY,
                                std::static_pointer_cast<void>(notify_ota_mgr_ready_),
@@ -302,7 +302,7 @@
           } else {
               throw std::runtime_error("App status DDS publisher not initialized");
           }
-          // ROS2/rosbridge 채널에도 동일 메시지 발행
+          // Publish the same message on the ROS2/rosbridge channel
           if (app_status_dds_ros_) {
               app_status_dds_ros_->Write(std::static_pointer_cast<void>(status_message));
           }
