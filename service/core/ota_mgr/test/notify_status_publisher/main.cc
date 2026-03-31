@@ -7,7 +7,7 @@
  * Terminates on empty line input.
  *
  * Topic: /mmf/otamanager/otaclient_service/NotifyAppUpdateStatus
- * Type:  ota_manager::msg::NotifyAppUpdateStatus
+ * Type:  OtaManager::NotifyAppUpdateStatus
  *
  * Usage:
  *   $ ./notify_status_publisher
@@ -53,7 +53,7 @@ int main()
 
     /* ── 2. Register TypeSupport ── */
     TypeSupport type_support(
-        new ota_manager::msg::NotifyAppUpdateStatusPubSubType());
+        new OtaManager::NotifyAppUpdateStatusPubSubType());
     if (RETCODE_OK != type_support.register_type(participant)) {
         std::cerr << "[ERROR] Failed to register type\n";
         DomainParticipantFactory::get_instance()->delete_participant(participant);
@@ -111,7 +111,7 @@ int main()
             continue;
         }
 
-        ota_manager::msg::NotifyAppUpdateStatus msg;
+        OtaManager::NotifyAppUpdateStatus msg;
         msg.client_id(DEFAULT_CLIENT_ID);
         msg.app_name(app_name);
         msg.status(status);
