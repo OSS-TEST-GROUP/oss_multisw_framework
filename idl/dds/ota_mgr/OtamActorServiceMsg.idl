@@ -1,79 +1,90 @@
 #include "common/ReturnValue.idl"
 
-module ota_manager {
-module msg {
-
 /**
-[Topic] "/mmf/otamanager/otaactor_service/GetAppUpdateSettings"
+[Topic] “/mmf/otamanager/otaactor_service/GetAppUpdateSettings”
 **/
+module OtaManager {
 // Define a Request struct
-struct GetAppUpdateSettings {
-    @key long id;          // Request ID
-    string app_name;
+    struct GetAppUpdateSettings {
+        @key long id;          // Request ID
+        string app_name;
+    };
 };
 
 /**
-[Topic] "/mmf/otamanager/otaactor_service/GetAppUpdateSettingsResponse"
+[Topic] “/mmf/otamanager/otaactor_service/GetAppUpdateSettingsResponse”
 **/
-struct GetAppUpdateSettingsResponse {
-    @key long id; // Response ID (matching the Request ID)
-    string app_name;
-    string app_settings;
-    ReturnValue ret_code;
+module OtaManager {
+    struct GetAppUpdateSettingsResponse {
+        @key long id; // Response ID (matching the Request ID)
+        string app_name;
+        string app_settings;
+        ReturnValue ret_code;
+    };
 };
 
 /**
-[Topic] "/mmf/otamanager/otaactor_service/SetAppUpdateSettings"
+[Topic] “/mmf/otamanager/otaactor_service/SetAppUpdateSettings”
 **/
-struct SetAppUpdateSettings {
-    @key long id;          // Request ID
-    string app_name;
-    string app_settings;
+module OtaManager {
+    struct SetAppUpdateSettings {
+        @key long id;          // Request ID
+        string app_name;
+        string app_settings;      
+    };
 };
 
 /**
-[Topic] "/mmf/otamanager/otaactor_service/SetAppUpdateSettingsResponse"
+[Topic] “/mmf/otamanager/otaactor_service/SetAppUpdateSettingsResponse”
 **/
-// Define a Response struct
-struct SetAppUpdateSettingsResponse {
-    @key long id;  // Response ID (matching the Request ID)
-    ReturnValue ret_code;
+module OtaManager {
+    // Define a Response struct
+    struct SetAppUpdateSettingsResponse {
+        @key long id;  // Response ID (matching the Request ID)
+        ReturnValue ret_code;
+    };
+};
+
+
+/**
+[Topic] “/mmf/otamanager/otaactor_service/GetAppUpdateState”
+**/
+module OtaManager {
+    struct GetAppUpdateState {
+        @key long id;          // Request ID
+        string app_name;
+    };
 };
 
 /**
-[Topic] "/mmf/otamanager/otaactor_service/GetAppUpdateState"
+[Topic] “/mmf/otamanager/otaactor_service/GetAppUpdateStateResponse”
 **/
-struct GetAppUpdateState {
-    @key long id;          // Request ID
-    string app_name;
+module OtaManager {
+    struct GetAppUpdateStateResponse {
+        @key long id; // Response ID (matching the Request ID)
+        string app_name;
+        string app_state_info;
+        ReturnValue ret_code;
+    };
 };
 
 /**
-[Topic] "/mmf/otamanager/otaactor_service/GetAppUpdateStateResponse"
+[Topic] “/mmf/otamanager/otaactor_service/SetAppUpdate”
 **/
-struct GetAppUpdateStateResponse {
-    @key long id; // Response ID (matching the Request ID)
-    string app_name;
-    string app_state_info;
-    ReturnValue ret_code;
+module OtaManager {
+    struct SetAppUpdate {
+        @key long id;          // Request ID
+        string app_name;
+    };
 };
 
 /**
-[Topic] "/mmf/otamanager/otaactor_service/SetAppUpdate"
+[Topic] “/mmf/otamanager/otaactor_service/SetAppUpdateResponse”
 **/
-struct SetAppUpdate {
-    @key long id;          // Request ID
-    string app_name;
+module OtaManager {
+    struct SetAppUpdateResponse {
+        @key long id; // Response ID (matching the Request ID)
+        string app_name;
+        ReturnValue ret_code;
+    };
 };
-
-/**
-[Topic] "/mmf/otamanager/otaactor_service/SetAppUpdateResponse"
-**/
-struct SetAppUpdateResponse {
-    @key long id; // Response ID (matching the Request ID)
-    string app_name;
-    ReturnValue ret_code;
-};
-
-}; // module msg
-}; // module ota_manager
