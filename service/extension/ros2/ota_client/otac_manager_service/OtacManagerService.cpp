@@ -4,7 +4,7 @@
 
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp>
 
-using namespace ota_manager::msg;
+using namespace OtaManager;
 using namespace eprosima::fastdds::dds;
 
 namespace ros2::ota_client
@@ -115,7 +115,7 @@ namespace ros2::ota_client
         //     return false;
         // }
 
-        auto reg = std::make_shared<ota_manager::msg::SetOtaClientRegistration>();
+        auto reg = std::make_shared<OtaManager::SetOtaClientRegistration>();
         reg->client_name(std::move(client_name));
 
         auto &seq = reg->app_list();
@@ -127,12 +127,12 @@ namespace ros2::ota_client
         return registration_dds_->Write(reg);
     }
 
-    void OtacManagerService::OnClientRegistrationResponse(const SetOtaClientRegistrationResponse &msg)
+    void OtacManagerService::OnClientRegistrationResponse(const OtaManager::SetOtaClientRegistrationResponse &msg)
     {
         std::cout << "Client id: " << msg.client_id() << "/ result: " << static_cast<std::int32_t>(msg.ret_code()) << std::endl;
     }
 
-    void OtacManagerService::OnManagerReady(const NotifyOtaManagerReady &msg)
+    void OtacManagerService::OnManagerReady(const OtaManager::NotifyOtaManagerReady &msg)
     {
         std::fprintf(stderr, "[SVC] OnManagerReady called\n");
 
@@ -144,7 +144,7 @@ namespace ros2::ota_client
             std::cout << "Successfully Call Publish.\n";
     }
 
-    void OtacManagerService::OnAppUpdateStatus(const NotifyAppUpdateStatus &msg)
+    void OtacManagerService::OnAppUpdateStatus(const OtaManager::NotifyAppUpdateStatus &msg)
     {
         status_store_->UpdateStatus(msg.app_name(), msg.status());
         std::cout << "App Update Status Update complete.\n";

@@ -213,9 +213,15 @@
   }
 
   void OtamClientService::OnMessageReceived(const OtaManager::SetOtaClientRegistration& registration_data) {
-      std::cout << "OtamClientService: Processing registration from client '"
-                << registration_data.client_name() << "' with "
-                << registration_data.app_list().size() << " applications." << std::endl;
+      // Build comma-separated app list string for logging
+      std::string app_list_str;
+      for (const auto& app : registration_data.app_list()) {
+          if (!app_list_str.empty()) app_list_str += ", ";
+          app_list_str += app;
+      }
+
+      std::cout << "[OtamClientService] Received registration from client: "
+                << registration_data.client_name() << ", apps: " << app_list_str << std::endl;
 
       try {
           // Convert IDL message format to internal format
@@ -229,24 +235,38 @@
           // Send registration response back to the client
           ReturnValue ret_code = (client_id >= 0) ? ReturnValue::SUCCESS : ReturnValue::FAIL;
           if (client_id < 0) {
+              std::cout << "[OtamClientService] Registration failed for " << registration_data.client_name()
+                        << ": Client ID allocation exhausted" << std::endl;
               ReportErrorToDiagnosticService(static_cast<int32_t>(OtamError::FAILED),
-                  "Failed: Client ID allocation exhausted for client '" + registration_data.client_name() + "'");
+                  "OtaClient Registration Failed: " + registration_data.client_name());
+          } else {
+              std::cout << "[OtamClientService] Assigned client_id=" << client_id
+                        << " to " << registration_data.client_name() << std::endl;
           }
-          PublishRegistrationResponse(client_id, ret_code);
 
-          std::cout << "OtamClientService: Client registration processed. Result: "
-                    << ((client_id >= 0) ? "SUCCESS" : "FAILURE") << std::endl;
+          PublishRegistrationResponse(client_id, ret_code);
+          std::cout << "[OtamClientService] Published registration response: client_id=" << client_id
+                    << ", result=" << ((ret_code == ReturnValue::SUCCESS) ? "SUCCESS" : "FAIL") << std::endl;
+
+          if (client_id >= 0 && diagnostic_service_) {
+              diagnostic_service_->PublishOtaMgrInfo(0,
+                  "OtaClient Registered: " + registration_data.client_name() +
+                  " (id=" + std::to_string(client_id) + ")");
+          }
       }
       catch (const std::exception& e) {
-          std::string error_msg = "Error processing client registration: " + std::string(e.what());
-          ReportErrorToDiagnosticService(static_cast<int32_t>(OtamError::FAILED), error_msg);
+          std::string reason = std::string(e.what());
+          std::cout << "[OtamClientService] Registration failed for " << registration_data.client_name()
+                    << ": " << reason << std::endl;
+          ReportErrorToDiagnosticService(static_cast<int32_t>(OtamError::FAILED),
+              "OtaClient Registration Failed: " + registration_data.client_name());
 
           // Send failure response
           try {
               PublishRegistrationResponse(0, ReturnValue::FAIL);
           }
           catch (...) {
-              std::cerr << "OtamClientService: Failed to send error response" << std::endl;
+              std::cerr << "[OtamClientService] Failed to send error response" << std::endl;
           }
       }
   }
