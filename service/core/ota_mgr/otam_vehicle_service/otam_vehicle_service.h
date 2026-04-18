@@ -35,8 +35,8 @@ class OtamVehicleService : public OtamService {
   // Request vehicle information
   // @param request_id: Unique request ID
   // @param name: Vehicle info name to request (e.g., "VIN", "Model")
-  void RequestVehicleInfo(int32_t request_id,
-                          const std::string& name);
+  virtual void RequestVehicleInfo(int32_t request_id,
+                                  const std::string& name);
 
   // Callback when vehicle info response is received from VISS
   // @param request_id: Request ID

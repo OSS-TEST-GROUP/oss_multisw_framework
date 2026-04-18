@@ -370,9 +370,9 @@ void OtamActorService::OnAppUpdateStateRequested(
       ret_code);
 }
 
-void OtamActorService::SendSetServiceModeRequest(int32_t request_id) {
-  std::cout << "OtamActorService: Sending SetServiceModeRequest (request_id: "
-            << request_id << ") to change mode to OTA_MODE" << std::endl;
+void OtamActorService::WriteServiceModeRequestInternal(
+    int32_t request_id, lifecyclemgr::ServiceMode mode) {
+  lifecycle_request_count_.fetch_add(1);
 
   auto it = dds_registry_.find(kTopicSetServiceModeRequest);
   if (it == dds_registry_.end()) {
@@ -384,32 +384,133 @@ void OtamActorService::SendSetServiceModeRequest(int32_t request_id) {
     return;
   }
 
-  // Create SetServiceModeRequest message
   auto request = std::make_shared<lifecyclemgr::SetServiceModeRequest>();
-
-  // Set OsType to ROS2 (adjust if needed)
   request->os_type(lifecyclemgr::OsType::ROS2);
-
-  // Set empty service list for now (apply to all services)
-  std::vector<std::string> service_list;
-  request->service_list(service_list);
-
-  // Set is_group to false
+  request->service_list(std::vector<std::string>{});
   request->is_group(false);
+  request->service_mode(mode);
 
-  // Set service_mode to OTA_MODE
-  request->service_mode(lifecyclemgr::ServiceMode::OTA_MODE);
-
-  // Publish the request
-  it->second->Write(std::static_pointer_cast<void>(request));
-
-  std::cout << "OtamActorService: SetServiceModeRequest sent successfully (request_id: "
-            << request_id << ")" << std::endl;
-
-  // Publish diagnostic info
-  if (otam_diagnostic_service_) {
-    otam_diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::SUCCEEDED), "Success: SetServiceModeRequest sent to switch to OTA_MODE");
+  try {
+    it->second->Write(std::static_pointer_cast<void>(request));
+  } catch (const std::exception& e) {
+    std::cerr << "OtamActorService: Failed to write SetServiceModeRequest: " << e.what() << std::endl;
+    if (otam_diagnostic_service_) {
+      otam_diagnostic_service_->PublishOtaMgrInfo(
+          static_cast<int32_t>(OtamError::FAILED),
+          std::string("Failed to write SetServiceModeRequest: ") + e.what());
+    }
   }
+}
+
+void OtamActorService::StartLifecycleTimeoutWatcher(int32_t request_id) {
+  if (!otam_server_service_) return;
+  const int timeout_sec = otam_server_service_->GetLifecycleTimeoutSec();
+  if (timeout_sec <= 0) return;
+
+  std::lock_guard<std::mutex> lk(notify_threads_mutex_);
+  notify_threads_.emplace_back([this, request_id, timeout_sec]() {
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(timeout_sec);
+    while (!stopping_.load() && std::chrono::steady_clock::now() < deadline) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+      std::lock_guard<std::mutex> l(pending_updates_mutex_);
+      auto it = pending_updates_.find(request_id);
+      if (it == pending_updates_.end() || !it->second.service_mode_pending) {
+        return;  // response already handled; nothing to do
+      }
+    }
+    if (stopping_.load()) return;
+
+    // Timeout fired. Remove pending, notify FAIL, then request NORMAL_MODE restore.
+    int32_t msg_id = -1;
+    std::string app_name;
+    {
+      std::lock_guard<std::mutex> l(pending_updates_mutex_);
+      auto it = pending_updates_.find(request_id);
+      if (it == pending_updates_.end() || !it->second.service_mode_pending) return;
+      msg_id = it->second.msg_id;
+      app_name = it->second.app_name;
+      pending_updates_.erase(it);
+    }
+
+    std::cerr << "OtamActorService: Lifecycle Manager response timeout (request_id: "
+              << request_id << ")" << std::endl;
+    if (otam_diagnostic_service_) {
+      otam_diagnostic_service_->PublishOtaMgrInfo(
+          static_cast<int32_t>(OtamError::FAILED),
+          "Failed: Lifecycle Manager response timeout");
+    }
+    // PublishSetAppUpdateResponse(FAIL) triggers the F013 NORMAL-mode restore centrally.
+    try {
+      PublishSetAppUpdateResponse(msg_id, app_name, ReturnValue::FAIL);
+    } catch (const std::exception& e) {
+      std::cerr << "OtamActorService: Failed to publish timeout FAIL: " << e.what() << std::endl;
+    }
+  });
+}
+
+void OtamActorService::SendSetServiceModeRequest(int32_t request_id) {
+  std::cout << "OtamActorService: Sending SetServiceModeRequest (request_id: "
+            << request_id << ") to change mode to OTA_MODE" << std::endl;
+
+  WriteServiceModeRequestInternal(request_id, lifecyclemgr::ServiceMode::OTA_MODE);
+
+  if (otam_diagnostic_service_) {
+    otam_diagnostic_service_->PublishOtaMgrInfo(
+        static_cast<int32_t>(OtamError::SUCCEEDED),
+        "Success: SetServiceModeRequest sent to switch to OTA_MODE");
+  }
+
+  StartLifecycleTimeoutWatcher(request_id);
+}
+
+void OtamActorService::StartVissTimeoutWatcher(int32_t request_id) {
+  if (!otam_server_service_) return;
+  const int timeout_sec = otam_server_service_->GetVissTimeoutSec();
+  if (timeout_sec <= 0) return;
+
+  std::lock_guard<std::mutex> lk(notify_threads_mutex_);
+  notify_threads_.emplace_back([this, request_id, timeout_sec]() {
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(timeout_sec);
+    while (!stopping_.load() && std::chrono::steady_clock::now() < deadline) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+      std::lock_guard<std::mutex> l(pending_updates_mutex_);
+      auto it = pending_updates_.find(request_id);
+      if (it == pending_updates_.end() || it->second.pending_info.empty()) {
+        return;  // all info arrived (or request handled); no timeout
+      }
+    }
+    if (stopping_.load()) return;
+
+    int32_t msg_id = -1;
+    std::string app_name;
+    std::string missing;
+    {
+      std::lock_guard<std::mutex> l(pending_updates_mutex_);
+      auto it = pending_updates_.find(request_id);
+      if (it == pending_updates_.end() || it->second.pending_info.empty()) return;
+      msg_id = it->second.msg_id;
+      app_name = it->second.app_name;
+      for (const auto& sig : it->second.pending_info) {
+        if (!missing.empty()) missing += ", ";
+        missing += sig;
+      }
+      pending_updates_.erase(it);
+    }
+
+    std::cerr << "OtamActorService: VISS response timeout (request_id: " << request_id
+              << ", missing: " << missing << ")" << std::endl;
+    if (otam_diagnostic_service_) {
+      otam_diagnostic_service_->PublishOtaMgrInfo(
+          static_cast<int32_t>(OtamError::FAILED),
+          "Failed: VISS response timeout (missing: " + missing + ")");
+    }
+    try {
+      PublishSetAppUpdateResponse(msg_id, app_name, ReturnValue::FAIL);
+    } catch (const std::exception& e) {
+      std::cerr << "OtamActorService: Failed to publish VISS timeout FAIL: "
+                << e.what() << std::endl;
+    }
+  });
 }
 
 void OtamActorService::OnSetServiceModeResponseReceived(
@@ -455,6 +556,9 @@ void OtamActorService::OnSetServiceModeResponseReceived(
       std::cout << "OtamActorService: Requesting vehicle info (vehicle_info_enabled=true)" << std::endl;
       otam_vehicle_service_->RequestVehicleInfo(target_key, "Vehicle.LowVoltageSystemState");
       otam_vehicle_service_->RequestVehicleInfo(target_key, "Vehicle.Speed");
+      otam_vehicle_service_->RequestVehicleInfo(
+          target_key, "Vehicle.Powertrain.TractionBattery.StateOfCharge.Current");
+      StartVissTimeoutWatcher(target_key);
     } else if (vehicle_info_enabled && !otam_vehicle_service_) {
       std::cerr << "OtamActorService: OtamVehicleService not available" << std::endl;
       pending_updates_.erase(target_key);
@@ -463,7 +567,11 @@ void OtamActorService::OnSetServiceModeResponseReceived(
         otam_diagnostic_service_->PublishOtaMgrInfo(
             static_cast<int32_t>(OtamError::FAILED), "Failed: OtamVehicleService not available");
       }
-      PublishSetAppUpdateResponse(msg_id, app_name, ReturnValue::FAIL);
+      try {
+        PublishSetAppUpdateResponse(msg_id, app_name, ReturnValue::FAIL);
+      } catch (const std::exception& e) {
+        std::cerr << "OtamActorService: Failed to publish FAIL response: " << e.what() << std::endl;
+      }
     } else {
       // vehicle_info_enabled == false: skip vehicle state query, proceed directly to update
       std::cout << "OtamActorService: Vehicle info check disabled, skipping to update (request_id: "
@@ -482,7 +590,11 @@ void OtamActorService::OnSetServiceModeResponseReceived(
       otam_diagnostic_service_->PublishOtaMgrInfo(
           static_cast<int32_t>(OtamError::FAILED), "Failed: Service mode change to OTA_MODE failed");
     }
-    PublishSetAppUpdateResponse(msg_id, app_name, ReturnValue::FAIL);
+    try {
+      PublishSetAppUpdateResponse(msg_id, app_name, ReturnValue::FAIL);
+    } catch (const std::exception& e) {
+      std::cerr << "OtamActorService: Failed to publish FAIL response: " << e.what() << std::endl;
+    }
   }
 }
 
@@ -534,17 +646,25 @@ void OtamActorService::OnAppUpdateRequested(
     pending_updates_.emplace(request_id, PendingUpdateRequest(msg.id(), msg.app_name()));
   }
 
-  std::cout << "OtamActorService: Created pending request (request_id: "
-            << request_id << "), sending SetServiceModeRequest..." << std::endl;
+  const bool lifecycle_enabled = otam_server_service_->IsLifecycleEnabled();
 
-  // First, send SetServiceModeRequest to switch to OTA_MODE
-  // Vehicle info will be requested after receiving SetServiceModeResponse with SUCCESS
-  SendSetServiceModeRequest(request_id);
+  if (lifecycle_enabled) {
+    std::cout << "OtamActorService: Created pending request (request_id: "
+              << request_id << "), sending SetServiceModeRequest..." << std::endl;
+    SendSetServiceModeRequest(request_id);
+  } else {
+    std::cout << "OtamActorService: Lifecycle check disabled, bypassing SetServiceModeRequest"
+              << " (request_id: " << request_id << ")" << std::endl;
+    // Synthesize a SUCCESS response to trigger the post-service-mode flow
+    lifecyclemgr::SetServiceModeResponse synthetic;
+    synthetic.ret_code(lifecyclemgr::ReturnCode::SUCCESS);
+    OnSetServiceModeResponseReceived(synthetic);
+  }
 }
 
 void OtamActorService::OnVehicleInfoReceived(
     int32_t request_id, const std::string& name, const std::string& value) {
-  std::lock_guard<std::mutex> lock(pending_updates_mutex_);
+  std::unique_lock<std::mutex> lock(pending_updates_mutex_);
 
   // Find the pending request
   auto it = pending_updates_.find(request_id);
@@ -567,19 +687,11 @@ void OtamActorService::OnVehicleInfoReceived(
     std::cout << "OtamActorService: All vehicle info collected for request "
               << request_id << ", processing update..." << std::endl;
 
-    // Copy request data before erasing to avoid iterator invalidation
     PendingUpdateRequest request_copy = request;
     pending_updates_.erase(it);
-
-    // Call ProcessPendingUpdate without holding the mutex to avoid deadlock;
-    // explicitly control the unique_lock scope
-    {
-      std::unique_lock<std::mutex> release_lock(pending_updates_mutex_, std::adopt_lock);
-      release_lock.unlock();
-      ProcessPendingUpdate(request_copy);
-      // No need to re-lock when release_lock goes out of scope — returning immediately
-      return;
-    }
+    lock.unlock();
+    ProcessPendingUpdate(request_copy);
+    return;
   } else {
     std::cout << "OtamActorService: Still waiting for vehicle info: ";
     for (const auto& pending : request.pending_info) {
@@ -615,8 +727,7 @@ void OtamActorService::ProcessPendingUpdate(const PendingUpdateRequest& request)
       otam_server_service_ && otam_server_service_->IsVehicleInfoEnabled();
 
   if (vehicle_info_enabled) {
-    // Check vehicle condition before running OTA update
-    // Condition: vehicle_state == "acc" || (vehicle_state == "ignition" && vehicle_speed == "0")
+    // Check vehicle condition: acc, or ignition with speed 0
     if (vehicle_state == "acc") {
       std::cout << "OtamActorService: Vehicle is in ACC state - OTA update allowed" << std::endl;
     } else if (vehicle_state == "ignition" && vehicle_speed == "0") {
@@ -631,10 +742,41 @@ void OtamActorService::ProcessPendingUpdate(const PendingUpdateRequest& request)
         otam_diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), err_msg);
       }
 
-      PublishSetAppUpdateResponse(
-          request.msg_id,
-          request.app_name,
-          ReturnValue::FAIL);
+      try {
+        PublishSetAppUpdateResponse(request.msg_id, request.app_name, ReturnValue::FAIL);
+      } catch (const std::exception& e) {
+        std::cerr << "OtamActorService: Failed to publish FAIL response: " << e.what() << std::endl;
+      }
+      return;
+    }
+
+    // Battery State-of-Charge check. Reject update when battery below threshold
+    // to prevent mid-update battery drain.
+    const double threshold = otam_server_service_->GetBatteryThresholdPercent();
+    auto soc_it = request.vehicle_info.find("Vehicle.Powertrain.TractionBattery.StateOfCharge.Current");
+    const std::string soc_str = (soc_it != request.vehicle_info.end()) ? soc_it->second : "";
+    double soc = -1.0;
+    try {
+      if (!soc_str.empty()) soc = std::stod(soc_str);
+    } catch (const std::exception&) {
+      soc = -1.0;  // unparseable → treated as unknown, rejected below
+    }
+
+    if (soc < threshold) {
+      std::cerr << "OtamActorService: Battery SoC below threshold"
+                << " (soc: " << soc_str << ", threshold: " << threshold << ")" << std::endl;
+
+      if (otam_diagnostic_service_) {
+        std::string err_msg = "Failed: Battery SoC below threshold (soc: " + soc_str
+                              + ", threshold: " + std::to_string(threshold) + ")";
+        otam_diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), err_msg);
+      }
+
+      try {
+        PublishSetAppUpdateResponse(request.msg_id, request.app_name, ReturnValue::FAIL);
+      } catch (const std::exception& e) {
+        std::cerr << "OtamActorService: Failed to publish FAIL response: " << e.what() << std::endl;
+      }
       return;
     }
   } else {
@@ -673,10 +815,14 @@ void OtamActorService::ProcessPendingUpdate(const PendingUpdateRequest& request)
   }
 
   // Publish the response with result from OtamServerService
-  PublishSetAppUpdateResponse(
-      request.msg_id,
-      request.app_name,
-      ret_code);
+  try {
+    PublishSetAppUpdateResponse(
+        request.msg_id,
+        request.app_name,
+        ret_code);
+  } catch (const std::exception& e) {
+    std::cerr << "OtamActorService: Failed to publish update response: " << e.what() << std::endl;
+  }
 }
 
 // ========== Response Publishers ==========
@@ -782,6 +928,24 @@ void OtamActorService::PublishSetAppUpdateResponse(
     int32_t id,
     const std::string& app_name,
     ReturnValue code) {
+  // Notify registered clients on failure first, so clients are informed even if the
+  // DDS path is unavailable (e.g., topic not registered, write throws, no subscribers).
+  if (code == ReturnValue::FAIL && otam_client_service_) {
+    try {
+      otam_client_service_->NotifyAppUpdateStatus(app_name, "FAILED");
+    } catch (const std::exception& e) {
+      std::cerr << "OtamActorService: Failed to notify client of FAILED status: "
+                << e.what() << std::endl;
+    }
+  }
+
+  // F013: Restore Lifecycle to NORMAL on any OTA failure so other services can resume.
+  // Skipped when lifecycle integration is disabled.
+  if (code == ReturnValue::FAIL && otam_server_service_
+      && otam_server_service_->IsLifecycleEnabled()) {
+    WriteServiceModeRequestInternal(0, lifecyclemgr::ServiceMode::NORMAL);
+  }
+
   auto it = dds_registry_.find(kTopicSetAppUpdateResponse);
   if (it == dds_registry_.end()) {
     std::string err_msg = std::string("Failed: DDS not found for topic: ") + kTopicSetAppUpdateResponse;
@@ -982,15 +1146,12 @@ void OtamActorService::SetAppUpdateListener::on_data_available(eprosima::fastdds
 }
 
 void OtamActorService::SetServiceModeResponseListener::on_data_available(eprosima::fastdds::dds::DataReader* reader) {
-    // This callback is invoked by FastDDS when SetServiceModeResponse arrives
     lifecyclemgr::SetServiceModeResponse message;
     eprosima::fastdds::dds::SampleInfo info;
 
     try {
-        // Attempt to read the next available message
         if (reader->take_next_sample(&message, &info) == eprosima::fastdds::dds::RETCODE_OK) {
             if (info.valid_data) {
-                // Forward the message to the service for processing
                 service_->OnSetServiceModeResponseReceived(message);
             } else {
                 std::cout << "SetServiceModeResponseListener: Received invalid data sample" << std::endl;

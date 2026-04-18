@@ -4,5 +4,9 @@
     "username": "admin",
     "password": "start$44"
   },
-  "vehicle_info_enabled": false
+  "vehicle_info_enabled": false,
+  "lifecycle_enabled": true,
+  "battery_threshold_percent": 20.0,
+  "lifecycle_timeout_sec": 5,
+  "viss_timeout_sec": 3
 }

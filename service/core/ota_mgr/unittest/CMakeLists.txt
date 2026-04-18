@@ -21,9 +21,11 @@ target_include_directories(OtamMocks PRIVATE
 message(STATUS "googletest_SOURCE_DIR = ${googletest_SOURCE_DIR}")
 
 # Add the test executable.
-add_executable(otam_main_tests 
+add_executable(otam_main_tests
     test_otam_main.cc
     test_otam_client_service.cc
+    test_otam_vehicle_service.cc
+    test_otam_actor_service.cc
 )
 
 # Link the test executable to GTest, GMock, OtamMain library, and our mocks.

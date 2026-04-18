@@ -2,8 +2,22 @@
 #include <gmock/gmock.h>
 #include "otam_main/otam_main.h"        // SUT (System Under Test)
 #include "mock_service.h"     // Our separated mocks
+#include "otam_common/otam_dds_impl.h"  // For OtamDdsParticipant::Shutdown
 
 #include <stdexcept> // For std::runtime_error
+
+// Global environment: tear down the shared FastDDS DomainParticipant after
+// RUN_ALL_TESTS() returns but before static destructors fire. This avoids a
+// SIGSEGV at program exit caused by undefined destruction order between the
+// participant singleton and DDS impls still held by other test suites.
+class DdsShutdownEnv : public ::testing::Environment {
+ public:
+  ~DdsShutdownEnv() override = default;
+  void SetUp() override {}
+  void TearDown() override {
+    OtamDdsParticipant::GetInstance().Shutdown();
+  }
+};
 
 // Test fixture for OtamMain
 class OtamMainTest : public ::testing::Test {
@@ -121,11 +135,8 @@ TEST_F(OtamMainTest, StopHandlesErrorButDoesNotReportToDiagnosticService) {
 }
 
 int main(int argc, char **argv) {
-  // The testing::InitGoogleTest and testing::InitGoogleMock functions
-  // initialize the GTest and GMock frameworks.
-  ::testing::InitGoogleMock(&argc, argv); // Initializes GMock (which also initializes GTest)
-  // Or: ::testing::InitGoogleTest(&argc, argv); if only using GTest
-
-  // Runs all registered tests.
+  ::testing::InitGoogleMock(&argc, argv);
+  // GTest takes ownership of the Environment pointer.
+  ::testing::AddGlobalTestEnvironment(new DdsShutdownEnv());
   return RUN_ALL_TESTS();
 }

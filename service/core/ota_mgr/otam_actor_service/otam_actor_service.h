@@ -117,6 +117,11 @@ class OtamActorService: public OtamService {
   void SendSetServiceModeRequest(int32_t request_id);
 
   /**
+   * @brief Test/observability hook: number of SetServiceMode DDS writes attempted
+   */
+  int GetLifecycleRequestCount() const { return lifecycle_request_count_.load(); }
+
+  /**
    * @brief Callback for SetServiceModeResponse
    * @param msg SetServiceModeResponse message
    */
@@ -184,8 +189,9 @@ class OtamActorService: public OtamService {
 
     PendingUpdateRequest(int32_t id, const std::string& name)
         : msg_id(id), app_name(name), service_mode_pending(true) {
-      pending_info.insert("vehicle_state");
-      pending_info.insert("vehicle_speed");
+      pending_info.insert("Vehicle.LowVoltageSystemState");
+      pending_info.insert("Vehicle.Speed");
+      pending_info.insert("Vehicle.Powertrain.TractionBattery.StateOfCharge.Current");
     }
   };
 
@@ -309,6 +315,29 @@ class OtamActorService: public OtamService {
    * @param request Pending update request
    */
   void ProcessPendingUpdate(const PendingUpdateRequest& request);
+
+  /**
+   * @brief Write a SetServiceModeRequest for the given mode. Does not start a timer.
+   */
+  void WriteServiceModeRequestInternal(int32_t request_id, lifecyclemgr::ServiceMode mode);
+
+  /**
+   * @brief Start a timeout watcher for the given request. If no response arrives
+   *        within lifecycle_timeout_sec, fails the request and restores NORMAL_MODE.
+   */
+  void StartLifecycleTimeoutWatcher(int32_t request_id);
+
+  /**
+   * @brief Start a VISS signal timeout watcher. If pending_info is not empty after
+   *        viss_timeout_sec, the update is aborted with a FAIL response.
+   */
+  void StartVissTimeoutWatcher(int32_t request_id);
+
+
+  /**
+   * @brief Count of SetServiceMode DDS writes attempted (test hook).
+   */
+  std::atomic<int> lifecycle_request_count_{0};
 
   // Prevent copying
   OtamActorService(const OtamActorService&) = delete;

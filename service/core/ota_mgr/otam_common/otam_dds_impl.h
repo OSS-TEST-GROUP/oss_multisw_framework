@@ -63,7 +63,15 @@ public:
         if (participant_) return;
 
         auto factory = eprosima::fastdds::dds::DomainParticipantFactory::get_instance();
-        participant_ = factory->create_participant(0, eprosima::fastdds::dds::PARTICIPANT_QOS_DEFAULT);
+        // Suppress same-participant writer→reader loopback. Production uses cross-process
+        // participants so this does not affect real inter-service traffic; it only
+        // eliminates spurious self-delivery when Request/Response topics share a
+        // participant (triggers false matches in OnSetServiceModeResponseReceived).
+        eprosima::fastdds::dds::DomainParticipantQos participant_qos =
+            eprosima::fastdds::dds::PARTICIPANT_QOS_DEFAULT;
+        participant_qos.properties().properties().emplace_back(
+            "fastdds.ignore_local_endpoints", "true");
+        participant_ = factory->create_participant(0, participant_qos);
         if (!participant_) {
             throw std::runtime_error("OtamDdsParticipant: Failed to create shared DomainParticipant");
         }
