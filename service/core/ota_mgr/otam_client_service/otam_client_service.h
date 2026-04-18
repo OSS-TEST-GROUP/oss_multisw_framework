@@ -151,7 +151,7 @@ class OtamDiagnosticService;
        * 
        * @note The client_id is currently hardcoded and should be made configurable
        */
-      void NotifyAppUpdateStatus(const std::string& app_name, const std::string& status);
+      virtual void NotifyAppUpdateStatus(const std::string& app_name, const std::string& status);
 
   private:
       /**

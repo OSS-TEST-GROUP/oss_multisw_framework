@@ -1,6 +1,7 @@
 #include <chrono>
+#include <cstdio>
 #include <iostream>
-#include <stdexcept> // For std::runtime_error
+#include <stdexcept>
 #include <thread>
 
 #include "otam_main.h"
@@ -182,9 +183,8 @@ void OtamMain::Stop() {
         diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::SUCCEEDED), err_msg);
       }
     } catch (const std::exception& e) {
-      // For Stop, just report the error and continue stopping other units.
       std::string err_msg = "Failed to stop " + unit->Name() + ": " + e.what();
-      std::cerr << "OtamMain: " << err_msg << std::endl;
+      fprintf(stderr, "OtamMain: %s\n", err_msg.c_str());
       if (diagnostic_service_) {
         diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), err_msg);
       }

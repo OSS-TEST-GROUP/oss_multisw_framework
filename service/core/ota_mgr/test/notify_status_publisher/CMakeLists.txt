@@ -20,7 +20,7 @@ get_filename_component(PROJECT_ROOT
     ABSOLUTE)
 
 set(IDL_BASE_DIR
-    "${PROJECT_ROOT}/output/x86_64/Debug/extension/ros2/generated/idl")
+    "${PROJECT_ROOT}/output/x86_64/Debug/core/generated/idl")
 set(IDL_OTA_MGR_DIR "${IDL_BASE_DIR}/ota_mgr")
 set(IDL_COMMON_DIR  "${IDL_BASE_DIR}/common")
 

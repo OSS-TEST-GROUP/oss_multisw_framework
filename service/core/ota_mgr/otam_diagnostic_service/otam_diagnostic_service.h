@@ -36,7 +36,7 @@ class OtamDiagnosticService : public OtamService {
   //
   // If no subscriber is currently connected, the message is buffered internally
   // and delivered automatically when the first subscriber connects.
-  void PublishOtaMgrInfo(int32_t err_code, const std::string& err_msg);
+  virtual void PublishOtaMgrInfo(int32_t err_code, const std::string& err_msg);
 
  private:
   // -----------------------------------------------------------------------

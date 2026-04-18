@@ -31,27 +31,18 @@ using ::testing::InSequence;
 class OtamClientServiceTest : public ::testing::Test {
 protected:
     static void SetUpTestCase() {
-        // Create the service instance
-        // service_ = std::make_unique<OtamClientService>();
-        
-        // Initialize the service to set up DDS instances
+        // Create + initialize service inside the suite setup so lifetime is bound
+        // to the test run, not to static construction/destruction order.
+        service_ = std::make_unique<OtamClientService>();
         service_->Initialize();
         service_->Start();
-        
-        // Create mock DDS instances
-        // mock_registration_dds_ = std::make_unique<StrictMock<MockOtamDdsImpl>>();
-        // mock_registration_response_dds_ = std::make_unique<StrictMock<MockOtamDdsImpl>>();
-        // mock_manager_ready_dds_ = std::make_unique<StrictMock<MockOtamDdsImpl>>();
-        // mock_app_status_dds_ = std::make_unique<StrictMock<MockOtamDdsImpl>>();
     }
 
     static void TearDownTestCase() {
-        service_->Stop();
-        service_.reset();
-        // mock_registration_dds_.reset();
-        // mock_registration_response_dds_.reset();
-        // mock_manager_ready_dds_.reset();
-        // mock_app_status_dds_.reset();
+        if (service_) {
+            service_->Stop();
+            service_.reset();
+        }
     }
 
     // Helper method to inject mock DDS instances into the service
@@ -67,7 +58,7 @@ protected:
     // std::unique_ptr<StrictMock<MockOtamDdsImpl>> mock_app_status_dds_;
 };
 
-std::unique_ptr<OtamClientService> OtamClientServiceTest::service_ = std::make_unique<OtamClientService>();
+std::unique_ptr<OtamClientService> OtamClientServiceTest::service_;
 
 /**
  * @brief Test OtamClientService constructor

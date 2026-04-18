@@ -34,7 +34,7 @@ public:
     ~MockOtamDdsImpl() override = default;
 
     // Mock methods corresponding to DdsAbstraction interface
-    MOCK_METHOD(void, Create, (const std::string& topic, std::shared_ptr<void> type, std::shared_ptr<void> listener), (override));
+    MOCK_METHOD(void, Create, (const std::string& topic, std::shared_ptr<void> type, std::shared_ptr<void> listener, bool transient_local), (override));
     MOCK_METHOD(void, SetQos, (uint32_t qos), (override));
     MOCK_METHOD(void, Write, (std::shared_ptr<void> message), (override));
     MOCK_METHOD(void, Read, (std::shared_ptr<void> message), (override));

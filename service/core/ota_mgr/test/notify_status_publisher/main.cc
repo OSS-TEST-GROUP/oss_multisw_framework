@@ -38,7 +38,7 @@ using namespace eprosima::fastdds::dds;
 static constexpr const char* TOPIC_NAME =
     "/mmf/otamanager/otaclient_service/NotifyAppUpdateStatus";
 
-static constexpr int32_t DEFAULT_CLIENT_ID = 1;
+static constexpr int32_t DEFAULT_CLIENT_ID = 0;
 
 int main()
 {

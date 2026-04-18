@@ -20,6 +20,14 @@ struct OtamServerConfig {
     std::map<std::string, std::string> headers;
     // Whether to query vehicle state from vehicle_info_mgr (default: disabled)
     bool vehicle_info_enabled{false};
+    // Whether to request OTA_MODE via Lifecycle Manager before update (default: enabled)
+    bool lifecycle_enabled{true};
+    // Minimum battery State-of-Charge (%) required to permit an OTA update
+    double battery_threshold_percent{20.0};
+    // Max seconds to wait for Lifecycle Manager's SetServiceModeResponse
+    int lifecycle_timeout_sec{5};
+    // Max seconds to wait for VISS signals after RequestVehicleInfo
+    int viss_timeout_sec{3};
 };
 
 class OtamServerService : public OtamService {
@@ -34,7 +42,11 @@ public:
     void SetConfigPath(std::string path);
     void SetOtamDiagnosticService(OtamDiagnosticService* svc);
 
-    bool IsVehicleInfoEnabled() const { return config_.vehicle_info_enabled; }
+    virtual bool   IsVehicleInfoEnabled()      const { return config_.vehicle_info_enabled; }
+    virtual bool   IsLifecycleEnabled()        const { return config_.lifecycle_enabled; }
+    virtual double GetBatteryThresholdPercent() const { return config_.battery_threshold_percent; }
+    virtual int    GetLifecycleTimeoutSec()     const { return config_.lifecycle_timeout_sec; }
+    virtual int    GetVissTimeoutSec()          const { return config_.viss_timeout_sec; }
 
     // === ArgoCD Token Management ===
     SessionResult CreateOtaSession(); // now calls ArgoCD API
@@ -42,8 +54,8 @@ public:
 
     AppSettingsResult    GetOtaSettings(const std::string& app_name);
     AppUpdateStateResult GetOtaUpdateState(const std::string& app_name);
-    ReturnValue           RunOtaUpdate(const std::string& app_name);
-    ReturnValue           SetOtaSettings(const std::string& app_name, const std::string& app_settings_json);
+    virtual ReturnValue  RunOtaUpdate(const std::string& app_name);
+    ReturnValue          SetOtaSettings(const std::string& app_name, const std::string& app_settings_json);
 
 private:
     OtamServerConfig LoadConfigFromFile(const std::string& path);

@@ -121,6 +121,7 @@ ARG BUILD_TYPE=Release
 
 # Install ROS2 Humble and rosbridge-server
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
     curl \
     gnupg2 \
     lsb-release \
@@ -159,6 +160,7 @@ ARG BUILD_TYPE=Release
 
 # Install ROS2 Humble and rosbridge-server
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
     curl \
     gnupg2 \
     lsb-release \

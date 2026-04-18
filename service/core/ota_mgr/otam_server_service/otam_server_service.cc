@@ -35,6 +35,8 @@ void OtamServerService::Initialize() {
               << config_.server_url << " user=" << config_.username << "\n";
     std::cout << "[OtamServerService] vehicle_info_enabled: "
               << (config_.vehicle_info_enabled ? "true" : "false") << "\n";
+    std::cout << "[OtamServerService] lifecycle_enabled: "
+              << (config_.lifecycle_enabled ? "true" : "false") << "\n";
 
     state_ = ServiceState::INITIALIZED;
     std::cout << "OtamServerService Initialized." << std::endl;
@@ -392,6 +394,18 @@ OtamServerConfig OtamServerService::LoadConfigFromFile(const std::string& path) 
         }
         if (j.contains("vehicle_info_enabled")) {
             cfg.vehicle_info_enabled = j["vehicle_info_enabled"].get<bool>();
+        }
+        if (j.contains("lifecycle_enabled")) {
+            cfg.lifecycle_enabled = j["lifecycle_enabled"].get<bool>();
+        }
+        if (j.contains("battery_threshold_percent")) {
+            cfg.battery_threshold_percent = j["battery_threshold_percent"].get<double>();
+        }
+        if (j.contains("lifecycle_timeout_sec")) {
+            cfg.lifecycle_timeout_sec = j["lifecycle_timeout_sec"].get<int>();
+        }
+        if (j.contains("viss_timeout_sec")) {
+            cfg.viss_timeout_sec = j["viss_timeout_sec"].get<int>();
         }
     } catch (const std::exception& e) {
         std::string err_msg = "Failed: OtamServerService config parse error: " + std::string(e.what());
