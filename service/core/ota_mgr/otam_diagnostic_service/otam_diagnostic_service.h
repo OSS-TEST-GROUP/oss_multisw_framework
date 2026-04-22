@@ -9,13 +9,16 @@
 #include <fastdds/dds/publisher/DataWriter.hpp>
 #include <fastdds/dds/core/status/PublicationMatchedStatus.hpp>
 
+#include <chrono>
+#include <condition_variable>
+#include <cstdint>
 #include <map>
 #include <memory>
-#include <string>
-#include <cstdint>
-#include <vector>
-#include <utility>
 #include <mutex>
+#include <string>
+#include <thread>
+#include <utility>
+#include <vector>
 #include <atomic>
 
 // OTA Manager Diagnostic Service
@@ -37,6 +40,24 @@ class OtamDiagnosticService : public OtamService {
   // If no subscriber is currently connected, the message is buffered internally
   // and delivered automatically when the first subscriber connects.
   virtual void PublishOtaMgrInfo(int32_t err_code, const std::string& err_msg);
+
+  // -----------------------------------------------------------------------
+  // F007 — periodic heartbeat publish.
+  //
+  // Start() spawns a background thread that publishes a
+  // OtaManager::NotifyOtaMgrHeartbeat every `heartbeat_interval_` (default
+  // 3 s, overridable via env HEARTBEAT_INTERVAL_SEC at construction time).
+  // Stop() signals the thread and joins it; safe to Start/Stop repeatedly.
+  //
+  // The heartbeat shares the same DDS participant as NotifyOtaMgrInfo but
+  // a separate DataWriter and topic, so its publish cadence is decoupled
+  // from the late-subscriber buffering used by PublishOtaMgrInfo.
+  //
+  // Topic: /mmf/otamanager/diagnostic_service/NotifyOtaMgrHeartbeat
+  // -----------------------------------------------------------------------
+  virtual void PublishHeartbeatOnce();   // exposed for unit tests
+  std::chrono::seconds heartbeat_interval() const { return heartbeat_interval_; }
+  int32_t heartbeat_seq() const { return heartbeat_seq_.load(); }
 
  private:
   // -----------------------------------------------------------------------
@@ -71,6 +92,25 @@ class OtamDiagnosticService : public OtamService {
       "/mmf/otamanager/diagnostic_service/NotifyOtaMgrInfo";
 
   std::shared_ptr<OtaManager::NotifyOtaMgrInfoPubSubType> notify_ota_mgr_info_;
+
+  // F007 — heartbeat fields.
+  static constexpr const char* kOtaMgrHeartbeatTopic =
+      "/mmf/otamanager/diagnostic_service/NotifyOtaMgrHeartbeat";
+  std::shared_ptr<OtaManager::NotifyOtaMgrHeartbeatPubSubType>
+      notify_ota_mgr_heartbeat_;
+  std::chrono::seconds heartbeat_interval_{3};
+  std::thread heartbeat_thread_;
+  std::atomic<bool> heartbeat_running_{false};
+  std::atomic<int32_t> heartbeat_seq_{0};
+  std::condition_variable heartbeat_cv_;
+  std::mutex heartbeat_cv_mutex_;
+
+  // Internal: drives the heartbeat thread. Sleeps on heartbeat_cv_ so
+  // Stop() can wake the thread immediately instead of waiting out the
+  // current interval.
+  void HeartbeatLoop();
+  void StartHeartbeat();
+  void StopHeartbeat();
 
   // -----------------------------------------------------------------------
   // Late-subscriber support: raw DataWriter pointer (lifetime tied to dds_impl)
