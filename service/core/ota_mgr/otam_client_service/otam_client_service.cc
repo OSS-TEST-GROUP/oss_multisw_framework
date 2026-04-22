@@ -89,6 +89,14 @@
           std::cout << "OtamClientService: Destroying app_status_dds_ros_" << std::endl;
           app_status_dds_ros_->Destroy();
       }
+      if (get_app_list_dds_) {
+          std::cout << "OtamClientService: Destroying get_app_list_dds_" << std::endl;
+          get_app_list_dds_->Destroy();
+      }
+      if (get_app_list_response_dds_) {
+          std::cout << "OtamClientService: Destroying get_app_list_response_dds_" << std::endl;
+          get_app_list_response_dds_->Destroy();
+      }
       state_ = ServiceState::UNINITIALIZED;
   }
 
@@ -131,6 +139,26 @@
       app_status_dds_ros_->Create(TOPIC_ROS_APP_STATUS,
                                std::static_pointer_cast<void>(notify_app_update_status_),
                                nullptr);
+
+      // F022 — GetAppList request topic (subscribe) + Response (publish).
+      // Response uses TRANSIENT_LOCAL so a late subscriber on the requester
+      // side still gets the most recent answer.
+      get_app_list_dds_ =
+          std::make_unique<OtamDdsImpl<OtaManager::GetAppList>>();
+      get_app_list_response_dds_ =
+          std::make_unique<OtamDdsImpl<OtaManager::GetAppListResponse>>();
+      get_app_list_listener_ = std::make_shared<GetAppListListener>(this);
+      get_app_list_ = std::make_shared<OtaManager::GetAppListPubSubType>();
+      get_app_list_response_ =
+          std::make_shared<OtaManager::GetAppListResponsePubSubType>();
+      get_app_list_dds_->Create(
+          TOPIC_GET_APP_LIST,
+          std::static_pointer_cast<void>(get_app_list_),
+          std::static_pointer_cast<void>(get_app_list_listener_));
+      get_app_list_response_dds_->Create(
+          TOPIC_GET_APP_LIST_RESPONSE,
+          std::static_pointer_cast<void>(get_app_list_response_),
+          nullptr, true);
 
       std::cout << "OtamClientService: DDS instances created." << std::endl;
   }
@@ -356,4 +384,92 @@
           service_->ReportErrorToDiagnosticService(static_cast<int32_t>(OtamError::FAILED),
               "RegistrationListener: Exception in data callback: " + std::string(e.what()));
       }
+  }
+  // ─────────────────────────────────────────────────────────────────────
+  // F022 — GetAppList request listener.
+  //
+  // Mirrors the RegistrationListener pattern: pull the next sample,
+  // forward to HandleGetAppListRequest. Any exception is funnelled
+  // through diagnostic_service_ so it surfaces in the Manager logs and
+  // doesn't crash the FastDDS reader thread.
+  // ─────────────────────────────────────────────────────────────────────
+  void OtamClientService::GetAppListListener::on_data_available(
+      eprosima::fastdds::dds::DataReader* reader) {
+      OtaManager::GetAppList request;
+      eprosima::fastdds::dds::SampleInfo info;
+
+      try {
+          if (reader->take_next_sample(&request, &info) ==
+              eprosima::fastdds::dds::RETCODE_OK) {
+              if (info.valid_data) {
+                  service_->HandleGetAppListRequest(request);
+              } else {
+                  std::cout << "GetAppListListener: invalid data sample"
+                            << std::endl;
+              }
+          } else {
+              std::cout << "GetAppListListener: failed to read sample"
+                        << std::endl;
+          }
+      } catch (const std::exception& e) {
+          service_->ReportErrorToDiagnosticService(
+              static_cast<int32_t>(OtamError::FAILED),
+              std::string("GetAppListListener: ") + e.what());
+      }
+  }
+
+  void OtamClientService::HandleGetAppListRequest(
+      const OtaManager::GetAppList& req) {
+      auto resp =
+          BuildGetAppListResponse(req.id(), ota_client_info_list_);
+      if (!get_app_list_response_dds_) {
+          std::cerr << "OtamClientService: GetAppListResponse DDS missing"
+                    << std::endl;
+          return;
+      }
+      auto out = std::make_shared<OtaManager::GetAppListResponse>(resp);
+      get_app_list_response_dds_->Write(
+          std::static_pointer_cast<void>(out));
+      std::cout << "OtamClientService: GetAppListResponse id=" << resp.id()
+                << " apps=" << resp.app_names().size() << std::endl;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // F022 — pure aggregator. Static so unit tests don't need a live
+  // OtamClientService instance (and don't need to touch DDS at all).
+  // ─────────────────────────────────────────────────────────────────────
+  OtaManager::GetAppListResponse OtamClientService::BuildGetAppListResponse(
+      int64_t request_id,
+      const std::map<int32_t, OtaClientInfo>& clients) {
+      // Step 1: dedupe — for each app name, remember the lowest client_id
+      //         that registered it. std::map keeps insertion of first
+      //         (lowest) value naturally because we iterate clients in
+      //         key order.
+      std::map<std::string, int32_t> app_to_owner;
+      for (const auto& [cid, info] : clients) {
+          for (const auto& app : info.app_names) {
+              auto it = app_to_owner.find(app);
+              if (it == app_to_owner.end() || cid < it->second) {
+                  app_to_owner[app] = cid;
+              }
+          }
+      }
+
+      // Step 2: emit parallel arrays in app-name lexicographic order
+      //         (std::map iteration order).
+      std::vector<std::string> names;
+      std::vector<int32_t>     owners;
+      names.reserve(app_to_owner.size());
+      owners.reserve(app_to_owner.size());
+      for (const auto& [app, owner] : app_to_owner) {
+          names.push_back(app);
+          owners.push_back(owner);
+      }
+
+      OtaManager::GetAppListResponse resp;
+      resp.id(request_id);
+      resp.app_names(names);
+      resp.owner_client_ids(owners);
+      resp.ret_code(ReturnValue::SUCCESS);
+      return resp;
   }

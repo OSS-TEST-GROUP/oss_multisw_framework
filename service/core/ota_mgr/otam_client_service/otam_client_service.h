@@ -94,16 +94,35 @@ class OtamDiagnosticService;
 
       /**
        * @brief Notifies that the OTA Manager is ready
-       * 
+       *
        * Publishes a NotifyOtaManagerReady message to inform clients
        * that the OTA Manager has completed initialization and is
        * ready to accept client registrations and process updates.
-       * 
+       *
        * @throws std::runtime_error if message publishing fails
-       * 
+       *
        * @note This should be called after successful service initialization
        */
       void NotifyManagerReady();
+
+      /**
+       * @brief F022 — pure aggregator. Builds a GetAppListResponse from a
+       *        snapshot of (client_id -> OtaClientInfo). Public + static
+       *        so unit tests can exercise the dedupe / sort / "lowest
+       *        client_id wins" semantics without standing up DDS.
+       *
+       *        - Apps registered under multiple clients are deduplicated;
+       *          owner_client_ids[i] is the lowest client_id that
+       *          registered app_names[i].
+       *        - app_names is sorted lexicographically; owner_client_ids
+       *          uses the same order (parallel arrays).
+       *        - ret_code is SUCCESS for a well-formed snapshot, even
+       *          when the input map is empty (caller sees zero-length
+       *          arrays).
+       */
+      static OtaManager::GetAppListResponse BuildGetAppListResponse(
+          int64_t request_id,
+          const std::map<int32_t, OtaClientInfo>& clients);
 
       /**
        * @brief Sets the diagnostic service for error reporting
@@ -193,6 +212,12 @@ class OtamDiagnosticService;
       std::shared_ptr<OtaManager::NotifyOtaManagerReadyPubSubType> notify_ota_mgr_ready_;
       std::shared_ptr<OtaManager::NotifyAppUpdateStatusPubSubType> notify_app_update_status_;
 
+      // F022 — GetAppList request/response DDS pair.
+      std::unique_ptr<OtamDds> get_app_list_dds_;            // subscribe
+      std::unique_ptr<OtamDds> get_app_list_response_dds_;   // publish
+      std::shared_ptr<OtaManager::GetAppListPubSubType> get_app_list_;
+      std::shared_ptr<OtaManager::GetAppListResponsePubSubType> get_app_list_response_;
+
       /**
        * @class RegistrationListener
        * @brief DDS listener for client registration messages
@@ -226,6 +251,33 @@ class OtamDiagnosticService;
 
       /** @brief Listener instance for registration messages */
       std::shared_ptr<RegistrationListener> registration_listener_;
+
+      /**
+       * @class GetAppListListener
+       * @brief F022 — DDS listener for GetAppList request messages.
+       *
+       * On receipt, snapshots ota_client_info_list_ under mutex (TODO),
+       * builds a GetAppListResponse via BuildGetAppListResponse(), and
+       * publishes it back through get_app_list_response_dds_.
+       */
+      class GetAppListListener
+          : public eprosima::fastdds::dds::DataReaderListener {
+       public:
+        explicit GetAppListListener(OtamClientService* service)
+            : service_(service) {}
+        void on_data_available(
+            eprosima::fastdds::dds::DataReader* reader) override;
+
+       private:
+        OtamClientService* service_;
+      };
+      std::shared_ptr<GetAppListListener> get_app_list_listener_;
+
+      /**
+       * @brief F022 — process one GetAppList request: build the response
+       *        from the live ota_client_info_list_ and publish it.
+       */
+      void HandleGetAppListRequest(const OtaManager::GetAppList& req);
 
       /**
        * @brief Initializes DDS communication infrastructure
@@ -271,6 +323,14 @@ class OtamDiagnosticService;
 
       /** @brief ROS2/rosbridge compatible topic name (rt/ prefix) */
       static constexpr const char* TOPIC_ROS_APP_STATUS = "rt/mmf/otamanager/otaclient_service/NotifyAppUpdateStatus";
+
+      /** @brief F022 — request topic for the GetAppList query */
+      static constexpr const char* TOPIC_GET_APP_LIST =
+          "/mmf/otamanager/otaclient_service/GetAppList";
+
+      /** @brief F022 — response topic for GetAppList */
+      static constexpr const char* TOPIC_GET_APP_LIST_RESPONSE =
+          "/mmf/otamanager/otaclient_service/GetAppListResponse";
 
       /** @brief Flag indicating if an OTA session is currently active */
       bool is_session_active_;
