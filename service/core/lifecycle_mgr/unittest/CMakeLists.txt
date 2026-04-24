@@ -84,7 +84,7 @@ add_executable ( MWServiceTest MWServiceTest.cpp ../service/MWService.cpp ../ser
 add_executable ( HelperTest HelperTest.cpp )
 
 # Integration test for concrete endpoints with actual DDS read
-add_executable ( ConcreteEndpointIntegrationTest 
+add_executable ( ConcreteEndpointIntegrationTest
                 ConcreteEndpointIntegrationTest.cpp
                 ../endpoint/StartServiceEndPoint.cpp
                 ../endpoint/StopServiceEndPoint.cpp
@@ -95,6 +95,16 @@ add_executable ( ConcreteEndpointIntegrationTest
                 ../endpoint/LifecycleDiagReportEndPoint.cpp
                 ../transmitter/DDSMessageEndPoint.cpp
                 ../transmitter/MessageEndPoint.cpp
+                ${GENERATED_DDS_FILES}
+                )
+
+# Integration test for lifecycle_mgr <-> adsw_manager handshake
+add_executable ( LifecycleAdswIntegrationTest
+                test_lifecycle_adsw_integration.cc
+                ../endpoint/UpdateServiceListEndPoint.cpp
+                ../transmitter/DDSMessageEndPoint.cpp
+                ../transmitter/MessageEndPoint.cpp
+                ../logger/Logger.cpp
                 ${GENERATED_DDS_FILES}
                 )
 
@@ -113,16 +123,17 @@ gtest_discover_tests ( ArgumentConfigTest )
 gtest_discover_tests ( MWServiceTest )
 gtest_discover_tests ( HelperTest )
 gtest_discover_tests ( ConcreteEndpointIntegrationTest )
+gtest_discover_tests ( LifecycleAdswIntegrationTest )
 
 
 ## Install
-install ( TARGETS 
+install ( TARGETS
                 ArgumentConfigTest
                 ServiceTest
                 DDSTransmitterTest
                 DDSMessageEndPointTest
                 DDSMessageEndPointReadTest
-                StateManagerTest    
+                StateManagerTest
                 MWServiceTest
                 LFPolicyManagerTest
                 StateMonitorTest
@@ -132,6 +143,7 @@ install ( TARGETS
                 ServiceRegistryTest
                 HelperTest
                 ConcreteEndpointIntegrationTest
+                LifecycleAdswIntegrationTest
     RUNTIME DESTINATION bin/unittest/lifecycle_mgr
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
