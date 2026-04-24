@@ -47,7 +47,7 @@ protected:
         mock_transmitter = std::make_shared<NiceMock<MockMessageTransmitter>>(mock_registry, mock_controller, mock_ddsmanager);
         mock_monitor = std::make_shared<NiceMock<MockServiceMonitor>>();
 
-        // ON_CALL(*mock_registry, Initialize()).WillByDefault(Return(true));
+        // ON_CALL(*mock_registry, Initialize(_)).WillByDefault(Return(true));
         // ON_CALL(*mock_controller, Initialize()).WillByDefault(Return(true));
         // ON_CALL(*mock_transmitter, Initialize(_)).WillByDefault(Return(true));
         // ON_CALL(*mock_monitor, Initialize(_,_,_,_)).WillByDefault(Return(true));
@@ -65,7 +65,7 @@ protected:
 // ----------------------------- Initialize -----------------------------
 
 TEST_F(ADSWManagerTestFixture, Initialize_NullParticipant) {
-    EXPECT_CALL(*mock_registry, Initialize()).Times(0);
+    EXPECT_CALL(*mock_registry, Initialize(_)).Times(0);
     EXPECT_CALL(*mock_controller, Initialize()).Times(0);
     EXPECT_CALL(*mock_transmitter, Initialize(_)).Times(0);
     EXPECT_CALL(*mock_monitor, Initialize(_,_,_,_)).Times(0);
@@ -76,7 +76,7 @@ TEST_F(ADSWManagerTestFixture, Initialize_NullParticipant) {
 }
 
 TEST_F(ADSWManagerTestFixture, Initialize_NullRegistry) {
-    EXPECT_CALL(*mock_registry, Initialize()).Times(0);
+    EXPECT_CALL(*mock_registry, Initialize(_)).Times(0);
     EXPECT_CALL(*mock_controller, Initialize()).Times(0);
     EXPECT_CALL(*mock_transmitter, Initialize(_)).Times(0);
     EXPECT_CALL(*mock_monitor, Initialize(_,_,_,_)).Times(0);
@@ -87,7 +87,7 @@ TEST_F(ADSWManagerTestFixture, Initialize_NullRegistry) {
 }
 
 TEST_F(ADSWManagerTestFixture, Initialize_NullAppController) {
-    EXPECT_CALL(*mock_registry, Initialize()).Times(0);
+    EXPECT_CALL(*mock_registry, Initialize(_)).Times(0);
     EXPECT_CALL(*mock_controller, Initialize()).Times(0);
     EXPECT_CALL(*mock_transmitter, Initialize(_)).Times(0);
     EXPECT_CALL(*mock_monitor, Initialize(_,_,_,_)).Times(0);
@@ -98,7 +98,7 @@ TEST_F(ADSWManagerTestFixture, Initialize_NullAppController) {
 }
 
 TEST_F(ADSWManagerTestFixture, Initialize_NullServiceController) {
-    EXPECT_CALL(*mock_registry, Initialize()).Times(0);
+    EXPECT_CALL(*mock_registry, Initialize(_)).Times(0);
     EXPECT_CALL(*mock_controller, Initialize()).Times(0);
     EXPECT_CALL(*mock_transmitter, Initialize(_)).Times(0);
     EXPECT_CALL(*mock_monitor, Initialize(_,_,_,_)).Times(0);
@@ -109,7 +109,7 @@ TEST_F(ADSWManagerTestFixture, Initialize_NullServiceController) {
 }
 
 TEST_F(ADSWManagerTestFixture, Initialize_NullDDSManager) {
-    EXPECT_CALL(*mock_registry, Initialize()).Times(0);
+    EXPECT_CALL(*mock_registry, Initialize(_)).Times(0);
     EXPECT_CALL(*mock_controller, Initialize()).Times(0);
     EXPECT_CALL(*mock_transmitter, Initialize(_)).Times(0);
     EXPECT_CALL(*mock_monitor, Initialize(_,_,_,_)).Times(0);
@@ -120,7 +120,7 @@ TEST_F(ADSWManagerTestFixture, Initialize_NullDDSManager) {
 }
 
 TEST_F(ADSWManagerTestFixture, Initialize_NullTransmitter) {
-    EXPECT_CALL(*mock_registry, Initialize()).Times(0);
+    EXPECT_CALL(*mock_registry, Initialize(_)).Times(0);
     EXPECT_CALL(*mock_controller, Initialize()).Times(0);
     EXPECT_CALL(*mock_transmitter, Initialize(_)).Times(0);
     EXPECT_CALL(*mock_monitor, Initialize(_,_,_,_)).Times(0);
@@ -131,7 +131,7 @@ TEST_F(ADSWManagerTestFixture, Initialize_NullTransmitter) {
 }
 
 TEST_F(ADSWManagerTestFixture, Initialize_NullMonitor) {
-    EXPECT_CALL(*mock_registry, Initialize()).Times(0);
+    EXPECT_CALL(*mock_registry, Initialize(_)).Times(0);
     EXPECT_CALL(*mock_controller, Initialize()).Times(0);
     EXPECT_CALL(*mock_transmitter, Initialize(_)).Times(0);
     EXPECT_CALL(*mock_monitor, Initialize(_,_,_,_)).Times(0);
@@ -147,7 +147,7 @@ TEST_F(ADSWManagerTestFixture, Initialize_Success_WiresEverythingInOrder) {
 
     InSequence seq; // 호출 순서 강제
 
-    EXPECT_CALL(*mock_registry, Initialize())
+    EXPECT_CALL(*mock_registry, Initialize(_))
         .Times(1)
         .WillOnce(Return(true));
 
@@ -191,7 +191,7 @@ TEST_F(ADSWManagerTestFixture, Initialize_Fails_WhenServiceRegistryInitFails) {
     ADSWManager manager(participant, mock_registry, mock_app_controller, 
         mock_controller, mock_ddsmanager, mock_transmitter, mock_monitor);
 
-    EXPECT_CALL(*mock_registry, Initialize()).WillOnce(Return(false));
+    EXPECT_CALL(*mock_registry, Initialize(_)).WillOnce(Return(false));
 
     EXPECT_CALL(*mock_controller, Initialize()).Times(0);
     EXPECT_CALL(*mock_transmitter, Initialize(_)).Times(0);
@@ -206,7 +206,7 @@ TEST_F(ADSWManagerTestFixture, Initialize_Fails_WhenServiceControllerInitFails) 
         mock_controller, mock_ddsmanager, mock_transmitter, mock_monitor);
 
     InSequence seq;
-    EXPECT_CALL(*mock_registry, Initialize()).WillOnce(Return(true));
+    EXPECT_CALL(*mock_registry, Initialize(_)).WillOnce(Return(true));
     EXPECT_CALL(*mock_controller, Initialize()).WillOnce(Return(false));
 
     EXPECT_CALL(*mock_transmitter, Initialize(_)).Times(0);
@@ -221,7 +221,7 @@ TEST_F(ADSWManagerTestFixture, Initialize_Fails_WhenMessageTransmitterInitFails)
         mock_controller, mock_ddsmanager, mock_transmitter, mock_monitor);
 
     InSequence seq;
-    EXPECT_CALL(*mock_registry, Initialize()).WillOnce(Return(true));
+    EXPECT_CALL(*mock_registry, Initialize(_)).WillOnce(Return(true));
     EXPECT_CALL(*mock_controller, Initialize()).WillOnce(Return(true));
     EXPECT_CALL(*mock_transmitter, Initialize(_)).WillOnce(Return(false));
 
@@ -236,7 +236,7 @@ TEST_F(ADSWManagerTestFixture, Initialize_Fails_WhenServiceMonitorInitFails) {
         mock_controller, mock_ddsmanager, mock_transmitter, mock_monitor);
 
     InSequence seq;
-    EXPECT_CALL(*mock_registry, Initialize()).WillOnce(Return(true));
+    EXPECT_CALL(*mock_registry, Initialize(_)).WillOnce(Return(true));
     EXPECT_CALL(*mock_controller, Initialize()).WillOnce(Return(true));
     EXPECT_CALL(*mock_transmitter, Initialize(_)).WillOnce(Return(true));
     EXPECT_CALL(*mock_monitor, Initialize(_,_,_,_)).WillOnce(Return(false));

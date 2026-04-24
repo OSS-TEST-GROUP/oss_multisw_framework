@@ -8,7 +8,7 @@ using namespace lifecyclemgr;
 
 class MockServiceRegistry : public adsw_manager::agl::ServiceRegistry {
 public:
-    MOCK_METHOD(bool, Initialize, (), (override));
+    MOCK_METHOD(bool, Initialize, (const std::string& config_path), (override));
     MOCK_METHOD(std::vector<Service>, GetAppList, (), (const, override));
     MOCK_METHOD(void, UpdateAppState, (const std::string&, ServiceState), (override));
     MOCK_METHOD((std::optional<std::pair<Service, ServiceState>>), GetAppInfo, (const std::string& app_name), (const, override));
