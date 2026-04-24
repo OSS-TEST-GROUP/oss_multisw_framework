@@ -26,6 +26,7 @@
 #include <fastdds/dds/publisher/Publisher.hpp>
 #include <fastdds/dds/subscriber/Subscriber.hpp>
 #include <fastdds/dds/topic/TypeSupport.hpp>
+#include <fastdds/rtps/transport/UDPv4TransportDescriptor.hpp>
 
 #include "endpoint/UpdateServiceListEndPoint.hpp"
 #include "transmitter/DDSMessageEndPoint.hpp"
@@ -37,9 +38,24 @@
 using namespace lifecycle_manager;
 using namespace lifecyclemgr;
 using namespace eprosima::fastdds::dds;
+using namespace eprosima::fastdds::rtps;
 
 using ::testing::_;
 using ::testing::AtLeast;
+
+/**
+ * @brief Create a DDS participant with UDP-only transport (no SHM).
+ * SHM transport causes inter-participant futex deadlocks in same-process tests
+ * when stale shm segments exist from prior runs.
+ */
+static DomainParticipant* CreateUdpOnlyParticipant(int domain_id, const char* name) {
+    DomainParticipantQos qos;
+    qos.name(name);
+    qos.transport().use_builtin_transports = false;
+    auto udp = std::make_shared<UDPv4TransportDescriptor>();
+    qos.transport().user_transports.push_back(udp);
+    return DomainParticipantFactory::get_instance()->create_participant(domain_id, qos);
+}
 
 /**
  * @brief Simulates adsw_manager handshake behavior
@@ -160,26 +176,32 @@ private:
     void ProcessLoop() {
         last_request_time_ = std::chrono::steady_clock::now();
 
-        // Send initial request immediately
+        // Send initial request immediately (no mutex held)
         SendUpdateServiceListRequest();
 
         while (running_) {
-            std::unique_lock<std::mutex> lock(mutex_);
+            bool should_send = false;
 
-            // Wait for 3 seconds or until stopped/running
-            cv_.wait_for(lock, std::chrono::milliseconds(3000),
-                        [this]() { return !running_ || state_ == State::RUNNING; });
+            {
+                std::unique_lock<std::mutex> lock(mutex_);
 
-            if (!running_ || state_ == State::RUNNING) {
-                break;
-            }
+                // Wait for 3 seconds or until stopped/running
+                cv_.wait_for(lock, std::chrono::milliseconds(3000),
+                            [this]() { return !running_ || state_ == State::RUNNING; });
 
-            // Check if 3 seconds have passed since last request
-            auto now = std::chrono::steady_clock::now();
-            auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                now - last_request_time_).count();
+                if (!running_ || state_ == State::RUNNING) {
+                    break;
+                }
 
-            if (elapsed >= 3000) {
+                // Check if 3 seconds have passed since last request
+                auto now = std::chrono::steady_clock::now();
+                auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    now - last_request_time_).count();
+
+                should_send = (elapsed >= 3000);
+            }  // mutex released before write to prevent deadlock with DDS callback
+
+            if (should_send) {
                 SendUpdateServiceListRequest();
             }
         }
@@ -256,19 +278,14 @@ private:
 class LifecycleAdswIntegrationTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        // Create DDS participant for lifecycle_mgr
-        DomainParticipantQos lcm_qos;
-        lcm_qos.name("LifecycleManager_Participant");
-        lcm_participant_ = DomainParticipantFactory::get_instance()->create_participant(0, lcm_qos);
+        // Use UDP-only transport: SHM causes futex deadlocks between same-process
+        // participants when stale shared memory segments exist from prior test runs.
+        lcm_participant_ = CreateUdpOnlyParticipant(0, "LifecycleManager_Participant");
         ASSERT_NE(lcm_participant_, nullptr);
 
-        // Create DDS participant for adsw_manager simulator
-        DomainParticipantQos adsw_qos;
-        adsw_qos.name("AdswManager_Participant");
-        adsw_participant_ = DomainParticipantFactory::get_instance()->create_participant(0, adsw_qos);
+        adsw_participant_ = CreateUdpOnlyParticipant(0, "AdswManager_Participant");
         ASSERT_NE(adsw_participant_, nullptr);
 
-        // Create AdswManagerSimulator
         adsw_simulator_ = std::make_unique<AdswManagerSimulator>();
         ASSERT_TRUE(adsw_simulator_->Initialize(adsw_participant_));
 
@@ -279,25 +296,20 @@ protected:
     void TearDown() override {
         if (adsw_simulator_) {
             adsw_simulator_->Stop();
-            adsw_simulator_.reset();
+            adsw_simulator_.reset();  // endpoint destructors delete DDS entities
         }
 
-        // NOTE: DDS participant cleanup (delete_contained_entities) can block
-        // in some scenarios. For integration tests, fast exit is acceptable
-        // as the process will terminate anyway, releasing all OS resources.
-        // This is a known DDS cleanup issue, not related to the handshake logic.
+        if (lcm_participant_) {
+            lcm_participant_->delete_contained_entities();
+            DomainParticipantFactory::get_instance()->delete_participant(lcm_participant_);
+            lcm_participant_ = nullptr;
+        }
 
-        // if (lcm_participant_) {
-        //     lcm_participant_->delete_contained_entities();
-        //     DomainParticipantFactory::get_instance()->delete_participant(lcm_participant_);
-        //     lcm_participant_ = nullptr;
-        // }
-
-        // if (adsw_participant_) {
-        //     adsw_participant_->delete_contained_entities();
-        //     DomainParticipantFactory::get_instance()->delete_participant(adsw_participant_);
-        //     adsw_participant_ = nullptr;
-        // }
+        if (adsw_participant_) {
+            adsw_participant_->delete_contained_entities();
+            DomainParticipantFactory::get_instance()->delete_participant(adsw_participant_);
+            adsw_participant_ = nullptr;
+        }
     }
 
     DomainParticipant* lcm_participant_ = nullptr;
@@ -313,6 +325,7 @@ protected:
  * and lifecycle_mgr responds within 3 seconds, causing adsw to transition to RUNNING.
  */
 TEST_F(LifecycleAdswIntegrationTest, Handshake_SuccessWithin3Seconds) {
+    // Create response endpoint outside of callback (needs to persist)
     // Create response endpoint outside of callback (needs to persist)
     auto lcm_response_endpoint = std::make_unique<UpdateServiceListEndPoint>(
         MessageType::UPDATE_SERVICE_LIST_RESPONSE,
