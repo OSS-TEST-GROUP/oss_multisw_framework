@@ -491,6 +491,124 @@ TEST_F(LifecycleAdswIntegrationTest, StateTransition_InitStartedRunning) {
 }
 
 
+// ==================== F003: StartService Integration Tests ====================
+
+#include "endpoint/StartServiceEndPoint.hpp"
+#include "lifecycle/StartServiceRequest.hpp"
+
+/**
+ * @brief TC006 (F003): StartService request message creation and publishing
+ *
+ * Verifies that StartServiceRequest can be created and published via DDS.
+ */
+TEST_F(LifecycleAdswIntegrationTest, F003_StartService_RequestPublish) {
+    // Create lifecycle_mgr request publisher
+    auto lcm_request_endpoint = std::make_unique<StartServiceEndPoint>(
+        MessageType::START_SERVICE_REQUEST,
+        "mmf/lifecyclemgr/StartServiceRequest");
+
+    Publisher* lcm_pub = lcm_participant_->create_publisher(PUBLISHER_QOS_DEFAULT);
+    ASSERT_TRUE(lcm_request_endpoint->Initialize(lcm_participant_, lcm_pub, nullptr));
+
+    // Wait for DDS discovery
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+
+    // Create and publish StartServiceRequest
+    StartServiceRequest request;
+    request.os_type(OsType::ROS2);
+    request.service_list().push_back("autoware");
+    request.is_group(false);
+
+    // Verify Write succeeds
+    EXPECT_TRUE(lcm_request_endpoint->Write(&request))
+        << "StartServiceRequest Write should succeed";
+}
+
+
+/**
+ * @brief TC007 (F003): StartService response message creation and publishing
+ *
+ * Verifies that StartServiceResponse can be created and published via DDS.
+ */
+TEST_F(LifecycleAdswIntegrationTest, F003_StartService_ResponsePublish) {
+    // Create adsw_manager response publisher
+    auto adsw_response_endpoint = std::make_unique<StartServiceEndPoint>(
+        MessageType::START_SERVICE_RESPONSE,
+        "mmf/lifecyclemgr/StartServiceResponse");
+
+    Publisher* adsw_pub = adsw_participant_->create_publisher(PUBLISHER_QOS_DEFAULT);
+    ASSERT_TRUE(adsw_response_endpoint->Initialize(adsw_participant_, adsw_pub, nullptr));
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+
+    // Create and publish StartServiceResponse
+    StartServiceResponse response;
+    response.ret_code(ReturnCode::SUCCESS);
+
+    // Verify Write succeeds
+    EXPECT_TRUE(adsw_response_endpoint->Write(&response))
+        << "StartServiceResponse Write should succeed";
+}
+
+
+/**
+ * @brief TC008 (F003): StartService request with single service name
+ *
+ * Verifies that StartServiceRequest with a single service name can be constructed correctly.
+ */
+TEST_F(LifecycleAdswIntegrationTest, F003_StartService_SingleServiceName) {
+    StartServiceRequest request;
+    request.os_type(OsType::ROS2);
+    request.service_list().push_back("autoware");
+    request.is_group(false);
+
+    // Verify request construction
+    EXPECT_EQ(request.os_type(), OsType::ROS2);
+    EXPECT_EQ(request.service_list().size(), 1);
+    EXPECT_EQ(request.service_list()[0], "autoware");
+    EXPECT_FALSE(request.is_group());
+}
+
+
+/**
+ * @brief TC009 (F003): StartService with multiple services (group)
+ *
+ * Verifies that StartServiceRequest with is_group=true and multiple services works.
+ */
+TEST_F(LifecycleAdswIntegrationTest, F003_StartService_MultipleServices) {
+    StartServiceRequest request;
+    request.os_type(OsType::ROS2);
+    request.service_list().push_back("autoware");
+    request.service_list().push_back("perception");
+    request.service_list().push_back("planning");
+    request.is_group(true);
+
+    // Verify request construction
+    EXPECT_EQ(request.os_type(), OsType::ROS2);
+    EXPECT_EQ(request.service_list().size(), 3);
+    EXPECT_EQ(request.service_list()[0], "autoware");
+    EXPECT_EQ(request.service_list()[1], "perception");
+    EXPECT_EQ(request.service_list()[2], "planning");
+    EXPECT_TRUE(request.is_group());
+}
+
+
+/**
+ * @brief TC010 (F003): StartService response codes
+ *
+ * Verifies that StartServiceResponse can represent SUCCESS and FAILED codes.
+ */
+TEST_F(LifecycleAdswIntegrationTest, F003_StartService_ResponseCodes) {
+    StartServiceResponse success_response;
+    success_response.ret_code(ReturnCode::SUCCESS);
+    EXPECT_EQ(success_response.ret_code(), ReturnCode::SUCCESS);
+
+    StartServiceResponse failed_response;
+    failed_response.ret_code(ReturnCode::FAILED);
+    EXPECT_EQ(failed_response.ret_code(), ReturnCode::FAILED);
+}
+
+
 int main(int argc, char* argv[]) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

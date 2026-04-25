@@ -102,6 +102,7 @@ add_executable ( ConcreteEndpointIntegrationTest
 add_executable ( LifecycleAdswIntegrationTest
                 test_lifecycle_adsw_integration.cc
                 ../endpoint/UpdateServiceListEndPoint.cpp
+                ../endpoint/StartServiceEndPoint.cpp
                 ../transmitter/DDSMessageEndPoint.cpp
                 ../transmitter/MessageEndPoint.cpp
                 ../logger/Logger.cpp
