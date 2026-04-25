@@ -97,11 +97,36 @@ public:
           << "            max: \"0\"\n";
         f.close();
 
-        // 2. Start autoware container (network host for DDS multicast)
+        // 2. Detect default network interface for CycloneDDS (loopback doesn't support multicast)
+        std::string iface = ExecShell("ip route show default 2>/dev/null | awk '{print $5; exit}'");
+        while (!iface.empty() && (iface.back() == '\n' || iface.back() == '\r' || iface.back() == ' '))
+            iface.pop_back();
+        if (iface.empty()) iface = "enp128s31f6";  // fallback for this machine
+
+        // Write a working CycloneDDS config using the detected interface
+        const char* CYCLONE_XML_PATH = "/tmp/cyclonedds_e2e.xml";
+        {
+            std::ofstream cf(CYCLONE_XML_PATH);
+            cf << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+               << "<CycloneDDS>\n"
+               << "  <Domain>\n"
+               << "    <General>\n"
+               << "      <Interfaces>\n"
+               << "        <NetworkInterface name=\"" << iface << "\"/>\n"
+               << "      </Interfaces>\n"
+               << "    </General>\n"
+               << "  </Domain>\n"
+               << "</CycloneDDS>\n";
+        }
+
+        // 3. Start autoware container (network host for DDS multicast)
         ExecShell(std::string("docker rm -f ") + AUTOWARE_CONTAINER + " 2>/dev/null");
         std::this_thread::sleep_for(std::chrono::seconds(1));
         ExecShell(std::string("docker run -d --name ") + AUTOWARE_CONTAINER
-                  + " --network host " + AUTOWARE_IMAGE + " sleep infinity");
+                  + " --network host"
+                  + " -v " + CYCLONE_XML_PATH + ":/tmp/cyclonedds_e2e.xml"
+                  + " -e CYCLONEDDS_URI=file:///tmp/cyclonedds_e2e.xml"
+                  + " " + AUTOWARE_IMAGE + " sleep infinity");
 
         bool container_ok = WaitForCondition([]() {
             std::string out = ExecShell(
@@ -114,14 +139,14 @@ public:
             return;
         }
 
-        // 3. Build LD_LIBRARY_PATH for child processes
+        // 4. Build LD_LIBRARY_PATH for child processes
         std::string ld_path = std::string(LF_LIB_PATH) + ":"
                             + ADSW_LIB_PATH + ":"
                             + FASTDDS_LIB_PATH;
         const char* existing_ld = std::getenv("LD_LIBRARY_PATH");
         if (existing_ld && strlen(existing_ld) > 0) ld_path += std::string(":") + existing_ld;
 
-        // 4. Fork lifecycle_mgr
+        // 5. Fork lifecycle_mgr
         lifecycle_pid_ = fork();
         if (lifecycle_pid_ == 0) {
             setenv("MMF_CONFIG_PATH", LF_CONFIG_PATH, 1);
@@ -130,7 +155,7 @@ public:
             _exit(127);
         }
 
-        // 5. Fork adsw_manager
+        // 6. Fork adsw_manager
         adsw_pid_ = fork();
         if (adsw_pid_ == 0) {
             setenv("SAVED_REGISTRY_BACKUP", E2E_CONFIG_DIR, 1);
@@ -139,7 +164,7 @@ public:
             _exit(127);
         }
 
-        // 6. Wait for logging_demo_main to appear in container (up to 60s)
+        // 7. Wait for logging_demo_main to appear in container (up to 60s)
         // Flow: adsw starts → sends UpdateServiceList → lifecycle responds → sends StartServiceRequest
         //       → adsw docker execs ros2 run → node appears in ros2 node list
         // Wait up to 60s for E2E chain: adsw startup + UpdateServiceList handshake +
@@ -150,7 +175,7 @@ public:
             std::string out = ExecShell(
                 "docker exec autoware-test bash -c "
                 "'source /opt/ros/humble/setup.bash 2>/dev/null && ros2 node list 2>/dev/null'");
-            if (out.find("/logging_demo_main") != std::string::npos) {
+            if (out.find("/logger_usage_demo") != std::string::npos) {
                 node_list_result_ = out;
                 return true;
             }
@@ -163,6 +188,7 @@ public:
         KillAndWait(lifecycle_pid_);
         ExecShell(std::string("docker rm -f ") + AUTOWARE_CONTAINER + " 2>/dev/null");
         ExecShell(std::string("rm -rf ") + E2E_CONFIG_DIR);
+        ExecShell("rm -f /tmp/cyclonedds_e2e.xml");
         adsw_pid_ = -1;
         lifecycle_pid_ = -1;
     }
@@ -192,19 +218,19 @@ TEST_F(L3AutowareE2ETest, TC002_BinariesRunning) {
 // AC4+AC5: adsw_manager ran docker exec → logging_demo_main node in container
 TEST_F(L3AutowareE2ETest, TC003_LoggingDemoNodeStartedInContainer) {
     ASSERT_TRUE(setup_ok_)
-        << "SetUpTestSuite: logging_demo_main did not appear in ros2 node list within 60s. "
+        << "SetUpTestSuite: logger_usage_demo did not appear in ros2 node list within 60s. "
         << "Check adsw_manager StartService command construction.";
     std::string out = ExecShell(
         "docker exec autoware-test bash -c "
         "'source /opt/ros/humble/setup.bash 2>/dev/null && ros2 node list 2>/dev/null'");
-    EXPECT_NE(out.find("/logging_demo_main"), std::string::npos)
-        << "Expected /logging_demo_main in ros2 node list, got: " << out;
+    EXPECT_NE(out.find("/logger_usage_demo"), std::string::npos)
+        << "Expected /logger_usage_demo in ros2 node list (logging_demo_main creates /logger_usage_demo + /logger_config), got: " << out;
 }
 
 // AC8: Verify node appeared within timeout (60s covers handshake + startup time)
 TEST_F(L3AutowareE2ETest, TC005_NodeStartedWithinTimeout) {
     ASSERT_TRUE(setup_ok_)
-        << "logging_demo_main did not start within 60s timeout — "
+        << "logger_usage_demo (from logging_demo_main) did not start within 60s timeout — "
         << "lifecycle_mgr→StartServiceRequest→adsw_manager→docker exec chain failed";
 }
 
