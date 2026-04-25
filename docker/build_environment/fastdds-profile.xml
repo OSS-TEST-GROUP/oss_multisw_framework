@@ -15,4 +15,22 @@
             <useBuiltinTransports>false</useBuiltinTransports>
         </rtps>
     </participant>
+
+    <!-- Disable data sharing for all readers/writers — forces UDP delivery and avoids
+         stale SHM segments from killed processes breaking writer proxy registration. -->
+    <data_reader profile_name="default_datareader" is_default_profile="true">
+        <qos>
+            <data_sharing>
+                <kind>OFF</kind>
+            </data_sharing>
+        </qos>
+    </data_reader>
+
+    <data_writer profile_name="default_datawriter" is_default_profile="true">
+        <qos>
+            <data_sharing>
+                <kind>OFF</kind>
+            </data_sharing>
+        </qos>
+    </data_writer>
 </profiles>
