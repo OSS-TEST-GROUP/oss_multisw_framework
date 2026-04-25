@@ -367,7 +367,10 @@ public:
         std::lock_guard<std::mutex> lock(mutex_);
         return received_service_name_;
     }
-    bool GetReceivedIsGroup() const { return received_is_group_; }
+    bool GetReceivedIsGroup() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return received_is_group_;
+    }
 
 private:
     void OnRequestReceived(StartServiceRequest* req) {
