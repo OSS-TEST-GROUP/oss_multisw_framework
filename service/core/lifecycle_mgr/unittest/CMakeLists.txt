@@ -109,6 +109,11 @@ add_executable ( LifecycleAdswIntegrationTest
                 ${GENERATED_DDS_FILES}
                 )
 
+# L3 E2E integration test with real autoware container
+add_executable ( LifecycleAutowareE2ETest
+                test_lifecycle_autoware_e2e.cc
+                )
+
 gtest_discover_tests ( LifecycleManagerTest )
 gtest_discover_tests ( DDSTransmitterTest )
 gtest_discover_tests ( DDSMessageEndPointTest )
@@ -125,6 +130,7 @@ gtest_discover_tests ( MWServiceTest )
 gtest_discover_tests ( HelperTest )
 gtest_discover_tests ( ConcreteEndpointIntegrationTest )
 gtest_discover_tests ( LifecycleAdswIntegrationTest )
+gtest_discover_tests ( LifecycleAutowareE2ETest )
 
 
 ## Install
@@ -145,6 +151,7 @@ install ( TARGETS
                 HelperTest
                 ConcreteEndpointIntegrationTest
                 LifecycleAdswIntegrationTest
+                LifecycleAutowareE2ETest
     RUNTIME DESTINATION bin/unittest/lifecycle_mgr
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib

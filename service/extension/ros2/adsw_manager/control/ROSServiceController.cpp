@@ -157,11 +157,24 @@ bool ROSServiceController::StartService(std::shared_ptr<Service> service){
     } else {
         // Use container/ROS2 orchestration - same code path for both
         LOG_DEBUG("Using container/ROS2 orchestration execution");
-        std::string basecommand = GetContainer()->BaseRos2Command("");
-        if (launchFile.empty()){
-            command = basecommand + "bash -c \" ros2 run " + service->GetPackage() + " " + service->GetName() + " 2>&1 & \"";
-        }else{
-            command = basecommand + "bash -c \" ros2 launch " + service->GetPackage() + " " + service->GetLaunchFile() + " 2>&1 & \"";
+        std::shared_ptr<ServiceRegistry> registry = ADSWManager::Get()->GetServiceRegistry();
+        std::string container_name = registry ? registry->GetGroupNameByService(service) : "";
+        std::string basecommand = GetContainer()->BaseRos2Command(container_name);
+        if (basecommand.empty()) {
+            // In-container self-execution
+            if (launchFile.empty()) {
+                command = "bash -c \"source /opt/ros/humble/setup.bash 2>/dev/null || true && ros2 run " + service->GetPackage() + " " + service->GetName() + " >/dev/null 2>&1 & echo $!\"";
+            } else {
+                command = "bash -c \"source /opt/ros/humble/setup.bash 2>/dev/null || true && ros2 launch " + service->GetPackage() + " " + service->GetLaunchFile() + " >/dev/null 2>&1 & echo $!\"";
+            }
+        } else {
+            // docker exec path: basecommand already = "docker exec <name> bash -c \"source ... && "
+            // Just append the ros2 command and close the quote - NO extra bash -c
+            if (launchFile.empty()) {
+                command = basecommand + "ros2 run " + service->GetPackage() + " " + service->GetName() + " >/dev/null 2>&1 & echo $!\"";
+            } else {
+                command = basecommand + "ros2 launch " + service->GetPackage() + " " + service->GetLaunchFile() + " >/dev/null 2>&1 & echo $!\"";
+            }
         }
     }
 
