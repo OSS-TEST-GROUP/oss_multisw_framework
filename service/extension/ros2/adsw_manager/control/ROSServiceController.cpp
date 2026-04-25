@@ -7,6 +7,7 @@
 #include "logger/Log.hpp"
 #include "HelperUtils.hpp"
 #include "service/TypeConvert.hpp"
+#include "service/ServiceRegistry.hpp"
 #include <sys/utsname.h>
 #include <unistd.h>
 #include <algorithm>
