@@ -327,9 +327,22 @@ bool ROSServiceController::StopService(std::shared_ptr<Service> service){
     } else {
         // Use container/ROS2 orchestration - same code path for both
         LOG_DEBUG("StopService using container/ROS2 orchestration execution");
-        std::string basecommand = GetContainer()->BaseCommand("");
-        command = basecommand + " kill " + std::to_string(pid);
-        result = system(command.c_str());        
+        std::shared_ptr<ServiceRegistry> registry = ADSWManager::Get()->GetServiceRegistry();
+        std::string container_name = registry ? registry->GetGroupNameByService(service) : "";
+        if (container_name.empty()) {
+            // In-container self-execution
+            command = "kill " + std::to_string(pid);
+            result = system(command.c_str());
+        } else {
+            // docker exec: kill bash wrapper + pkill by name for child processes
+            std::string svc_name = service->GetName();
+            command = "docker exec " + container_name
+                    + " bash -c \"kill " + std::to_string(pid) + " 2>/dev/null; "
+                    + "pkill -TERM -f '" + svc_name + "' 2>/dev/null; "
+                    + "sleep 0.3; pkill -KILL -f '" + svc_name + "' 2>/dev/null; true\"";
+            result = system(command.c_str());
+            result = 0;  // "true" ensures 0 exit code
+        }
     } 
 
     if (result == 0){
