@@ -149,11 +149,11 @@ bool ROSServiceController::StartService(std::shared_ptr<Service> service){
             // For direct execution, use FindExecutablePath to get full path
             std::string fullExePath = FindExecutablePath(service->GetPackage());
             // Simplified command that should reliably return PID
-            command = "bash -c \"" + fullExePath + " >/dev/null 2>&1 & echo $!\"";
+            command = "bash -c \"" + fullExePath + " >/dev/null 2>&1 & echo \\$!\"";
             LOG_DEBUG("Using executable path: " << fullExePath);
         }else{
             // For launch files, use ROS2 commands directly
-            command = "bash -c \"source /opt/ros/humble/setup.bash 2>/dev/null || true && ros2 launch " + service->GetPackage() + " " + service->GetLaunchFile() + " >/dev/null 2>&1 & echo $!\"";
+            command = "bash -c \"source /opt/ros/humble/setup.bash 2>/dev/null || true && ros2 launch " + service->GetPackage() + " " + service->GetLaunchFile() + " >/dev/null 2>&1 & echo \\$!\"";
         }
     } else {
         // Use container/ROS2 orchestration - same code path for both
@@ -164,17 +164,17 @@ bool ROSServiceController::StartService(std::shared_ptr<Service> service){
         if (basecommand.empty()) {
             // In-container self-execution
             if (launchFile.empty()) {
-                command = "bash -c \"source /opt/ros/humble/setup.bash 2>/dev/null || true && ros2 run " + service->GetPackage() + " " + service->GetName() + " >/dev/null 2>&1 & echo $!\"";
+                command = "bash -c \"source /opt/ros/humble/setup.bash 2>/dev/null || true && ros2 run " + service->GetPackage() + " " + service->GetName() + " >/dev/null 2>&1 & echo \\$!\"";
             } else {
-                command = "bash -c \"source /opt/ros/humble/setup.bash 2>/dev/null || true && ros2 launch " + service->GetPackage() + " " + service->GetLaunchFile() + " >/dev/null 2>&1 & echo $!\"";
+                command = "bash -c \"source /opt/ros/humble/setup.bash 2>/dev/null || true && ros2 launch " + service->GetPackage() + " " + service->GetLaunchFile() + " >/dev/null 2>&1 & echo \\$!\"";
             }
         } else {
             // docker exec path: basecommand already = "docker exec <name> bash -c \"source ... && "
             // Just append the ros2 command and close the quote - NO extra bash -c
             if (launchFile.empty()) {
-                command = basecommand + "ros2 run " + service->GetPackage() + " " + service->GetName() + " >/dev/null 2>&1 & echo $!\"";
+                command = basecommand + "ros2 run " + service->GetPackage() + " " + service->GetName() + " >/dev/null 2>&1 & echo \\$!\"";
             } else {
-                command = basecommand + "ros2 launch " + service->GetPackage() + " " + service->GetLaunchFile() + " >/dev/null 2>&1 & echo $!\"";
+                command = basecommand + "ros2 launch " + service->GetPackage() + " " + service->GetLaunchFile() + " >/dev/null 2>&1 & echo \\$!\"";
             }
         }
     }
@@ -337,11 +337,10 @@ bool ROSServiceController::StopService(std::shared_ptr<Service> service){
             // docker exec: kill bash wrapper + pkill by name for child processes
             std::string svc_name = service->GetName();
             command = "docker exec " + container_name
-                    + " bash -c \"kill " + std::to_string(pid) + " 2>/dev/null; "
-                    + "pkill -TERM -f '" + svc_name + "' 2>/dev/null; "
-                    + "sleep 0.3; pkill -KILL -f '" + svc_name + "' 2>/dev/null; true\"";
+                    + " bash -c \"kill " + std::to_string(pid) + " 2>/dev/null || true; "
+                    + "pkill -TERM -f '" + svc_name + "' 2>/dev/null || true; "
+                    + "sleep 1.0; pkill -KILL -f '" + svc_name + "' 2>/dev/null || true\"";
             result = system(command.c_str());
-            result = 0;  // "true" ensures 0 exit code
         }
     } 
 

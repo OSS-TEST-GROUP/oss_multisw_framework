@@ -73,6 +73,11 @@ public:
     static void SetUpTestSuite() {
         setup_ok_ = false;
 
+        // Kill any stale processes from previous runs to avoid DDS domain interference
+        ExecShell(std::string("pkill -9 -f '") + LIFECYCLE_MGR_BIN + "' 2>/dev/null");
+        ExecShell(std::string("pkill -9 -f '") + ADSW_MANAGER_BIN + "' 2>/dev/null");
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
         // 1. Create config dir and write saved-service-list.yaml
         mkdir(E2E_CONFIG_DIR, 0755);
         std::string yaml_path = std::string(E2E_CONFIG_DIR) + "/saved-service-list.yaml";
