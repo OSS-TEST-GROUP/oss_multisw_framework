@@ -146,11 +146,17 @@ public:
         const char* existing_ld = std::getenv("LD_LIBRARY_PATH");
         if (existing_ld && strlen(existing_ld) > 0) ld_path += std::string(":") + existing_ld;
 
+        // FastDDS UDP-only profile to avoid SHM transport errors on host
+        const char* FASTDDS_PROFILE =
+            "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework"
+            "/docker/build_environment/fastdds-profile.xml";
+
         // 5. Fork lifecycle_mgr
         lifecycle_pid_ = fork();
         if (lifecycle_pid_ == 0) {
             setenv("MMF_CONFIG_PATH", LF_CONFIG_PATH, 1);
             setenv("LD_LIBRARY_PATH", ld_path.c_str(), 1);
+            setenv("FASTDDS_DEFAULT_PROFILES_FILE", FASTDDS_PROFILE, 1);
             execl(LIFECYCLE_MGR_BIN, "lifecycle_mgr", nullptr);
             _exit(127);
         }
@@ -160,6 +166,7 @@ public:
         if (adsw_pid_ == 0) {
             setenv("SAVED_REGISTRY_BACKUP", E2E_CONFIG_DIR, 1);
             setenv("LD_LIBRARY_PATH", ld_path.c_str(), 1);
+            setenv("FASTDDS_DEFAULT_PROFILES_FILE", FASTDDS_PROFILE, 1);
             execl(ADSW_MANAGER_BIN, "adsw_manager", nullptr);
             _exit(127);
         }
