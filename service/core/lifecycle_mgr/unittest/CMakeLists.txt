@@ -123,6 +123,11 @@ add_executable ( LifecycleAutowareStopE2ETest
                 ${GENERATED_DDS_FILES}
                 )
 
+# L3 E2E polling verification test with real autoware container
+add_executable ( LifecycleAutowarePollingE2ETest
+                test_lifecycle_autoware_polling_e2e.cc
+                )
+
 gtest_discover_tests ( LifecycleManagerTest )
 gtest_discover_tests ( DDSTransmitterTest )
 gtest_discover_tests ( DDSMessageEndPointTest )
@@ -141,6 +146,7 @@ gtest_discover_tests ( ConcreteEndpointIntegrationTest )
 gtest_discover_tests ( LifecycleAdswIntegrationTest )
 gtest_discover_tests ( LifecycleAutowareE2ETest )
 gtest_discover_tests ( LifecycleAutowareStopE2ETest )
+gtest_discover_tests ( LifecycleAutowarePollingE2ETest )
 
 
 ## Install
