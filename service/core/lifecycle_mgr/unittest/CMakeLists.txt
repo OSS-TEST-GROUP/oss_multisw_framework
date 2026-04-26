@@ -169,6 +169,7 @@ install ( TARGETS
                 LifecycleAdswIntegrationTest
                 LifecycleAutowareE2ETest
                 LifecycleAutowareStopE2ETest
+                LifecycleAutowarePollingE2ETest
     RUNTIME DESTINATION bin/unittest/lifecycle_mgr
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib

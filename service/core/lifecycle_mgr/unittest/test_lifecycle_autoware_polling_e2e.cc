@@ -208,7 +208,7 @@ public:
         // 6. Fork adsw_manager
         adsw_pid_ = fork();
         if (adsw_pid_ == 0) {
-            setenv("MMF_CONFIG_PATH", E2E_CONFIG_DIR, 1);
+            setenv("SAVED_REGISTRY_BACKUP", E2E_CONFIG_DIR, 1);
             setenv("LD_LIBRARY_PATH", ld_path.c_str(), 1);
             setenv("FASTDDS_DEFAULT_PROFILES_FILE", FASTDDS_PROFILE, 1);
             execl(ADSW_MANAGER_BIN, "adsw_manager", nullptr);
@@ -316,3 +316,8 @@ TEST_F(L3AutowarePollingE2ETest, TC004_PollingCompletedWithinTimeout) {
 }
 
 }  // namespace
+
+int main(int argc, char* argv[]) {
+    ::testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
+}
