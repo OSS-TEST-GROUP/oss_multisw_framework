@@ -133,6 +133,20 @@ add_executable ( LifecycleAutowareCrashE2ETest
                 test_lifecycle_autoware_crash_e2e.cc
                 )
 
+# L3 E2E recovery policy test with real autoware container
+add_executable ( LifecycleAutowareRecoveryE2ETest
+                test_lifecycle_autoware_recovery_e2e.cc
+                )
+
+# L3 E2E OTA mode transition test with real autoware container
+add_executable ( LifecycleAutowareOtaE2ETest
+                test_lifecycle_autoware_ota_e2e.cc
+                ../transmitter/DDSMessageEndPoint.cpp
+                ../transmitter/MessageEndPoint.cpp
+                ../logger/Logger.cpp
+                ${GENERATED_DDS_FILES}
+                )
+
 gtest_discover_tests ( LifecycleManagerTest )
 gtest_discover_tests ( DDSTransmitterTest )
 gtest_discover_tests ( DDSMessageEndPointTest )
@@ -153,6 +167,8 @@ gtest_discover_tests ( LifecycleAutowareE2ETest )
 gtest_discover_tests ( LifecycleAutowareStopE2ETest )
 gtest_discover_tests ( LifecycleAutowarePollingE2ETest )
 gtest_discover_tests ( LifecycleAutowareCrashE2ETest )
+gtest_discover_tests ( LifecycleAutowareRecoveryE2ETest )
+gtest_discover_tests ( LifecycleAutowareOtaE2ETest )
 
 
 ## Install
@@ -177,6 +193,8 @@ install ( TARGETS
                 LifecycleAutowareStopE2ETest
                 LifecycleAutowarePollingE2ETest
                 LifecycleAutowareCrashE2ETest
+                LifecycleAutowareRecoveryE2ETest
+                LifecycleAutowareOtaE2ETest
     RUNTIME DESTINATION bin/unittest/lifecycle_mgr
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
