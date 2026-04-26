@@ -128,6 +128,11 @@ add_executable ( LifecycleAutowarePollingE2ETest
                 test_lifecycle_autoware_polling_e2e.cc
                 )
 
+# L3 E2E crash notification test with real autoware container
+add_executable ( LifecycleAutowareCrashE2ETest
+                test_lifecycle_autoware_crash_e2e.cc
+                )
+
 gtest_discover_tests ( LifecycleManagerTest )
 gtest_discover_tests ( DDSTransmitterTest )
 gtest_discover_tests ( DDSMessageEndPointTest )
@@ -147,6 +152,7 @@ gtest_discover_tests ( LifecycleAdswIntegrationTest )
 gtest_discover_tests ( LifecycleAutowareE2ETest )
 gtest_discover_tests ( LifecycleAutowareStopE2ETest )
 gtest_discover_tests ( LifecycleAutowarePollingE2ETest )
+gtest_discover_tests ( LifecycleAutowareCrashE2ETest )
 
 
 ## Install
@@ -170,6 +176,7 @@ install ( TARGETS
                 LifecycleAutowareE2ETest
                 LifecycleAutowareStopE2ETest
                 LifecycleAutowarePollingE2ETest
+                LifecycleAutowareCrashE2ETest
     RUNTIME DESTINATION bin/unittest/lifecycle_mgr
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
