@@ -1,0 +1,66 @@
+# Integration test environment (x86_64, locally built images)
+#
+# Brings up both runtime containers on the host network so that
+#   - any client (e.g. OTA Monitor / Flutter integration_test) running on
+#     the host can reach rosbridge at ws://localhost:9090
+#   - rosbridge_server inside mmf-ext-ros2 sees the DDS traffic published
+#     by services inside mmf-core (FastDDS uses UDP multicast / unicast
+#     scoped to the host's interfaces — network_mode: host avoids the
+#     bridge-network drop that breaks discovery).
+#
+# Images expected to exist locally (built by ./build.sh):
+#   - oss-mmf-core:local      runtime-mmf-core target
+#   - oss-mmf-ext-ros2:local  runtime-mmf-ext-ros2 target (rosbridge included)
+#
+# Usage (from oss_multisw_framework root):
+#   docker compose -f docker/compose/docker-compose-integration.yaml up -d
+#   docker compose -f docker/compose/docker-compose-integration.yaml ps
+#   docker compose -f docker/compose/docker-compose-integration.yaml logs -f mmf-ext-ros2
+#   docker compose -f docker/compose/docker-compose-integration.yaml down
+#
+# Linux only — `network_mode: host` is unsupported on Docker Desktop for
+# macOS/Windows.
+
+services:
+  mmf-core:
+    container_name: oss-mmf-core
+    image: oss-mmf-core:local
+    privileged: true
+    network_mode: host
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+    environment:
+      # ROS_DOMAIN_ID MUST match between mmf-core, mmf-ext-ros2, and any
+      # external consumer (e.g. OTA Monitor) so DDS discovery succeeds.
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      # F007 — heartbeat publish interval (seconds). Picked up by the
+      # patched diagnostic service when present; harmless otherwise.
+      HEARTBEAT_INTERVAL_SEC: ${HEARTBEAT_INTERVAL_SEC:-3}
+    # /dev/shm is shared so FastDDS shared-memory transport (default for
+    # same-host pubsub) works between mmf-core and mmf-ext-ros2.
+    volumes:
+      - /dev/shm:/dev/shm
+    restart: unless-stopped
+
+  mmf-ext-ros2:
+    container_name: oss-mmf-ext-ros2
+    image: oss-mmf-ext-ros2:local
+    privileged: true
+    network_mode: host
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+    environment:
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+    volumes:
+      - /dev/shm:/dev/shm
+    # mmf-core advertises DDS topics first; ext-ros2's rosbridge then
+    # subscribes and re-publishes over WebSocket. Starting the bridge
+    # after the core avoids "no publisher matched yet" warnings on the
+    # first second of operation. depends_on does not wait for readiness
+    # (no healthcheck baked into upstream image yet); external runners
+    # should poll port 9090 to confirm rosbridge is OPEN before testing.
+    depends_on:
+      - mmf-core
+    restart: unless-stopped
