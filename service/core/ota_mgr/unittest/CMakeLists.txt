@@ -26,7 +26,7 @@ add_executable(otam_main_tests
     test_otam_client_service.cc
     test_otam_vehicle_service.cc
     test_otam_actor_service.cc
-    # F007 — heartbeat configuration / regression tests
+    test_otam_get_applist.cc
     test_otam_diagnostic_service.cc
 )
 
