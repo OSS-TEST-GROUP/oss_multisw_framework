@@ -1,11 +1,42 @@
 #include "otam_diagnostic_service.h"
 
+#include <chrono>
+#include <cstdlib>
 #include <iostream>
+#include <string>
 #include <utility>
 
 constexpr const char* OtamDiagnosticService::kOtaMgrInfoTopic;
+constexpr const char* OtamDiagnosticService::kOtaMgrHeartbeatTopic;
 
-OtamDiagnosticService::OtamDiagnosticService() {}
+namespace {
+
+// F007: respect HEARTBEAT_INTERVAL_SEC at construction time. Falls back to
+// the 3 s default when the env var is missing, empty, or non-numeric.
+std::chrono::seconds resolve_heartbeat_interval() {
+  const char* raw = std::getenv("HEARTBEAT_INTERVAL_SEC");
+  if (raw == nullptr || *raw == '\0') {
+    return std::chrono::seconds{3};
+  }
+  try {
+    int sec = std::stoi(raw);
+    if (sec <= 0) return std::chrono::seconds{3};
+    return std::chrono::seconds{sec};
+  } catch (...) {
+    return std::chrono::seconds{3};
+  }
+}
+
+int64_t now_epoch_ms() {
+  return std::chrono::duration_cast<std::chrono::milliseconds>(
+             std::chrono::system_clock::now().time_since_epoch())
+      .count();
+}
+
+}  // namespace
+
+OtamDiagnosticService::OtamDiagnosticService()
+    : heartbeat_interval_(resolve_heartbeat_interval()) {}
 
 void OtamDiagnosticService::Initialize() {
   if (state_ != ServiceState::UNINITIALIZED) {
@@ -27,6 +58,23 @@ void OtamDiagnosticService::Initialize() {
                    nullptr);
 
   RegisterDds(kOtaMgrInfoTopic, dds_impl);
+
+  // F007 — heartbeat DataWriter on a separate topic.
+  // Lifetime mirrors NotifyOtaMgrInfo; no late-subscriber buffering needed
+  // because the next periodic publish will land within heartbeat_interval_.
+  notify_ota_mgr_heartbeat_ =
+      std::make_shared<OtaManager::NotifyOtaMgrHeartbeatPubSubType>();
+  auto heartbeat_dds_impl =
+      std::make_shared<OtamDdsImpl<OtaManager::NotifyOtaMgrHeartbeat>>();
+  heartbeat_dds_impl->Create(
+      kOtaMgrHeartbeatTopic,
+      std::static_pointer_cast<void>(notify_ota_mgr_heartbeat_),
+      nullptr);
+  RegisterDds(kOtaMgrHeartbeatTopic, heartbeat_dds_impl);
+  std::cout << "OtamDiagnosticService: heartbeat DDS initialized "
+            << "(topic=" << kOtaMgrHeartbeatTopic
+            << ", interval=" << heartbeat_interval_.count() << "s)"
+            << std::endl;
 
   // -------------------------------------------------------------------------
   // Late-subscriber support
@@ -61,11 +109,16 @@ void OtamDiagnosticService::Start() {
   state_ = ServiceState::STARTED;
   std::cout << "OtamDiagnosticService: Starting OtamDiagnosticService."
             << std::endl;
+  StartHeartbeat();
 }
 
 void OtamDiagnosticService::Stop() {
   std::cout << "OtamDiagnosticService: Stopping OtamDiagnosticService."
             << std::endl;
+
+  // F007: stop heartbeat thread BEFORE tearing down DDS — otherwise a
+  // late tick might race against DataWriter destruction.
+  StopHeartbeat();
 
   // Detach the listener first (blocks until any in-flight callback returns)
   // then null out writer_ under the pending_mutex_ so FlushPendingMessages
@@ -207,4 +260,63 @@ std::shared_ptr<OtamDds> OtamDiagnosticService::GetDds(
     return it->second;
   }
   return nullptr;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// F007 — heartbeat thread.
+//
+// The thread sleeps on heartbeat_cv_ instead of std::this_thread::sleep_for
+// so Stop() can wake it instantly via heartbeat_cv_.notify_all(); without
+// this, container shutdown would block for up to one heartbeat_interval_.
+// ─────────────────────────────────────────────────────────────────────
+void OtamDiagnosticService::StartHeartbeat() {
+  if (heartbeat_running_.exchange(true)) {
+    // Already running.
+    return;
+  }
+  heartbeat_thread_ = std::thread(&OtamDiagnosticService::HeartbeatLoop, this);
+  std::cout << "OtamDiagnosticService: heartbeat thread started"
+            << std::endl;
+}
+
+void OtamDiagnosticService::StopHeartbeat() {
+  if (!heartbeat_running_.exchange(false)) {
+    return;  // not running
+  }
+  {
+    std::lock_guard<std::mutex> lock(heartbeat_cv_mutex_);
+  }
+  heartbeat_cv_.notify_all();
+  if (heartbeat_thread_.joinable()) {
+    heartbeat_thread_.join();
+  }
+  std::cout << "OtamDiagnosticService: heartbeat thread stopped"
+            << std::endl;
+}
+
+void OtamDiagnosticService::HeartbeatLoop() {
+  while (heartbeat_running_.load()) {
+    PublishHeartbeatOnce();
+
+    std::unique_lock<std::mutex> lock(heartbeat_cv_mutex_);
+    // Wait for either the next interval OR a Stop() wakeup.
+    heartbeat_cv_.wait_for(lock, heartbeat_interval_,
+                           [this] { return !heartbeat_running_.load(); });
+  }
+}
+
+void OtamDiagnosticService::PublishHeartbeatOnce() {
+  if (state_ != ServiceState::STARTED) {
+    return;
+  }
+  auto dds = GetDds(kOtaMgrHeartbeatTopic);
+  if (!dds) {
+    std::cout << "OtamDiagnosticService: heartbeat DDS missing — skip"
+              << std::endl;
+    return;
+  }
+  auto msg = std::make_shared<OtaManager::NotifyOtaMgrHeartbeat>();
+  msg->seq(heartbeat_seq_.fetch_add(1) + 1);    // first published seq is 1
+  msg->timestamp_ms(now_epoch_ms());
+  dds->Write(std::static_pointer_cast<void>(msg));
 }
