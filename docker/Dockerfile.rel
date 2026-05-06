@@ -130,6 +130,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
     ros-humble-rosbridge-server \
+    ros-humble-ros2launch \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --chown=ossuser:ossuser docker/entrypoint/ros2_entrypoint.sh /oss/entrypoint.sh
@@ -169,6 +170,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
     ros-humble-rosbridge-server \
+    ros-humble-ros2launch \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --chown=ossuser:ossuser docker/entrypoint/ros2_entrypoint.sh /oss/entrypoint.sh

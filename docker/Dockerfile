@@ -49,7 +49,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 	libgtest-dev \
 	python3 \
 	python3-pip \
-	openjdk-11-jre \
+	openjdk-17-jdk-headless \
 	gcc-aarch64-linux-gnu \
 	g++-aarch64-linux-gnu \
 	# Static Analysis

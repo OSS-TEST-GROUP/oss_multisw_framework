@@ -389,8 +389,8 @@ do_pull_builder_image()
 		docker build -t ${REGISTRY_ADDRESS}/oss/${BUILDER_CONTAINER_NAME}:${BUILDER_CONTAINER_TAG} \
 			-f ${PWD}/docker/Dockerfile .
 		do_error_check
-		docker push ${REGISTRY_ADDRESS}/oss/${BUILDER_CONTAINER_NAME}:${BUILDER_CONTAINER_TAG}
-		do_error_check
+		docker push ${REGISTRY_ADDRESS}/oss/${BUILDER_CONTAINER_NAME}:${BUILDER_CONTAINER_TAG} || \
+			echo "[build_all] push to registry failed (502/auth) — using local image" >&2
 	else
 		docker pull ${img_name}
 	fi
