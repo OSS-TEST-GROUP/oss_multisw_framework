@@ -1,0 +1,18 @@
+// F007 — periodic OTA Manager liveness signal.
+//
+// The diagnostic service publishes one of these messages every
+// HEARTBEAT_INTERVAL_SEC (default 3) seconds. External health-checks
+// (the integration test runner, the Monitor's Client tab) treat
+// "no message for N×interval" as Manager unreachable.
+
+#include "common/ReturnValue.idl"
+
+/**
+[Topic] "/mmf/otamanager/diagnostic_service/NotifyOtaMgrHeartbeat"
+**/
+module OtaManager {
+    struct NotifyOtaMgrHeartbeat {
+        long      seq;            // monotonically increasing, starts at 1
+        long long timestamp_ms;   // epoch ms at publish (Manager wall clock)
+    };
+};
