@@ -1,61 +1,86 @@
 #!/bin/bash
 
-# Multi-architecture Docker image build script for OSS Multi-Middleware Framework
+# Multi-architecture Docker image build script for OSS Multi-Middleware Framework.
+#
+# Builds runtime-mmf-{core,ext-ros2,ext-agl} for both linux/amd64 and
+# linux/arm64 and pushes a multi-arch manifest list to the company
+# registry as :latest.
+#
+# Implementation note — TARGETARCH naming mismatch
+# ------------------------------------------------
+# Dockerfile.rel selects the right runtime stage via
+#   FROM runtime-mmf-core-${TARGETARCH} AS runtime-mmf-core
+# but its named stages are runtime-mmf-core-x86_64 / runtime-mmf-core-aarch64
+# (kernel arch). Docker auto-fills TARGETARCH per platform with `amd64` /
+# `arm64` (Docker arch), which does NOT match the kernel-arch suffix.
+#
+# A single `docker buildx build --platform=linux/amd64,linux/arm64` cannot
+# pass a per-platform --build-arg, so we build each platform separately
+# (with explicit TARGETARCH override), push them as
+# `:latest-amd64` / `:latest-arm64`, and then assemble the multi-arch
+# manifest list at `:latest` using `docker buildx imagetools create`.
+#
+# Usage:
+#   BUILD_TYPE=Release ./docker/build_multiarch.sh
 
 set -e
 
 REGISTRY="registry.obigo.com"
 BUILD_TYPE="${BUILD_TYPE:-Release}"
-PLATFORMS="linux/amd64,linux/arm64"
+
+# Maps Docker auto-fill arch (amd64/arm64) → SUT kernel-arch stage suffix.
+declare -A ARCH_MAP=( [amd64]=x86_64 [arm64]=aarch64 )
+ARCHS=(amd64 arm64)
+TARGETS=(core ext-ros2 ext-agl)
 
 echo "=== OSS Multi-Middleware Framework Multi-arch Build ==="
-echo "Platforms: ${PLATFORMS}"
-echo "Build Type: ${BUILD_TYPE}"
+echo "Architectures: ${ARCHS[*]}"
+echo "Build Type:    ${BUILD_TYPE}"
+echo "Registry:      ${REGISTRY}"
 echo ""
 
-# Create buildx builder if not exists
+# Create buildx builder if not exists.
 echo "Creating buildx builder..."
 docker buildx create --name mmf-buildx --driver docker-container --use 2>/dev/null || \
-docker buildx use mmf-buildx
+  docker buildx use mmf-buildx
 
-echo ""
-echo "=== Building MMF Core (multi-arch) ==="
-docker buildx build \
-    --platform="${PLATFORMS}" \
-    --build-arg BUILD_TYPE=${BUILD_TYPE} \
-    -f docker/Dockerfile.rel \
-    --target runtime-mmf-core \
-    --push \
-    -t ${REGISTRY}/oss/oss-mmf-core:latest \
-    .
+build_target() {
+  local tgt="$1"
+  local manifest_tag="${REGISTRY}/oss/oss-mmf-${tgt}:latest"
+  local platform_tags=()
 
-echo ""
-echo "=== Building MMF Extension ROS2 (multi-arch) ==="
-docker buildx build \
-    --platform="${PLATFORMS}" \
-    --build-arg BUILD_TYPE=${BUILD_TYPE} \
-    -f docker/Dockerfile.rel \
-    --target runtime-mmf-ext-ros2 \
-    --push \
-    -t ${REGISTRY}/oss/oss-mmf-ext-ros2:latest \
-    .
+  for arch in "${ARCHS[@]}"; do
+    local kernel_arch="${ARCH_MAP[$arch]}"
+    local platform_tag="${manifest_tag}-${arch}"
 
-echo ""
-echo "=== Building MMF Extension AGL (multi-arch) ==="
-docker buildx build \
-    --platform="${PLATFORMS}" \
-    --build-arg BUILD_TYPE=${BUILD_TYPE} \
-    -f docker/Dockerfile.rel \
-    --target runtime-mmf-ext-agl \
-    --push \
-    -t ${REGISTRY}/oss/oss-mmf-ext-agl:latest \
-    .
+    echo ""
+    echo "=== Building runtime-mmf-${tgt} for linux/${arch} (TARGETARCH=${kernel_arch}) ==="
+    docker buildx build \
+      --platform="linux/${arch}" \
+      --build-arg "BUILD_TYPE=${BUILD_TYPE}" \
+      --build-arg "TARGETARCH=${kernel_arch}" \
+      -f docker/Dockerfile.rel \
+      --target "runtime-mmf-${tgt}" \
+      --push \
+      -t "${platform_tag}" \
+      .
+    platform_tags+=("${platform_tag}")
+  done
+
+  echo ""
+  echo "=== Assembling multi-arch manifest ${manifest_tag} ==="
+  docker buildx imagetools create \
+    -t "${manifest_tag}" \
+    "${platform_tags[@]}"
+}
+
+for tgt in "${TARGETS[@]}"; do
+  build_target "$tgt"
+done
 
 echo ""
 echo "=== Build Complete ==="
-echo "Images pushed to ${REGISTRY}/oss/"
-echo "  - oss-mmf-core:latest"
-echo "  - oss-mmf-ext-ros2:latest"
-echo "  - oss-mmf-ext-agl:latest"
-echo ""
-echo "Supported architectures: amd64, arm64"
+echo "Multi-arch manifests pushed:"
+for tgt in "${TARGETS[@]}"; do
+  echo "  - ${REGISTRY}/oss/oss-mmf-${tgt}:latest  (linux/amd64 + linux/arm64)"
+done
