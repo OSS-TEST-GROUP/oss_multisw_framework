@@ -64,8 +64,8 @@ class OtamVehicleService : public OtamService {
   static constexpr const char* kVehicleInfoResponseTopic =
       "/mmf/otamanager/vehicleinfo_service/GetVehicleInfoResponse";
 
-  std::shared_ptr<OtaManager::GetVehicleInfoPubSubType> get_vehicle_info_;
-  std::shared_ptr<OtaManager::GetVehicleInfoResponsePubSubType> get_vehicle_info_res_;
+  std::shared_ptr<otamanager::GetVehicleInfoPubSubType> get_vehicle_info_;
+  std::shared_ptr<otamanager::GetVehicleInfoResponsePubSubType> get_vehicle_info_res_;
   std::shared_ptr<VissRequestTopicPubSubType> viss_request_;
   std::shared_ptr<VissRequestTopicPubSubType> viss_response_;
 

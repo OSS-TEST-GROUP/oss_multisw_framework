@@ -113,25 +113,89 @@ ENTRYPOINT ["/oss/bin/lifecycle_mgr"]
 FROM runtime-mmf-core-${TARGETARCH} AS runtime-mmf-core
 
 ###################################################################################
+# ROS-mmf base (formerly Dockerfile.ros)
+#
+# Shared base for the ext-ros2 runtime stages. Installs ROS 2 Humble +
+# rosbridge_server + rosidl/colcon tooling, builds tier4_autoware_msgs,
+# and runs idl_to_msg.py + colcon build to install every per-module
+# ament package (diagnosticmgr, lifecyclemgr, otamanager, adswmgr,
+# security) under /opt/ros/humble/share/mmf_interfaces.
+#
+# Both x86_64 and aarch64 ext-ros2 stages start from this so the apt
+# install + IDL build steps run only once per platform.
+###################################################################################
+FROM runtime AS ros-mmf-base
+
+ENV ROS_DISTRO=humble
+
+# apt: tooling needed to (a) add the ROS 2 apt source, (b) build
+# tier4_autoware_msgs from source, (c) build per-module ament packages.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates curl dirmngr gnupg2 wget tar gzip \
+        build-essential cmake \
+    && rm -rf /var/lib/apt/lists/*
+
+# ROS 2 humble apt source (signed deb).
+RUN curl -L -s -o /tmp/ros2-apt-source.deb \
+        https://github.com/ros-infrastructure/ros-apt-source/releases/download/1.1.0/ros2-apt-source_1.1.0.jammy_all.deb \
+    && echo "1600cb8cc28258a39bffc1736a75bcbf52d1f2db371a4d020c1b187d2a5a083b /tmp/ros2-apt-source.deb" | sha256sum --strict --check \
+    && apt-get -o Acquire::AllowReleaseInfoChange=true update \
+    && apt-get install -y /tmp/ros2-apt-source.deb \
+    && rm -f /tmp/ros2-apt-source.deb \
+    && rm -rf /var/lib/apt/lists/*
+
+# ROS 2 packages: rosbridge_server (bridge), rosidl_default_generators
+# (needed to build per-module .msg → C/Python/typesupport), colcon
+# (workspace builder), autoware/geographic msgs (consumed by some
+# topics our SUTs may reference).
+RUN apt-get -o Acquire::AllowReleaseInfoChange=true update \
+    && apt-get install -y --no-install-recommends \
+        ros-humble-ros-core=0.10.0-1* \
+        ros-humble-rosidl-generator-c \
+        ros-humble-rosidl-generator-py \
+        ros-humble-rosidl-default-generators \
+        ros-humble-builtin-interfaces \
+        ros-humble-rosbridge-server \
+        ros-humble-ros2launch \
+        ros-humble-geographic-msgs \
+        ros-humble-autoware*msgs \
+        python3-colcon-common-extensions \
+    && rm -rf /var/lib/apt/lists/*
+
+# tier4_autoware_msgs from upstream tarball, installed as its own colcon
+# overlay so ros2_entrypoint.sh can source it independently.
+RUN wget -O /tmp/tier4_autoware_msgs.tar.gz \
+        https://github.com/tier4/tier4_autoware_msgs/archive/refs/tags/v0.58.0.tar.gz \
+    && cd /tmp && tar xf tier4_autoware_msgs.tar.gz \
+    && cd tier4_autoware_msgs-0.58.0 \
+    && /bin/bash -c "source /opt/ros/humble/setup.bash \
+       && colcon build --install-base /opt/ros/humble/share/tier4_autoware || true" \
+    && cd /tmp && rm -rf tier4_autoware_msgs*
+
+# Per-module ament packages from idl/dds via idl_to_msg.py. The
+# generated <module> packages let rosbridge speak the same DDS wire
+# types ('<module>::msg::dds_::*_') that bare DDS apps register, so
+# adsw_monitor / ota_monitor advertise + subscribe with their canonical
+# pkg/msg/Type names without "No module named X" rosbridge errors.
+COPY idl/ /tmp/mmf_ws/idl/
+RUN /bin/bash -c " \
+        source /opt/ros/humble/setup.bash \
+        && cd /tmp/mmf_ws/idl/rosbridge \
+        && rm -rf work \
+        && python3 idl_to_msg.py --idl-root ../dds \
+        && cd work \
+        && colcon build --install-base /opt/ros/humble/share/mmf_interfaces \
+             --cmake-args -DBUILD_TESTING=OFF \
+        && rm -rf /tmp/mmf_ws \
+    "
+
+###################################################################################
 # Extension ROS2 - x86_64
 ###################################################################################
-FROM runtime AS runtime-mmf-ext-ros2-x86_64
+FROM ros-mmf-base AS runtime-mmf-ext-ros2-x86_64
 
 ARG BUILD_TYPE=Release
-
-# Install ROS2 Humble and rosbridge-server
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    curl \
-    gnupg2 \
-    lsb-release \
-    && curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg \
-    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/ros2.list > /dev/null \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends \
-    ros-humble-rosbridge-server \
-    ros-humble-ros2launch \
-    && rm -rf /var/lib/apt/lists/*
 
 COPY --chown=ossuser:ossuser docker/entrypoint/ros2_entrypoint.sh /oss/entrypoint.sh
 COPY --chown=ossuser:ossuser output/x86_64/${BUILD_TYPE}/extension/ros2/bin /oss/bin
@@ -155,23 +219,9 @@ ENTRYPOINT ["/oss/entrypoint.sh"]
 ###################################################################################
 # Extension ROS2 - aarch64
 ###################################################################################
-FROM runtime AS runtime-mmf-ext-ros2-aarch64
+FROM ros-mmf-base AS runtime-mmf-ext-ros2-aarch64
 
 ARG BUILD_TYPE=Release
-
-# Install ROS2 Humble and rosbridge-server
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    curl \
-    gnupg2 \
-    lsb-release \
-    && curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg \
-    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/ros2.list > /dev/null \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends \
-    ros-humble-rosbridge-server \
-    ros-humble-ros2launch \
-    && rm -rf /var/lib/apt/lists/*
 
 COPY --chown=ossuser:ossuser docker/entrypoint/ros2_entrypoint.sh /oss/entrypoint.sh
 COPY --chown=ossuser:ossuser output/aarch64/${BUILD_TYPE}/extension/ros2/bin /oss/bin

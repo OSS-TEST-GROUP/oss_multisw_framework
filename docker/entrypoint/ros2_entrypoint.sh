@@ -18,6 +18,22 @@ export SAVED_REGISTRY_BACKUP=/oss/bin/config
 # Source ROS2 Humble setup
 source /opt/ros/humble/setup.bash
 
+# colcon overlay containing all auto-generated per-module packages
+# (diagnosticmgr, lifecyclemgr, otamanager, adswmgr, security). Built
+# in docker/Dockerfile.rel's ros-mmf-base stage via idl_to_msg.py +
+# colcon. Required so rosbridge_server can resolve `<pkg>/msg/<Type>`
+# advertise / subscribe requests; without it every typed advertise
+# fails with "No module named '<pkg>'".
+if [ -f /opt/ros/humble/share/mmf_interfaces/setup.bash ]; then
+  source /opt/ros/humble/share/mmf_interfaces/setup.bash
+fi
+
+# tier4_autoware_msgs overlay (built in same ros-mmf-base stage). Only
+# needed if any topic uses tier4_*_msgs / autoware_*_msgs types.
+if [ -f /opt/ros/humble/share/tier4_autoware/setup.bash ]; then
+  source /opt/ros/humble/share/tier4_autoware/setup.bash
+fi
+
 # F010: ota_client background launch.
 # The binary is shipped by Dockerfile.rel runtime-mmf-ext-ros2 (it copies
 # output/<arch>/<type>/extension/ros2/bin/ → /oss/bin/). We still guard

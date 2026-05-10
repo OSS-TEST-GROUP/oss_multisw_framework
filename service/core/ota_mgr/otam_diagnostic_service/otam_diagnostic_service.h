@@ -45,7 +45,7 @@ class OtamDiagnosticService : public OtamService {
   // F007 — periodic heartbeat publish.
   //
   // Start() spawns a background thread that publishes a
-  // OtaManager::NotifyOtaMgrHeartbeat every `heartbeat_interval_` (default
+  // otamanager::NotifyOtaMgrHeartbeat every `heartbeat_interval_` (default
   // 3 s, overridable via env HEARTBEAT_INTERVAL_SEC at construction time).
   // Stop() signals the thread and joins it; safe to Start/Stop repeatedly.
   //
@@ -91,12 +91,12 @@ class OtamDiagnosticService : public OtamService {
   static constexpr const char* kOtaMgrInfoTopic =
       "/mmf/otamanager/diagnostic_service/NotifyOtaMgrInfo";
 
-  std::shared_ptr<OtaManager::NotifyOtaMgrInfoPubSubType> notify_ota_mgr_info_;
+  std::shared_ptr<otamanager::NotifyOtaMgrInfoPubSubType> notify_ota_mgr_info_;
 
   // F007 — heartbeat fields.
   static constexpr const char* kOtaMgrHeartbeatTopic =
       "/mmf/otamanager/diagnostic_service/NotifyOtaMgrHeartbeat";
-  std::shared_ptr<OtaManager::NotifyOtaMgrHeartbeatPubSubType>
+  std::shared_ptr<otamanager::NotifyOtaMgrHeartbeatPubSubType>
       notify_ota_mgr_heartbeat_;
   std::chrono::seconds heartbeat_interval_{3};
   std::thread heartbeat_thread_;

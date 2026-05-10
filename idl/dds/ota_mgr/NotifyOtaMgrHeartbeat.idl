@@ -10,7 +10,7 @@
 /**
 [Topic] "/mmf/otamanager/diagnostic_service/NotifyOtaMgrHeartbeat"
 **/
-module OtaManager {
+module otamanager {
     struct NotifyOtaMgrHeartbeat {
         long      seq;            // monotonically increasing, starts at 1
         long long timestamp_ms;   // epoch ms at publish (Manager wall clock)

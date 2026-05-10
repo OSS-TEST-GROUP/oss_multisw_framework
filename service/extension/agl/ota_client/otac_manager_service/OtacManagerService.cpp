@@ -4,7 +4,7 @@
 
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp>
 
-using namespace OtaManager;
+using namespace otamanager;
 using namespace eprosima::fastdds::dds;
 
 namespace ota_client::agl
@@ -115,7 +115,7 @@ namespace ota_client::agl
         //     return false;
         // }
 
-        auto reg = std::make_shared<OtaManager::SetOtaClientRegistration>();
+        auto reg = std::make_shared<otamanager::SetOtaClientRegistration>();
         reg->client_name(std::move(client_name));
 
         auto &seq = reg->app_list();
