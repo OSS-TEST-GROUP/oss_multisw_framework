@@ -90,7 +90,7 @@ protected:
     // Helper: trigger OnAppUpdateRequested, returns request_id used internally
     int32_t CreatePendingRequest(const std::string& app_name = "test_app",
                                   int32_t msg_id = 1) {
-        OtaManager::SetAppUpdate msg;
+        otamanager::SetAppUpdate msg;
         msg.id(msg_id);
         msg.app_name(app_name);
         actor_service_->OnAppUpdateRequested(msg);
@@ -214,7 +214,7 @@ TEST_F(OtamActorServiceTest, F005_ServiceModeFail_RunOtaUpdateNotCalled) {
 TEST_F(OtamActorServiceTest, F005_NoServerService_AppUpdateFails) {
     actor_service_->SetOtamServerService(nullptr);
 
-    OtaManager::SetAppUpdate msg;
+    otamanager::SetAppUpdate msg;
     msg.id(199);
     msg.app_name("app_no_server");
 
@@ -305,7 +305,7 @@ TEST_F(OtamActorServiceTest, LifecycleDisabled_NoVehicle_RunsUpdateDirectly) {
     EXPECT_CALL(*mock_vehicle_, RequestVehicleInfo(_, _)).Times(0);
     EXPECT_CALL(*mock_server_, RunOtaUpdate("nolc_app")).WillOnce(Return(ReturnValue::SUCCESS));
 
-    OtaManager::SetAppUpdate msg;
+    otamanager::SetAppUpdate msg;
     msg.id(300);
     msg.app_name("nolc_app");
     actor_service_->OnAppUpdateRequested(msg);
@@ -360,7 +360,7 @@ TEST_F(OtamActorServiceTest, LifecycleDisabled_VehicleEnabled_StillRequestsVehic
         .Times(1);
     EXPECT_CALL(*mock_server_, RunOtaUpdate("nolc_veh_app")).WillOnce(Return(ReturnValue::SUCCESS));
 
-    OtaManager::SetAppUpdate msg;
+    otamanager::SetAppUpdate msg;
     msg.id(301);
     msg.app_name("nolc_veh_app");
     actor_service_->OnAppUpdateRequested(msg);
@@ -491,7 +491,7 @@ TEST_F(OtamActorServiceTest, F013_LifecycleDisabled_FailSkipsRestore) {
         .WillOnce(Return(ReturnValue::FAIL));
 
     int before = actor_service_->GetLifecycleRequestCount();
-    OtaManager::SetAppUpdate msg;
+    otamanager::SetAppUpdate msg;
     msg.id(703);
     msg.app_name("f013_nolc");
     actor_service_->OnAppUpdateRequested(msg);

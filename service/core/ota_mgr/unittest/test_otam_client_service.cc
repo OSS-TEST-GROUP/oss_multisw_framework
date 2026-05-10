@@ -74,7 +74,7 @@ TEST_F(OtamClientServiceTest, OnMessageReceived_ValidRegistration) {
     // Create test registration message
     std::cout << "OnMessageReceived_ValidRegistration-1 !!!!." << std::endl;
 
-    OtaManager::SetOtaClientRegistration registration_msg;
+    otamanager::SetOtaClientRegistration registration_msg;
     registration_msg.client_name("test_client");
     
     std::cout << "OnMessageReceived_ValidRegistration-2 !!!!." << std::endl;
@@ -96,7 +96,7 @@ TEST_F(OtamClientServiceTest, OnMessageReceived_ValidRegistration) {
  * @brief Test client registration with empty app list
  */
 TEST_F(OtamClientServiceTest, OnMessageReceived_EmptyAppList) {
-    OtaManager::SetOtaClientRegistration registration_msg;
+    otamanager::SetOtaClientRegistration registration_msg;
     registration_msg.client_name("test_client_empty");
     
     // Empty app list
@@ -108,12 +108,12 @@ TEST_F(OtamClientServiceTest, OnMessageReceived_EmptyAppList) {
  */
 TEST_F(OtamClientServiceTest, OnMessageReceived_DuplicateClient) {
     // First registration
-    OtaManager::SetOtaClientRegistration registration_msg1;
+    otamanager::SetOtaClientRegistration registration_msg1;
     registration_msg1.client_name("duplicate_client");
     registration_msg1.app_list().push_back("app1");
     
     // Second registration with same client name
-    OtaManager::SetOtaClientRegistration registration_msg2;
+    otamanager::SetOtaClientRegistration registration_msg2;
     registration_msg2.client_name("duplicate_client");
     registration_msg2.app_list().push_back("app2");
 
@@ -126,7 +126,7 @@ TEST_F(OtamClientServiceTest, OnMessageReceived_DuplicateClient) {
  */
 TEST_F(OtamClientServiceTest, FindClient_ExistingClient) {
     // Register a client first
-    OtaManager::SetOtaClientRegistration registration_msg;
+    otamanager::SetOtaClientRegistration registration_msg;
     registration_msg.client_name("findable_client");
     registration_msg.app_list().push_back("app1");
     
@@ -142,7 +142,7 @@ TEST_F(OtamClientServiceTest, FindClient_ExistingClient) {
  */
 TEST_F(OtamClientServiceTest, FindClientIdWithApp_ExistingApp) {
     // Register a client with specific app
-    OtaManager::SetOtaClientRegistration registration_msg;
+    otamanager::SetOtaClientRegistration registration_msg;
     registration_msg.client_name("app_owner_client");
     registration_msg.app_list().push_back("unique_app");
     
@@ -165,7 +165,7 @@ TEST_F(OtamClientServiceTest, NotifyAppUpdateStatus_NonExistentApp) {
  */
 TEST_F(OtamClientServiceTest, NotifyAppUpdateStatus_VariousStatuses) {
     // Register a client first
-    OtaManager::SetOtaClientRegistration registration_msg;
+    otamanager::SetOtaClientRegistration registration_msg;
     registration_msg.client_name("status_test_client");
     registration_msg.app_list().push_back("status_app");
     
@@ -188,7 +188,7 @@ TEST_F(OtamClientServiceTest, ClientIdAssignment_MultipleClients) {
     };
     
     for (const auto& client_name : client_names) {
-        OtaManager::SetOtaClientRegistration registration_msg;
+        otamanager::SetOtaClientRegistration registration_msg;
         registration_msg.client_name(client_name);
         registration_msg.app_list().push_back("app_for_" + client_name);
         
@@ -221,7 +221,7 @@ TEST_F(OtamClientServiceTest, NotifyManagerReady) {
  * @brief Test edge cases for client registration
  */
 TEST_F(OtamClientServiceTest, EdgeCases_EmptyClientName) {
-    OtaManager::SetOtaClientRegistration registration_msg;
+    otamanager::SetOtaClientRegistration registration_msg;
     registration_msg.client_name(""); // Empty client name
     registration_msg.app_list().push_back("app1");
     
@@ -232,7 +232,7 @@ TEST_F(OtamClientServiceTest, EdgeCases_EmptyClientName) {
  * @brief Test edge cases for app names
  */
 TEST_F(OtamClientServiceTest, EdgeCases_EmptyAppName) {
-    OtaManager::SetOtaClientRegistration registration_msg;
+    otamanager::SetOtaClientRegistration registration_msg;
     registration_msg.client_name("client_with_empty_app");
     registration_msg.app_list().push_back(""); // Empty app name
     
@@ -243,7 +243,7 @@ TEST_F(OtamClientServiceTest, EdgeCases_EmptyAppName) {
  * @brief Test large number of applications
  */
 TEST_F(OtamClientServiceTest, LargeNumberOfApps) {
-    OtaManager::SetOtaClientRegistration registration_msg;
+    otamanager::SetOtaClientRegistration registration_msg;
     registration_msg.client_name("client_with_many_apps");
     
     // Add 100 applications
@@ -258,7 +258,7 @@ TEST_F(OtamClientServiceTest, LargeNumberOfApps) {
  * @brief Test special characters in client and app names
  */
 TEST_F(OtamClientServiceTest, SpecialCharacters) {
-    OtaManager::SetOtaClientRegistration registration_msg;
+    otamanager::SetOtaClientRegistration registration_msg;
     registration_msg.client_name("client-with_special.chars@123");
     registration_msg.app_list().push_back("app-with_special.chars@456");
     
@@ -272,7 +272,7 @@ TEST_F(OtamClientServiceTest, SpecialCharacters) {
 TEST_F(OtamClientServiceTest, Performance_RapidRegistrations) {
     // Test rapid registration of multiple clients
     for (int i = 0; i < 50; ++i) {
-        OtaManager::SetOtaClientRegistration registration_msg;
+        otamanager::SetOtaClientRegistration registration_msg;
         registration_msg.client_name("rapid_client_" + std::to_string(i));
         registration_msg.app_list().push_back("rapid_app_" + std::to_string(i));
         

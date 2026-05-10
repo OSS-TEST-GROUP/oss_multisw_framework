@@ -60,7 +60,7 @@ protected:
 
 // 1) 한 인스턴스에서 writer+reader를 둘 다 만들고, Write → 콜백 수신
 TEST_F(DdsEnv, LoopbackSingleInstanceInvokesCallback) {
-    using namespace OtaManager;
+    using namespace otamanager;
 
     TypeSupport ts(new SetOtaClientRegistrationPubSubType());
 
@@ -103,7 +103,7 @@ TEST_F(DdsEnv, LoopbackSingleInstanceInvokesCallback) {
 
 // 2) Writer-only ↔ Reader-only (같은 토픽) 사이 전달 확인
 TEST_F(DdsEnv, WriterOnlyToReaderOnlyDeliversMessage) {
-    using namespace OtaManager;
+    using namespace otamanager;
 
     const char* kTopic = "ut/otac/SetOtaClientRegistration";
 

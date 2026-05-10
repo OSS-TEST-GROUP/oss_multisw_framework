@@ -19,7 +19,7 @@
 #include <cstdio>
 #include <cstring>
 
-using namespace OtaManager;
+using namespace otamanager;
 
 class OtamActorServiceTester {
  public:

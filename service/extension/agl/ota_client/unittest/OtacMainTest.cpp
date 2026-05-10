@@ -21,7 +21,7 @@ using ::testing::Invoke;
 using ::testing::SaveArg;
 
 using eprosima::fastdds::dds::SampleInfo;
-using OtaManager::SetOtaClientRegistration;
+using otamanager::SetOtaClientRegistration;
 using namespace ota_client::agl;
 
 TEST(OtacMainInitializeTest, Initialize_AllOk_ReturnsTrue) {

@@ -8,7 +8,7 @@
 
 class MockOtacStatusStore : public ota_client::agl::OtacStatusStore {
 public:
-    using StatusType = decltype(std::declval<OtaManager::NotifyAppUpdateStatus>().status());
+    using StatusType = decltype(std::declval<otamanager::NotifyAppUpdateStatus>().status());
 
     MOCK_METHOD(std::vector<std::string>, GetAppNameList, (), (const));
     MOCK_METHOD(bool, UpdateStatus, (const std::string, const std::string));

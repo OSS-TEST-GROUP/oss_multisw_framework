@@ -3,7 +3,7 @@
 /** 
 [Topic] “/mmf/otamanager/otaclient_service/SetOtaClientRegistration”
 **/
-module OtaManager {
+module otamanager {
     struct SetOtaClientRegistration {
         string client_name;
         sequence<string> app_list;
@@ -13,7 +13,7 @@ module OtaManager {
 /** 
 [Topic] “/mmf/otamanager/otaclient_service/SetOtaClientRegistrationResponse
 **/
-module OtaManager {
+module otamanager {
     struct SetOtaClientRegistrationResponse {
         long client_id;
         ReturnValue ret_code;
@@ -23,7 +23,7 @@ module OtaManager {
 /** 
 [Topic] “/mmf/otamanager/otaclient_service/NotifyOtaManagerReady”
 **/
-module OtaManager {
+module otamanager {
     struct NotifyOtaManagerReady {
     };
 };
@@ -32,7 +32,7 @@ module OtaManager {
 [Topic] “/mmf/otamanager/otaclient_service/NotifyAppUpdateStatus”
 **/
 
-module OtaManager {
+module otamanager {
     struct NotifyAppUpdateStatus {
         @key long client_id;
         string app_name;
@@ -47,7 +47,7 @@ F022 — request a snapshot of every (client × app) pair currently
 registered with the Manager. The OtamClientService is the source of
 truth (ota_client_info_list_).
 **/
-module OtaManager {
+module otamanager {
     struct GetAppList {
         @key long id;
     };
@@ -62,7 +62,7 @@ Parallel arrays:
                          (when the same app is registered by multiple
                           clients, the lowest client_id wins)
 **/
-module OtaManager {
+module otamanager {
     struct GetAppListResponse {
         @key long id;
         sequence<string> app_names;

@@ -20,7 +20,7 @@ using ::testing::Return;
 using ::testing::SaveArg;
 
 using namespace ros2::ota_client;
-using OtaManager::SetOtaClientRegistration;
+using otamanager::SetOtaClientRegistration;
 using eprosima::fastdds::dds::SampleInfo;
 
 class OtacManagerServiceTest : public ::testing::Test {
@@ -158,10 +158,10 @@ TEST_F(OtacManagerServiceTest, OnManagerReady_GetsAppListAndPublishesRegistratio
         .Times(1)
         .WillOnce(DoAll(SaveArg<0>(&captured), Return(true)));
 
-    OtaManager::NotifyOtaManagerReady msg;
+    otamanager::NotifyOtaManagerReady msg;
     svc_.OnManagerReady(msg);
 
-    auto reg_msg = std::static_pointer_cast<OtaManager::SetOtaClientRegistration>(captured);
+    auto reg_msg = std::static_pointer_cast<otamanager::SetOtaClientRegistration>(captured);
     ASSERT_TRUE(reg_msg);
     EXPECT_EQ(reg_msg->client_name(), "ros2_ota_client");
     ASSERT_EQ(reg_msg->app_list().size(), apps.size());
@@ -185,7 +185,7 @@ TEST_F(OtacManagerServiceTest, OnManagerReady_WhenPublishFails_NoSuccessLog) {
         .WillOnce(Return(false));
 
     testing::internal::CaptureStdout();
-    OtaManager::NotifyOtaManagerReady msg;
+    otamanager::NotifyOtaManagerReady msg;
     svc_.OnManagerReady(msg);
     std::string out = testing::internal::GetCapturedStdout();
 
@@ -197,7 +197,7 @@ TEST_F(OtacManagerServiceTest, OnAppUpdateStatus_DelegatesToStoreUpdateStatus) {
     svc_.status_store_ = std::shared_ptr<OtacStatusStore>(
         store, [](OtacStatusStore* p){ delete static_cast<MockOtacStatusStore*>(p); });
 
-    OtaManager::NotifyAppUpdateStatus msg;
+    otamanager::NotifyAppUpdateStatus msg;
     msg.app_name("nav_app");
 
     using StatusT = MockOtacStatusStore::StatusType;
@@ -207,7 +207,7 @@ TEST_F(OtacManagerServiceTest, OnAppUpdateStatus_DelegatesToStoreUpdateStatus) {
 }
 
 TEST_F(OtacManagerServiceTest, OnClientRegistrationResponse_PrintsClientIdAndResult) {
-    OtaManager::SetOtaClientRegistrationResponse resp;
+    otamanager::SetOtaClientRegistrationResponse resp;
     resp.client_id(1234);
 
     testing::internal::CaptureStdout();

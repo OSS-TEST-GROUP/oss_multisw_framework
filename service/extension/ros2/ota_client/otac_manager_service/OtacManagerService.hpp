@@ -23,9 +23,9 @@ namespace ros2::ota_client {
             bool Start() override;
             void Stop() override;
             bool PublishClientRegistration(std::string client_name, std::vector<std::string> app_list);
-            void OnClientRegistrationResponse(const OtaManager::SetOtaClientRegistrationResponse& msg);
-            void OnManagerReady(const OtaManager::NotifyOtaManagerReady& msg);
-            void OnAppUpdateStatus(const OtaManager::NotifyAppUpdateStatus& msg);
+            void OnClientRegistrationResponse(const otamanager::SetOtaClientRegistrationResponse& msg);
+            void OnManagerReady(const otamanager::NotifyOtaManagerReady& msg);
+            void OnAppUpdateStatus(const otamanager::NotifyAppUpdateStatus& msg);
 
         private:
             eprosima::fastdds::dds::DomainParticipant* participant_{nullptr};

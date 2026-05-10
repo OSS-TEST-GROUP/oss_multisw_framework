@@ -4,7 +4,18 @@ project ( "MultiMiddlewareFramework" )
 
 ## Common Environment
 set ( CMAKE_VERBOSE_MAKEFILE OFF)
-set ( CMAKE_BUILD_TYPE "$ENV{BUILD_MODE}" )
+# CMAKE_BUILD_TYPE: prefer (1) -DCMAKE_BUILD_TYPE on the cmake CLI,
+# (2) the BUILD_MODE env var (used by docker/scripts/build.sh), then
+# (3) Debug as a safe default. Without the fallback an unset env var
+# leaves it empty, which cascades into OUTPUT_DIR = "output/<arch>//core"
+# (double slash) and `make install` ends up writing to the wrong tree.
+if ( NOT CMAKE_BUILD_TYPE )
+    if ( DEFINED ENV{BUILD_MODE} AND NOT "$ENV{BUILD_MODE}" STREQUAL "" )
+        set ( CMAKE_BUILD_TYPE "$ENV{BUILD_MODE}" )
+    else()
+        set ( CMAKE_BUILD_TYPE "Debug" )
+    endif()
+endif()
 set ( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++20 -Wall" )
 
 set ( PROJECT_TOP_DIR "${CMAKE_CURRENT_SOURCE_DIR}" )

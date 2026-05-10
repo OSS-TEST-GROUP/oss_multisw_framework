@@ -57,7 +57,7 @@ protected:
     }
 
     int32_t TriggerUpdateRequest(const std::string& app_name, int32_t msg_id) {
-        OtaManager::SetAppUpdate msg;
+        otamanager::SetAppUpdate msg;
         msg.id(msg_id);
         msg.app_name(app_name);
         actor_service_->OnAppUpdateRequested(msg);

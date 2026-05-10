@@ -49,10 +49,10 @@ void OtamDiagnosticService::Initialize() {
   std::cout << "Initializing OtamDiagnosticService..." << std::endl;
 
   // Create DDS implementation for NotifyOtaMgrInfo
-  auto dds_impl = std::make_shared<OtamDdsImpl<OtaManager::NotifyOtaMgrInfo>>();
+  auto dds_impl = std::make_shared<OtamDdsImpl<otamanager::NotifyOtaMgrInfo>>();
 
   // Create DDS entities
-  notify_ota_mgr_info_ = std::make_shared<OtaManager::NotifyOtaMgrInfoPubSubType>();
+  notify_ota_mgr_info_ = std::make_shared<otamanager::NotifyOtaMgrInfoPubSubType>();
   dds_impl->Create(kOtaMgrInfoTopic,
                    std::static_pointer_cast<void>(notify_ota_mgr_info_),
                    nullptr);
@@ -63,9 +63,9 @@ void OtamDiagnosticService::Initialize() {
   // Lifetime mirrors NotifyOtaMgrInfo; no late-subscriber buffering needed
   // because the next periodic publish will land within heartbeat_interval_.
   notify_ota_mgr_heartbeat_ =
-      std::make_shared<OtaManager::NotifyOtaMgrHeartbeatPubSubType>();
+      std::make_shared<otamanager::NotifyOtaMgrHeartbeatPubSubType>();
   auto heartbeat_dds_impl =
-      std::make_shared<OtamDdsImpl<OtaManager::NotifyOtaMgrHeartbeat>>();
+      std::make_shared<OtamDdsImpl<otamanager::NotifyOtaMgrHeartbeat>>();
   heartbeat_dds_impl->Create(
       kOtaMgrHeartbeatTopic,
       std::static_pointer_cast<void>(notify_ota_mgr_heartbeat_),
@@ -180,7 +180,7 @@ void OtamDiagnosticService::PublishOtaMgrInfo(int32_t err_code,
     return;
   }
 
-  auto msg = std::make_shared<OtaManager::NotifyOtaMgrInfo>();
+  auto msg = std::make_shared<otamanager::NotifyOtaMgrInfo>();
   msg->err_code(err_code);
   msg->err_msg(err_msg);
 
@@ -238,7 +238,7 @@ void OtamDiagnosticService::FlushPendingMessages() {
             << " buffered message(s)..." << std::endl;
 
   for (auto& [code, msg] : to_flush) {
-    auto pending_msg = std::make_shared<OtaManager::NotifyOtaMgrInfo>();
+    auto pending_msg = std::make_shared<otamanager::NotifyOtaMgrInfo>();
     pending_msg->err_code(code);
     pending_msg->err_msg(msg);
     w->write(pending_msg.get());
@@ -315,7 +315,7 @@ void OtamDiagnosticService::PublishHeartbeatOnce() {
               << std::endl;
     return;
   }
-  auto msg = std::make_shared<OtaManager::NotifyOtaMgrHeartbeat>();
+  auto msg = std::make_shared<otamanager::NotifyOtaMgrHeartbeat>();
   msg->seq(heartbeat_seq_.fetch_add(1) + 1);    // first published seq is 1
   msg->timestamp_ms(now_epoch_ms());
   dds->Write(std::static_pointer_cast<void>(msg));

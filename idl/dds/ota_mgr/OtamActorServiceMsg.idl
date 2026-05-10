@@ -3,7 +3,7 @@
 /**
 [Topic] “/mmf/otamanager/otaactor_service/GetAppUpdateSettings”
 **/
-module OtaManager {
+module otamanager {
 // Define a Request struct
     struct GetAppUpdateSettings {
         @key long id;          // Request ID
@@ -14,7 +14,7 @@ module OtaManager {
 /**
 [Topic] “/mmf/otamanager/otaactor_service/GetAppUpdateSettingsResponse”
 **/
-module OtaManager {
+module otamanager {
     struct GetAppUpdateSettingsResponse {
         @key long id; // Response ID (matching the Request ID)
         string app_name;
@@ -26,7 +26,7 @@ module OtaManager {
 /**
 [Topic] “/mmf/otamanager/otaactor_service/SetAppUpdateSettings”
 **/
-module OtaManager {
+module otamanager {
     struct SetAppUpdateSettings {
         @key long id;          // Request ID
         string app_name;
@@ -37,7 +37,7 @@ module OtaManager {
 /**
 [Topic] “/mmf/otamanager/otaactor_service/SetAppUpdateSettingsResponse”
 **/
-module OtaManager {
+module otamanager {
     // Define a Response struct
     struct SetAppUpdateSettingsResponse {
         @key long id;  // Response ID (matching the Request ID)
@@ -49,7 +49,7 @@ module OtaManager {
 /**
 [Topic] “/mmf/otamanager/otaactor_service/GetAppUpdateState”
 **/
-module OtaManager {
+module otamanager {
     struct GetAppUpdateState {
         @key long id;          // Request ID
         string app_name;
@@ -59,7 +59,7 @@ module OtaManager {
 /**
 [Topic] “/mmf/otamanager/otaactor_service/GetAppUpdateStateResponse”
 **/
-module OtaManager {
+module otamanager {
     struct GetAppUpdateStateResponse {
         @key long id; // Response ID (matching the Request ID)
         string app_name;
@@ -71,7 +71,7 @@ module OtaManager {
 /**
 [Topic] “/mmf/otamanager/otaactor_service/SetAppUpdate”
 **/
-module OtaManager {
+module otamanager {
     struct SetAppUpdate {
         @key long id;          // Request ID
         string app_name;
@@ -81,7 +81,7 @@ module OtaManager {
 /**
 [Topic] “/mmf/otamanager/otaactor_service/SetAppUpdateResponse”
 **/
-module OtaManager {
+module otamanager {
     struct SetAppUpdateResponse {
         @key long id; // Response ID (matching the Request ID)
         string app_name;

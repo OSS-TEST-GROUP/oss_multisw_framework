@@ -1,8 +1,4 @@
-# colcon build artifacts
-build/
-install/
-log/
-
-# Auto-generated from DDS IDL via idl_to_msg.py
-# Regenerated automatically on each colcon build
-msg/
+# Workspace populated by idl_to_msg.py — contains all generated
+# ament packages plus colcon build/log/install. Regenerated on every
+# run; never commit anything inside.
+work/

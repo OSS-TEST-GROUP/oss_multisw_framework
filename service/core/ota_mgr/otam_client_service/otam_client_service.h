@@ -120,7 +120,7 @@ class OtamDiagnosticService;
        *          when the input map is empty (caller sees zero-length
        *          arrays).
        */
-      static OtaManager::GetAppListResponse BuildGetAppListResponse(
+      static otamanager::GetAppListResponse BuildGetAppListResponse(
           int64_t request_id,
           const std::map<int32_t, OtaClientInfo>& clients);
 
@@ -142,7 +142,7 @@ class OtamDiagnosticService;
        * 
        * @note This method is called automatically by the DDS listener
        */
-      void OnMessageReceived(const OtaManager::SetOtaClientRegistration& registration_data);
+      void OnMessageReceived(const otamanager::SetOtaClientRegistration& registration_data);
 
       /**
        * @brief Publishes client registration response
@@ -207,16 +207,16 @@ class OtamDiagnosticService;
       /** @brief ROS2/rosbridge channel publisher for NotifyAppUpdateStatus */
       std::unique_ptr<OtamDds> app_status_dds_ros_;
 
-      std::shared_ptr<OtaManager::SetOtaClientRegistrationPubSubType> set_ota_client_reg_;
-      std::shared_ptr<OtaManager::SetOtaClientRegistrationResponsePubSubType> set_ota_client_reg_res_;
-      std::shared_ptr<OtaManager::NotifyOtaManagerReadyPubSubType> notify_ota_mgr_ready_;
-      std::shared_ptr<OtaManager::NotifyAppUpdateStatusPubSubType> notify_app_update_status_;
+      std::shared_ptr<otamanager::SetOtaClientRegistrationPubSubType> set_ota_client_reg_;
+      std::shared_ptr<otamanager::SetOtaClientRegistrationResponsePubSubType> set_ota_client_reg_res_;
+      std::shared_ptr<otamanager::NotifyOtaManagerReadyPubSubType> notify_ota_mgr_ready_;
+      std::shared_ptr<otamanager::NotifyAppUpdateStatusPubSubType> notify_app_update_status_;
 
       // F022 — GetAppList request/response DDS pair.
       std::unique_ptr<OtamDds> get_app_list_dds_;            // subscribe
       std::unique_ptr<OtamDds> get_app_list_response_dds_;   // publish
-      std::shared_ptr<OtaManager::GetAppListPubSubType> get_app_list_;
-      std::shared_ptr<OtaManager::GetAppListResponsePubSubType> get_app_list_response_;
+      std::shared_ptr<otamanager::GetAppListPubSubType> get_app_list_;
+      std::shared_ptr<otamanager::GetAppListResponsePubSubType> get_app_list_response_;
 
       /**
        * @class RegistrationListener
@@ -277,7 +277,7 @@ class OtamDiagnosticService;
        * @brief F022 — process one GetAppList request: build the response
        *        from the live ota_client_info_list_ and publish it.
        */
-      void HandleGetAppListRequest(const OtaManager::GetAppList& req);
+      void HandleGetAppListRequest(const otamanager::GetAppList& req);
 
       /**
        * @brief Initializes DDS communication infrastructure

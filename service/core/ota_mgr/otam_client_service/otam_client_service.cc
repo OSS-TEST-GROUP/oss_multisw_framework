@@ -104,35 +104,35 @@
       // Create DDS implementation instances for each message type
       // Each instance manages a separate DDS communication channel
 
-      registration_dds_ = std::make_unique<OtamDdsImpl<OtaManager::SetOtaClientRegistration>>();
-      registration_response_dds_ = std::make_unique<OtamDdsImpl<OtaManager::SetOtaClientRegistrationResponse>>();
-      manager_ready_dds_ = std::make_unique<OtamDdsImpl<OtaManager::NotifyOtaManagerReady>>();
-      app_status_dds_     = std::make_unique<OtamDdsImpl<OtaManager::NotifyAppUpdateStatus>>();
-      app_status_dds_ros_ = std::make_unique<OtamDdsImpl<OtaManager::NotifyAppUpdateStatus>>();
+      registration_dds_ = std::make_unique<OtamDdsImpl<otamanager::SetOtaClientRegistration>>();
+      registration_response_dds_ = std::make_unique<OtamDdsImpl<otamanager::SetOtaClientRegistrationResponse>>();
+      manager_ready_dds_ = std::make_unique<OtamDdsImpl<otamanager::NotifyOtaManagerReady>>();
+      app_status_dds_     = std::make_unique<OtamDdsImpl<otamanager::NotifyAppUpdateStatus>>();
+      app_status_dds_ros_ = std::make_unique<OtamDdsImpl<otamanager::NotifyAppUpdateStatus>>();
 
       // Create listener for incoming registration messages
       registration_listener_ = std::make_shared<RegistrationListener>(this);
 
       // SetOtaClientRegistration
-      set_ota_client_reg_ = std::make_shared<OtaManager::SetOtaClientRegistrationPubSubType>();
+      set_ota_client_reg_ = std::make_shared<otamanager::SetOtaClientRegistrationPubSubType>();
       registration_dds_->Create(TOPIC_REGISTRATION,
                                std::static_pointer_cast<void>(set_ota_client_reg_),
                                std::static_pointer_cast<void>(registration_listener_));
 
       // SetOtaClientRegistrationResponse (TRANSIENT_LOCAL: late-joining clients can receive it)
-      set_ota_client_reg_res_ = std::make_shared<OtaManager::SetOtaClientRegistrationResponsePubSubType>();
+      set_ota_client_reg_res_ = std::make_shared<otamanager::SetOtaClientRegistrationResponsePubSubType>();
       registration_response_dds_->Create(TOPIC_REGISTRATION_RESPONSE,
                                std::static_pointer_cast<void>(set_ota_client_reg_res_),
                                nullptr, true);
 
       // NotifyOtaManagerReady (TRANSIENT_LOCAL: late-joining clients can receive it)
-      notify_ota_mgr_ready_ = std::make_shared<OtaManager::NotifyOtaManagerReadyPubSubType>();
+      notify_ota_mgr_ready_ = std::make_shared<otamanager::NotifyOtaManagerReadyPubSubType>();
       manager_ready_dds_->Create(TOPIC_MANAGER_READY,
                                std::static_pointer_cast<void>(notify_ota_mgr_ready_),
                                nullptr, true);
 
       // NotifyAppUpdateStatus (raw DDS + ROS2/rosbridge)
-      notify_app_update_status_ = std::make_shared<OtaManager::NotifyAppUpdateStatusPubSubType>();
+      notify_app_update_status_ = std::make_shared<otamanager::NotifyAppUpdateStatusPubSubType>();
       app_status_dds_->Create(TOPIC_APP_STATUS,
                                std::static_pointer_cast<void>(notify_app_update_status_),
                                nullptr);
@@ -144,13 +144,13 @@
       // Response uses TRANSIENT_LOCAL so a late subscriber on the requester
       // side still gets the most recent answer.
       get_app_list_dds_ =
-          std::make_unique<OtamDdsImpl<OtaManager::GetAppList>>();
+          std::make_unique<OtamDdsImpl<otamanager::GetAppList>>();
       get_app_list_response_dds_ =
-          std::make_unique<OtamDdsImpl<OtaManager::GetAppListResponse>>();
+          std::make_unique<OtamDdsImpl<otamanager::GetAppListResponse>>();
       get_app_list_listener_ = std::make_shared<GetAppListListener>(this);
-      get_app_list_ = std::make_shared<OtaManager::GetAppListPubSubType>();
+      get_app_list_ = std::make_shared<otamanager::GetAppListPubSubType>();
       get_app_list_response_ =
-          std::make_shared<OtaManager::GetAppListResponsePubSubType>();
+          std::make_shared<otamanager::GetAppListResponsePubSubType>();
       get_app_list_dds_->Create(
           TOPIC_GET_APP_LIST,
           std::static_pointer_cast<void>(get_app_list_),
@@ -225,7 +225,7 @@
 
       try {
           // Create and populate the manager ready message
-          auto message = std::make_shared<OtaManager::NotifyOtaManagerReady>();
+          auto message = std::make_shared<otamanager::NotifyOtaManagerReady>();
           // Note: Current IDL defines this as an empty struct
           // Add timestamp or other fields if IDL is updated
 
@@ -240,7 +240,7 @@
       }
   }
 
-  void OtamClientService::OnMessageReceived(const OtaManager::SetOtaClientRegistration& registration_data) {
+  void OtamClientService::OnMessageReceived(const otamanager::SetOtaClientRegistration& registration_data) {
       // Build comma-separated app list string for logging
       std::string app_list_str;
       for (const auto& app : registration_data.app_list()) {
@@ -302,7 +302,7 @@
   void OtamClientService::PublishRegistrationResponse(long client_id, ReturnValue ret_code) {
       try {
           // Create SetOtaClientRegistrationResponse message
-          auto response_message = std::make_shared<OtaManager::SetOtaClientRegistrationResponse>();
+          auto response_message = std::make_shared<otamanager::SetOtaClientRegistrationResponse>();
           response_message->client_id(client_id);
           response_message->ret_code(ret_code);
 
@@ -327,7 +327,7 @@
   void OtamClientService::NotifyAppUpdateStatus(const std::string& app_name, const std::string& status) {
       try {
           // Create NotifyAppUpdateStatus message
-          auto status_message = std::make_shared<OtaManager::NotifyAppUpdateStatus>();
+          auto status_message = std::make_shared<otamanager::NotifyAppUpdateStatus>();
           
           // Set client_id (currently hardcoded as mentioned in header comment)
           // TODO: Make client_id configurable or retrieve from context
@@ -364,7 +364,7 @@
 
   void OtamClientService::RegistrationListener::on_data_available(eprosima::fastdds::dds::DataReader* reader) {
       // This callback is invoked by FastDDS when new registration data arrives
-      OtaManager::SetOtaClientRegistration message;
+      otamanager::SetOtaClientRegistration message;
       eprosima::fastdds::dds::SampleInfo info;
 
       try {
@@ -395,7 +395,7 @@
   // ─────────────────────────────────────────────────────────────────────
   void OtamClientService::GetAppListListener::on_data_available(
       eprosima::fastdds::dds::DataReader* reader) {
-      OtaManager::GetAppList request;
+      otamanager::GetAppList request;
       eprosima::fastdds::dds::SampleInfo info;
 
       try {
@@ -419,7 +419,7 @@
   }
 
   void OtamClientService::HandleGetAppListRequest(
-      const OtaManager::GetAppList& req) {
+      const otamanager::GetAppList& req) {
       auto resp =
           BuildGetAppListResponse(req.id(), ota_client_info_list_);
       if (!get_app_list_response_dds_) {
@@ -427,7 +427,7 @@
                     << std::endl;
           return;
       }
-      auto out = std::make_shared<OtaManager::GetAppListResponse>(resp);
+      auto out = std::make_shared<otamanager::GetAppListResponse>(resp);
       get_app_list_response_dds_->Write(
           std::static_pointer_cast<void>(out));
       std::cout << "OtamClientService: GetAppListResponse id=" << resp.id()
@@ -438,7 +438,7 @@
   // F022 — pure aggregator. Static so unit tests don't need a live
   // OtamClientService instance (and don't need to touch DDS at all).
   // ─────────────────────────────────────────────────────────────────────
-  OtaManager::GetAppListResponse OtamClientService::BuildGetAppListResponse(
+  otamanager::GetAppListResponse OtamClientService::BuildGetAppListResponse(
       int64_t request_id,
       const std::map<int32_t, OtaClientInfo>& clients) {
       // Step 1: dedupe — for each app name, remember the lowest client_id
@@ -466,7 +466,7 @@
           owners.push_back(owner);
       }
 
-      OtaManager::GetAppListResponse resp;
+      otamanager::GetAppListResponse resp;
       resp.id(request_id);
       resp.app_names(names);
       resp.owner_client_ids(owners);

@@ -80,27 +80,27 @@ class OtamActorService: public OtamService {
    * @param msg GetAppUpdateSettings message
    */
   void OnAppUpdateSettingsRequested(
-      const OtaManager::GetAppUpdateSettings& msg);
+      const otamanager::GetAppUpdateSettings& msg);
 
   /**
    * @brief Handle SetAppUpdateSettings request
    * @param msg SetAppUpdateSettings message
    */
   void OnSetAppUpdateSettingsReceived(
-      const OtaManager::SetAppUpdateSettings& msg);
+      const otamanager::SetAppUpdateSettings& msg);
 
   /**
    * @brief Handle GetAppUpdateState request
    * @param msg GetAppUpdateState message
    */
   void OnAppUpdateStateRequested(
-      const OtaManager::GetAppUpdateState& msg);
+      const otamanager::GetAppUpdateState& msg);
 
   /**
    * @brief Handle SetAppUpdate request
    * @param msg SetAppUpdate message
    */
-  void OnAppUpdateRequested(const OtaManager::SetAppUpdate& msg);
+  void OnAppUpdateRequested(const otamanager::SetAppUpdate& msg);
 
   /**
    * @brief Callback for vehicle info response
