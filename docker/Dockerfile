@@ -83,7 +83,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 RUN /bin/bash -c "\
 	mkdir -p /tmp/fastddsgen \
 	&& cd /tmp/fastddsgen \
-	&& git clone --depth 1 --branch v4.0.5 https://github.com/eProsima/Fast-DDS-Gen.git \
+	&& git clone https://github.com/eProsima/Fast-DDS-Gen.git \
 	&& cd /tmp/fastddsgen/Fast-DDS-Gen \
 	&& chmod +x gradlew \
 	&& ./gradlew clean \
