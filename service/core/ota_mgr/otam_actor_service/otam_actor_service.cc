@@ -124,6 +124,25 @@ void OtamActorService::Initialize() {
     CreateDdsForTopic<otamanager::SetAppUpdateResponse>(kTopicRosSetAppUpdateResponse,
                       set_update_resp_type);
 
+    // Initialize GetAppList (Request) - raw DDS + ROS2/rosbridge.
+    // Relocated from OtamClientService so ota_monitor can talk to
+    // otaactor_service exclusively.
+    auto get_app_list_type =
+        std::make_shared<otamanager::GetAppListPubSubType>();
+    get_app_list_listener_ = std::make_shared<GetAppListListener>(this);
+    CreateDdsForTopic<otamanager::GetAppList>(kTopicGetAppList,
+                      get_app_list_type, get_app_list_listener_);
+    CreateDdsForTopic<otamanager::GetAppList>(kTopicRosGetAppList,
+                      get_app_list_type, get_app_list_listener_);
+
+    // Initialize GetAppListResponse (Response) - raw DDS + ROS2/rosbridge
+    auto get_app_list_resp_type =
+        std::make_shared<otamanager::GetAppListResponsePubSubType>();
+    CreateDdsForTopic<otamanager::GetAppListResponse>(kTopicGetAppListResponse,
+                      get_app_list_resp_type);
+    CreateDdsForTopic<otamanager::GetAppListResponse>(kTopicRosGetAppListResponse,
+                      get_app_list_resp_type);
+
     // Initialize SetServiceModeRequest (Publisher for lifecycle management)
     auto set_service_mode_type =
         std::make_shared<lifecyclemgr::SetServiceModeRequestPubSubType>();
@@ -1167,4 +1186,86 @@ void OtamActorService::SetServiceModeResponseListener::on_data_available(eprosim
             service_->otam_diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), err_msg);
         }
     }
+}
+
+void OtamActorService::GetAppListListener::on_data_available(eprosima::fastdds::dds::DataReader* reader) {
+    otamanager::GetAppList message;
+    eprosima::fastdds::dds::SampleInfo info;
+
+    try {
+        if (reader->take_next_sample(&message, &info) == eprosima::fastdds::dds::RETCODE_OK) {
+            if (info.valid_data) {
+                service_->OnGetAppListRequested(message);
+            } else {
+                std::cout << "GetAppListListener: Received invalid data sample" << std::endl;
+            }
+        } else {
+            std::cout << "GetAppListListener: Failed to read message sample" << std::endl;
+        }
+    }
+    catch (const std::exception& e) {
+        std::string err_msg = "GetAppListListener: Exception in data callback: " + std::string(e.what());
+        std::cerr << err_msg << std::endl;
+        if (service_->otam_diagnostic_service_) {
+            service_->otam_diagnostic_service_->PublishOtaMgrInfo(static_cast<int32_t>(OtamError::FAILED), err_msg);
+        }
+    }
+}
+
+void OtamActorService::OnGetAppListRequested(const otamanager::GetAppList& msg) {
+    if (!otam_client_service_) {
+        std::cerr << "OtamActorService::OnGetAppListRequested — OtamClientService not connected" << std::endl;
+        return;
+    }
+    auto resp = BuildGetAppListResponse(msg.id(), otam_client_service_->GetClientInfoListSnapshot());
+    auto out = std::make_shared<otamanager::GetAppListResponse>(resp);
+    auto it_raw = dds_registry_.find(kTopicGetAppListResponse);
+    if (it_raw != dds_registry_.end() && it_raw->second) {
+        it_raw->second->Write(std::static_pointer_cast<void>(out));
+    }
+    auto it_ros = dds_registry_.find(kTopicRosGetAppListResponse);
+    if (it_ros != dds_registry_.end() && it_ros->second) {
+        it_ros->second->Write(std::static_pointer_cast<void>(out));
+    }
+    std::cout << "OtamActorService: GetAppListResponse id=" << resp.id()
+              << " apps=" << resp.app_names().size() << std::endl;
+}
+
+// Pure aggregator. Static so unit tests don't need a live OtamActorService
+// instance (and don't need to touch DDS at all). Logic relocated unchanged
+// from OtamClientService::BuildGetAppListResponse.
+otamanager::GetAppListResponse OtamActorService::BuildGetAppListResponse(
+    int64_t request_id,
+    const std::map<int32_t, OtaClientInfo>& clients) {
+    // Step 1: dedupe — for each app name, remember the lowest client_id
+    //         that registered it. std::map keeps insertion of first
+    //         (lowest) value naturally because we iterate clients in key
+    //         order.
+    std::map<std::string, int32_t> app_to_owner;
+    for (const auto& [cid, info] : clients) {
+        for (const auto& app : info.app_names) {
+            auto it = app_to_owner.find(app);
+            if (it == app_to_owner.end() || cid < it->second) {
+                app_to_owner[app] = cid;
+            }
+        }
+    }
+
+    // Step 2: emit parallel arrays in app-name lexicographic order
+    //         (std::map iteration order).
+    std::vector<std::string> names;
+    std::vector<int32_t>     owners;
+    names.reserve(app_to_owner.size());
+    owners.reserve(app_to_owner.size());
+    for (const auto& [app, owner] : app_to_owner) {
+        names.push_back(app);
+        owners.push_back(owner);
+    }
+
+    otamanager::GetAppListResponse resp;
+    resp.id(request_id);
+    resp.app_names(names);
+    resp.owner_client_ids(owners);
+    resp.ret_code(ReturnValue::SUCCESS);
+    return resp;
 }

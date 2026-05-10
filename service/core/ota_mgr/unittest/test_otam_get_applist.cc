@@ -1,16 +1,20 @@
-// F022 — unit tests for OtamClientService::BuildGetAppListResponse.
+// Unit tests for OtamActorService::BuildGetAppListResponse.
 //
 // Pure aggregator: no DDS, no participant, no fastrtps wiring. We feed
 // it a synthetic snapshot of (client_id → OtaClientInfo) and assert on
 // the parallel arrays + ret_code it produces.
 //
-// 4 cases (one per F022 ac4 bullet):
+// 4 cases:
 //   - empty input (no clients registered)
 //   - single client with N apps (sort + parallel-array invariant)
 //   - multiple clients with overlapping apps (dedupe + "lowest wins")
 //   - 1000 clients × 5 apps each (performance smoke; completes <1s)
+//
+// Note: BuildGetAppListResponse was relocated from OtamClientService
+// to OtamActorService when GetAppList moved to the otaactor_service
+// topic namespace. The aggregator logic is unchanged.
 
-#include "otam_client_service/otam_client_service.h"
+#include "otam_actor_service/otam_actor_service.h"
 
 #include <gtest/gtest.h>
 
@@ -31,7 +35,7 @@ OtaClientInfo make_client(std::string name,
 
 TEST(OtamClientServiceBuildGetAppList, EmptySnapshotReturnsSuccessNoApps) {
   std::map<int32_t, OtaClientInfo> empty;
-  auto resp = OtamClientService::BuildGetAppListResponse(42, empty);
+  auto resp = OtamActorService::BuildGetAppListResponse(42, empty);
 
   EXPECT_EQ(resp.id(), 42);
   EXPECT_EQ(resp.ret_code(), ReturnValue::SUCCESS);
@@ -46,7 +50,7 @@ TEST(OtamClientServiceBuildGetAppList,
   clients[7] = make_client("client_a",
                            {"navi", "audio", "music", "video", "weather"});
 
-  auto resp = OtamClientService::BuildGetAppListResponse(100, clients);
+  auto resp = OtamActorService::BuildGetAppListResponse(100, clients);
 
   EXPECT_EQ(resp.id(), 100);
   EXPECT_EQ(resp.ret_code(), ReturnValue::SUCCESS);
@@ -74,7 +78,7 @@ TEST(OtamClientServiceBuildGetAppList,
   clients[3]  = make_client("three", {"shared_app", "three_only"});
   clients[7]  = make_client("seven", {"shared_app", "seven_only"});
 
-  auto resp = OtamClientService::BuildGetAppListResponse(7, clients);
+  auto resp = OtamActorService::BuildGetAppListResponse(7, clients);
 
   EXPECT_EQ(resp.id(), 7);
   EXPECT_EQ(resp.ret_code(), ReturnValue::SUCCESS);
@@ -120,7 +124,7 @@ TEST(OtamClientServiceBuildGetAppList,
   }
 
   const auto t0 = std::chrono::steady_clock::now();
-  auto resp = OtamClientService::BuildGetAppListResponse(999, clients);
+  auto resp = OtamActorService::BuildGetAppListResponse(999, clients);
   const auto t1 = std::chrono::steady_clock::now();
   const auto ms =
       std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
