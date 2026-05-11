@@ -71,6 +71,15 @@ public:
             eprosima::fastdds::dds::PARTICIPANT_QOS_DEFAULT;
         participant_qos.properties().properties().emplace_back(
             "fastdds.ignore_local_endpoints", "true");
+        // Disable XTypes TypeObject discovery so peers fall back to
+        // type-name-only matching. The dynamic-IDL adapter
+        // (ota_dds_bridge) parses the same IDL files at runtime but
+        // produces a TypeObject with different member IDs / hashes
+        // than the IDL-compiled PubSubType OtaManager registers.
+        // Without this property OtaManager's strict reader rejects
+        // the bridge's writes.
+        participant_qos.properties().properties().emplace_back(
+            "fastdds.type_propagation", "disabled");
         participant_ = factory->create_participant(0, participant_qos);
         if (!participant_) {
             throw std::runtime_error("OtamDdsParticipant: Failed to create shared DomainParticipant");

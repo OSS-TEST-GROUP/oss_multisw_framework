@@ -6,7 +6,7 @@
 module otamanager {
 // Define a Request struct
     struct GetAppUpdateSettings {
-        @key long id;          // Request ID
+        long id;          // Request ID
         string app_name;
     };
 };
@@ -16,7 +16,7 @@ module otamanager {
 **/
 module otamanager {
     struct GetAppUpdateSettingsResponse {
-        @key long id; // Response ID (matching the Request ID)
+        long id; // Response ID (matching the Request ID)
         string app_name;
         string app_settings;
         ReturnValue ret_code;
@@ -28,7 +28,7 @@ module otamanager {
 **/
 module otamanager {
     struct SetAppUpdateSettings {
-        @key long id;          // Request ID
+        long id;          // Request ID
         string app_name;
         string app_settings;      
     };
@@ -40,7 +40,7 @@ module otamanager {
 module otamanager {
     // Define a Response struct
     struct SetAppUpdateSettingsResponse {
-        @key long id;  // Response ID (matching the Request ID)
+        long id;  // Response ID (matching the Request ID)
         ReturnValue ret_code;
     };
 };
@@ -51,7 +51,7 @@ module otamanager {
 **/
 module otamanager {
     struct GetAppUpdateState {
-        @key long id;          // Request ID
+        long id;          // Request ID
         string app_name;
     };
 };
@@ -61,7 +61,7 @@ module otamanager {
 **/
 module otamanager {
     struct GetAppUpdateStateResponse {
-        @key long id; // Response ID (matching the Request ID)
+        long id; // Response ID (matching the Request ID)
         string app_name;
         string app_state_info;
         ReturnValue ret_code;
@@ -73,7 +73,7 @@ module otamanager {
 **/
 module otamanager {
     struct SetAppUpdate {
-        @key long id;          // Request ID
+        long id;          // Request ID
         string app_name;
     };
 };
@@ -83,7 +83,7 @@ module otamanager {
 **/
 module otamanager {
     struct SetAppUpdateResponse {
-        @key long id; // Response ID (matching the Request ID)
+        long id; // Response ID (matching the Request ID)
         string app_name;
         ReturnValue ret_code;
     };
@@ -98,7 +98,7 @@ ota_monitor can talk to otaactor_service only.
 **/
 module otamanager {
     struct GetAppList {
-        @key long id;
+        long id;
     };
 };
 
@@ -113,7 +113,7 @@ Parallel arrays:
 **/
 module otamanager {
     struct GetAppListResponse {
-        @key long id;
+        long id;
         sequence<string> app_names;
         sequence<long>   owner_client_ids;
         ReturnValue ret_code;

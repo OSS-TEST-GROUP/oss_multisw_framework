@@ -5,7 +5,7 @@
 **/
 module otamanager {
     struct GetVehicleInfo {
-        @key long id; //Request ID
+        long id; //Request ID
         string name;
     };
 };
@@ -15,7 +15,7 @@ module otamanager {
 **/
 module otamanager {
     struct GetVehicleInfoResponse {
-        @key long id; // Response ID (matching the Request ID)
+        long id; // Response ID (matching the Request ID)
         string name;
         string value;
         ReturnValue ret_code;

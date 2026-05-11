@@ -34,7 +34,7 @@ module otamanager {
 
 module otamanager {
     struct NotifyAppUpdateStatus {
-        @key long client_id;
+        long client_id;
         string app_name;
         string status;
     };

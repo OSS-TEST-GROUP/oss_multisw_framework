@@ -48,6 +48,21 @@ else
   echo "[ros2_entrypoint] WARN: /oss/bin/ota_client not found, skipping (rebuild ext-ros2 to populate it)" >&2
 fi
 
+# ota_dds_bridge: dynamic-IDL adapter that forwards every OtaManager
+# topic between the raw bare-DDS layer (otamanager::X) and the
+# ROS-canonical layer (otamanager::msg::dds_::X_) so rosbridge_server
+# and ota_monitor can talk to the host OtaManager without TypeObject
+# matching pain. Topic table + design rationale live in
+# service/extension/ros2/dds_bridge/main.cc.
+if [ -x /oss/bin/ota_dds_bridge ]; then
+  echo "[ros2_entrypoint] launching /oss/bin/ota_dds_bridge in background"
+  ( /oss/bin/ota_dds_bridge /oss/bin/idl; rc=$?
+    echo "[ros2_entrypoint] ota_dds_bridge exited rc=$rc (container stays up)"
+  ) &
+else
+  echo "[ros2_entrypoint] WARN: /oss/bin/ota_dds_bridge not found, skipping" >&2
+fi
+
 # Start rosbridge_server in background
 ros2 launch rosbridge_server rosbridge_websocket_launch.xml &
 
