@@ -5,6 +5,7 @@
 #include <pthread.h>
 
 #include "otam_main.h"
+#include "otam_common/otam_dds_impl.h"
 #include "otam_common/otam_logger.h"
 
 static std::atomic<bool> g_shutdown_requested{false};
@@ -51,6 +52,11 @@ int main(int argc, char* argv[]) {
         std::cerr << "OtaManager: fatal error: " << e.what() << std::endl;
     }
     manager.Stop();
+    // Tear down the shared DomainParticipant while FastDDS internals are still
+    // alive. If we leave it to ~OtamDdsParticipant() at static-destruction
+    // time, delete_contained_entities() segfaults because libfastdds.so's
+    // own statics may already be gone.
+    OtamDdsParticipant::GetInstance().Shutdown();
     sig_thread.join();
     OtamLogger::Shutdown();
     return 0;
