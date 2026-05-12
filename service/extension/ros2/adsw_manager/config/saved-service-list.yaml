@@ -70,13 +70,6 @@ specs:
       #       recovery: "ALWAYS"
       #       enabled: "true"
       #       max: "0"
-      #     - package: "extension_communication"
-      #       name: "extension_communication"
-      #       launchfile: ""
-      #       type: "NORMAL"
-      #       recovery: "ALWAYS"
-      #       enabled: "true"
-      #       max: "0"
 
       # ── 로컬 테스트용 샘플 컨테이너 (adsw-test-app:latest 이미지 필요) ──
       # 이미지 빌드: docker build -t adsw-test-app:latest unittest/docker/

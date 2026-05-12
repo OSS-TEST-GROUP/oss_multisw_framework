@@ -44,13 +44,6 @@ specs:
             recovery: "ALWAYS"
             enabled: "true"
             max: "0"
-          - package: "extension_communication"
-            name: "extension_communication"
-            launchfile: ""
-            type: "NORMAL"
-            recovery: "ALWAYS"
-            enabled: "true"
-            max: "0"
 
 
 
