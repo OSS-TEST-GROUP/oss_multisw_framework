@@ -4,6 +4,6 @@ project ( "ros2" )
 
 ## Sub Directory
 add_subdirectory ( adsw_manager )
-add_subdirectory ( extension_communication )
+add_subdirectory ( ext_comm )
 add_subdirectory ( ota_client )
 add_subdirectory ( security_client )

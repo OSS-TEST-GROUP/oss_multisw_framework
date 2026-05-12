@@ -34,39 +34,12 @@ module otamanager {
 
 module otamanager {
     struct NotifyAppUpdateStatus {
-        @key long client_id;
+        long client_id;
         string app_name;
         string status;
     };
 };
 
-/**
-[Topic] "/mmf/otamanager/otaclient_service/GetAppList"
-
-F022 — request a snapshot of every (client × app) pair currently
-registered with the Manager. The OtamClientService is the source of
-truth (ota_client_info_list_).
-**/
-module otamanager {
-    struct GetAppList {
-        @key long id;
-    };
-};
-
-/**
-[Topic] "/mmf/otamanager/otaclient_service/GetAppListResponse"
-
-Parallel arrays:
-  app_names[i]        — application name (deduplicated, sorted)
-  owner_client_ids[i] — id of the client that registered app_names[i]
-                         (when the same app is registered by multiple
-                          clients, the lowest client_id wins)
-**/
-module otamanager {
-    struct GetAppListResponse {
-        @key long id;
-        sequence<string> app_names;
-        sequence<long>   owner_client_ids;
-        ReturnValue ret_code;
-    };
-};
+// NOTE: GetAppList / GetAppListResponse moved to OtamActorServiceMsg.idl
+//       (topic namespace changed to /mmf/otamanager/otaactor_service/...).
+//       ota_monitor now talks to otaactor_service only.

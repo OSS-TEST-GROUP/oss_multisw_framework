@@ -6,7 +6,7 @@
 module otamanager {
 // Define a Request struct
     struct GetAppUpdateSettings {
-        @key long id;          // Request ID
+        long id;          // Request ID
         string app_name;
     };
 };
@@ -16,7 +16,7 @@ module otamanager {
 **/
 module otamanager {
     struct GetAppUpdateSettingsResponse {
-        @key long id; // Response ID (matching the Request ID)
+        long id; // Response ID (matching the Request ID)
         string app_name;
         string app_settings;
         ReturnValue ret_code;
@@ -28,7 +28,7 @@ module otamanager {
 **/
 module otamanager {
     struct SetAppUpdateSettings {
-        @key long id;          // Request ID
+        long id;          // Request ID
         string app_name;
         string app_settings;      
     };
@@ -40,7 +40,7 @@ module otamanager {
 module otamanager {
     // Define a Response struct
     struct SetAppUpdateSettingsResponse {
-        @key long id;  // Response ID (matching the Request ID)
+        long id;  // Response ID (matching the Request ID)
         ReturnValue ret_code;
     };
 };
@@ -51,7 +51,7 @@ module otamanager {
 **/
 module otamanager {
     struct GetAppUpdateState {
-        @key long id;          // Request ID
+        long id;          // Request ID
         string app_name;
     };
 };
@@ -61,7 +61,7 @@ module otamanager {
 **/
 module otamanager {
     struct GetAppUpdateStateResponse {
-        @key long id; // Response ID (matching the Request ID)
+        long id; // Response ID (matching the Request ID)
         string app_name;
         string app_state_info;
         ReturnValue ret_code;
@@ -73,7 +73,7 @@ module otamanager {
 **/
 module otamanager {
     struct SetAppUpdate {
-        @key long id;          // Request ID
+        long id;          // Request ID
         string app_name;
     };
 };
@@ -83,8 +83,39 @@ module otamanager {
 **/
 module otamanager {
     struct SetAppUpdateResponse {
-        @key long id; // Response ID (matching the Request ID)
+        long id; // Response ID (matching the Request ID)
         string app_name;
+        ReturnValue ret_code;
+    };
+};
+
+/**
+[Topic] "/mmf/otamanager/otaactor_service/GetAppList"
+
+Request a snapshot of every (client × app) pair currently registered
+with the Manager. Moved from OtamClientServiceMsg.idl so that
+ota_monitor can talk to otaactor_service only.
+**/
+module otamanager {
+    struct GetAppList {
+        long id;
+    };
+};
+
+/**
+[Topic] "/mmf/otamanager/otaactor_service/GetAppListResponse"
+
+Parallel arrays:
+  app_names[i]        — application name (deduplicated, sorted)
+  owner_client_ids[i] — id of the client that registered app_names[i]
+                         (when the same app is registered by multiple
+                          clients, the lowest client_id wins)
+**/
+module otamanager {
+    struct GetAppListResponse {
+        long id;
+        sequence<string> app_names;
+        sequence<long>   owner_client_ids;
         ReturnValue ret_code;
     };
 };

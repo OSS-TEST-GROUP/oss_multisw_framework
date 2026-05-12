@@ -9,6 +9,10 @@
 #include "lifecycle/SetServiceModeRequest.hpp"
 #include "lifecycle/SetServiceModeRequestPubSubTypes.hpp"
 
+// OtaClientInfo is the value type passed to BuildGetAppListResponse below.
+// Full definition is required because std::map<K,V> needs sizeof(V) here.
+#include "otam_client_service/otam_client_service.h"
+
 #include <map>
 #include <memory>
 #include <string>
@@ -101,6 +105,23 @@ class OtamActorService: public OtamService {
    * @param msg SetAppUpdate message
    */
   void OnAppUpdateRequested(const otamanager::SetAppUpdate& msg);
+
+  /**
+   * @brief Handle GetAppList request — snapshots OtamClientService's
+   *        registry, builds the response, and publishes it on
+   *        kTopicGetAppListResponse (and the rt/ rosbridge variant).
+   */
+  void OnGetAppListRequested(const otamanager::GetAppList& msg);
+
+  /**
+   * @brief Pure aggregator. Builds a GetAppListResponse from a snapshot
+   *        of (client_id -> OtaClientInfo). Static so unit tests can
+   *        exercise the dedupe / sort / "lowest client_id wins"
+   *        semantics without standing up DDS.
+   */
+  static otamanager::GetAppListResponse BuildGetAppListResponse(
+      int64_t request_id,
+      const std::map<int32_t, OtaClientInfo>& clients);
 
   /**
    * @brief Callback for vehicle info response
@@ -265,28 +286,24 @@ class OtamActorService: public OtamService {
       "/mmf/otamanager/otaactor_service/SetAppUpdate";
   static constexpr const char* kTopicSetAppUpdateResponse =
       "/mmf/otamanager/otaactor_service/SetAppUpdateResponse";
+  // GetAppList request/response topics (relocated from OtamClientService —
+  // ota_monitor now talks to otaactor_service exclusively).
+  static constexpr const char* kTopicGetAppList =
+      "/mmf/otamanager/otaactor_service/GetAppList";
+  static constexpr const char* kTopicGetAppListResponse =
+      "/mmf/otamanager/otaactor_service/GetAppListResponse";
   static constexpr const char* kTopicSetServiceModeRequest =
       "mmf/lifecyclemgr/SetServiceModeRequest";
   static constexpr const char* kTopicSetServiceModeResponse =
       "mmf/lifecyclemgr/SetServiceModeResponse";
 
-  // ROS2/rosbridge compatible topic constants (rt/ prefix follows rosbridge DDS topic naming convention)
-  static constexpr const char* kTopicRosGetAppUpdateSettings =
-      "rt/mmf/otamanager/otaactor_service/GetAppUpdateSettings";
-  static constexpr const char* kTopicRosGetAppUpdateSettingsResponse =
-      "rt/mmf/otamanager/otaactor_service/GetAppUpdateSettingsResponse";
-  static constexpr const char* kTopicRosSetAppUpdateSettings =
-      "rt/mmf/otamanager/otaactor_service/SetAppUpdateSettings";
-  static constexpr const char* kTopicRosSetAppUpdateSettingsResponse =
-      "rt/mmf/otamanager/otaactor_service/SetAppUpdateSettingsResponse";
-  static constexpr const char* kTopicRosGetAppUpdateState =
-      "rt/mmf/otamanager/otaactor_service/GetAppUpdateState";
-  static constexpr const char* kTopicRosGetAppUpdateStateResponse =
-      "rt/mmf/otamanager/otaactor_service/GetAppUpdateStateResponse";
-  static constexpr const char* kTopicRosSetAppUpdate =
-      "rt/mmf/otamanager/otaactor_service/SetAppUpdate";
-  static constexpr const char* kTopicRosSetAppUpdateResponse =
-      "rt/mmf/otamanager/otaactor_service/SetAppUpdateResponse";
+  // ROS 2 / rosbridge interop is provided by service/extension/ros2/dds_bridge/
+  // (a dynamic-IDL forwarder running inside the rosbridge container). The
+  // bridge subscribes to these raw bare-DDS topics and republishes on the
+  // rt/-prefixed equivalents using ROS-canonical type names. The earlier
+  // attempt at registering the rt/ topics from OtaManager itself never
+  // matched on the wire (raw IDL TypeObject vs rosidl's TypeObject) so
+  // those constants were removed.
 
   /**
    * @brief DDS registry mapping topic names to DDS implementations
@@ -390,6 +407,18 @@ class OtamActorService: public OtamService {
         OtamActorService* service_;
   };
   std::shared_ptr<SetAppUpdateListener> set_app_update_listener_;
+
+  class GetAppListListener : public eprosima::fastdds::dds::DataReaderListener {
+    public:
+        GetAppListListener(OtamActorService* service) : service_(service) {}
+
+        void on_data_available(eprosima::fastdds::dds::DataReader* reader) override;
+
+    private:
+        /** @brief Pointer to the parent service instance */
+        OtamActorService* service_;
+  };
+  std::shared_ptr<GetAppListListener> get_app_list_listener_;
 
   class SetServiceModeResponseListener : public eprosima::fastdds::dds::DataReaderListener {
     public:
