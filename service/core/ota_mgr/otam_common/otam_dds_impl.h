@@ -73,7 +73,7 @@ public:
             "fastdds.ignore_local_endpoints", "true");
         // Disable XTypes TypeObject discovery so peers fall back to
         // type-name-only matching. The dynamic-IDL adapter
-        // (ota_dds_bridge) parses the same IDL files at runtime but
+        // (dds_bridge) parses the same IDL files at runtime but
         // produces a TypeObject with different member IDs / hashes
         // than the IDL-compiled PubSubType OtaManager registers.
         // Without this property OtaManager's strict reader rejects

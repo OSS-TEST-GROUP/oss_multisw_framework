@@ -1,4 +1,4 @@
-// ota_dds_bridge entry-point.
+// dds_bridge entry-point.
 //
 // Wires OtaBridge to the full set of OtaManager topics that
 // ota_monitor (Dart) currently uses, then idles until SIGINT/SIGTERM.
