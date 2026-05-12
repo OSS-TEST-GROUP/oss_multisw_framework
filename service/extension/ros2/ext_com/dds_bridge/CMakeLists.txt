@@ -5,7 +5,10 @@ project("ota_dds_bridge")
 include_directories(.)
 link_libraries(pthread fastcdr fastdds)
 
-add_executable(${PROJECT_NAME} main.cc)
+add_executable(${PROJECT_NAME}
+    main.cc
+    ota_bridge.cc
+)
 
 install(TARGETS ${PROJECT_NAME}
     RUNTIME DESTINATION bin

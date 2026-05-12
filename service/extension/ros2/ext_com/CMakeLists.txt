@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.5)
 project ( "extension_communication" )
 
 ## Sub Directory
-
+add_subdirectory ( dds_bridge )
 
 ## Source
 set ( MAIN_SRC main.cc )
