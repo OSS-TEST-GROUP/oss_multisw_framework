@@ -297,28 +297,13 @@ class OtamActorService: public OtamService {
   static constexpr const char* kTopicSetServiceModeResponse =
       "mmf/lifecyclemgr/SetServiceModeResponse";
 
-  // ROS2/rosbridge compatible topic constants (rt/ prefix follows rosbridge DDS topic naming convention)
-  static constexpr const char* kTopicRosGetAppUpdateSettings =
-      "rt/mmf/otamanager/otaactor_service/GetAppUpdateSettings";
-  static constexpr const char* kTopicRosGetAppUpdateSettingsResponse =
-      "rt/mmf/otamanager/otaactor_service/GetAppUpdateSettingsResponse";
-  static constexpr const char* kTopicRosSetAppUpdateSettings =
-      "rt/mmf/otamanager/otaactor_service/SetAppUpdateSettings";
-  static constexpr const char* kTopicRosSetAppUpdateSettingsResponse =
-      "rt/mmf/otamanager/otaactor_service/SetAppUpdateSettingsResponse";
-  static constexpr const char* kTopicRosGetAppUpdateState =
-      "rt/mmf/otamanager/otaactor_service/GetAppUpdateState";
-  static constexpr const char* kTopicRosGetAppUpdateStateResponse =
-      "rt/mmf/otamanager/otaactor_service/GetAppUpdateStateResponse";
-  static constexpr const char* kTopicRosSetAppUpdate =
-      "rt/mmf/otamanager/otaactor_service/SetAppUpdate";
-  static constexpr const char* kTopicRosSetAppUpdateResponse =
-      "rt/mmf/otamanager/otaactor_service/SetAppUpdateResponse";
-  // GetAppList rosbridge-compatible variants
-  static constexpr const char* kTopicRosGetAppList =
-      "rt/mmf/otamanager/otaactor_service/GetAppList";
-  static constexpr const char* kTopicRosGetAppListResponse =
-      "rt/mmf/otamanager/otaactor_service/GetAppListResponse";
+  // ROS 2 / rosbridge interop is provided by service/extension/ros2/dds_bridge/
+  // (a dynamic-IDL forwarder running inside the rosbridge container). The
+  // bridge subscribes to these raw bare-DDS topics and republishes on the
+  // rt/-prefixed equivalents using ROS-canonical type names. The earlier
+  // attempt at registering the rt/ topics from OtaManager itself never
+  // matched on the wire (raw IDL TypeObject vs rosidl's TypeObject) so
+  // those constants were removed.
 
   /**
    * @brief DDS registry mapping topic names to DDS implementations

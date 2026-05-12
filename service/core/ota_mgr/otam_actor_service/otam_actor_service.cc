@@ -58,73 +58,50 @@ void OtamActorService::Initialize() {
 
     try {
 
-    // Initialize GetAppUpdateSettings (Request) - raw DDS + ROS2/rosbridge
+    // Initialize GetAppUpdateSettings (Request)
     auto get_settings_type =
         std::make_shared<otamanager::GetAppUpdateSettingsPubSubType>();
     get_app_update_settings_listener_ = std::make_shared<GetAppUpdateSettingsListener>(this);
     CreateDdsForTopic<otamanager::GetAppUpdateSettings>(kTopicGetAppUpdateSettings,
                       get_settings_type, get_app_update_settings_listener_);
-    CreateDdsForTopic<otamanager::GetAppUpdateSettings>(kTopicRosGetAppUpdateSettings,
-                      get_settings_type, get_app_update_settings_listener_);
-
-    // Initialize GetAppUpdateSettingsResponse (Response) - raw DDS + ROS2/rosbridge
+    // Initialize GetAppUpdateSettingsResponse (Response)
     auto get_settings_resp_type =
         std::make_shared<otamanager::GetAppUpdateSettingsResponsePubSubType>();
     CreateDdsForTopic<otamanager::GetAppUpdateSettingsResponse>(kTopicGetAppUpdateSettingsResponse,
                       get_settings_resp_type);
-    CreateDdsForTopic<otamanager::GetAppUpdateSettingsResponse>(kTopicRosGetAppUpdateSettingsResponse,
-                      get_settings_resp_type);
-
-    // Initialize SetAppUpdateSettings (Request) - raw DDS + ROS2/rosbridge
+    // Initialize SetAppUpdateSettings (Request)
     auto set_settings_type =
         std::make_shared<otamanager::SetAppUpdateSettingsPubSubType>();
     set_app_update_settings_listener_ = std::make_shared<SetAppUpdateSettingsListener>(this);
     CreateDdsForTopic<otamanager::SetAppUpdateSettings>(kTopicSetAppUpdateSettings,
                       set_settings_type, set_app_update_settings_listener_);
-    CreateDdsForTopic<otamanager::SetAppUpdateSettings>(kTopicRosSetAppUpdateSettings,
-                      set_settings_type, set_app_update_settings_listener_);
-
-    // Initialize SetAppUpdateSettingsResponse (Response) - raw DDS + ROS2/rosbridge
+    // Initialize SetAppUpdateSettingsResponse (Response)
     auto set_settings_resp_type =
         std::make_shared<otamanager::SetAppUpdateSettingsResponsePubSubType>();
     CreateDdsForTopic<otamanager::SetAppUpdateSettingsResponse>(kTopicSetAppUpdateSettingsResponse,
                       set_settings_resp_type);
-    CreateDdsForTopic<otamanager::SetAppUpdateSettingsResponse>(kTopicRosSetAppUpdateSettingsResponse,
-                      set_settings_resp_type);
-
-    // Initialize GetAppUpdateState (Request) - raw DDS + ROS2/rosbridge
+    // Initialize GetAppUpdateState (Request)
     auto get_state_type =
         std::make_shared<otamanager::GetAppUpdateStatePubSubType>();
     get_app_update_state_listener_ = std::make_shared<GetAppUpdateStateListener>(this);
     CreateDdsForTopic<otamanager::GetAppUpdateState>(kTopicGetAppUpdateState, get_state_type,
                       get_app_update_state_listener_);
-    CreateDdsForTopic<otamanager::GetAppUpdateState>(kTopicRosGetAppUpdateState, get_state_type,
-                      get_app_update_state_listener_);
-
-    // Initialize GetAppUpdateStateResponse (Response) - raw DDS + ROS2/rosbridge
+    // Initialize GetAppUpdateStateResponse (Response)
     auto get_state_resp_type =
         std::make_shared<otamanager::GetAppUpdateStateResponsePubSubType>();
     CreateDdsForTopic<otamanager::GetAppUpdateStateResponse>(kTopicGetAppUpdateStateResponse,
                       get_state_resp_type);
-    CreateDdsForTopic<otamanager::GetAppUpdateStateResponse>(kTopicRosGetAppUpdateStateResponse,
-                      get_state_resp_type);
-
-    // Initialize SetAppUpdate (Request) - raw DDS + ROS2/rosbridge
+    // Initialize SetAppUpdate (Request)
     auto set_update_type =
         std::make_shared<otamanager::SetAppUpdatePubSubType>();
     set_app_update_listener_ = std::make_shared<SetAppUpdateListener>(this);
     CreateDdsForTopic<otamanager::SetAppUpdate>(kTopicSetAppUpdate, set_update_type, set_app_update_listener_);
-    CreateDdsForTopic<otamanager::SetAppUpdate>(kTopicRosSetAppUpdate, set_update_type, set_app_update_listener_);
-
-    // Initialize SetAppUpdateResponse (Response) - raw DDS + ROS2/rosbridge
+    // Initialize SetAppUpdateResponse (Response)
     auto set_update_resp_type =
         std::make_shared<otamanager::SetAppUpdateResponsePubSubType>();
     CreateDdsForTopic<otamanager::SetAppUpdateResponse>(kTopicSetAppUpdateResponse,
                       set_update_resp_type);
-    CreateDdsForTopic<otamanager::SetAppUpdateResponse>(kTopicRosSetAppUpdateResponse,
-                      set_update_resp_type);
-
-    // Initialize GetAppList (Request) - raw DDS + ROS2/rosbridge.
+    // Initialize GetAppList (Request)
     // Relocated from OtamClientService so ota_monitor can talk to
     // otaactor_service exclusively.
     auto get_app_list_type =
@@ -132,17 +109,11 @@ void OtamActorService::Initialize() {
     get_app_list_listener_ = std::make_shared<GetAppListListener>(this);
     CreateDdsForTopic<otamanager::GetAppList>(kTopicGetAppList,
                       get_app_list_type, get_app_list_listener_);
-    CreateDdsForTopic<otamanager::GetAppList>(kTopicRosGetAppList,
-                      get_app_list_type, get_app_list_listener_);
-
-    // Initialize GetAppListResponse (Response) - raw DDS + ROS2/rosbridge
+    // Initialize GetAppListResponse (Response)
     auto get_app_list_resp_type =
         std::make_shared<otamanager::GetAppListResponsePubSubType>();
     CreateDdsForTopic<otamanager::GetAppListResponse>(kTopicGetAppListResponse,
                       get_app_list_resp_type);
-    CreateDdsForTopic<otamanager::GetAppListResponse>(kTopicRosGetAppListResponse,
-                      get_app_list_resp_type);
-
     // Initialize SetServiceModeRequest (Publisher for lifecycle management)
     auto set_service_mode_type =
         std::make_shared<lifecyclemgr::SetServiceModeRequestPubSubType>();
@@ -871,12 +842,6 @@ void OtamActorService::PublishAppUpdateSettingsResponse(
   std::cout << "OtamActorService: Published "
             << "GetAppUpdateSettingsResponse - id: " << id
             << std::endl;
-
-  // Publish the same response on the ROS2/rosbridge channel
-  auto ros_it = dds_registry_.find(kTopicRosGetAppUpdateSettingsResponse);
-  if (ros_it != dds_registry_.end()) {
-    ros_it->second->Write(std::static_pointer_cast<void>(response));
-  }
 }
 
 void OtamActorService::PublishSetAppUpdateSettingsResponse(
@@ -902,12 +867,6 @@ void OtamActorService::PublishSetAppUpdateSettingsResponse(
   std::cout << "OtamActorService: Published "
             << "SetAppUpdateSettingsResponse - id: " << id
             << std::endl;
-
-  // Publish the same response on the ROS2/rosbridge channel
-  auto ros_it = dds_registry_.find(kTopicRosSetAppUpdateSettingsResponse);
-  if (ros_it != dds_registry_.end()) {
-    ros_it->second->Write(std::static_pointer_cast<void>(response));
-  }
 }
 
 void OtamActorService::PublishAppUpdateStateResponse(
@@ -935,12 +894,6 @@ void OtamActorService::PublishAppUpdateStateResponse(
   std::cout << "OtamActorService: Published "
             << "GetAppUpdateStateResponse - id: " << id
             << std::endl;
-
-  // Publish the same response on the ROS2/rosbridge channel
-  auto ros_it = dds_registry_.find(kTopicRosGetAppUpdateStateResponse);
-  if (ros_it != dds_registry_.end()) {
-    ros_it->second->Write(std::static_pointer_cast<void>(response));
-  }
 }
 
 void OtamActorService::PublishSetAppUpdateResponse(
@@ -983,12 +936,6 @@ void OtamActorService::PublishSetAppUpdateResponse(
   it->second->Write(std::static_pointer_cast<void>(response));
   std::cout << "OtamActorService: Published "
             << "SetAppUpdateResponse - id: " << id << std::endl;
-
-  // Publish the same response on the ROS2/rosbridge channel
-  auto ros_it = dds_registry_.find(kTopicRosSetAppUpdateResponse);
-  if (ros_it != dds_registry_.end()) {
-    ros_it->second->Write(std::static_pointer_cast<void>(response));
-  }
 
   // If the update started successfully, poll status in a background thread and notify clients.
   // Store the thread in notify_threads_ instead of detaching, so Stop() can safely join it.
@@ -1222,10 +1169,6 @@ void OtamActorService::OnGetAppListRequested(const otamanager::GetAppList& msg) 
     auto it_raw = dds_registry_.find(kTopicGetAppListResponse);
     if (it_raw != dds_registry_.end() && it_raw->second) {
         it_raw->second->Write(std::static_pointer_cast<void>(out));
-    }
-    auto it_ros = dds_registry_.find(kTopicRosGetAppListResponse);
-    if (it_ros != dds_registry_.end() && it_ros->second) {
-        it_ros->second->Write(std::static_pointer_cast<void>(out));
     }
     std::cout << "OtamActorService: GetAppListResponse id=" << resp.id()
               << " apps=" << resp.app_names().size() << std::endl;

@@ -30,7 +30,6 @@
       registration_response_dds_.reset();
       manager_ready_dds_.reset();
       app_status_dds_.reset();
-      app_status_dds_ros_.reset();
   }
 
   void OtamClientService::Initialize() {
@@ -85,10 +84,6 @@
           std::cout << "OtamClientService: Destroying app_status_dds_" << std::endl;
           app_status_dds_->Destroy();
       }
-      if (app_status_dds_ros_) {
-          std::cout << "OtamClientService: Destroying app_status_dds_ros_" << std::endl;
-          app_status_dds_ros_->Destroy();
-      }
       state_ = ServiceState::UNINITIALIZED;
   }
 
@@ -100,7 +95,6 @@
       registration_response_dds_ = std::make_unique<OtamDdsImpl<otamanager::SetOtaClientRegistrationResponse>>();
       manager_ready_dds_ = std::make_unique<OtamDdsImpl<otamanager::NotifyOtaManagerReady>>();
       app_status_dds_     = std::make_unique<OtamDdsImpl<otamanager::NotifyAppUpdateStatus>>();
-      app_status_dds_ros_ = std::make_unique<OtamDdsImpl<otamanager::NotifyAppUpdateStatus>>();
 
       // Create listener for incoming registration messages
       registration_listener_ = std::make_shared<RegistrationListener>(this);
@@ -128,10 +122,6 @@
       app_status_dds_->Create(TOPIC_APP_STATUS,
                                std::static_pointer_cast<void>(notify_app_update_status_),
                                nullptr);
-      app_status_dds_ros_->Create(TOPIC_ROS_APP_STATUS,
-                               std::static_pointer_cast<void>(notify_app_update_status_),
-                               nullptr);
-
       std::cout << "OtamClientService: DDS instances created." << std::endl;
   }
 
@@ -321,10 +311,6 @@
                         << app_name << ", Status: " << status << std::endl;
           } else {
               throw std::runtime_error("App status DDS publisher not initialized");
-          }
-          // Publish the same message on the ROS2/rosbridge channel
-          if (app_status_dds_ros_) {
-              app_status_dds_ros_->Write(std::static_pointer_cast<void>(status_message));
           }
       }
       catch (const std::exception& e) {

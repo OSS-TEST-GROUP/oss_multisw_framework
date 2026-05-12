@@ -195,7 +195,6 @@ class OtamDiagnosticService;
        */
       std::unique_ptr<OtamDds> app_status_dds_;
       /** @brief ROS2/rosbridge channel publisher for NotifyAppUpdateStatus */
-      std::unique_ptr<OtamDds> app_status_dds_ros_;
 
       std::shared_ptr<otamanager::SetOtaClientRegistrationPubSubType> set_ota_client_reg_;
       std::shared_ptr<otamanager::SetOtaClientRegistrationResponsePubSubType> set_ota_client_reg_res_;
@@ -279,7 +278,6 @@ class OtamDiagnosticService;
       static constexpr const char* TOPIC_APP_STATUS = "/mmf/otamanager/otaclient_service/NotifyAppUpdateStatus";
 
       /** @brief ROS2/rosbridge compatible topic name (rt/ prefix) */
-      static constexpr const char* TOPIC_ROS_APP_STATUS = "rt/mmf/otamanager/otaclient_service/NotifyAppUpdateStatus";
 
       /** @brief Flag indicating if an OTA session is currently active */
       bool is_session_active_;
