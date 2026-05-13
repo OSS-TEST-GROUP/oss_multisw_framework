@@ -48,11 +48,12 @@ int main(int argc, char** argv) {
         });
     };
 
-    const std::string actor_idl  = "ota_mgr/OtamActorServiceMsg.idl";
-    const std::string client_idl = "ota_mgr/OtamClientServiceMsg.idl";
+    const std::string actor_idl     = "ota_mgr/OtamActorServiceMsg.idl";
+    const std::string client_idl    = "ota_mgr/OtamClientServiceMsg.idl";
+    const std::string heartbeat_idl = "ota_mgr/NotifyOtaMgrHeartbeat.idl";
     bool ok = true;
 
-    // ── otaactor_service: 5 request/response pairs (10 topics) ─────────────
+    // ── otaactor_service: 6 request/response pairs (12 topics) ─────────────
     const std::string ap = "/mmf/otamanager/otaactor_service/";
     ok &= add("GetAppList",                   actor_idl, ap + "GetAppList",                   /*ros→raw*/true);
     ok &= add("GetAppListResponse",           actor_idl, ap + "GetAppListResponse",           /*raw→ros*/false);
@@ -64,6 +65,10 @@ int main(int argc, char** argv) {
     ok &= add("GetAppUpdateStateResponse",    actor_idl, ap + "GetAppUpdateStateResponse",    false);
     ok &= add("SetAppUpdate",                 actor_idl, ap + "SetAppUpdate",                 true);
     ok &= add("SetAppUpdateResponse",         actor_idl, ap + "SetAppUpdateResponse",         false);
+    // Delete-client API surfaces from ota_monitor's tree trash-icon
+    // (oss-agent3 client-list-persist round).
+    ok &= add("DeleteOtaClientRegistration",         actor_idl, ap + "DeleteOtaClientRegistration",         /*ros→raw*/true);
+    ok &= add("DeleteOtaClientRegistrationResponse", actor_idl, ap + "DeleteOtaClientRegistrationResponse", /*raw→ros*/false);
 
     // ── otaclient_service: registration + manager broadcasts (4 topics) ────
     const std::string cp = "/mmf/otamanager/otaclient_service/";
@@ -71,6 +76,14 @@ int main(int argc, char** argv) {
     ok &= add("SetOtaClientRegistrationResponse", client_idl, cp + "SetOtaClientRegistrationResponse", /*raw→ros*/false);
     ok &= add("NotifyOtaManagerReady",            client_idl, cp + "NotifyOtaManagerReady",            /*raw→ros*/false);
     ok &= add("NotifyAppUpdateStatus",            client_idl, cp + "NotifyAppUpdateStatus",            /*raw→ros*/false);
+
+    // ── diagnostic_service: heartbeat (Manager → monitor only) ─────────────
+    // Surfaces the periodic NotifyOtaMgrHeartbeat publish so the monitor's
+    // Client/Manager Status card can show seq + ts. Without this entry the
+    // bare-DDS publisher's type name doesn't line up with the rmw_fastrtps
+    // subscriber rosbridge spawns, and the topic stays invisible to ros2.
+    const std::string dp = "/mmf/otamanager/diagnostic_service/";
+    ok &= add("NotifyOtaMgrHeartbeat", heartbeat_idl, dp + "NotifyOtaMgrHeartbeat", /*raw→ros*/false);
 
     if (!ok) {
         std::cerr << "[bridge] one or more pairs failed to register\n";
