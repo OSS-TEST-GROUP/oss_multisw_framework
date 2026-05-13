@@ -31,8 +31,14 @@ class ContainerHealthMonitor {
   protected:
     std::map<std::string, bool> prev_state_;  // container_name -> was_running
 
+    // Per-service liveness cache: service_name -> (last_seen_pid, was_alive).
+    // Tracks the PID checked last cycle to detect the alive→dead transition
+    // for individual ROS2 node processes inside a still-running container.
+    std::map<std::string, std::pair<uint64_t, bool>> prev_service_;
+
   private:
     void PollLoop();
+    void PollServicesInContainer(const std::string& container_name);
 
     std::thread       poll_thread_;
     std::atomic<bool> running_{false};

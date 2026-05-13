@@ -155,6 +155,27 @@ int32_t ServiceMonitor::NodeCount(std::string service){
 }
 
 
+void ServiceMonitor::OnServiceProcessDied(const std::string& service_name,
+                                          int32_t exit_code) {
+    LOG_DEBUG("ServiceMonitor::OnServiceProcessDied service=" << service_name
+              << " exit_code=" << exit_code);
+
+    std::shared_ptr<ServiceRegistry> registry = ADSWManager::Get()->GetServiceRegistry();
+    if (!registry) return;
+
+    std::shared_ptr<Service> svc = registry->GetService(service_name);
+    if (!svc) {
+        LOG_DEBUG("ServiceMonitor::OnServiceProcessDied unknown service: " << service_name);
+        return;
+    }
+
+    svc->SetServiceState(ServiceState::NOT_RUNNING);
+    svc->SetExitCode(exit_code);
+    svc->SetPID(0);
+
+    NotifyServiceState();
+}
+
 void ServiceMonitor::OnContainerStateChanged(const std::string& container_name,
                                              bool is_running,
                                              int32_t exit_code) {

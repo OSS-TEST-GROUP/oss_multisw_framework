@@ -138,6 +138,11 @@ add_executable ( LifecycleAutowareRecoveryE2ETest
                 test_lifecycle_autoware_recovery_e2e.cc
                 )
 
+# L3 E2E node-kill (PID polling) test with real autoware container
+add_executable ( LifecycleAutowareNodeKillE2ETest
+                test_lifecycle_autoware_node_kill_e2e.cc
+                )
+
 # L3 E2E OTA mode transition test with real autoware container
 add_executable ( LifecycleAutowareOtaE2ETest
                 test_lifecycle_autoware_ota_e2e.cc
@@ -168,6 +173,7 @@ gtest_discover_tests ( LifecycleAutowareStopE2ETest )
 gtest_discover_tests ( LifecycleAutowarePollingE2ETest )
 gtest_discover_tests ( LifecycleAutowareCrashE2ETest )
 gtest_discover_tests ( LifecycleAutowareRecoveryE2ETest )
+gtest_discover_tests ( LifecycleAutowareNodeKillE2ETest )
 gtest_discover_tests ( LifecycleAutowareOtaE2ETest )
 
 
@@ -194,6 +200,7 @@ install ( TARGETS
                 LifecycleAutowarePollingE2ETest
                 LifecycleAutowareCrashE2ETest
                 LifecycleAutowareRecoveryE2ETest
+                LifecycleAutowareNodeKillE2ETest
                 LifecycleAutowareOtaE2ETest
     RUNTIME DESTINATION bin/unittest/lifecycle_mgr
     LIBRARY DESTINATION lib

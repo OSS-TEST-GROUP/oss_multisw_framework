@@ -37,6 +37,12 @@ class ServiceMonitor {
                                  bool is_running,
                                  int32_t exit_code);
 
+    // Called by ContainerHealthMonitor when an individual service's process
+    // (identified by stored PID) is detected dead inside a running container.
+    // SIGKILL inside a healthy container is invisible to docker-inspect-based
+    // monitoring; this path handles it via per-PID polling.
+    void OnServiceProcessDied(const std::string& service_name, int32_t exit_code);
+
   private:
     std::shared_ptr<ROSServiceDiscovery> ros_service_discovery_;
     std::map<std::string, std::vector<std::string>> ros_service_node_list_;
