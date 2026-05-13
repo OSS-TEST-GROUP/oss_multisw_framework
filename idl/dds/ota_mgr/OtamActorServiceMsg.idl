@@ -106,16 +106,49 @@ module otamanager {
 [Topic] "/mmf/otamanager/otaactor_service/GetAppListResponse"
 
 Parallel arrays:
-  app_names[i]        — application name (deduplicated, sorted)
-  owner_client_ids[i] — id of the client that registered app_names[i]
-                         (when the same app is registered by multiple
-                          clients, the lowest client_id wins)
+  app_names[i]          — application name (deduplicated, sorted)
+  owner_client_ids[i]   — id of the client that registered app_names[i]
+                            (when the same app is registered by multiple
+                             clients, the lowest client_id wins)
+  owner_client_names[i] — registered name of owner_client_ids[i], so the
+                            ota_monitor tree can label clients without a
+                            separate query
 **/
 module otamanager {
     struct GetAppListResponse {
         long id;
         sequence<string> app_names;
         sequence<long>   owner_client_ids;
+        sequence<string> owner_client_names;
+        ReturnValue ret_code;
+    };
+};
+
+/**
+[Topic] "/mmf/otamanager/otaactor_service/DeleteOtaClientRegistration"
+
+Remove a client and all its app entries from the Manager's registry,
+addressed by client_id. The Manager persists the change so the
+registration does not come back on restart.
+**/
+module otamanager {
+    struct DeleteOtaClientRegistration {
+        long id;
+        long client_id;
+    };
+};
+
+/**
+[Topic] "/mmf/otamanager/otaactor_service/DeleteOtaClientRegistrationResponse"
+
+ret_code:
+  SUCCESS — client_id was present and removed
+  FAIL    — client_id not found (no-op)
+**/
+module otamanager {
+    struct DeleteOtaClientRegistrationResponse {
+        long id;
+        long client_id;
         ReturnValue ret_code;
     };
 };

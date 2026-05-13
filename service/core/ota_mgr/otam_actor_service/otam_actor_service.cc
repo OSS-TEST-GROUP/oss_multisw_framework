@@ -114,6 +114,20 @@ void OtamActorService::Initialize() {
         std::make_shared<otamanager::GetAppListResponsePubSubType>();
     CreateDdsForTopic<otamanager::GetAppListResponse>(kTopicGetAppListResponse,
                       get_app_list_resp_type);
+    // Initialize DeleteOtaClientRegistration (Request) — operator-driven
+    // removal of a registered client and all its apps.
+    auto delete_client_reg_type =
+        std::make_shared<otamanager::DeleteOtaClientRegistrationPubSubType>();
+    delete_client_registration_listener_ =
+        std::make_shared<DeleteClientRegistrationListener>(this);
+    CreateDdsForTopic<otamanager::DeleteOtaClientRegistration>(
+        kTopicDeleteOtaClientRegistration, delete_client_reg_type,
+        delete_client_registration_listener_);
+    // Initialize DeleteOtaClientRegistrationResponse (Response)
+    auto delete_client_reg_resp_type =
+        std::make_shared<otamanager::DeleteOtaClientRegistrationResponsePubSubType>();
+    CreateDdsForTopic<otamanager::DeleteOtaClientRegistrationResponse>(
+        kTopicDeleteOtaClientRegistrationResponse, delete_client_reg_resp_type);
     // Initialize SetServiceModeRequest (Publisher for lifecycle management)
     auto set_service_mode_type =
         std::make_shared<lifecyclemgr::SetServiceModeRequestPubSubType>();
@@ -1176,10 +1190,18 @@ void OtamActorService::OnGetAppListRequested(const otamanager::GetAppList& msg) 
 
 // Pure aggregator. Static so unit tests don't need a live OtamActorService
 // instance (and don't need to touch DDS at all). Logic relocated unchanged
-// from OtamClientService::BuildGetAppListResponse.
+// from OtamClientService::BuildGetAppListResponse, then extended to also
+// emit owner_client_names parallel to owner_client_ids.
 otamanager::GetAppListResponse OtamActorService::BuildGetAppListResponse(
     int64_t request_id,
     const std::map<int32_t, OtaClientInfo>& clients) {
+    // Step 0: build a quick (client_id -> client_name) lookup so we can
+    //         emit owner_client_names alongside owner_client_ids.
+    std::map<int32_t, std::string> id_to_name;
+    for (const auto& [cid, info] : clients) {
+        id_to_name[cid] = info.client_name;
+    }
+
     // Step 1: dedupe — for each app name, remember the lowest client_id
     //         that registered it. std::map keeps insertion of first
     //         (lowest) value naturally because we iterate clients in key
@@ -1198,17 +1220,73 @@ otamanager::GetAppListResponse OtamActorService::BuildGetAppListResponse(
     //         (std::map iteration order).
     std::vector<std::string> names;
     std::vector<int32_t>     owners;
+    std::vector<std::string> owner_names;
     names.reserve(app_to_owner.size());
     owners.reserve(app_to_owner.size());
+    owner_names.reserve(app_to_owner.size());
     for (const auto& [app, owner] : app_to_owner) {
         names.push_back(app);
         owners.push_back(owner);
+        auto nit = id_to_name.find(owner);
+        owner_names.push_back(nit != id_to_name.end() ? nit->second : std::string{});
     }
 
     otamanager::GetAppListResponse resp;
     resp.id(request_id);
     resp.app_names(names);
     resp.owner_client_ids(owners);
+    resp.owner_client_names(owner_names);
     resp.ret_code(ReturnValue::SUCCESS);
     return resp;
+}
+
+void OtamActorService::DeleteClientRegistrationListener::on_data_available(
+    eprosima::fastdds::dds::DataReader* reader) {
+    otamanager::DeleteOtaClientRegistration message;
+    eprosima::fastdds::dds::SampleInfo info;
+
+    try {
+        if (reader->take_next_sample(&message, &info) == eprosima::fastdds::dds::RETCODE_OK) {
+            if (info.valid_data) {
+                service_->OnDeleteClientRegistrationRequested(message);
+            } else {
+                std::cout << "DeleteClientRegistrationListener: Received invalid data sample" << std::endl;
+            }
+        } else {
+            std::cout << "DeleteClientRegistrationListener: Failed to read message sample" << std::endl;
+        }
+    } catch (const std::exception& e) {
+        std::string err_msg = "DeleteClientRegistrationListener: Exception in data callback: "
+                              + std::string(e.what());
+        std::cerr << err_msg << std::endl;
+        if (service_->otam_diagnostic_service_) {
+            service_->otam_diagnostic_service_->PublishOtaMgrInfo(
+                static_cast<int32_t>(OtamError::FAILED), err_msg);
+        }
+    }
+}
+
+void OtamActorService::OnDeleteClientRegistrationRequested(
+    const otamanager::DeleteOtaClientRegistration& msg) {
+    const int32_t client_id = static_cast<int32_t>(msg.client_id());
+    ReturnValue ret = ReturnValue::FAIL;
+    if (otam_client_service_) {
+        ret = otam_client_service_->DeleteClientById(client_id);
+    } else {
+        std::cerr << "OtamActorService::OnDeleteClientRegistrationRequested — "
+                     "OtamClientService not connected" << std::endl;
+    }
+
+    otamanager::DeleteOtaClientRegistrationResponse resp;
+    resp.id(msg.id());
+    resp.client_id(client_id);
+    resp.ret_code(ret);
+    auto out = std::make_shared<otamanager::DeleteOtaClientRegistrationResponse>(resp);
+    auto it = dds_registry_.find(kTopicDeleteOtaClientRegistrationResponse);
+    if (it != dds_registry_.end() && it->second) {
+        it->second->Write(std::static_pointer_cast<void>(out));
+    }
+    std::cout << "OtamActorService: DeleteOtaClientRegistrationResponse id="
+              << resp.id() << " client_id=" << client_id
+              << " ret=" << static_cast<int>(ret) << std::endl;
 }

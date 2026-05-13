@@ -115,6 +115,16 @@ class OtamDiagnosticService;
       std::map<int32_t, OtaClientInfo> GetClientInfoListSnapshot() const;
 
       /**
+       * @brief Removes a previously registered client and all its apps
+       *        addressed by client_id. The registry is persisted to disk
+       *        after a successful delete.
+       *
+       * @return ReturnValue::SUCCESS if client_id was found and removed,
+       *         ReturnValue::FAIL    if no entry matched (no-op).
+       */
+      ReturnValue DeleteClientById(int32_t client_id);
+
+      /**
        * @brief Sets the diagnostic service for error reporting
        * @param svc Pointer to OtamDiagnosticService
        */
@@ -305,13 +315,42 @@ class OtamDiagnosticService;
 
       /**
        * @brief Reports errors to the diagnostic service
-       * 
+       *
        * Logs error messages and forwards them to the diagnostic
        * service for monitoring and troubleshooting.
-       * 
+       *
        * @param error_message Description of the error that occurred
        */
       void ReportErrorToDiagnosticService(int32_t err_code, const std::string& error_message);
+
+      /**
+       * @brief Reads ota_client_info_list_ from a JSON file. Missing or
+       *        malformed files are tolerated (treated as empty registry).
+       *
+       * Defaults to "config/otam_client_apps.json"; overridable via the
+       * OTAM_CLIENT_APPS_CONFIG environment variable. Called by
+       * Initialize() so previously-registered clients are restored
+       * across Manager restarts.
+       */
+      void LoadClientListFromFile();
+
+      /**
+       * @brief Writes ota_client_info_list_ to the same JSON file used
+       *        by LoadClientListFromFile(). Best-effort: write errors
+       *        are reported through the diagnostic service but do not
+       *        throw, since persistence failures must not break the
+       *        live request being serviced.
+       */
+      void SaveClientListToFile() const;
+
+  public:
+      /** @brief Default config path (relative to Manager working dir).
+       *         Exposed so the free path-resolver function can fall
+       *         back to it when the OTAM_CLIENT_APPS_CONFIG env var is
+       *         unset. Treat as read-only.
+       */
+      static constexpr const char* DEFAULT_CLIENT_APPS_CONFIG_PATH =
+          "config/otam_client_apps.json";
   };
 
   #endif // OTAM_CLIENT_SERVICE_H_
