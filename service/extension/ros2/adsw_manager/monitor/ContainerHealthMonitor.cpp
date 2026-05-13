@@ -17,26 +17,25 @@ namespace ros2 {
 namespace adsw_manager {
 
 namespace {
-// Check if a service's node process is alive inside the container.
+// Check if a service's process tree is alive inside the container.
 //
 // We can't trust the stored PID: StartService captures the PID echoed by
-// `bash -c "... ros2 run pkg exe & echo $!"`, which is the bash subshell
-// (PPID=1 after the outer bash exits), NOT the C++ node binary. The wrapper
-// PID is reused fast by docker exec — `kill -0 <pid>` gives false positives.
+// `bash -c "... & echo $!"`, which is the bash subshell or ros2-cli wrapper,
+// NOT the actual node/binary. The wrapper PID also gets reused fast by
+// docker exec — `kill -0 <pid>` gives false positives.
 //
-// pgrep matched against the FULL command line catches the actual binary
-// (cmdline = `/opt/ros/humble/lib/<pkg>/<svc>`) and the ros2-cli wrapper
-// (cmdline = `python3 /opt/ros/humble/bin/ros2 run <pkg> <svc>`). The `$`
-// anchor restricts matches to processes whose cmdline ENDS with the service
-// name — that excludes our own check command (whose cmdline ends with quote
-// + shell punctuation) and the bash wrapper (whose cmdline ends with `$!`).
+// pgrep matched against the FULL command line (-f) catches the relevant
+// process. The `$` end-anchor restricts matches to processes whose cmdline
+// ENDS with the match token — that excludes the bash wrapper (cmdline ends
+// with `$!`) and our own check shell (cmdline ends with quote/punctuation).
 //
-// pkill -9 -f <svc> kills wrapper + ros2-cli + binary; once they're gone,
-// pgrep returns zero matches → we report dead.
+// `token` should come from Service::ResolveProcessMatchToken(), which picks
+// launchfile / name / package / explicit-override appropriately.
 bool IsServiceAliveInContainer(const std::string& container,
-                                const std::string& service_name) {
+                                const std::string& token) {
+    if (token.empty()) return true;  // no token → can't check; assume alive
     std::string cmd = "docker exec " + container
-                    + " pgrep -f " + service_name + "\\$"
+                    + " pgrep -f " + token + "\\$"
                     + " >/dev/null 2>&1 && echo alive || echo dead";
     FILE* fp = popen(cmd.c_str(), "r");
     if (!fp) return true;  // can't check — don't false-positive a death
@@ -148,25 +147,32 @@ void ContainerHealthMonitor::NotifyContainerState(const std::string& container_n
 
 void ContainerHealthMonitor::PollServicesInContainer(const std::string& container_name) {
     if (!ADSWManager::Get()) return;
-    auto registry = ADSWManager::Get()->GetServiceRegistry();
-    auto monitor  = ADSWManager::Get()->GetServiceMonitor();
+    auto controller = ADSWManager::Get()->GetServiceController();
+    auto registry   = ADSWManager::Get()->GetServiceRegistry();
+    auto monitor    = ADSWManager::Get()->GetServiceMonitor();
     if (!registry || !monitor) return;
+
+    const bool is_native = controller && controller->IsNativeExecution();
 
     auto services = registry->GetServicesByGroup(container_name);
     LOG_DEBUG("PollServicesInContainer container=" << container_name
-              << " services=" << services.size());
+              << " services=" << services.size()
+              << " native=" << (is_native ? "yes" : "no"));
     for (auto& svc : services) {
         // Poll any service with a known PID. State alone is unreliable:
         // ROSServiceDiscovery's NodeStarted callback sets state to INITIALIZING
         // via UpdateServiceState(CREATED) after StartService set it to RUNNING,
-        // so most of the time a healthy service sits at INITIALIZING. We treat
-        // a non-zero PID and a non-NOT_RUNNING state as "alive enough to watch".
+        // so most of the time a healthy service sits at INITIALIZING.
         ServiceState st = svc->GetServiceState();
         if (st == ServiceState::NOT_RUNNING) continue;
         uint64_t pid = svc->GetPID();
         if (pid == 0) continue;
 
+        // Pick the right cmdline token for this service's invocation mode:
+        // launchfile / name / package / explicit override.
+        const std::string token = svc->ResolveProcessMatchToken(is_native);
         const std::string& sname = svc->GetName();
+
         auto it = prev_service_.find(sname);
         // Reset cache entry if the PID changed (service restarted).
         if (it != prev_service_.end() && it->second.first != pid) {
@@ -174,16 +180,18 @@ void ContainerHealthMonitor::PollServicesInContainer(const std::string& containe
             it = prev_service_.end();
         }
 
-        bool alive = IsServiceAliveInContainer(container_name, sname);
+        bool alive = IsServiceAliveInContainer(container_name, token);
         bool prev_alive = (it != prev_service_.end()) ? it->second.second : true;
         LOG_DEBUG("PollSvc " << sname << " pid=" << pid
+                  << " token='" << token << "'"
                   << " state=" << static_cast<int>(st)
                   << " alive=" << (alive ? "yes" : "no")
                   << " prev_alive=" << (prev_alive ? "yes" : "no"));
 
         if (prev_alive && !alive) {
             LOG_DEBUG("ContainerHealthMonitor: service " << sname
-                      << " (pid=" << pid << ") died inside container " << container_name);
+                      << " (pid=" << pid << ", token='" << token << "') "
+                      << "died inside container " << container_name);
             // -1 sentinel: process died but we can't recover its exit code via
             // `kill -0`. PolicyOnFailure treats any non-zero as failure, so this
             // is consistent with the existing convention.

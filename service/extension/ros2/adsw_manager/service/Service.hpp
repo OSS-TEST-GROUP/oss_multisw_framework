@@ -41,6 +41,24 @@ class Service {
     void SetExitCode(int32_t code);
     int32_t GetExitCode();
 
+    // Optional explicit token used by liveness monitoring to find this
+    // service's process inside its container. Setting this overrides the
+    // launchfile/name/package auto-derivation done in ResolveProcessMatchToken.
+    // Use it for tricky cases like exec wrappers or fork-and-exit scripts
+    // where the launching script's name is not what survives in /proc.
+    void SetProcessMatchPattern(const std::string& pattern);
+    const std::string& GetProcessMatchPattern() const;
+
+    // Pick the cmdline-suffix that uniquely identifies this service's process
+    // in `pgrep -f <token>$`. Precedence:
+    //   1. Explicit ProcessMatchPattern if set
+    //   2. LaunchFile  (when ros2 launch is used)
+    //   3. Name        (when ros2 run is used)
+    //   4. Package     (when a binary or script is executed directly)
+    // The `is_native` flag distinguishes 3 from 4: with no launchfile, native
+    // execution uses package name as the binary; otherwise it's ros2 run.
+    std::string ResolveProcessMatchToken(bool is_native) const;
+
   private:
     std::string name_;
     ServiceType service_type_;
@@ -49,6 +67,7 @@ class Service {
     ServiceState service_state_;
     std::string packag_name_;
     std::string launch_file_;
+    std::string match_pattern_;
 
     int32_t max_nodes_;
     int32_t current_nodes_;

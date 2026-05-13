@@ -390,6 +390,9 @@ bool ServiceRegistry::Save() {
       ndservice["package"] = service->GetPackage();
       ndservice["name"] = service->GetName();
       ndservice["launchfile"] = service->GetLaunchFile();
+      if (!service->GetProcessMatchPattern().empty()) {
+        ndservice["match_pattern"] = service->GetProcessMatchPattern();
+      }
 
       // Convert integers to strings if you need consistent quoting; here leave
       // as int or convert explicitly
@@ -515,6 +518,10 @@ bool ServiceRegistry::LoadServiceSaved(const std::string &path) {
             std::string recoStr = serviceNode["recovery"].as<std::string>("");
             std::string enableStr = serviceNode["enabled"].as<std::string>("");
             std::string maxStr = serviceNode["max"].as<std::string>("");
+            // Optional liveness-monitoring hint. Use only when launchfile/name/
+            // package can't be auto-derived (exec wrappers, fork-and-exit scripts).
+            std::string matchPatternStr =
+                serviceNode["match_pattern"].as<std::string>("");
 
             ServiceType serviceType = ServiceType::NORMAL;
             RecoveryPolicy recoveryPolicy = RecoveryPolicy::R_DEFAULT;
@@ -551,6 +558,9 @@ bool ServiceRegistry::LoadServiceSaved(const std::string &path) {
 
             service->SetPackage(pkgStr);
             service->SetLaunchFile(lfileStr);
+            if (!matchPatternStr.empty()) {
+              service->SetProcessMatchPattern(matchPatternStr);
+            }
             AddService(service, groupname);
           }
         }

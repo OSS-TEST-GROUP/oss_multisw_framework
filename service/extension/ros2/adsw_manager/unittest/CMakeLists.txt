@@ -46,6 +46,7 @@ add_executable ( ADSWServiceMonitorTest ServiceMonitorTest.cpp
                  mock/MockADSWManager.cpp
                  ../monitor/ServiceMonitor.cpp
                  ../monitor/UpdateServiceInfo.cpp
+                 ../service/Service.cpp
                  ${GENERATED_DIR}/lifecycle/NotifyServiceStatePubSubTypes.cxx
                  ${GENERATED_DIR}/lifecycle/NotifyServiceStateTypeObjectSupport.cxx
                  ${GENERATED_DIR}/lifecycle/LifecycleCommonPubSubTypes.cxx
@@ -186,6 +187,7 @@ add_executable( ADSWContainerControllerTest ContinerControllerTest.cpp
 add_executable( ADSWContainerHealthMonitorTest ContainerHealthMonitorTest.cpp
                 ../monitor/ContainerHealthMonitor.cpp
                 ../service/Container.cpp
+                ../service/Service.cpp
                 mock/MockADSWManager.cpp
 )
 
@@ -195,6 +197,7 @@ add_executable( ADSWContainerDockerIntegrationTest
                 ../control/ContainerController.cpp
                 ../monitor/ContainerHealthMonitor.cpp
                 ../service/Container.cpp
+                ../service/Service.cpp
                 ../logger/Logger.cpp
                 mock/MockADSWManager.cpp
 )

@@ -11,12 +11,13 @@ Service::Service(const std::string& name, ServiceType service_type, RecoveryPoli
       service_state_(ServiceState::NOT_RUNNING),
       packag_name_(""),
       launch_file_(""),
+      match_pattern_(""),
       max_nodes_(0),
       current_nodes_(0),
       pid_(0),
       exit_code_(-1)
 {
-    
+
 }
 
 Service::~Service() {}
@@ -99,6 +100,35 @@ void Service::SetExitCode(int32_t code) {
 
 int32_t Service::GetExitCode() {
     return exit_code_;
+}
+
+void Service::SetProcessMatchPattern(const std::string& pattern) {
+    match_pattern_ = pattern;
+}
+
+const std::string& Service::GetProcessMatchPattern() const {
+    return match_pattern_;
+}
+
+std::string Service::ResolveProcessMatchToken(bool is_native) const {
+    // Explicit hint takes precedence — needed for exec wrappers, fork-and-exit
+    // launcher scripts, or anything else where the launching command name is
+    // NOT what survives in /proc after startup.
+    if (!match_pattern_.empty()) {
+        return match_pattern_;
+    }
+    // ros2 launch → cmdline ends with the launch file (after `ros2 launch pkg`).
+    if (!launch_file_.empty()) {
+        return launch_file_;
+    }
+    // Native execution with no launch file → the binary/script located by
+    // FindExecutablePath(package). Its cmdline tail is the package name
+    // (binaries) or the script path ending with the script name (scripts).
+    if (is_native) {
+        return packag_name_.empty() ? name_ : packag_name_;
+    }
+    // Default: ros2 run pkg name → cmdline ends with the executable name.
+    return name_;
 }
 
 } // namespace adsw_manager
