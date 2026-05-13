@@ -377,8 +377,14 @@
   }
 
   static std::string ResolveClientAppsConfigPath() {
-      if (const char* env_p = std::getenv("OTAM_CLIENT_APPS_CONFIG")) {
-          return std::string(env_p);
+      // Match the working convention used by Diagnostic/Vehicle services
+      // (DIAG_CONFIG_PATH / VEHICLE_CONFIG_PATH): a directory env var
+      // exported by Dockerfile.rel, code joins the filename. In the
+      // runtime image OtaManager's cwd is /oss while the seed config
+      // lives at /oss/bin/config/, so a relative default doesn't
+      // resolve — we rely on OTAM_CONFIG_PATH being set.
+      if (const char* base = std::getenv("OTAM_CONFIG_PATH")) {
+          return std::string(base) + "/otam_client_apps.json";
       }
       return OtamClientService::DEFAULT_CLIENT_APPS_CONFIG_PATH;
   }
