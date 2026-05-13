@@ -109,15 +109,25 @@ class OtamActorService: public OtamService {
   /**
    * @brief Handle GetAppList request — snapshots OtamClientService's
    *        registry, builds the response, and publishes it on
-   *        kTopicGetAppListResponse (and the rt/ rosbridge variant).
+   *        kTopicGetAppListResponse.
    */
   void OnGetAppListRequested(const otamanager::GetAppList& msg);
+
+  /**
+   * @brief Handle DeleteOtaClientRegistration request — removes the
+   *        client addressed by client_id from the registry (via
+   *        OtamClientService) and publishes the response.
+   */
+  void OnDeleteClientRegistrationRequested(
+      const otamanager::DeleteOtaClientRegistration& msg);
 
   /**
    * @brief Pure aggregator. Builds a GetAppListResponse from a snapshot
    *        of (client_id -> OtaClientInfo). Static so unit tests can
    *        exercise the dedupe / sort / "lowest client_id wins"
-   *        semantics without standing up DDS.
+   *        semantics without standing up DDS. Also fills the
+   *        owner_client_names parallel array (each index pairs with
+   *        owner_client_ids[i]).
    */
   static otamanager::GetAppListResponse BuildGetAppListResponse(
       int64_t request_id,
@@ -292,6 +302,12 @@ class OtamActorService: public OtamService {
       "/mmf/otamanager/otaactor_service/GetAppList";
   static constexpr const char* kTopicGetAppListResponse =
       "/mmf/otamanager/otaactor_service/GetAppListResponse";
+  // DeleteOtaClientRegistration — operator-driven removal of a client
+  // (and all its apps) from the Manager's persisted registry.
+  static constexpr const char* kTopicDeleteOtaClientRegistration =
+      "/mmf/otamanager/otaactor_service/DeleteOtaClientRegistration";
+  static constexpr const char* kTopicDeleteOtaClientRegistrationResponse =
+      "/mmf/otamanager/otaactor_service/DeleteOtaClientRegistrationResponse";
   static constexpr const char* kTopicSetServiceModeRequest =
       "mmf/lifecyclemgr/SetServiceModeRequest";
   static constexpr const char* kTopicSetServiceModeResponse =
@@ -419,6 +435,17 @@ class OtamActorService: public OtamService {
         OtamActorService* service_;
   };
   std::shared_ptr<GetAppListListener> get_app_list_listener_;
+
+  class DeleteClientRegistrationListener : public eprosima::fastdds::dds::DataReaderListener {
+    public:
+        DeleteClientRegistrationListener(OtamActorService* service) : service_(service) {}
+
+        void on_data_available(eprosima::fastdds::dds::DataReader* reader) override;
+
+    private:
+        OtamActorService* service_;
+  };
+  std::shared_ptr<DeleteClientRegistrationListener> delete_client_registration_listener_;
 
   class SetServiceModeResponseListener : public eprosima::fastdds::dds::DataReaderListener {
     public:

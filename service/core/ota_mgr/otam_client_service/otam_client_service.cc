@@ -1,6 +1,9 @@
   #include "otam_client_service.h"
   #include "otam_diagnostic_service/otam_diagnostic_service.h"
+  #include <cstdlib>
+  #include <fstream>
   #include <iostream>
+  #include <nlohmann/json.hpp>
 
   /**
    * @file otam_client_service.cc
@@ -44,6 +47,12 @@
     std::cout << "OtamClientService: Initializing with DDS setup." << std::endl;
 
       try {
+          // Restore previously-registered clients from disk before DDS
+          // comes up so the very first GetAppList query (or a fast
+          // SetOtaClientRegistration with the same client_name) sees
+          // them.
+          LoadClientListFromFile();
+
           // Initialize DDS infrastructure in proper order
           InitializeDDS();
           SetupPublishers();
@@ -221,6 +230,7 @@
           int32_t client_id = HandleClientRegistration(client_info);
 
           ota_client_info_list_[client_id] = client_info;
+          SaveClientListToFile();
 
           // Send registration response back to the client
           ReturnValue ret_code = (client_id >= 0) ? ReturnValue::SUCCESS : ReturnValue::FAIL;
@@ -350,4 +360,76 @@
   std::map<int32_t, OtaClientInfo>
   OtamClientService::GetClientInfoListSnapshot() const {
       return ota_client_info_list_;
+  }
+
+  ReturnValue OtamClientService::DeleteClientById(int32_t client_id) {
+      auto it = ota_client_info_list_.find(client_id);
+      if (it == ota_client_info_list_.end()) {
+          std::cout << "[OtamClientService] DeleteClientById(" << client_id
+                    << "): not found (no-op)" << std::endl;
+          return ReturnValue::FAIL;
+      }
+      std::cout << "[OtamClientService] Deleting client_id=" << client_id
+                << " (name=" << it->second.client_name << ")" << std::endl;
+      ota_client_info_list_.erase(it);
+      SaveClientListToFile();
+      return ReturnValue::SUCCESS;
+  }
+
+  static std::string ResolveClientAppsConfigPath() {
+      if (const char* env_p = std::getenv("OTAM_CLIENT_APPS_CONFIG")) {
+          return std::string(env_p);
+      }
+      return OtamClientService::DEFAULT_CLIENT_APPS_CONFIG_PATH;
+  }
+
+  void OtamClientService::LoadClientListFromFile() {
+      const std::string path = ResolveClientAppsConfigPath();
+      std::ifstream ifs(path);
+      if (!ifs.is_open()) {
+          std::cout << "[OtamClientService] Load: " << path
+                    << " not found, starting with empty registry" << std::endl;
+          return;
+      }
+      try {
+          nlohmann::json j = nlohmann::json::parse(ifs, nullptr, true);
+          const auto& clients = j.value("clients", nlohmann::json::array());
+          ota_client_info_list_.clear();
+          for (const auto& entry : clients) {
+              const int32_t cid = entry.value("client_id", -1);
+              if (cid < 0) continue;
+              OtaClientInfo info;
+              info.client_name = entry.value("client_name", std::string{});
+              for (const auto& app : entry.value("app_list", nlohmann::json::array())) {
+                  if (app.is_string()) info.app_names.push_back(app.get<std::string>());
+              }
+              ota_client_info_list_[cid] = std::move(info);
+          }
+          std::cout << "[OtamClientService] Loaded " << ota_client_info_list_.size()
+                    << " client(s) from " << path << std::endl;
+      } catch (const std::exception& e) {
+          std::cerr << "[OtamClientService] Load failed (" << path
+                    << "): " << e.what() << " — starting empty" << std::endl;
+          ota_client_info_list_.clear();
+      }
+  }
+
+  void OtamClientService::SaveClientListToFile() const {
+      const std::string path = ResolveClientAppsConfigPath();
+      nlohmann::json j;
+      auto& clients = j["clients"] = nlohmann::json::array();
+      for (const auto& [cid, info] : ota_client_info_list_) {
+          nlohmann::json e;
+          e["client_id"] = cid;
+          e["client_name"] = info.client_name;
+          e["app_list"] = info.app_names;
+          clients.push_back(std::move(e));
+      }
+      std::ofstream ofs(path);
+      if (!ofs.is_open()) {
+          std::cerr << "[OtamClientService] Save failed: cannot open "
+                    << path << " for write" << std::endl;
+          return;
+      }
+      ofs << j.dump(2) << std::endl;
   }

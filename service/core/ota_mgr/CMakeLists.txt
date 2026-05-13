@@ -87,4 +87,5 @@ install(DIRECTORY
 
 # config
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/config/otam_config.json
+              ${CMAKE_CURRENT_SOURCE_DIR}/config/otam_client_apps.json
     DESTINATION bin/config)

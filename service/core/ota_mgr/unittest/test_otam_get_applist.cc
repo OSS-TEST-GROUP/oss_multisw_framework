@@ -62,10 +62,12 @@ TEST(OtamClientServiceBuildGetAppList,
   for (size_t i = 0; i < expected.size(); ++i) {
     EXPECT_EQ(resp.app_names()[i], expected[i]) << "idx=" << i;
   }
-  // Parallel-array invariant: every owner is client 7.
+  // Parallel-array invariant: every owner is client 7 / "client_a".
   ASSERT_EQ(resp.owner_client_ids().size(), expected.size());
+  ASSERT_EQ(resp.owner_client_names().size(), expected.size());
   for (size_t i = 0; i < expected.size(); ++i) {
     EXPECT_EQ(resp.owner_client_ids()[i], 7) << "idx=" << i;
+    EXPECT_EQ(resp.owner_client_names()[i], "client_a") << "idx=" << i;
   }
 }
 
@@ -93,16 +95,21 @@ TEST(OtamClientServiceBuildGetAppList,
 
   // For shared_app the owner MUST be client 3 (the lowest id).
   ASSERT_EQ(resp.owner_client_ids().size(), expected_names.size());
+  ASSERT_EQ(resp.owner_client_names().size(), expected_names.size());
   for (size_t i = 0; i < expected_names.size(); ++i) {
     if (resp.app_names()[i] == "shared_app") {
       EXPECT_EQ(resp.owner_client_ids()[i], 3)
           << "shared_app must be owned by lowest client_id (3)";
+      EXPECT_EQ(resp.owner_client_names()[i], "three");
     } else if (resp.app_names()[i] == "ten_only") {
       EXPECT_EQ(resp.owner_client_ids()[i], 10);
+      EXPECT_EQ(resp.owner_client_names()[i], "ten");
     } else if (resp.app_names()[i] == "three_only") {
       EXPECT_EQ(resp.owner_client_ids()[i], 3);
+      EXPECT_EQ(resp.owner_client_names()[i], "three");
     } else if (resp.app_names()[i] == "seven_only") {
       EXPECT_EQ(resp.owner_client_ids()[i], 7);
+      EXPECT_EQ(resp.owner_client_names()[i], "seven");
     }
   }
 }
