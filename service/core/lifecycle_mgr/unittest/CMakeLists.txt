@@ -148,6 +148,11 @@ add_executable ( LifecycleAutowareLaunchKillE2ETest
                 test_lifecycle_autoware_launch_kill_e2e.cc
                 )
 
+# L3 E2E direct-binary execution test with real autoware container
+add_executable ( LifecycleAutowareDirectBinaryE2ETest
+                test_lifecycle_autoware_direct_binary_e2e.cc
+                )
+
 # L3 E2E OTA mode transition test with real autoware container
 add_executable ( LifecycleAutowareOtaE2ETest
                 test_lifecycle_autoware_ota_e2e.cc
@@ -180,6 +185,7 @@ gtest_discover_tests ( LifecycleAutowareCrashE2ETest )
 gtest_discover_tests ( LifecycleAutowareRecoveryE2ETest )
 gtest_discover_tests ( LifecycleAutowareNodeKillE2ETest )
 gtest_discover_tests ( LifecycleAutowareLaunchKillE2ETest )
+gtest_discover_tests ( LifecycleAutowareDirectBinaryE2ETest )
 gtest_discover_tests ( LifecycleAutowareOtaE2ETest )
 
 
@@ -208,6 +214,7 @@ install ( TARGETS
                 LifecycleAutowareRecoveryE2ETest
                 LifecycleAutowareNodeKillE2ETest
                 LifecycleAutowareLaunchKillE2ETest
+                LifecycleAutowareDirectBinaryE2ETest
                 LifecycleAutowareOtaE2ETest
     RUNTIME DESTINATION bin/unittest/lifecycle_mgr
     LIBRARY DESTINATION lib

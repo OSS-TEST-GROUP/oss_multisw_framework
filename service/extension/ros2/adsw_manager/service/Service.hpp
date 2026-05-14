@@ -49,14 +49,22 @@ class Service {
     void SetProcessMatchPattern(const std::string& pattern);
     const std::string& GetProcessMatchPattern() const;
 
+    // True when the service is launched as a direct binary or script via
+    //   `docker exec <c> bash -c "<package> & echo $!"`,
+    // bypassing ros2 run / ros2 launch. The package field carries the
+    // executable path or PATH-resolvable name. Set from YAML's
+    // `exec_type: "binary"` (default false → ros2 run/launch).
+    void SetDirectExec(bool direct);
+    bool IsDirectExec() const;
+
     // Pick the cmdline-suffix that uniquely identifies this service's process
     // in `pgrep -f <token>$`. Precedence:
     //   1. Explicit ProcessMatchPattern if set
-    //   2. LaunchFile  (when ros2 launch is used)
-    //   3. Name        (when ros2 run is used)
-    //   4. Package     (when a binary or script is executed directly)
-    // The `is_native` flag distinguishes 3 from 4: with no launchfile, native
-    // execution uses package name as the binary; otherwise it's ros2 run.
+    //   2. LaunchFile          (when ros2 launch is used)
+    //   3. Package             (when direct binary/script is executed)
+    //   4. Name                (when ros2 run is used — default)
+    // is_native (legacy host path) and is_direct_exec_ (in-container direct
+    // exec) both select branch 3. Either flag flips into the binary mode.
     std::string ResolveProcessMatchToken(bool is_native) const;
 
   private:
@@ -68,6 +76,7 @@ class Service {
     std::string packag_name_;
     std::string launch_file_;
     std::string match_pattern_;
+    bool is_direct_exec_;
 
     int32_t max_nodes_;
     int32_t current_nodes_;

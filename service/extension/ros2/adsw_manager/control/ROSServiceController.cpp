@@ -161,20 +161,30 @@ bool ROSServiceController::StartService(std::shared_ptr<Service> service){
         std::shared_ptr<ServiceRegistry> registry = ADSWManager::Get()->GetServiceRegistry();
         std::string container_name = registry ? registry->GetGroupNameByService(service) : "";
         std::string basecommand = GetContainer()->BaseRos2Command(container_name);
+        // Branch selection precedence (when basecommand is non-empty, i.e. docker exec):
+        //   launchFile non-empty → ros2 launch
+        //   IsDirectExec()       → bash -c "<package> & echo $!"   (binary or shebang script)
+        //   else                 → ros2 run
+        // Same precedence in the in-container self-execution path.
         if (basecommand.empty()) {
             // In-container self-execution
-            if (launchFile.empty()) {
-                command = "bash -c \"source /opt/ros/humble/setup.bash 2>/dev/null || true && ros2 run " + service->GetPackage() + " " + service->GetName() + " >/dev/null 2>&1 & echo \\$!\"";
-            } else {
+            if (!launchFile.empty()) {
                 command = "bash -c \"source /opt/ros/humble/setup.bash 2>/dev/null || true && ros2 launch " + service->GetPackage() + " " + service->GetLaunchFile() + " >/dev/null 2>&1 & echo \\$!\"";
+            } else if (service->IsDirectExec()) {
+                // package field carries the binary/script path (absolute or in PATH).
+                command = "bash -c \"" + service->GetPackage() + " >/dev/null 2>&1 & echo \\$!\"";
+            } else {
+                command = "bash -c \"source /opt/ros/humble/setup.bash 2>/dev/null || true && ros2 run " + service->GetPackage() + " " + service->GetName() + " >/dev/null 2>&1 & echo \\$!\"";
             }
         } else {
             // docker exec path: basecommand already = "docker exec <name> bash -c \"source ... && "
-            // Just append the ros2 command and close the quote - NO extra bash -c
-            if (launchFile.empty()) {
-                command = basecommand + "ros2 run " + service->GetPackage() + " " + service->GetName() + " >/dev/null 2>&1 & echo \\$!\"";
-            } else {
+            // Just append the command and close the quote.
+            if (!launchFile.empty()) {
                 command = basecommand + "ros2 launch " + service->GetPackage() + " " + service->GetLaunchFile() + " >/dev/null 2>&1 & echo \\$!\"";
+            } else if (service->IsDirectExec()) {
+                command = basecommand + service->GetPackage() + " >/dev/null 2>&1 & echo \\$!\"";
+            } else {
+                command = basecommand + "ros2 run " + service->GetPackage() + " " + service->GetName() + " >/dev/null 2>&1 & echo \\$!\"";
             }
         }
     }
@@ -334,12 +344,17 @@ bool ROSServiceController::StopService(std::shared_ptr<Service> service){
             command = "kill " + std::to_string(pid);
             result = system(command.c_str());
         } else {
-            // docker exec: kill bash wrapper + pkill by name for child processes
-            std::string svc_name = service->GetName();
+            // docker exec: kill bash wrapper + pkill by match token for child
+            // processes.  ResolveProcessMatchToken picks the right token
+            // (launchfile / name / package / explicit override) consistent
+            // with the liveness-polling logic, so direct-binary services don't
+            // get missed by pkill -f using the service name.
+            const std::string token =
+                service->ResolveProcessMatchToken(use_native_execution_);
             command = "docker exec " + container_name
                     + " bash -c \"kill " + std::to_string(pid) + " 2>/dev/null || true; "
-                    + "pkill -TERM -f '" + svc_name + "' 2>/dev/null || true; "
-                    + "sleep 1.0; pkill -KILL -f '" + svc_name + "' 2>/dev/null || true\"";
+                    + "pkill -TERM -f '" + token + "' 2>/dev/null || true; "
+                    + "sleep 1.0; pkill -KILL -f '" + token + "' 2>/dev/null || true\"";
             result = system(command.c_str());
         }
     } 

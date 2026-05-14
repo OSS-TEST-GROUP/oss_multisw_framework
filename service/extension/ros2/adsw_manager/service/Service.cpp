@@ -12,6 +12,7 @@ Service::Service(const std::string& name, ServiceType service_type, RecoveryPoli
       packag_name_(""),
       launch_file_(""),
       match_pattern_(""),
+      is_direct_exec_(false),
       max_nodes_(0),
       current_nodes_(0),
       pid_(0),
@@ -110,6 +111,14 @@ const std::string& Service::GetProcessMatchPattern() const {
     return match_pattern_;
 }
 
+void Service::SetDirectExec(bool direct) {
+    is_direct_exec_ = direct;
+}
+
+bool Service::IsDirectExec() const {
+    return is_direct_exec_;
+}
+
 std::string Service::ResolveProcessMatchToken(bool is_native) const {
     // Explicit hint takes precedence — needed for exec wrappers, fork-and-exit
     // launcher scripts, or anything else where the launching command name is
@@ -121,10 +130,9 @@ std::string Service::ResolveProcessMatchToken(bool is_native) const {
     if (!launch_file_.empty()) {
         return launch_file_;
     }
-    // Native execution with no launch file → the binary/script located by
-    // FindExecutablePath(package). Its cmdline tail is the package name
-    // (binaries) or the script path ending with the script name (scripts).
-    if (is_native) {
+    // Binary/script mode (either host-native or `docker exec <binary>`): the
+    // process cmdline tail is the binary/script path or name from `package`.
+    if (is_native || is_direct_exec_) {
         return packag_name_.empty() ? name_ : packag_name_;
     }
     // Default: ros2 run pkg name → cmdline ends with the executable name.
