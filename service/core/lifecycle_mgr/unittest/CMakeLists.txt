@@ -84,7 +84,7 @@ add_executable ( MWServiceTest MWServiceTest.cpp ../service/MWService.cpp ../ser
 add_executable ( HelperTest HelperTest.cpp )
 
 # Integration test for concrete endpoints with actual DDS read
-add_executable ( ConcreteEndpointIntegrationTest 
+add_executable ( ConcreteEndpointIntegrationTest
                 ConcreteEndpointIntegrationTest.cpp
                 ../endpoint/StartServiceEndPoint.cpp
                 ../endpoint/StopServiceEndPoint.cpp
@@ -95,6 +95,70 @@ add_executable ( ConcreteEndpointIntegrationTest
                 ../endpoint/LifecycleDiagReportEndPoint.cpp
                 ../transmitter/DDSMessageEndPoint.cpp
                 ../transmitter/MessageEndPoint.cpp
+                ${GENERATED_DDS_FILES}
+                )
+
+# Integration test for lifecycle_mgr <-> adsw_manager handshake
+add_executable ( LifecycleAdswIntegrationTest
+                test_lifecycle_adsw_integration.cc
+                ../endpoint/UpdateServiceListEndPoint.cpp
+                ../endpoint/StartServiceEndPoint.cpp
+                ../transmitter/DDSMessageEndPoint.cpp
+                ../transmitter/MessageEndPoint.cpp
+                ../logger/Logger.cpp
+                ${GENERATED_DDS_FILES}
+                )
+
+# L3 E2E integration test with real autoware container
+add_executable ( LifecycleAutowareE2ETest
+                test_lifecycle_autoware_e2e.cc
+                )
+
+# L3 E2E stop service test with real autoware container
+add_executable ( LifecycleAutowareStopE2ETest
+                test_lifecycle_autoware_stop_e2e.cc
+                ../transmitter/DDSMessageEndPoint.cpp
+                ../transmitter/MessageEndPoint.cpp
+                ../logger/Logger.cpp
+                ${GENERATED_DDS_FILES}
+                )
+
+# L3 E2E polling verification test with real autoware container
+add_executable ( LifecycleAutowarePollingE2ETest
+                test_lifecycle_autoware_polling_e2e.cc
+                )
+
+# L3 E2E crash notification test with real autoware container
+add_executable ( LifecycleAutowareCrashE2ETest
+                test_lifecycle_autoware_crash_e2e.cc
+                )
+
+# L3 E2E recovery policy test with real autoware container
+add_executable ( LifecycleAutowareRecoveryE2ETest
+                test_lifecycle_autoware_recovery_e2e.cc
+                )
+
+# L3 E2E node-kill (PID polling) test with real autoware container
+add_executable ( LifecycleAutowareNodeKillE2ETest
+                test_lifecycle_autoware_node_kill_e2e.cc
+                )
+
+# L3 E2E launch-mode node-kill test with real autoware container
+add_executable ( LifecycleAutowareLaunchKillE2ETest
+                test_lifecycle_autoware_launch_kill_e2e.cc
+                )
+
+# L3 E2E direct-binary execution test with real autoware container
+add_executable ( LifecycleAutowareDirectBinaryE2ETest
+                test_lifecycle_autoware_direct_binary_e2e.cc
+                )
+
+# L3 E2E OTA mode transition test with real autoware container
+add_executable ( LifecycleAutowareOtaE2ETest
+                test_lifecycle_autoware_ota_e2e.cc
+                ../transmitter/DDSMessageEndPoint.cpp
+                ../transmitter/MessageEndPoint.cpp
+                ../logger/Logger.cpp
                 ${GENERATED_DDS_FILES}
                 )
 
@@ -113,16 +177,26 @@ gtest_discover_tests ( ArgumentConfigTest )
 gtest_discover_tests ( MWServiceTest )
 gtest_discover_tests ( HelperTest )
 gtest_discover_tests ( ConcreteEndpointIntegrationTest )
+gtest_discover_tests ( LifecycleAdswIntegrationTest )
+gtest_discover_tests ( LifecycleAutowareE2ETest )
+gtest_discover_tests ( LifecycleAutowareStopE2ETest )
+gtest_discover_tests ( LifecycleAutowarePollingE2ETest )
+gtest_discover_tests ( LifecycleAutowareCrashE2ETest )
+gtest_discover_tests ( LifecycleAutowareRecoveryE2ETest )
+gtest_discover_tests ( LifecycleAutowareNodeKillE2ETest )
+gtest_discover_tests ( LifecycleAutowareLaunchKillE2ETest )
+gtest_discover_tests ( LifecycleAutowareDirectBinaryE2ETest )
+gtest_discover_tests ( LifecycleAutowareOtaE2ETest )
 
 
 ## Install
-install ( TARGETS 
+install ( TARGETS
                 ArgumentConfigTest
                 ServiceTest
                 DDSTransmitterTest
                 DDSMessageEndPointTest
                 DDSMessageEndPointReadTest
-                StateManagerTest    
+                StateManagerTest
                 MWServiceTest
                 LFPolicyManagerTest
                 StateMonitorTest
@@ -132,6 +206,16 @@ install ( TARGETS
                 ServiceRegistryTest
                 HelperTest
                 ConcreteEndpointIntegrationTest
+                LifecycleAdswIntegrationTest
+                LifecycleAutowareE2ETest
+                LifecycleAutowareStopE2ETest
+                LifecycleAutowarePollingE2ETest
+                LifecycleAutowareCrashE2ETest
+                LifecycleAutowareRecoveryE2ETest
+                LifecycleAutowareNodeKillE2ETest
+                LifecycleAutowareLaunchKillE2ETest
+                LifecycleAutowareDirectBinaryE2ETest
+                LifecycleAutowareOtaE2ETest
     RUNTIME DESTINATION bin/unittest/lifecycle_mgr
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib

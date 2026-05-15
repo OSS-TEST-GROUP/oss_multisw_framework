@@ -390,6 +390,12 @@ bool ServiceRegistry::Save() {
       ndservice["package"] = service->GetPackage();
       ndservice["name"] = service->GetName();
       ndservice["launchfile"] = service->GetLaunchFile();
+      if (!service->GetProcessMatchPattern().empty()) {
+        ndservice["match_pattern"] = service->GetProcessMatchPattern();
+      }
+      if (service->IsDirectExec()) {
+        ndservice["exec_type"] = "binary";
+      }
 
       // Convert integers to strings if you need consistent quoting; here leave
       // as int or convert explicitly
@@ -515,6 +521,16 @@ bool ServiceRegistry::LoadServiceSaved(const std::string &path) {
             std::string recoStr = serviceNode["recovery"].as<std::string>("");
             std::string enableStr = serviceNode["enabled"].as<std::string>("");
             std::string maxStr = serviceNode["max"].as<std::string>("");
+            // Optional liveness-monitoring hint. Use only when launchfile/name/
+            // package can't be auto-derived (exec wrappers, fork-and-exit scripts).
+            std::string matchPatternStr =
+                serviceNode["match_pattern"].as<std::string>("");
+            // Optional execution mode override. "binary" → docker exec runs
+            // the `package` field directly, bypassing ros2 run / ros2 launch.
+            // Default behavior (empty or unrecognized) → ros2 run/launch as
+            // determined by launchfile presence.
+            std::string execTypeStr =
+                serviceNode["exec_type"].as<std::string>("");
 
             ServiceType serviceType = ServiceType::NORMAL;
             RecoveryPolicy recoveryPolicy = RecoveryPolicy::R_DEFAULT;
@@ -551,6 +567,12 @@ bool ServiceRegistry::LoadServiceSaved(const std::string &path) {
 
             service->SetPackage(pkgStr);
             service->SetLaunchFile(lfileStr);
+            if (!matchPatternStr.empty()) {
+              service->SetProcessMatchPattern(matchPatternStr);
+            }
+            if (execTypeStr == "binary") {
+              service->SetDirectExec(true);
+            }
             AddService(service, groupname);
           }
         }

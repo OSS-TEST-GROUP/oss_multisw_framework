@@ -42,6 +42,13 @@ class ROSServiceController  : public ServiceController {
 
     std::shared_ptr<ContainerController> GetContainer() {return container_controller_;}
 
+    // True when adsw_manager is starting services as native host processes
+    // (no docker exec wrapper, no `ros2 run/launch` indirection). Used by
+    // ContainerHealthMonitor to pick the right liveness-check token: native
+    // services' cmdlines end with the package binary name, container-based
+    // services end with the ros2 node/launch identifier.
+    bool IsNativeExecution() const { return use_native_execution_; }
+
   private:
     std::shared_ptr<ROS2NodeController>  ros2node_controller_;
     std::shared_ptr<ContainerController>  container_controller_;

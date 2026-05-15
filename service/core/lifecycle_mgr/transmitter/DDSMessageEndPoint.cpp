@@ -32,7 +32,18 @@ DDSMessageEndPoint::DDSMessageEndPoint(std::string topic)
 }
 
 DDSMessageEndPoint::~DDSMessageEndPoint() {
-    
+    if (writer_ && publisher_) {
+        publisher_->delete_datawriter(writer_);
+        writer_ = nullptr;
+    }
+    if (reader_ && subscriber_) {
+        subscriber_->delete_datareader(reader_);
+        reader_ = nullptr;
+    }
+    if (dds_topic_ && participant_) {
+        participant_->delete_topic(dds_topic_);
+        dds_topic_ = nullptr;
+    }
 }
 
 

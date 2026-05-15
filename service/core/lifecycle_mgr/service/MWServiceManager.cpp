@@ -196,7 +196,9 @@ pid_t MWServiceManager::run_process(const std::string exename, const std::string
 
         execvp(c_args[0], c_args.data());
         perror("execvp failed");
-        exit(1);
+        _exit(1);  // _exit skips C++ destructors — avoids FastDDS sending "participant leaving"
+                   // for the parent's DDS participant (inherited via fork), which would cause
+                   // all adsw_manager endpoints to unmatch lifecycle_mgr.
     }
     // In parent process
     return pid;

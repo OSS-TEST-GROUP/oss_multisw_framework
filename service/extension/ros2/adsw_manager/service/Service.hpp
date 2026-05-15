@@ -41,6 +41,32 @@ class Service {
     void SetExitCode(int32_t code);
     int32_t GetExitCode();
 
+    // Optional explicit token used by liveness monitoring to find this
+    // service's process inside its container. Setting this overrides the
+    // launchfile/name/package auto-derivation done in ResolveProcessMatchToken.
+    // Use it for tricky cases like exec wrappers or fork-and-exit scripts
+    // where the launching script's name is not what survives in /proc.
+    void SetProcessMatchPattern(const std::string& pattern);
+    const std::string& GetProcessMatchPattern() const;
+
+    // True when the service is launched as a direct binary or script via
+    //   `docker exec <c> bash -c "<package> & echo $!"`,
+    // bypassing ros2 run / ros2 launch. The package field carries the
+    // executable path or PATH-resolvable name. Set from YAML's
+    // `exec_type: "binary"` (default false → ros2 run/launch).
+    void SetDirectExec(bool direct);
+    bool IsDirectExec() const;
+
+    // Pick the cmdline-suffix that uniquely identifies this service's process
+    // in `pgrep -f <token>$`. Precedence:
+    //   1. Explicit ProcessMatchPattern if set
+    //   2. LaunchFile          (when ros2 launch is used)
+    //   3. Package             (when direct binary/script is executed)
+    //   4. Name                (when ros2 run is used — default)
+    // is_native (legacy host path) and is_direct_exec_ (in-container direct
+    // exec) both select branch 3. Either flag flips into the binary mode.
+    std::string ResolveProcessMatchToken(bool is_native) const;
+
   private:
     std::string name_;
     ServiceType service_type_;
@@ -49,6 +75,8 @@ class Service {
     ServiceState service_state_;
     std::string packag_name_;
     std::string launch_file_;
+    std::string match_pattern_;
+    bool is_direct_exec_;
 
     int32_t max_nodes_;
     int32_t current_nodes_;
