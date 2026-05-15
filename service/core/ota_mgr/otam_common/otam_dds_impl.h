@@ -314,6 +314,10 @@ void OtamDdsImpl<MessageType>::Create(const std::string& topic,
 
         // Create DataWriter on shared Publisher
         eprosima::fastdds::dds::DataWriterQos writer_qos = eprosima::fastdds::dds::DATAWRITER_QOS_DEFAULT;
+        // F011: disable POSIX-shm data_sharing — when other FastDDS participants
+        // live in sibling containers (host network), their shm segments are
+        // unreachable and the reader spams "Failed to open segment" errors.
+        writer_qos.data_sharing().off();
         writer_qos.reliability().kind = eprosima::fastdds::dds::RELIABLE_RELIABILITY_QOS;
         if (transient_local) {
             writer_qos.durability().kind = eprosima::fastdds::dds::TRANSIENT_LOCAL_DURABILITY_QOS;
@@ -331,6 +335,9 @@ void OtamDdsImpl<MessageType>::Create(const std::string& topic,
         // Durability: VOLATILE - keeps FastDDS default (also matches TRANSIENT_LOCAL publishers)
         // DDS QoS compatibility rule: VOLATILE subscriber can receive from TRANSIENT_LOCAL publisher
         eprosima::fastdds::dds::DataReaderQos reader_qos = eprosima::fastdds::dds::DATAREADER_QOS_DEFAULT;
+        // F011: see writer counterpart — disable shm data_sharing to silence
+        // "Failed to open segment" noise from sibling-container writers.
+        reader_qos.data_sharing().off();
         reader_qos.reliability().kind = eprosima::fastdds::dds::RELIABLE_RELIABILITY_QOS;
         reader_ = subscriber->create_datareader(topic_, reader_qos, listener_);
         if (!reader_) {

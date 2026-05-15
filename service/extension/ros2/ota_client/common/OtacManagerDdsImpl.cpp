@@ -41,6 +41,10 @@ namespace ros2::ota_client
         if (create_writer)
         {
             DataWriterQos writer_qos = DATAWRITER_QOS_DEFAULT;
+            // F011: disable POSIX-shm data_sharing — sibling-container writers'
+            // segments aren't visible across container mount namespaces, so
+            // leaving it on produces "Failed to open segment" stderr noise.
+            writer_qos.data_sharing().off();
             if (transient_local) {
                 writer_qos.durability().kind = TRANSIENT_LOCAL_DURABILITY_QOS;
             }
@@ -51,6 +55,8 @@ namespace ros2::ota_client
         if (create_reader)
         {
             DataReaderQos reader_qos = DATAREADER_QOS_DEFAULT;
+            // F011: see writer counterpart — explicit data_sharing OFF.
+            reader_qos.data_sharing().off();
             if (transient_local) {
                 reader_qos.durability().kind = TRANSIENT_LOCAL_DURABILITY_QOS;
             }
