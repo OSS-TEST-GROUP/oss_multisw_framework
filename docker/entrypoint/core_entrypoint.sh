@@ -75,10 +75,12 @@ sleep 1
 start_bg /oss/bin/vehicle_info_manager_app
 sleep 1
 
-# OtaManager's first positional arg is delay_time (seconds); the previous
-# config_middleware.yaml default was 3, preserve it here so the OTA boot
-# timing for downstream clients doesn't shift.
-start_bg /oss/bin/OtaManager 3
+# OtaManager ignores argv entirely (main.cc takes argc/argv but doesn't read
+# them, and there's no internal delay handling). The 1-second `sleep 1`
+# above is what spaces it out from vehicle_info_manager_app's DDS startup;
+# config_middleware.yaml's old `delay_time: 3` arg was dead config carried
+# by the previous fork loop.
+start_bg /oss/bin/OtaManager
 
 # Block on lifecycle_mgr. When it exits, propagate its return code so the
 # orchestrator's restart policy can act on it.
