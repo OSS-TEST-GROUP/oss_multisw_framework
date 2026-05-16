@@ -35,6 +35,9 @@ bool DDSMessageEndpoint::Initialize(DomainParticipant* participant, Publisher* p
         // Create the reader
         DataReaderQos reader_qos = DATAREADER_QOS_DEFAULT;
         subscriber_->get_default_datareader_qos(reader_qos);
+        // F011: explicit data_sharing OFF — sibling-container writers' POSIX-shm
+        // segments are unreachable across container mount namespaces.
+        reader_qos.data_sharing().off();
         data_reader_ = subscriber_->create_datareader(dds_topic_, reader_qos, this, StatusMask::all());
         if (data_reader_ == nullptr)
         {
@@ -49,6 +52,8 @@ bool DDSMessageEndpoint::Initialize(DomainParticipant* participant, Publisher* p
         DataWriterQos writer_qos = DATAWRITER_QOS_DEFAULT;
         writer_qos.history().depth = 5;
         publisher_->get_default_datawriter_qos(writer_qos);
+        // F011: see reader counterpart — explicit data_sharing OFF.
+        writer_qos.data_sharing().off();
         data_writer_ = publisher_->create_datawriter(dds_topic_, writer_qos, this, StatusMask::all());
         if (data_writer_ == nullptr)
         {

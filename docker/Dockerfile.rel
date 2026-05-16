@@ -53,6 +53,11 @@ ARG BUILD_TYPE=Release
 COPY --chown=ossuser:ossuser output/x86_64/${BUILD_TYPE}/core/bin /oss/bin
 COPY --chown=ossuser:ossuser output/x86_64/lib /oss/lib
 COPY --chown=ossuser:ossuser output/x86_64/${BUILD_TYPE}/core/lib /tmp/lib
+# F011: container entrypoint now launches lifecycle_mgr + supporting
+# middleware (diagnostics, vehicle_info_manager_app, OtaManager) instead
+# of relying on lifecycle_mgr's removed in-process fork loop. Mirrors
+# the ros2_entrypoint.sh pattern used by runtime-mmf-ext-ros2.
+COPY --chown=ossuser:ossuser docker/entrypoint/core_entrypoint.sh /oss/entrypoint.sh
 
 # Generate unique machin_id
 RUN if [ ! -s /etc/machine-id ]; then \
@@ -65,7 +70,8 @@ USER ossuser
 RUN cp -rpa /tmp/lib/*.so* /oss/lib/ \
     && rm -rf /tmp/lib
 
-RUN sed -e "s#./#/oss/bin/#g" -i /oss/bin/config/config_middleware.yaml
+RUN sed -e "s#./#/oss/bin/#g" -i /oss/bin/config/config_middleware.yaml \
+    && chmod +x /oss/entrypoint.sh
 
 ENV LD_LIBRARY_PATH=/oss/lib
 ENV MMF_CONFIG_PATH=/oss/bin/config
@@ -74,7 +80,7 @@ ENV VEHICLE_CONFIG_PATH=/oss/bin/config
 ENV OTAM_CONFIG_PATH=/oss/bin/config
 ENV DIAG_IDL_PATH=/oss/bin/idl
 
-ENTRYPOINT ["/oss/bin/lifecycle_mgr"]
+ENTRYPOINT ["/oss/entrypoint.sh"]
 
 ###################################################################################
 # Core - aarch64
@@ -86,6 +92,8 @@ ARG BUILD_TYPE=Release
 COPY --chown=ossuser:ossuser output/aarch64/${BUILD_TYPE}/core/bin /oss/bin
 COPY --chown=ossuser:ossuser output/aarch64/lib /oss/lib
 COPY --chown=ossuser:ossuser output/aarch64/${BUILD_TYPE}/core/lib /tmp/lib
+# F011: see x86_64 stage for rationale.
+COPY --chown=ossuser:ossuser docker/entrypoint/core_entrypoint.sh /oss/entrypoint.sh
 
 # Generate unique machin_id
 RUN if [ ! -s /etc/machine-id ]; then \
@@ -98,7 +106,8 @@ USER ossuser
 RUN cp -rpa /tmp/lib/*.so* /oss/lib/ \
     && rm -rf /tmp/lib
 
-RUN sed -e "s#./#/oss/bin/#g" -i /oss/bin/config/config_middleware.yaml
+RUN sed -e "s#./#/oss/bin/#g" -i /oss/bin/config/config_middleware.yaml \
+    && chmod +x /oss/entrypoint.sh
 
 ENV LD_LIBRARY_PATH=/oss/lib
 ENV MMF_CONFIG_PATH=/oss/bin/config
@@ -107,7 +116,7 @@ ENV VEHICLE_CONFIG_PATH=/oss/bin/config
 ENV OTAM_CONFIG_PATH=/oss/bin/config
 ENV DIAG_IDL_PATH=/oss/bin/idl
 
-ENTRYPOINT ["/oss/bin/lifecycle_mgr"]
+ENTRYPOINT ["/oss/entrypoint.sh"]
 
 ###################################################################################
 # Core - Multi-arch selector

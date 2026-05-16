@@ -415,6 +415,11 @@ void DDSProvider::start()
     // Set Reliability QoS for DataReaders
     DataReaderQos reliable_qos = DATAREADER_QOS_DEFAULT;
     reliable_qos.reliability().kind = RELIABLE_RELIABILITY_QOS;
+    // F011: disable POSIX-shm data_sharing so cross-container writers don't
+    // leave us spamming "Failed to open segment" stderr noise. The XML
+    // default profile alone isn't enough — DDS code paths that build their
+    // own DataReaderQos from DEFAULT bypass the XML default.
+    reliable_qos.data_sharing().off();
 
     // Create DataReaders and Listeners
     vehicle_data_listener_ = std::make_unique<VehicleDataListener>(data_channel_.get());
@@ -427,9 +432,11 @@ void DDSProvider::start()
     trajectory_reader_ = subscriber_->create_datareader(trajectory_topic_, reliable_qos, trajectory_listener_.get());
 
 
-    // Create DataWriter for VehicleDataTopic
+    // Create DataWriter for VehicleDataTopic — explicit QoS so we can force data_sharing OFF.
+    DataWriterQos writer_qos = DATAWRITER_QOS_DEFAULT;
+    writer_qos.data_sharing().off();
     vehicle_data_writer_listener_ = std::make_unique<VehicleDataWriterListener>();
-    vehicle_data_writer_ = publisher_->create_datawriter(set_vehicle_data_topic_, DATAWRITER_QOS_DEFAULT, vehicle_data_writer_listener_.get());
+    vehicle_data_writer_ = publisher_->create_datawriter(set_vehicle_data_topic_, writer_qos, vehicle_data_writer_listener_.get());
 
     active_ = true;
     LOG_INFO << "DDSProvider started.";

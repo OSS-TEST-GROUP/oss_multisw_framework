@@ -82,6 +82,10 @@ bool DDSMessageEndPoint::Initialize(DomainParticipant* participant, Publisher* p
         DataWriterQos writer_qos = DATAWRITER_QOS_DEFAULT;
         writer_qos.history().depth = 5;
         publisher_->get_default_datawriter_qos(writer_qos);
+        // F011: belt-and-suspenders disable of shm data_sharing — the XML
+        // profile's `is_default_profile="true"` only applies if downstream
+        // code path doesn't reset the QoS after this point. Force it here.
+        writer_qos.data_sharing().off();
         writer_ = publisher_->create_datawriter(dds_topic_, writer_qos, this, StatusMask::all());
         if (writer_ == nullptr)
         {
@@ -96,6 +100,8 @@ bool DDSMessageEndPoint::Initialize(DomainParticipant* participant, Publisher* p
         // Create the reader
         DataReaderQos reader_qos = DATAREADER_QOS_DEFAULT;
         subscriber_->get_default_datareader_qos(reader_qos);
+        // F011: see writer counterpart — explicit data_sharing OFF.
+        reader_qos.data_sharing().off();
         reader_ = subscriber_->create_datareader(dds_topic_, reader_qos, this, StatusMask::all());
         if (reader_ == nullptr)
         {

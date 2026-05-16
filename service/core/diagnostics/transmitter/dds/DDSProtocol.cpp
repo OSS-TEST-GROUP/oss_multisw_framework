@@ -785,6 +785,10 @@ bool DDSProtocol::create_datareader(std::shared_ptr<TopicInformation> topic_info
 
     DataReaderQos reader_qos = DATAREADER_QOS_DEFAULT;
     subscriber_->get_default_datareader_qos(reader_qos);
+    // F011: explicit data_sharing OFF — sibling-container writers' POSIX-shm
+    // segments aren't visible across container mount namespaces, so leaving
+    // it on produces "Failed to open segment" stderr noise.
+    reader_qos.data_sharing().off();
     topic_information->reader = subscriber_->create_datareader(topic_information->topic, reader_qos);
     if (topic_information->reader == nullptr) {
         return false;
@@ -835,6 +839,8 @@ bool DDSProtocol::create_datawriter(std::shared_ptr<TopicInformation> topic_info
     LOG_VERBOSE("Creating DataWriter with default QoS for topic: " << topic_information->topic_name);
     DataWriterQos writer_qos = DATAWRITER_QOS_DEFAULT;
     publisher_->get_default_datawriter_qos(writer_qos);
+    // F011: see reader counterpart — explicit data_sharing OFF for cross-container quiet.
+    writer_qos.data_sharing().off();
     topic_information->writer = publisher_->create_datawriter(
         topic_information->topic,
         writer_qos

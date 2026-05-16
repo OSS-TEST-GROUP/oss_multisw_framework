@@ -233,6 +233,8 @@ struct DDSTransportImpl {
             }
             DataWriterQos writer_qos = DATAWRITER_QOS_DEFAULT;
             writer_qos.reliability().kind = RELIABLE_RELIABILITY_QOS;
+            // F011: cross-container shm segments are unreachable — disable data_sharing.
+            writer_qos.data_sharing().off();
             writer = publisher->create_datawriter(topic, writer_qos, publication_listener.get());
             if (writer == nullptr) {
                 LOG_ERROR << "Failed to create datawriter for topic: " << topic_name;
@@ -333,6 +335,8 @@ void DDSTransport::start() {
 
     DataReaderQos reader_qos = DATAREADER_QOS_DEFAULT;
     reader_qos.reliability().kind = RELIABLE_RELIABILITY_QOS;
+    // F011: see DDSProvider — explicit shm data_sharing OFF.
+    reader_qos.data_sharing().off();
     p_impl->request_reader = p_impl->subscriber->create_datareader(p_impl->request_topic, reader_qos, p_impl->request_listener.get());
 
     LOG_INFO << "DDS Transport started and subscribed to " << VISS_DDS_REQUEST_TOPIC;
