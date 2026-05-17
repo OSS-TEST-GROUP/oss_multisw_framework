@@ -3,6 +3,9 @@
 
 #include "lifecycle/LifecycleCommon.hpp"
 
+#include "include/ContainerState.hpp"
+#include "include/ContainerType.hpp"
+
 namespace lifecycle_manager {
 
 using namespace lifecyclemgr;
@@ -115,7 +118,44 @@ class TypeConvert {
         return lifecyclemgr::OsType::ROS2;
     }
 
-    
+    // ── F013: Container enums ───────────────────────────────────────────
+    static ContainerType ToContainerType(lifecyclemgr::ContainerType t) {
+        switch (t) {
+            case lifecyclemgr::ContainerType::CT_UNKNOWN     : return ContainerType::CT_UNKNOWN;
+            case lifecyclemgr::ContainerType::DOCKER         : return ContainerType::DOCKER;
+            case lifecyclemgr::ContainerType::DOCKER_COMPOSE : return ContainerType::DOCKER_COMPOSE;
+            case lifecyclemgr::ContainerType::K3S            : return ContainerType::K3S;
+        }
+        return ContainerType::CT_UNKNOWN;
+    }
+    static lifecyclemgr::ContainerType ToContainerType(ContainerType t) {
+        switch (t) {
+            case ContainerType::CT_UNKNOWN     : return lifecyclemgr::ContainerType::CT_UNKNOWN;
+            case ContainerType::DOCKER         : return lifecyclemgr::ContainerType::DOCKER;
+            case ContainerType::DOCKER_COMPOSE : return lifecyclemgr::ContainerType::DOCKER_COMPOSE;
+            case ContainerType::K3S            : return lifecyclemgr::ContainerType::K3S;
+        }
+        return lifecyclemgr::ContainerType::CT_UNKNOWN;
+    }
+
+    static ContainerState ToContainerState(lifecyclemgr::ContainerState s) {
+        switch (s) {
+            case lifecyclemgr::ContainerState::CS_UNKNOWN         : return ContainerState::CS_UNKNOWN;
+            case lifecyclemgr::ContainerState::CONTAINER_STOPPED  : return ContainerState::CONTAINER_STOPPED;
+            case lifecyclemgr::ContainerState::CONTAINER_RUNNING  : return ContainerState::CONTAINER_RUNNING;
+            case lifecyclemgr::ContainerState::CONTAINER_PAUSED   : return ContainerState::CONTAINER_PAUSED;
+        }
+        return ContainerState::CS_UNKNOWN;
+    }
+    static lifecyclemgr::ContainerState ToContainerState(ContainerState s) {
+        switch (s) {
+            case ContainerState::CS_UNKNOWN         : return lifecyclemgr::ContainerState::CS_UNKNOWN;
+            case ContainerState::CONTAINER_STOPPED  : return lifecyclemgr::ContainerState::CONTAINER_STOPPED;
+            case ContainerState::CONTAINER_RUNNING  : return lifecyclemgr::ContainerState::CONTAINER_RUNNING;
+            case ContainerState::CONTAINER_PAUSED   : return lifecyclemgr::ContainerState::CONTAINER_PAUSED;
+        }
+        return lifecyclemgr::ContainerState::CS_UNKNOWN;
+    }
 };
 
 

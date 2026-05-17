@@ -46,6 +46,13 @@ class Service {
 
     OsType GetOsType();
 
+    // F013: which container hosts this service.  Empty string means
+    // "native / non-containerised" (treated as a distinct registration
+    // group by the registry).  Mutable so a re-registration can move a
+    // service between containers without dropping the Service object.
+    const std::string& GetContainerName() const { return container_name_; }
+    void SetContainerName(const std::string& name) { container_name_ = name; }
+
   private:
     std::string name_;
     ServiceType service_type_;
@@ -59,6 +66,8 @@ class Service {
     int32_t exit_code_;
 
     OsType os_type_;
+
+    std::string container_name_;  // F013
 
 };
 

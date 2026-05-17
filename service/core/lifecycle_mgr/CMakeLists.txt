@@ -42,6 +42,7 @@ set ( SERIVCE_SRC
     service/Service.cpp
     service/ServiceRegistry.cpp
     service/ArgumentConfig.cpp
+    service/Container.cpp
 )
 
 set ( STATE_SRC
