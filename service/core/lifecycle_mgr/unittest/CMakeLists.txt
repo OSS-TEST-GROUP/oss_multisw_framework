@@ -28,6 +28,15 @@ set(GENERATED_DDS_FILES ${GENERATED_DIR}/lifecycle/LifecycleCommonPubSubTypes.cx
                         ${GENERATED_DIR}/lifecycle/GetServiceStateRequestTypeObjectSupport.cxx
                         ${GENERATED_DIR}/lifecycle/NotifyServiceStatePubSubTypes.cxx
                         ${GENERATED_DIR}/lifecycle/NotifyServiceStateTypeObjectSupport.cxx
+                        # F013
+                        ${GENERATED_DIR}/lifecycle/NotifyContainerStatePubSubTypes.cxx
+                        ${GENERATED_DIR}/lifecycle/NotifyContainerStateTypeObjectSupport.cxx
+                        ${GENERATED_DIR}/lifecycle/StartContainerRequestPubSubTypes.cxx
+                        ${GENERATED_DIR}/lifecycle/StartContainerRequestTypeObjectSupport.cxx
+                        ${GENERATED_DIR}/lifecycle/StopContainerRequestPubSubTypes.cxx
+                        ${GENERATED_DIR}/lifecycle/StopContainerRequestTypeObjectSupport.cxx
+                        ${GENERATED_DIR}/lifecycle/LifecycleCtrlRequestPubSubTypes.cxx
+                        ${GENERATED_DIR}/lifecycle/LifecycleCtrlRequestTypeObjectSupport.cxx
 )
 
 ## Source
@@ -54,7 +63,7 @@ add_executable ( DDSMessageEndPointReadTest DDSMessageEndPointReadTest.cpp
                 ../transmitter/MessageEndPoint.cpp
                 ${GENERATED_DDS_FILES}
                 )
-add_executable ( EndPointFactoryTest EndPointFactoryTest.cpp 
+add_executable ( EndPointFactoryTest EndPointFactoryTest.cpp
                 ../endpoint/EndPointFactory.cpp
                 ../endpoint/GetServiceStateEndPoint.cpp
                 ../endpoint/LifecycleDiagReportEndPoint.cpp
@@ -63,6 +72,15 @@ add_executable ( EndPointFactoryTest EndPointFactoryTest.cpp
                 ../endpoint/StartServiceEndPoint.cpp
                 ../endpoint/StopServiceEndPoint.cpp
                 ../endpoint/UpdateServiceListEndPoint.cpp
+                # F013 container actuator + ctrl/* endpoints
+                ../endpoint/NotifyContainerStateEndPoint.cpp
+                ../endpoint/StartContainerEndPoint.cpp
+                ../endpoint/StopContainerEndPoint.cpp
+                ../endpoint/CtrlStartServiceEndPoint.cpp
+                ../endpoint/CtrlStopServiceEndPoint.cpp
+                ../endpoint/CtrlSetServiceModeEndPoint.cpp
+                ../endpoint/CtrlStartContainerEndPoint.cpp
+                ../endpoint/CtrlStopContainerEndPoint.cpp
                 ${GENERATED_DDS_FILES}
                 )
 add_executable ( MWServiceManagerTest MWServiceManagerTest.cpp ../service/MWServiceManager.cpp)

@@ -17,6 +17,15 @@ namespace lifecyclemgr {
     class GetServiceStateResponse;
     class NotifyServiceState;
     class UpdateServiceListRequest;
+    // F013
+    class NotifyContainerState;
+    class StartContainerResponse;
+    class StopContainerResponse;
+    class CtrlStartServiceRequest;
+    class CtrlStopServiceRequest;
+    class CtrlSetServiceModeRequest;
+    class CtrlStartContainerRequest;
+    class CtrlStopContainerRequest;
 }
 
 namespace lifecycle_manager {
@@ -28,6 +37,18 @@ struct EndPointHandlers {
     std::function<void(lifecyclemgr::GetServiceStateResponse*)>  on_get_state_resp;
     std::function<void(lifecyclemgr::NotifyServiceState*)>       on_notify_state;
     std::function<void(lifecyclemgr::UpdateServiceListRequest*)> on_update_list;
+
+    // F013: Container actuators — sub callbacks for messages from adsw_manager.
+    std::function<void(lifecyclemgr::NotifyContainerState*)>        on_notify_container_state;
+    std::function<void(lifecyclemgr::StartContainerResponse*)>      on_start_container_resp;
+    std::function<void(lifecyclemgr::StopContainerResponse*)>       on_stop_container_resp;
+
+    // F013: ctrl/* gate — sub callbacks for requests from operator/monitor.
+    std::function<void(lifecyclemgr::CtrlStartServiceRequest*)>     on_ctrl_start_service;
+    std::function<void(lifecyclemgr::CtrlStopServiceRequest*)>      on_ctrl_stop_service;
+    std::function<void(lifecyclemgr::CtrlSetServiceModeRequest*)>   on_ctrl_set_service_mode;
+    std::function<void(lifecyclemgr::CtrlStartContainerRequest*)>   on_ctrl_start_container;
+    std::function<void(lifecyclemgr::CtrlStopContainerRequest*)>    on_ctrl_stop_container;
 };
 
 class EndPointFactory  {

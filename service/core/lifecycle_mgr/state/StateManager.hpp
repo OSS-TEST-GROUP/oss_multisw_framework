@@ -12,6 +12,10 @@
 #include "lifecycle/StartServiceRequest.hpp"
 #include "lifecycle/StopServiceRequest.hpp"
 #include "lifecycle/SetServiceModeRequest.hpp"
+// F013
+#include "lifecycle/StartContainerRequest.hpp"
+#include "lifecycle/StopContainerRequest.hpp"
+#include "lifecycle/LifecycleCtrlRequest.hpp"
 
 namespace lifecycle_manager {
 
@@ -33,8 +37,29 @@ class StateManager : public ManagerBase {
 
     void OnStart(lifecyclemgr::StartServiceResponse* message);
     void OnStop(lifecyclemgr::StopServiceResponse* message);
-    
+
+    // ── F013: actuator response relays ─────────────────────────────────
+    // adsw_manager → lifecycle_mgr Start/StopContainerResponse arrives
+    // here.  We forward the verdict to the ctrl/* CtrlResponse topic so
+    // monitor sees the outcome of its CtrlStart/StopContainer request.
+    void OnStartContainer(lifecyclemgr::StartContainerResponse* message);
+    void OnStopContainer(lifecyclemgr::StopContainerResponse* message);
+
+    // ── F013: ctrl/* gate handlers ─────────────────────────────────────
+    // Each runs lightweight policy gating against the ServiceRegistry,
+    // forwards to the corresponding actuator topic on success, and
+    // publishes a CtrlResponse with the gating verdict on the matching
+    // ctrl/* response topic.  ret_code mirrors lifecyclemgr::ReturnCode.
+    void HandleCtrlStartService(lifecyclemgr::CtrlStartServiceRequest* message);
+    void HandleCtrlStopService(lifecyclemgr::CtrlStopServiceRequest* message);
+    void HandleCtrlSetServiceMode(lifecyclemgr::CtrlSetServiceModeRequest* message);
+    void HandleCtrlStartContainer(lifecyclemgr::CtrlStartContainerRequest* message);
+    void HandleCtrlStopContainer(lifecyclemgr::CtrlStopContainerRequest* message);
+
   private:
+    // F013: publish a CtrlResponse on the given ctrl/* response topic.
+    bool PublishCtrlResponse(MessageType response_topic,
+                              lifecyclemgr::ReturnCode code);
 
   private:
     std::shared_ptr<PolicyManager> policy_manager_;
@@ -42,6 +67,12 @@ class StateManager : public ManagerBase {
     lifecyclemgr::StopServiceRequest stop_request_;
     lifecyclemgr::SetServiceModeResponse set_response_;
 
+    // F013: scratch publish buffers — reused per call, single-thread on the
+    // ctrl/sub dispatch path.
+    lifecyclemgr::SetServiceModeRequest   set_mode_request_;
+    lifecyclemgr::StartContainerRequest   start_container_request_;
+    lifecyclemgr::StopContainerRequest    stop_container_request_;
+    lifecyclemgr::CtrlResponse            ctrl_response_;
 };
 
 } // namespace lifecycle_manager

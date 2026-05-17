@@ -22,6 +22,15 @@ set ( ENDPOINT_SRC
     endpoint/NotifyServiceStateEndPoint.cpp
     endpoint/StartServiceEndPoint.cpp
     endpoint/StopServiceEndPoint.cpp
+    # F013: container actuator + ctrl/* gate endpoints
+    endpoint/NotifyContainerStateEndPoint.cpp
+    endpoint/StartContainerEndPoint.cpp
+    endpoint/StopContainerEndPoint.cpp
+    endpoint/CtrlStartServiceEndPoint.cpp
+    endpoint/CtrlStopServiceEndPoint.cpp
+    endpoint/CtrlSetServiceModeEndPoint.cpp
+    endpoint/CtrlStartContainerEndPoint.cpp
+    endpoint/CtrlStopContainerEndPoint.cpp
     endpoint/EndPointFactory.cpp
 )
 
@@ -80,6 +89,15 @@ set(GENERATED_DDS_FILES ${GENERATED_DIR}/lifecycle/LifecycleCommonPubSubTypes.cx
                         ${GENERATED_DIR}/lifecycle/GetServiceStateRequestTypeObjectSupport.cxx
                         ${GENERATED_DIR}/lifecycle/NotifyServiceStatePubSubTypes.cxx
                         ${GENERATED_DIR}/lifecycle/NotifyServiceStateTypeObjectSupport.cxx
+                        # F013
+                        ${GENERATED_DIR}/lifecycle/NotifyContainerStatePubSubTypes.cxx
+                        ${GENERATED_DIR}/lifecycle/NotifyContainerStateTypeObjectSupport.cxx
+                        ${GENERATED_DIR}/lifecycle/StartContainerRequestPubSubTypes.cxx
+                        ${GENERATED_DIR}/lifecycle/StartContainerRequestTypeObjectSupport.cxx
+                        ${GENERATED_DIR}/lifecycle/StopContainerRequestPubSubTypes.cxx
+                        ${GENERATED_DIR}/lifecycle/StopContainerRequestTypeObjectSupport.cxx
+                        ${GENERATED_DIR}/lifecycle/LifecycleCtrlRequestPubSubTypes.cxx
+                        ${GENERATED_DIR}/lifecycle/LifecycleCtrlRequestTypeObjectSupport.cxx
 )
 set ( MAIN_SRC main.cc
                ${MANAGER_SRC}

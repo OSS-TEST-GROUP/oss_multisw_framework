@@ -10,6 +10,13 @@
 #include "endpoint/EndPointFactory.hpp"
 #include "logger/Log.hpp"
 
+// F013: full IDL definitions required by the lambdas below
+#include "lifecycle/NotifyContainerState.hpp"
+#include "lifecycle/StartContainerRequest.hpp"
+#include "lifecycle/StopContainerRequest.hpp"
+#include "lifecycle/LifecycleCtrlRequest.hpp"
+#include "include/TypeConvert.hpp"
+
 namespace lifecycle_manager {
 
 LifecycleManager::LifecycleManager() {}
@@ -56,6 +63,50 @@ bool LifecycleManager::Initialize() {
     };
     handlers.on_update_list = [this](lifecyclemgr::UpdateServiceListRequest* msg) {
         if (service_registry_) service_registry_->UpdateServiceList(msg);
+    };
+
+    // F013: container actuator notifications from adsw_manager.
+    // NotifyContainerState carries parallel arrays {name[i], state[i], exit[i]}.
+    // We forward each to the registry so subsequent registry queries reflect
+    // the latest known state.
+    handlers.on_notify_container_state = [this](lifecyclemgr::NotifyContainerState* msg) {
+        if (!service_registry_ || msg == nullptr) return;
+        auto& names  = msg->container_list();
+        auto& states = msg->container_state_list();
+        auto& exits  = msg->exit_code_list();
+        const size_t n = names.size();
+        for (size_t i = 0; i < n; ++i) {
+            ContainerState s = (i < states.size())
+                ? TypeConvert::ToContainerState(states[i])
+                : ContainerState::CS_UNKNOWN;
+            int32_t ec = (i < exits.size()) ? exits[i] : 0;
+            service_registry_->UpdateContainerState(names[i], s, ec);
+        }
+    };
+    handlers.on_start_container_resp = [this](lifecyclemgr::StartContainerResponse* msg) {
+        if (state_manager_) state_manager_->OnStartContainer(msg);
+    };
+    handlers.on_stop_container_resp = [this](lifecyclemgr::StopContainerResponse* msg) {
+        if (state_manager_) state_manager_->OnStopContainer(msg);
+    };
+
+    // F013: ctrl/* gate from monitor/operator.  Each lambda forwards to a
+    // StateManager handler that does (a) policy gating, (b) forwarding to
+    // the actuator topic (adsw_manager), and (c) CtrlResponse publish.
+    handlers.on_ctrl_start_service = [this](lifecyclemgr::CtrlStartServiceRequest* msg) {
+        if (state_manager_) state_manager_->HandleCtrlStartService(msg);
+    };
+    handlers.on_ctrl_stop_service = [this](lifecyclemgr::CtrlStopServiceRequest* msg) {
+        if (state_manager_) state_manager_->HandleCtrlStopService(msg);
+    };
+    handlers.on_ctrl_set_service_mode = [this](lifecyclemgr::CtrlSetServiceModeRequest* msg) {
+        if (state_manager_) state_manager_->HandleCtrlSetServiceMode(msg);
+    };
+    handlers.on_ctrl_start_container = [this](lifecyclemgr::CtrlStartContainerRequest* msg) {
+        if (state_manager_) state_manager_->HandleCtrlStartContainer(msg);
+    };
+    handlers.on_ctrl_stop_container = [this](lifecyclemgr::CtrlStopContainerRequest* msg) {
+        if (state_manager_) state_manager_->HandleCtrlStopContainer(msg);
     };
 
     endpoint_factory_->CreateEndPoints(msg_transmitter_, handlers);
