@@ -344,7 +344,29 @@ bool ServiceRegistry::ProcessUpdateServiceListRequest() {
           TypeConvert::ToRecoveryPolicy(service_ptr->GetRecoveryPolicy());
       service_info.is_enabled() = service_ptr->IsEnabled();
       service_info.os_type() = TypeConvert::ToOsType(OsType::ROS2);
+      // F013: tell lifecycle_mgr which container hosts this service.
+      service_info.container_name() = service_ptr->GetContainerName();
       message.service_list().push_back(service_info);
+    }
+  }
+
+  // F013: ship known containers alongside services so lifecycle_mgr can
+  // populate its registry's containers_ map and expose them to the monitor.
+  auto controller = ADSWManager::Get()->GetServiceController();
+  if (controller) {
+    auto container_ctrl = controller->GetContainer();
+    if (container_ctrl) {
+      for (const auto &container : container_ctrl->GetAllContainers()) {
+        if (container == nullptr) continue;
+        lifecyclemgr::Container container_info;
+        container_info.name()                = container->GetName();
+        container_info.image()               = container->GetImage();
+        container_info.deploy_file()         = container->GetDeployFile();
+        container_info.container_namespace() = container->GetNamespace();
+        container_info.type()                = TypeConvert::ToContainerType(
+            container->GetContainerType());
+        message.container_list().push_back(container_info);
+      }
     }
   }
 
@@ -357,7 +379,8 @@ bool ServiceRegistry::ProcessUpdateServiceListRequest() {
   if (endpoint != nullptr) {
     endpoint->Write(&message);
     LOG_DEBUG("UpdateServiceListRequest sent with "
-              << message.service_list().size() << " services.");
+              << message.service_list().size() << " services and "
+              << message.container_list().size() << " containers.");
     UpdateLastSentRecovery();
     return true;
   }
@@ -573,6 +596,9 @@ bool ServiceRegistry::LoadServiceSaved(const std::string &path) {
             if (execTypeStr == "binary") {
               service->SetDirectExec(true);
             }
+            // F013: stamp the enclosing container name so lifecycle_mgr can
+            // map service ↔ container without re-deriving from the group.
+            service->SetContainerName(groupname);
             AddService(service, groupname);
           }
         }

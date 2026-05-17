@@ -57,6 +57,13 @@ class Service {
     void SetDirectExec(bool direct);
     bool IsDirectExec() const;
 
+    // F013: which container hosts this service. Empty string = native /
+    // non-containerised. Set during ServiceRegistry::LoadServiceSaved from
+    // the enclosing container's `name` field and shipped to lifecycle_mgr
+    // in UpdateServiceListRequest.Service.container_name.
+    void SetContainerName(const std::string& name) { container_name_ = name; }
+    const std::string& GetContainerName() const { return container_name_; }
+
     // Pick the cmdline-suffix that uniquely identifies this service's process
     // in `pgrep -f <token>$`. Precedence:
     //   1. Explicit ProcessMatchPattern if set
@@ -82,6 +89,8 @@ class Service {
     int32_t current_nodes_;
     uint64_t pid_;
     int32_t exit_code_;
+
+    std::string container_name_;  // F013
 };
 
 } // namespace adsw_manager

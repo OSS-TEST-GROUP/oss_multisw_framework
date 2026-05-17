@@ -1,6 +1,8 @@
 #ifndef ROS2_ADSW_MANAGER_SERIVCE_TYPE_COVERT_HPP_
 #define ROS2_ADSW_MANAGER_SERIVCE_TYPE_COVERT_HPP_
 
+#include "Container.hpp"
+
 namespace ros2 {
 namespace adsw_manager {
 
@@ -90,6 +92,19 @@ class TypeConvert {
             case OsType::ROS2 : return lifecyclemgr::OsType::ROS2;
             case OsType::AGL : return lifecyclemgr::OsType::AGL;
             case OsType::AUTOSAR : return lifecyclemgr::OsType::AUTOSAR;
+        }
+    }
+
+    // F013: Container enum bridge between adsw_manager local enum and the IDL.
+    // Note local enum is `UNKNOWN/K3S/DOCKER/DOCKER_COMPOSE`; IDL uses
+    // `CT_UNKNOWN/DOCKER/DOCKER_COMPOSE/K3S` (slightly different ordering).
+    static lifecyclemgr::ContainerType ToContainerType(ContainerType t) {
+        switch (t) {
+            case ContainerType::DOCKER         : return lifecyclemgr::ContainerType::DOCKER;
+            case ContainerType::DOCKER_COMPOSE : return lifecyclemgr::ContainerType::DOCKER_COMPOSE;
+            case ContainerType::K3S            : return lifecyclemgr::ContainerType::K3S;
+            case ContainerType::UNKNOWN        :
+            default                            : return lifecyclemgr::ContainerType::CT_UNKNOWN;
         }
     }
 };

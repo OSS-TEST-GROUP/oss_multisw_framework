@@ -24,6 +24,10 @@ set ( TRANSMIT_SRC
     endpoint/StopServiceEndPoint.cpp
     endpoint/UpdateServiceListEndPoint.cpp
     endpoint/AdswServiceStatusEndPoint.cpp
+    # F013: container actuator surface
+    endpoint/NotifyContainerStateEndPoint.cpp
+    endpoint/StartContainerEndPoint.cpp
+    endpoint/StopContainerEndPoint.cpp
 )
 
 set ( SERVICE_SRC
@@ -74,7 +78,14 @@ set(GENERATED_DDS_LIFECYCLE_FILES
                         ${GENERATED_LIFECYCLE_DIR}/lifecycle/UpdateServiceListRequestPubSubTypes.cxx
                         ${GENERATED_LIFECYCLE_DIR}/lifecycle/UpdateServiceListRequestTypeObjectSupport.cxx
                         ${GENERATED_LIFECYCLE_DIR}/lifecycle/LifecycleCommonPubSubTypes.cxx
-                        ${GENERATED_LIFECYCLE_DIR}/lifecycle/LifecycleCommonTypeObjectSupport.cxx                                           
+                        ${GENERATED_LIFECYCLE_DIR}/lifecycle/LifecycleCommonTypeObjectSupport.cxx
+                        # F013
+                        ${GENERATED_LIFECYCLE_DIR}/lifecycle/NotifyContainerStatePubSubTypes.cxx
+                        ${GENERATED_LIFECYCLE_DIR}/lifecycle/NotifyContainerStateTypeObjectSupport.cxx
+                        ${GENERATED_LIFECYCLE_DIR}/lifecycle/StartContainerRequestPubSubTypes.cxx
+                        ${GENERATED_LIFECYCLE_DIR}/lifecycle/StartContainerRequestTypeObjectSupport.cxx
+                        ${GENERATED_LIFECYCLE_DIR}/lifecycle/StopContainerRequestPubSubTypes.cxx
+                        ${GENERATED_LIFECYCLE_DIR}/lifecycle/StopContainerRequestTypeObjectSupport.cxx
 )
 
 ## Source

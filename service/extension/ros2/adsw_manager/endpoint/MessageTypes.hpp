@@ -8,20 +8,27 @@ namespace adsw_manager {
     enum class MessageType {
         ROS2_DISCOVREY_INFO,
         NOTIFY_SERVICE_STATE,
-        
+
         UPDATE_SERVICE_LIST_REQUEST,
         UPDATE_SERVICE_LIST_RESPONSE,
 
         GET_SERVICE_STATE_REQUEST,
         GET_SERVICE_STATE_RESPONSE,
-        
+
         START_SERVICE_REQUEST,
         START_SERVICE_RESPONSE,
 
         STOP_SERVICE_REQUEST,
         STOP_SERVICE_RESPONSE,
 
-        ADSW_SERVICE_STATUS
+        ADSW_SERVICE_STATUS,
+
+        // F013: container actuator surface (paired with lifecycle_mgr S2b)
+        NOTIFY_CONTAINER_STATE,
+        START_CONTAINER_REQUEST,
+        START_CONTAINER_RESPONSE,
+        STOP_CONTAINER_REQUEST,
+        STOP_CONTAINER_RESPONSE,
     };
 
     

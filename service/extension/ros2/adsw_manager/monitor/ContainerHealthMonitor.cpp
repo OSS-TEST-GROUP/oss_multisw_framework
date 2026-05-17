@@ -11,7 +11,12 @@
 #include "service/ServiceRegistry.hpp"
 #include "service/Service.hpp"
 #include "service/ServiceState.hpp"
+#include "transmitter/DDSTransmitter.hpp"
 #include "logger/Log.hpp"
+
+// F013: NotifyContainerState DDS publish
+#include "lifecycle/NotifyContainerState.hpp"
+#include "endpoint/MessageTypes.hpp"
 
 namespace ros2 {
 namespace adsw_manager {
@@ -139,10 +144,35 @@ void ContainerHealthMonitor::NotifyContainerState(const std::string& container_n
                                                    bool is_running,
                                                    int32_t exit_code) {
     if (!ADSWManager::Get()) return;
+
+    // Existing path: fan out as per-service NotifyServiceState so recovery
+    // policy keeps working.
     auto monitor = ADSWManager::Get()->GetServiceMonitor();
     if (monitor) {
         monitor->OnContainerStateChanged(container_name, is_running, exit_code);
     }
+
+    // F013: also publish a dedicated NotifyContainerState DDS message so
+    // lifecycle_mgr can update its containers_ map and the monitor sees
+    // container-level state changes directly (independent of services).
+    auto transmitter = ADSWManager::Get()->GetTransmitter();
+    const char* topic = ADSWManager::Get()->GetTopic(MessageType::NOTIFY_CONTAINER_STATE);
+    if (!transmitter || !topic) return;
+
+    auto endpoint = transmitter->GetMessageEndpoint(topic);
+    if (!endpoint) return;
+
+    lifecyclemgr::NotifyContainerState payload;
+    payload.container_list().push_back(container_name);
+    payload.container_state_list().push_back(
+        is_running ? lifecyclemgr::ContainerState::CONTAINER_RUNNING
+                   : lifecyclemgr::ContainerState::CONTAINER_STOPPED);
+    payload.exit_code_list().push_back(exit_code);
+    endpoint->Write(&payload);
+
+    LOG_DEBUG("NotifyContainerState published: " << container_name
+              << " running=" << (is_running ? "true" : "false")
+              << " exit_code=" << exit_code);
 }
 
 void ContainerHealthMonitor::PollServicesInContainer(const std::string& container_name) {
