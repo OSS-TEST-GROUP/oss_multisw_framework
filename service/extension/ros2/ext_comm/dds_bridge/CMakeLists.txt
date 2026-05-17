@@ -21,5 +21,9 @@ install(TARGETS ${PROJECT_NAME}
 install(DIRECTORY
     ${CMAKE_SOURCE_DIR}/idl/dds/common
     ${CMAKE_SOURCE_DIR}/idl/dds/ota_mgr
+    # F012/F013: bridge also forwards lifecycle_mgr topics — explicit
+    # install so the runtime IDL parser finds them regardless of which
+    # other target happened to copy them first.
+    ${CMAKE_SOURCE_DIR}/idl/dds/lifecycle
     DESTINATION bin/idl
 )
