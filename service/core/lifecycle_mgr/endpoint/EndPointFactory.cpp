@@ -63,6 +63,28 @@ int32_t EndPointFactory::Initialize(){
     topic_lists_[MessageType::UPDATE_SERVICE_LIST_REQUEST] = MessageTopic::GetTopicStr(MessageType::UPDATE_SERVICE_LIST_REQUEST);;
     topic_lists_[MessageType::UPDATE_SERVICE_LIST_RESPONSE] = MessageTopic::GetTopicStr(MessageType::UPDATE_SERVICE_LIST_RESPONSE);;
 
+    // F013: Container management + ctrl/* surface. Topic-string registration
+    // only at this stage — actual endpoint instantiation lives in the
+    // CreateEndPoints() switch (added incrementally in S2b-3).  Unhandled
+    // MessageTypes fall through with pubsub = PUBSUB_NONE so registering
+    // them here is a safe no-op until the switch case lands.
+    topic_lists_[MessageType::NOTIFY_CONTAINER_STATE]   = MessageTopic::GetTopicStr(MessageType::NOTIFY_CONTAINER_STATE);
+    topic_lists_[MessageType::START_CONTAINER_REQUEST]  = MessageTopic::GetTopicStr(MessageType::START_CONTAINER_REQUEST);
+    topic_lists_[MessageType::START_CONTAINER_RESPONSE] = MessageTopic::GetTopicStr(MessageType::START_CONTAINER_RESPONSE);
+    topic_lists_[MessageType::STOP_CONTAINER_REQUEST]   = MessageTopic::GetTopicStr(MessageType::STOP_CONTAINER_REQUEST);
+    topic_lists_[MessageType::STOP_CONTAINER_RESPONSE]  = MessageTopic::GetTopicStr(MessageType::STOP_CONTAINER_RESPONSE);
+
+    topic_lists_[MessageType::CTRL_START_SERVICE_REQUEST]      = MessageTopic::GetTopicStr(MessageType::CTRL_START_SERVICE_REQUEST);
+    topic_lists_[MessageType::CTRL_START_SERVICE_RESPONSE]     = MessageTopic::GetTopicStr(MessageType::CTRL_START_SERVICE_RESPONSE);
+    topic_lists_[MessageType::CTRL_STOP_SERVICE_REQUEST]       = MessageTopic::GetTopicStr(MessageType::CTRL_STOP_SERVICE_REQUEST);
+    topic_lists_[MessageType::CTRL_STOP_SERVICE_RESPONSE]      = MessageTopic::GetTopicStr(MessageType::CTRL_STOP_SERVICE_RESPONSE);
+    topic_lists_[MessageType::CTRL_SET_SERVICE_MODE_REQUEST]   = MessageTopic::GetTopicStr(MessageType::CTRL_SET_SERVICE_MODE_REQUEST);
+    topic_lists_[MessageType::CTRL_SET_SERVICE_MODE_RESPONSE]  = MessageTopic::GetTopicStr(MessageType::CTRL_SET_SERVICE_MODE_RESPONSE);
+    topic_lists_[MessageType::CTRL_START_CONTAINER_REQUEST]    = MessageTopic::GetTopicStr(MessageType::CTRL_START_CONTAINER_REQUEST);
+    topic_lists_[MessageType::CTRL_START_CONTAINER_RESPONSE]   = MessageTopic::GetTopicStr(MessageType::CTRL_START_CONTAINER_RESPONSE);
+    topic_lists_[MessageType::CTRL_STOP_CONTAINER_REQUEST]     = MessageTopic::GetTopicStr(MessageType::CTRL_STOP_CONTAINER_REQUEST);
+    topic_lists_[MessageType::CTRL_STOP_CONTAINER_RESPONSE]    = MessageTopic::GetTopicStr(MessageType::CTRL_STOP_CONTAINER_RESPONSE);
+
     return topic_lists_.size();
 
 }
