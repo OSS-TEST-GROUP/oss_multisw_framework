@@ -1,0 +1,17 @@
+// F013: lifecycle_mgr → adsw_manager container stop command.
+// See StartContainerRequest.idl for the symmetric flow rationale.
+
+#include "LifecycleCommon.idl"
+
+module lifecyclemgr {
+
+    /* TopicName - mmf/lifecyclemgr/StopContainerRequest */
+    struct StopContainerRequest {
+        sequence<string> container_list;
+    };
+
+    /* TopicName - mmf/lifecyclemgr/StopContainerResponse */
+    struct StopContainerResponse {
+        ReturnCode ret_code;
+    };
+};

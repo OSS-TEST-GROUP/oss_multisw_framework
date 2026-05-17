@@ -40,4 +40,29 @@ module lifecyclemgr {
         AGL,
         AUTOSAR
     };
+
+    // F013: container as a first-class concept in lifecycle_mgr.
+    // adsw_manager registers its containers alongside services so the
+    // monitor / control surface can address them directly.
+    enum ContainerType {
+        CT_UNKNOWN,
+        DOCKER,
+        DOCKER_COMPOSE,
+        K3S
+    };
+
+    enum ContainerState {
+        CS_UNKNOWN,
+        CONTAINER_STOPPED,
+        CONTAINER_RUNNING,
+        CONTAINER_PAUSED
+    };
+
+    struct Container {
+        string name;            // unique identifier within a registration
+        string image;            // docker image / kubernetes image
+        string deploy_file;      // compose file or k8s manifest path
+        string container_namespace;  // k8s namespace (or "" for plain docker)
+        ContainerType type;
+    };
 };

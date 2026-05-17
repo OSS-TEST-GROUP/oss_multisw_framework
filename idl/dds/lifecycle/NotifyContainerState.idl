@@ -1,0 +1,21 @@
+// F013: container-state notification.  adsw_manager publishes whenever a
+// container transitions running ↔ stopped (ContainerHealthMonitor poll).
+// lifecycle_mgr subscribes, updates its Container registry, and re-publishes
+// the same payload on a forwarded topic the lfc_monitor reads through
+// rosbridge.
+
+#include "LifecycleCommon.idl"
+
+module lifecyclemgr {
+
+    /* TopicName - mmf/lifecyclemgr/NotifyContainerState */
+    struct NotifyContainerState {
+        // Parallel arrays — entry i in each list describes the same container.
+        // Kept array-style (not struct-of-arrays) for symmetry with the
+        // existing NotifyServiceState shape so downstream subscribers can
+        // re-use parsing helpers.
+        sequence<string> container_list;
+        sequence<ContainerState> container_state_list;
+        sequence<int32> exit_code_list;
+    };
+};

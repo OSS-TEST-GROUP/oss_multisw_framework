@@ -1,0 +1,21 @@
+// F013: lifecycle_mgr → adsw_manager container start command.
+//
+// Issued by lifecycle_mgr's StateManager after a Ctrl* command from
+// lfc_monitor (or other client) passes policy gating.  adsw_manager
+// answers via StartContainerResponse and runs docker start / kubectl apply
+// via its ContainerController.
+
+#include "LifecycleCommon.idl"
+
+module lifecyclemgr {
+
+    /* TopicName - mmf/lifecyclemgr/StartContainerRequest */
+    struct StartContainerRequest {
+        sequence<string> container_list;
+    };
+
+    /* TopicName - mmf/lifecyclemgr/StartContainerResponse */
+    struct StartContainerResponse {
+        ReturnCode ret_code;
+    };
+};
