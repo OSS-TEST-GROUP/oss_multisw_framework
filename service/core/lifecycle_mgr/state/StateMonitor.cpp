@@ -141,6 +141,12 @@ bool StateMonitor::getServiceState(std::shared_ptr<Service> svc, lifecyclemgr::S
     entry.service_state() = TypeConvert::ToServiceState(svc->GetServiceState());
     entry.is_enabled() = svc->isEnabled();
     entry.recovered_count() = svc->GetRecoveredCount();
+    // F013/F014 follow-up: enrich the periodic diag report so monitors
+    // (e.g. lfc_monitor) see policy + last exit + hosting container without
+    // a second channel.
+    entry.recovery_policy() = TypeConvert::ToRecoveryPolicy(svc->GetRecoveryPolicy());
+    entry.exit_code() = svc->GetExitCode();
+    entry.container_name() = svc->GetContainerName();
 
     return false;
 }

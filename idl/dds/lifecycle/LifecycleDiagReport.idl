@@ -8,6 +8,13 @@ module lifecyclemgr {
         ServiceState service_state;
         boolean is_enabled;
         int32 recovered_count;
+        // F013/F014 follow-up: surface recovery policy + last exit code +
+        // hosting container name in the periodic diag report so the monitor
+        // doesn't need a separate channel for these.  Older subscribers
+        // simply ignore the extra fields.
+        RecoveryPolicy recovery_policy;
+        int32 exit_code;
+        string container_name;
     };
 
     /* TopicName - mmf/lifecyclemgr/LifecycleDiagReport */

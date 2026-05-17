@@ -1,12 +1,18 @@
 #ifndef ROS2_ADSW_MANAGER_SERIVCE_TYPE_COVERT_HPP_
 #define ROS2_ADSW_MANAGER_SERIVCE_TYPE_COVERT_HPP_
 
+// IMPORTANT: include the IDL header at file scope, NOT inside our namespace.
+// The IDL-generated header pulls in fastcdr's fixed_size_string headers
+// which reference std::string — including those headers inside our namespace
+// resolves std as `ros2::adsw_manager::std` and the build breaks.
+// (Previously the IDL header was light enough to slip through; the F013-S4
+// LifecycleCommon extension surfaced the bug.)
+#include "lifecycle/LifecycleCommon.hpp"
+
 #include "Container.hpp"
 
 namespace ros2 {
 namespace adsw_manager {
-
-#include "lifecycle/LifecycleCommon.hpp"
 
 class TypeConvert {
   public:
