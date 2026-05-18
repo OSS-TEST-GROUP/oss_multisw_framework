@@ -478,39 +478,73 @@ bool ROSServiceController::ProcessServiceStartRequest(lifecyclemgr::StartService
             int32_t count = 0;
             LOG_DEBUG("Starting services: " << (is_group ? "Group" : "Individual") << " - " << service_list.size() << " services.");
 
-            // 컨테이너가 실행 중이 아닐 때만 시작한다.
-            // 서비스 상태에 의한 컨테이너 재시작은 하지 않는다.
-            if (container_controller_) {
-                std::shared_ptr<ServiceRegistry> registry = ADSWManager::Get()->GetServiceRegistry();
-                std::set<std::string> started_containers;
+            // Container ownership semantics — services live inside
+            // their container.  Per-container we attempt at most one
+            // start: if the container goes RUNNING (already, or after
+            // our explicit start), services hosted in it proceed.  If
+            // StartContainer fails, every service mapped to that
+            // container is skipped and the overall result reflects that
+            // — instead of silently trying StartService against a
+            // non-existent container, which the docker-exec inside
+            // StartService would then fail at, producing two layers of
+            // confusing error logs and a misleading ctrl/* outcome.
+            std::shared_ptr<ServiceRegistry> registry =
+                ADSWManager::Get()->GetServiceRegistry();
+            std::set<std::string> failed_containers;
+            if (container_controller_ && registry) {
+                std::set<std::string> handled_containers;
                 for (const auto& svc_name : service_list) {
-                    if (!registry) break;
                     std::shared_ptr<Service> svc = registry->GetService(svc_name);
                     if (!svc) continue;
-                    std::string container_name = registry->GetGroupNameByService(svc);
+                    std::string container_name =
+                        registry->GetGroupNameByService(svc);
                     if (container_name.empty()) continue;
-                    if (started_containers.count(container_name)) continue;
+                    if (handled_containers.count(container_name)) continue;
+                    handled_containers.insert(container_name);
 
-                    if (!container_controller_->IsContainerRunning(container_name)) {
-                        LOG_DEBUG("ROSServiceController: container " << container_name
-                                  << " not running, starting it for service " << svc_name);
-                        container_controller_->StartContainer(container_name);
-                    } else {
+                    if (container_controller_->IsContainerRunning(container_name)) {
                         LOG_DEBUG("ROSServiceController: container " << container_name
                                   << " already running, starting service only: " << svc_name);
+                        continue;
                     }
-                    started_containers.insert(container_name);
+                    LOG_DEBUG("ROSServiceController: container " << container_name
+                              << " not running, starting it for service " << svc_name);
+                    if (!container_controller_->StartContainer(container_name)) {
+                        LOG_ERROR("StartContainer failed for " << container_name
+                                  << "; services hosted in it will be skipped");
+                        failed_containers.insert(container_name);
+                    }
                 }
             }
 
+            auto container_failed = [&](const std::string& svc_name) -> bool {
+                if (failed_containers.empty() || !registry) return false;
+                auto svc = registry->GetService(svc_name);
+                if (!svc) return false;
+                const std::string container_name =
+                    registry->GetGroupNameByService(svc);
+                return !container_name.empty() &&
+                       failed_containers.count(container_name) > 0;
+            };
+
             if (is_group) {
                 for (const auto& service : service_list) {
+                    if (container_failed(service)) {
+                        LOG_ERROR("Skip start of group " << service
+                                  << " — its container is down");
+                        continue;
+                    }
                     if (StartGroup(service) == true) {
                         count++;
                     }
                 }
             } else {
                 for (const auto& service : service_list) {
+                    if (container_failed(service)) {
+                        LOG_ERROR("Skip start of " << service
+                                  << " — its container is down");
+                        continue;
+                    }
                     if (StartService(service) == true){
                         count++;
                     }

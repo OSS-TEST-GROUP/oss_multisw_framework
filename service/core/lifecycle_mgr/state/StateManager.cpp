@@ -170,23 +170,26 @@ void StateManager::RequestStopAll(){
 }
 
 void StateManager::OnStart(lifecyclemgr::StartServiceResponse* message){
-
-    if (message){
-        if( message->ret_code() != lifecyclemgr::ReturnCode::SUCCESS){
-            // error 
-            LOG_ERROR("Service Start Failure " << static_cast<int32_t>(message->ret_code()));
-        }
+    if (!message) return;
+    if (message->ret_code() != lifecyclemgr::ReturnCode::SUCCESS){
+        LOG_ERROR("Service Start Failure " << static_cast<int32_t>(message->ret_code()));
     }
-
+    // F014 follow-up: keep ctrl/* response semantics symmetric with the
+    // container path (OnStartContainer).  Every StartServiceResponse the
+    // actuator emits is relayed to ctrl/StartServiceResponse so the
+    // monitor sees the real end-to-end verdict, not just a "forwarded"
+    // ack.  Non-ctrl-originated starts (e.g. recovery policy retries)
+    // also relay; that's harmless — the monitor's events ring shows
+    // operator visibility into the same outcome.
+    PublishCtrlResponse(MessageType::CTRL_START_SERVICE_RESPONSE, message->ret_code());
 }
 
 void StateManager::OnStop(lifecyclemgr::StopServiceResponse* message){
-    if (message){
-        if( message->ret_code() != lifecyclemgr::ReturnCode::SUCCESS){
-            // error
-            LOG_ERROR("Service Stop Failure " << static_cast<int32_t>(message->ret_code()));
-        }
+    if (!message) return;
+    if (message->ret_code() != lifecyclemgr::ReturnCode::SUCCESS){
+        LOG_ERROR("Service Stop Failure " << static_cast<int32_t>(message->ret_code()));
     }
+    PublishCtrlResponse(MessageType::CTRL_STOP_SERVICE_RESPONSE, message->ret_code());
 }
 
 // ── F013: actuator response relays ─────────────────────────────────────
@@ -212,14 +215,17 @@ void StateManager::OnStopContainer(lifecyclemgr::StopContainerResponse* message)
 // ── F013: ctrl/* gate handlers ────────────────────────────────────────
 //
 // Gating policy (option (b) chosen at design time):
-//   - Empty request list   → REQ_FAIL (nothing to act on).
-//   - Unknown service/container name → REQ_FAIL.
-//   - Service mode mismatch (e.g. control while in OTA_MODE) → REQ_FAIL.
-//   - Otherwise forward to the actuator topic (adsw_manager) and publish
-//     a SUCCESS CtrlResponse.  For container ops the *final* outcome is
-//     re-published by OnStartContainer / OnStopContainer when the
-//     adsw_manager response arrives — the synchronous CtrlResponse here
-//     just acknowledges that the request was accepted (i.e. forwarded).
+//   - Empty request list   → FAILED (nothing to act on, surface immediately).
+//   - Unknown service/container name → FAILED.
+//   - Service mode mismatch (e.g. control while in OTA_MODE) → FAILED.
+//   - Otherwise forward to the actuator topic (adsw_manager) and let the
+//     OnStart/OnStop/OnStart/StopContainer relays publish the
+//     ctrl/*Response with the real actuator verdict.  No interim SUCCESS
+//     ack — every ctrl/* command shares one shape:
+//       "lifecycle_mgr's ctrl/*Response == actuator's success/fail",
+//     mirroring how StartContainer already worked. The operator never
+//     sees an early SUCCESS that's contradicted by a later failure on a
+//     separate channel.
 
 void StateManager::HandleCtrlStartService(lifecyclemgr::CtrlStartServiceRequest* message){
     if (!message){ return; }
@@ -264,8 +270,8 @@ void StateManager::HandleCtrlStartService(lifecyclemgr::CtrlStartServiceRequest*
         transmitter->SendMessage(MessageType::START_SERVICE_REQUEST,
                                   reinterpret_cast<void*>(&start_request_));
     }
-    PublishCtrlResponse(MessageType::CTRL_START_SERVICE_RESPONSE,
-                        lifecyclemgr::ReturnCode::SUCCESS);
+    // No interim ctrl/StartServiceResponse here — OnStart() relays the
+    // real actuator verdict once StartServiceResponse comes back.
 }
 
 void StateManager::HandleCtrlStopService(lifecyclemgr::CtrlStopServiceRequest* message){
@@ -304,8 +310,8 @@ void StateManager::HandleCtrlStopService(lifecyclemgr::CtrlStopServiceRequest* m
         transmitter->SendMessage(MessageType::STOP_SERVICE_REQUEST,
                                   reinterpret_cast<void*>(&stop_request_));
     }
-    PublishCtrlResponse(MessageType::CTRL_STOP_SERVICE_RESPONSE,
-                        lifecyclemgr::ReturnCode::SUCCESS);
+    // No interim ctrl/StopServiceResponse — OnStop() relays the real
+    // actuator verdict once StopServiceResponse comes back.
 }
 
 void StateManager::HandleCtrlSetServiceMode(lifecyclemgr::CtrlSetServiceModeRequest* message){
