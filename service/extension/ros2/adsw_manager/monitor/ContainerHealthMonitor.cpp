@@ -113,18 +113,25 @@ void ContainerHealthMonitor::PollLoop() {
         for (const auto& container : containers) {
             const std::string& name = container->GetName();
             bool is_running = container_ctrl->IsContainerRunning(name);
+            int32_t exit_code = is_running ? 0 : container_ctrl->GetContainerExitCode(name);
 
             auto it = prev_state_.find(name);
             bool prev_running = (it != prev_state_.end()) ? it->second : false;
+            bool first_time = (it == prev_state_.end());
 
-            if (is_running != prev_running) {
-                int32_t exit_code = is_running ? 0 : container_ctrl->GetContainerExitCode(name);
+            if (first_time || is_running != prev_running) {
                 LOG_DEBUG("ContainerHealthMonitor: " << name
                           << " state changed: " << (prev_running ? "running" : "stopped")
                           << " -> " << (is_running ? "running" : "stopped")
                           << " exit_code=" << exit_code);
                 NotifyContainerState(name, is_running, exit_code);
                 prev_state_[name] = is_running;
+            } else {
+                // F014 follow-up heartbeat: re-publish the latest known
+                // state every cycle so monitors that connected after the
+                // initial publish still see the container.  dds_bridge's
+                // VOLATILE durability would otherwise leave them blank.
+                PublishContainerStateHeartbeat(name, is_running, exit_code);
             }
 
             // Per-service PID polling: catches SIGKILL of an individual ROS2
@@ -155,6 +162,15 @@ void ContainerHealthMonitor::NotifyContainerState(const std::string& container_n
     // F013: also publish a dedicated NotifyContainerState DDS message so
     // lifecycle_mgr can update its containers_ map and the monitor sees
     // container-level state changes directly (independent of services).
+    PublishContainerStateHeartbeat(container_name, is_running, exit_code);
+}
+
+// virtual — overridable in tests
+void ContainerHealthMonitor::PublishContainerStateHeartbeat(
+        const std::string& container_name,
+        bool is_running,
+        int32_t exit_code) {
+    if (!ADSWManager::Get()) return;
     auto transmitter = ADSWManager::Get()->GetTransmitter();
     const char* topic = ADSWManager::Get()->GetTopic(MessageType::NOTIFY_CONTAINER_STATE);
     if (!transmitter || !topic) return;
@@ -169,10 +185,6 @@ void ContainerHealthMonitor::NotifyContainerState(const std::string& container_n
                    : lifecyclemgr::ContainerState::CONTAINER_STOPPED);
     payload.exit_code_list().push_back(exit_code);
     endpoint->Write(&payload);
-
-    LOG_DEBUG("NotifyContainerState published: " << container_name
-              << " running=" << (is_running ? "true" : "false")
-              << " exit_code=" << exit_code);
 }
 
 void ContainerHealthMonitor::PollServicesInContainer(const std::string& container_name) {

@@ -24,9 +24,23 @@ class ContainerHealthMonitor {
 
   protected:
     // Overridable in tests to intercept state-change notifications.
+    // This path does the full fan-out: per-service NotifyServiceState
+    // through ServiceMonitor + dedicated NotifyContainerState DDS publish.
+    // Only call on actual transitions to avoid retriggering recovery.
     virtual void NotifyContainerState(const std::string& container_name,
                                       bool is_running,
                                       int32_t exit_code);
+
+    // F014 follow-up: publish-only path used by the periodic heartbeat.
+    // dds_bridge forces VOLATILE durability so late-subscribing monitors
+    // (e.g. lfc_monitor launched after adsw_manager) miss the one-shot
+    // notify emitted on startup. Re-publishing the latest known state
+    // every poll lets a fresh client catch up within one cycle, without
+    // re-triggering ServiceMonitor's per-service fan-out (which would
+    // poke lifecycle_mgr's recovery policy on every tick).
+    virtual void PublishContainerStateHeartbeat(const std::string& container_name,
+                                                 bool is_running,
+                                                 int32_t exit_code);
 
   protected:
     std::map<std::string, bool> prev_state_;  // container_name -> was_running
