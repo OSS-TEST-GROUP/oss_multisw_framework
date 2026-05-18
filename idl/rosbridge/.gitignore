@@ -2,3 +2,7 @@
 # ament packages plus colcon build/log/install. Regenerated on every
 # run; never commit anything inside.
 work/
+build/
+install/
+log/
+msg/
