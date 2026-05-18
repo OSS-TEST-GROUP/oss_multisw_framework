@@ -1,0 +1,19 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from mmf_interfaces/msg/CommonStatusType.msg
+// generated code does not contain a copyright notice
+
+
+module mmf_interfaces {
+  module msg {
+    module CommonStatusType_Constants {
+      const int32 UNKNOWN = 0;
+      const int32 PASS = 1;
+      const int32 FAIL = 2;
+    };
+    @verbatim (language="comment", text=
+      "CommonStatusType enum (from common/Common.idl)")
+    struct CommonStatusType {
+      int32 value;
+    };
+  };
+};

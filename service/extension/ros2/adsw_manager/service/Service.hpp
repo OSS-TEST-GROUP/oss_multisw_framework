@@ -21,6 +21,9 @@ class Service {
 
     ServiceType GetServiceType();
     RecoveryPolicy GetRecoveryPolicy();
+    // F014 follow-up: in-memory mutation for ctrl/SetRecoveryPolicy.
+    // ServiceRegistry::Save() persists to saved-service-list.yaml.
+    void SetRecoveryPolicy(RecoveryPolicy policy);
     bool IsEnabled();
 
     ServiceState GetServiceState();

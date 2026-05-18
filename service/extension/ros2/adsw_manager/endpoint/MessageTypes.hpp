@@ -29,6 +29,10 @@ namespace adsw_manager {
         START_CONTAINER_RESPONSE,
         STOP_CONTAINER_REQUEST,
         STOP_CONTAINER_RESPONSE,
+
+        // F014 follow-up: recovery policy actuator (lifecycle_mgr → adsw)
+        SET_RECOVERY_POLICY_REQUEST,
+        SET_RECOVERY_POLICY_RESPONSE,
     };
 
     

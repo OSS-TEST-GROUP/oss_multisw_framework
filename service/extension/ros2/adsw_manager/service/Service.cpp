@@ -35,6 +35,10 @@ RecoveryPolicy Service::GetRecoveryPolicy() {
     return recovery_policy_;
 }
 
+void Service::SetRecoveryPolicy(RecoveryPolicy policy) {
+    recovery_policy_ = policy;
+}
+
 bool Service::IsEnabled() {
     return is_enabled_;
 }

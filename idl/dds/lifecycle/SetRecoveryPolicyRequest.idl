@@ -1,0 +1,25 @@
+// F014 follow-up: persistent per-service recovery-policy mutation actuator.
+//
+// Companion to the ctrl/SetRecoveryPolicy gate.  lifecycle_mgr forwards
+// the validated request on this topic; adsw_manager (the yaml owner)
+// applies it to its ServiceRegistry, calls Save() to persist into
+// saved-service-list.yaml, and acks via SetRecoveryPolicyResponse —
+// which lifecycle_mgr then relays back to monitor as the final
+// ctrl/SetRecoveryPolicyResponse, matching the Start/StopContainer
+// pattern.
+
+#include "LifecycleCommon.idl"
+
+module lifecyclemgr {
+
+    /* TopicName - mmf/lifecyclemgr/SetRecoveryPolicyRequest */
+    struct SetRecoveryPolicyRequest {
+        sequence<string> service_list;
+        RecoveryPolicy recovery_policy;
+    };
+
+    /* TopicName - mmf/lifecyclemgr/SetRecoveryPolicyResponse */
+    struct SetRecoveryPolicyResponse {
+        ReturnCode ret_code;
+    };
+};

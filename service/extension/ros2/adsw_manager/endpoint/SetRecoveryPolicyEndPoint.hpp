@@ -1,0 +1,41 @@
+#ifndef ADSW_SET_RECOVERY_POLICY_ENDPOINT_HPP_
+#define ADSW_SET_RECOVERY_POLICY_ENDPOINT_HPP_
+
+#include <memory>
+#include <string>
+
+#include "transmitter/DDSMessageEndpoint.hpp"
+#include "lifecycle/SetRecoveryPolicyRequestPubSubTypes.hpp"
+#include "MessageTypes.hpp"
+
+namespace ros2 {
+namespace adsw_manager {
+
+using namespace lifecyclemgr;
+
+// F014 follow-up: adsw side of SetRecoveryPolicy.  SUB the request,
+// mutate ServiceRegistry, persist via ServiceRegistry::Save(), PUB the
+// response.  Same paired pattern as Start/StopContainerEndPoint.
+class SetRecoveryPolicyEndPoint : public DDSMessageEndpoint {
+  public:
+    SetRecoveryPolicyEndPoint(MessageType msgtype, std::string topic);
+    virtual ~SetRecoveryPolicyEndPoint();
+
+    virtual std::string GetTopic();
+    virtual std::string GetTypeName();
+    virtual std::shared_ptr<TypeSupport> GetTypeSupport();
+
+    virtual void OnDataAvailable();
+
+  private:
+    std::string                  topic_;
+    std::shared_ptr<TypeSupport> type_support_;
+
+    SetRecoveryPolicyRequest  req_;
+    SetRecoveryPolicyResponse resp_;
+};
+
+} // namespace adsw_manager
+} // namespace ros2
+
+#endif // ADSW_SET_RECOVERY_POLICY_ENDPOINT_HPP_

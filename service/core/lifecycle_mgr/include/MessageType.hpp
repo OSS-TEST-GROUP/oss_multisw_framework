@@ -28,6 +28,11 @@ enum class MessageType {
     STOP_CONTAINER_REQUEST,         // lifecycle_mgr → adsw_manager  (pub)
     STOP_CONTAINER_RESPONSE,        // adsw_manager → lifecycle_mgr  (sub)
 
+    // F014 follow-up: per-service recovery-policy mutation actuator.
+    // adsw_manager owns saved-service-list.yaml and persists the change.
+    SET_RECOVERY_POLICY_REQUEST,    // lifecycle_mgr → adsw_manager  (pub)
+    SET_RECOVERY_POLICY_RESPONSE,   // adsw_manager → lifecycle_mgr  (sub)
+
     // ── F013: Operator/monitor → lifecycle_mgr policy gate (ctrl/*) ──
     // lifecycle_mgr subscribes for every request, gates, then forwards to
     // the actuator topics above (or to existing Start/Stop/SetServiceMode
@@ -43,6 +48,10 @@ enum class MessageType {
     CTRL_START_CONTAINER_RESPONSE,
     CTRL_STOP_CONTAINER_REQUEST,
     CTRL_STOP_CONTAINER_RESPONSE,
+
+    // F014 follow-up: per-service recovery-policy gate.
+    CTRL_SET_RECOVERY_POLICY_REQUEST,
+    CTRL_SET_RECOVERY_POLICY_RESPONSE,
 };
 
 
@@ -89,6 +98,10 @@ class MessageTopic {
             case MessageType::STOP_CONTAINER_REQUEST   : return "mmf/lifecyclemgr/StopContainerRequest";
             case MessageType::STOP_CONTAINER_RESPONSE  : return "mmf/lifecyclemgr/StopContainerResponse";
 
+            // F014 follow-up: recovery policy actuator
+            case MessageType::SET_RECOVERY_POLICY_REQUEST  : return "mmf/lifecyclemgr/SetRecoveryPolicyRequest";
+            case MessageType::SET_RECOVERY_POLICY_RESPONSE : return "mmf/lifecyclemgr/SetRecoveryPolicyResponse";
+
             // F013: ctrl/* — monitor → lifecycle_mgr command gate
             case MessageType::CTRL_START_SERVICE_REQUEST     : return "mmf/lifecyclemgr/ctrl/StartService";
             case MessageType::CTRL_START_SERVICE_RESPONSE    : return "mmf/lifecyclemgr/ctrl/StartServiceResponse";
@@ -100,6 +113,9 @@ class MessageTopic {
             case MessageType::CTRL_START_CONTAINER_RESPONSE  : return "mmf/lifecyclemgr/ctrl/StartContainerResponse";
             case MessageType::CTRL_STOP_CONTAINER_REQUEST    : return "mmf/lifecyclemgr/ctrl/StopContainer";
             case MessageType::CTRL_STOP_CONTAINER_RESPONSE   : return "mmf/lifecyclemgr/ctrl/StopContainerResponse";
+
+            case MessageType::CTRL_SET_RECOVERY_POLICY_REQUEST  : return "mmf/lifecyclemgr/ctrl/SetRecoveryPolicy";
+            case MessageType::CTRL_SET_RECOVERY_POLICY_RESPONSE : return "mmf/lifecyclemgr/ctrl/SetRecoveryPolicyResponse";
         }
         return "";
     }

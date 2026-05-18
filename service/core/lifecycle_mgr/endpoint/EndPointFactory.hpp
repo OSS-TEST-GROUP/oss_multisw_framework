@@ -26,6 +26,9 @@ namespace lifecyclemgr {
     class CtrlSetServiceModeRequest;
     class CtrlStartContainerRequest;
     class CtrlStopContainerRequest;
+    // F014 follow-up: recovery policy mutation
+    class SetRecoveryPolicyResponse;
+    class CtrlSetRecoveryPolicyRequest;
 }
 
 namespace lifecycle_manager {
@@ -49,6 +52,10 @@ struct EndPointHandlers {
     std::function<void(lifecyclemgr::CtrlSetServiceModeRequest*)>   on_ctrl_set_service_mode;
     std::function<void(lifecyclemgr::CtrlStartContainerRequest*)>   on_ctrl_start_container;
     std::function<void(lifecyclemgr::CtrlStopContainerRequest*)>    on_ctrl_stop_container;
+
+    // F014 follow-up: recovery policy mutation
+    std::function<void(lifecyclemgr::SetRecoveryPolicyResponse*)>     on_set_recovery_policy_resp;
+    std::function<void(lifecyclemgr::CtrlSetRecoveryPolicyRequest*)>  on_ctrl_set_recovery_policy;
 };
 
 class EndPointFactory  {

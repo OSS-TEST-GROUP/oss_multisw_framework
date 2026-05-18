@@ -440,5 +440,68 @@ bool StateManager::PublishCtrlResponse(MessageType response_topic,
                                      reinterpret_cast<void*>(&ctrl_response_));
 }
 
+// ── F014 follow-up: recovery policy mutation ──────────────────────────
+//
+// monitor → ctrl/SetRecoveryPolicy → lifecycle_mgr policy gate → forward
+// to SetRecoveryPolicyRequest (actuator topic on adsw_manager) → adsw
+// mutates ServiceRegistry + persists yaml → adsw publishes
+// SetRecoveryPolicyResponse → lifecycle_mgr OnSetRecoveryPolicy() relays
+// to ctrl/SetRecoveryPolicyResponse for monitor.  Same end-to-end shape
+// as Start/StopContainer.
+
+void StateManager::HandleCtrlSetRecoveryPolicy(
+        lifecyclemgr::CtrlSetRecoveryPolicyRequest* message){
+    if (!message){ return; }
+
+    auto& names = message->service_list();
+    if (names.empty()){
+        PublishCtrlResponse(MessageType::CTRL_SET_RECOVERY_POLICY_RESPONSE,
+                            lifecyclemgr::ReturnCode::FAILED);
+        return;
+    }
+    for (const auto& name : names){
+        if (GetService(name) == nullptr){
+            LOG_ERROR("CtrlSetRecoveryPolicy: unknown service '" << name << "'");
+            PublishCtrlResponse(MessageType::CTRL_SET_RECOVERY_POLICY_RESPONSE,
+                                lifecyclemgr::ReturnCode::FAILED);
+            return;
+        }
+    }
+
+    std::shared_ptr<DDSTransmitter> transmitter = GetTransmitter();
+    if (transmitter == nullptr){
+        PublishCtrlResponse(MessageType::CTRL_SET_RECOVERY_POLICY_RESPONSE,
+                            lifecyclemgr::ReturnCode::FAILED);
+        return;
+    }
+
+    set_recovery_request_.service_list() = names;
+    set_recovery_request_.recovery_policy() = message->recovery_policy();
+    transmitter->SendMessage(MessageType::SET_RECOVERY_POLICY_REQUEST,
+                              reinterpret_cast<void*>(&set_recovery_request_));
+
+    // Mirror into local registry immediately so subsequent gating
+    // decisions see the new policy without waiting for the round trip.
+    RecoveryPolicy policy =
+        TypeConvert::ToRecoveryPolicy(message->recovery_policy());
+    for (const auto& name : names){
+        auto svc = GetService(name);
+        if (svc) svc->SetRecoveryPolicy(policy);
+    }
+    // Final ctrl/* response is published by OnSetRecoveryPolicy when the
+    // SetRecoveryPolicyResponse arrives — same pattern as Start/StopContainer.
+}
+
+void StateManager::OnSetRecoveryPolicy(
+        lifecyclemgr::SetRecoveryPolicyResponse* message){
+    if (!message) return;
+    if (message->ret_code() != lifecyclemgr::ReturnCode::SUCCESS){
+        LOG_ERROR("SetRecoveryPolicy Failure "
+                  << static_cast<int32_t>(message->ret_code()));
+    }
+    PublishCtrlResponse(MessageType::CTRL_SET_RECOVERY_POLICY_RESPONSE,
+                        message->ret_code());
+}
+
 
 } // namespace lifecycle_manager

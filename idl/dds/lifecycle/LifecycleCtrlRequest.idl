@@ -57,4 +57,14 @@ module lifecyclemgr {
     struct CtrlStopContainerRequest {
         sequence<string> container_list;
     };
+
+    /* TopicName - mmf/lifecyclemgr/ctrl/SetRecoveryPolicy */
+    // F014 follow-up: per-service recovery policy mutation from the
+    // monitor.  Same gating pattern as the other ctrl/* commands;
+    // forwards to adsw_manager which mutates ServiceRegistry + persists
+    // the yaml so the choice survives a process restart.
+    struct CtrlSetRecoveryPolicyRequest {
+        sequence<string> service_list;
+        RecoveryPolicy recovery_policy;
+    };
 };

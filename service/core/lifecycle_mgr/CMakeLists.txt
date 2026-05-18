@@ -31,6 +31,9 @@ set ( ENDPOINT_SRC
     endpoint/CtrlSetServiceModeEndPoint.cpp
     endpoint/CtrlStartContainerEndPoint.cpp
     endpoint/CtrlStopContainerEndPoint.cpp
+    # F014 follow-up: recovery policy
+    endpoint/SetRecoveryPolicyEndPoint.cpp
+    endpoint/CtrlSetRecoveryPolicyEndPoint.cpp
     endpoint/EndPointFactory.cpp
 )
 
@@ -98,6 +101,9 @@ set(GENERATED_DDS_FILES ${GENERATED_DIR}/lifecycle/LifecycleCommonPubSubTypes.cx
                         ${GENERATED_DIR}/lifecycle/StopContainerRequestTypeObjectSupport.cxx
                         ${GENERATED_DIR}/lifecycle/LifecycleCtrlRequestPubSubTypes.cxx
                         ${GENERATED_DIR}/lifecycle/LifecycleCtrlRequestTypeObjectSupport.cxx
+                        # F014 follow-up
+                        ${GENERATED_DIR}/lifecycle/SetRecoveryPolicyRequestPubSubTypes.cxx
+                        ${GENERATED_DIR}/lifecycle/SetRecoveryPolicyRequestTypeObjectSupport.cxx
 )
 set ( MAIN_SRC main.cc
                ${MANAGER_SRC}

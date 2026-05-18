@@ -28,6 +28,8 @@ set ( TRANSMIT_SRC
     endpoint/NotifyContainerStateEndPoint.cpp
     endpoint/StartContainerEndPoint.cpp
     endpoint/StopContainerEndPoint.cpp
+    # F014 follow-up: recovery policy actuator
+    endpoint/SetRecoveryPolicyEndPoint.cpp
 )
 
 set ( SERVICE_SRC
@@ -86,6 +88,9 @@ set(GENERATED_DDS_LIFECYCLE_FILES
                         ${GENERATED_LIFECYCLE_DIR}/lifecycle/StartContainerRequestTypeObjectSupport.cxx
                         ${GENERATED_LIFECYCLE_DIR}/lifecycle/StopContainerRequestPubSubTypes.cxx
                         ${GENERATED_LIFECYCLE_DIR}/lifecycle/StopContainerRequestTypeObjectSupport.cxx
+                        # F014 follow-up
+                        ${GENERATED_LIFECYCLE_DIR}/lifecycle/SetRecoveryPolicyRequestPubSubTypes.cxx
+                        ${GENERATED_LIFECYCLE_DIR}/lifecycle/SetRecoveryPolicyRequestTypeObjectSupport.cxx
 )
 
 ## Source

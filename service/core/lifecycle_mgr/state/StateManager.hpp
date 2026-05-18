@@ -16,6 +16,8 @@
 #include "lifecycle/StartContainerRequest.hpp"
 #include "lifecycle/StopContainerRequest.hpp"
 #include "lifecycle/LifecycleCtrlRequest.hpp"
+// F014 follow-up
+#include "lifecycle/SetRecoveryPolicyRequest.hpp"
 
 namespace lifecycle_manager {
 
@@ -56,6 +58,10 @@ class StateManager : public ManagerBase {
     void HandleCtrlStartContainer(lifecyclemgr::CtrlStartContainerRequest* message);
     void HandleCtrlStopContainer(lifecyclemgr::CtrlStopContainerRequest* message);
 
+    // F014 follow-up: recovery policy mutation
+    void HandleCtrlSetRecoveryPolicy(lifecyclemgr::CtrlSetRecoveryPolicyRequest* message);
+    void OnSetRecoveryPolicy(lifecyclemgr::SetRecoveryPolicyResponse* message);
+
   private:
     // F013: publish a CtrlResponse on the given ctrl/* response topic.
     bool PublishCtrlResponse(MessageType response_topic,
@@ -73,6 +79,8 @@ class StateManager : public ManagerBase {
     lifecyclemgr::StartContainerRequest   start_container_request_;
     lifecyclemgr::StopContainerRequest    stop_container_request_;
     lifecyclemgr::CtrlResponse            ctrl_response_;
+    // F014 follow-up
+    lifecyclemgr::SetRecoveryPolicyRequest set_recovery_request_;
 };
 
 } // namespace lifecycle_manager

@@ -1,0 +1,15 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from mmf_interfaces/msg/UpdateServiceListResponse.msg
+// generated code does not contain a copyright notice
+
+
+module mmf_interfaces {
+  module msg {
+    @verbatim (language="comment", text=
+      "Auto-generated from idl/dds/lifecycle/UpdateServiceListRequest.idl" "\n"
+      "Module: lifecyclemgr, Struct: UpdateServiceListResponse")
+    struct UpdateServiceListResponse {
+      int32 ret_code;
+    };
+  };
+};

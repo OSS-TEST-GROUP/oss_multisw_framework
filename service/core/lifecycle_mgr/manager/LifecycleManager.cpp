@@ -15,6 +15,7 @@
 #include "lifecycle/StartContainerRequest.hpp"
 #include "lifecycle/StopContainerRequest.hpp"
 #include "lifecycle/LifecycleCtrlRequest.hpp"
+#include "lifecycle/SetRecoveryPolicyRequest.hpp"  // F014 follow-up
 #include "include/TypeConvert.hpp"
 
 namespace lifecycle_manager {
@@ -107,6 +108,14 @@ bool LifecycleManager::Initialize() {
     };
     handlers.on_ctrl_stop_container = [this](lifecyclemgr::CtrlStopContainerRequest* msg) {
         if (state_manager_) state_manager_->HandleCtrlStopContainer(msg);
+    };
+
+    // F014 follow-up: recovery policy actuator + ctrl gate.
+    handlers.on_set_recovery_policy_resp = [this](lifecyclemgr::SetRecoveryPolicyResponse* msg) {
+        if (state_manager_) state_manager_->OnSetRecoveryPolicy(msg);
+    };
+    handlers.on_ctrl_set_recovery_policy = [this](lifecyclemgr::CtrlSetRecoveryPolicyRequest* msg) {
+        if (state_manager_) state_manager_->HandleCtrlSetRecoveryPolicy(msg);
     };
 
     endpoint_factory_->CreateEndPoints(msg_transmitter_, handlers);

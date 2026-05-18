@@ -175,6 +175,12 @@ int main(int argc, char** argv) {
     ok &= add_lc("CtrlResponse",               "lifecycle/LifecycleCtrlRequest.idl",
                  cp_lc + "StopContainerResponse",    /*raw→ros*/false);
 
+    // F014 follow-up: recovery policy gate
+    ok &= add_lc("CtrlSetRecoveryPolicyRequest", "lifecycle/LifecycleCtrlRequest.idl",
+                 cp_lc + "SetRecoveryPolicy",        /*ros→raw*/true);
+    ok &= add_lc("CtrlResponse",               "lifecycle/LifecycleCtrlRequest.idl",
+                 cp_lc + "SetRecoveryPolicyResponse", /*raw→ros*/false);
+
     if (!ok) {
         std::cerr << "[bridge] one or more pairs failed to register\n";
         return 1;

@@ -19,6 +19,10 @@
 #include "CtrlStartContainerEndPoint.hpp"
 #include "CtrlStopContainerEndPoint.hpp"
 
+// F014 follow-up: recovery policy mutation
+#include "SetRecoveryPolicyEndPoint.hpp"
+#include "CtrlSetRecoveryPolicyEndPoint.hpp"
+
 #include "logger/Log.hpp"
 
 namespace lifecycle_manager {
@@ -95,6 +99,12 @@ int32_t EndPointFactory::Initialize(){
     topic_lists_[MessageType::CTRL_START_CONTAINER_RESPONSE]   = MessageTopic::GetTopicStr(MessageType::CTRL_START_CONTAINER_RESPONSE);
     topic_lists_[MessageType::CTRL_STOP_CONTAINER_REQUEST]     = MessageTopic::GetTopicStr(MessageType::CTRL_STOP_CONTAINER_REQUEST);
     topic_lists_[MessageType::CTRL_STOP_CONTAINER_RESPONSE]    = MessageTopic::GetTopicStr(MessageType::CTRL_STOP_CONTAINER_RESPONSE);
+
+    // F014 follow-up: recovery policy
+    topic_lists_[MessageType::SET_RECOVERY_POLICY_REQUEST]        = MessageTopic::GetTopicStr(MessageType::SET_RECOVERY_POLICY_REQUEST);
+    topic_lists_[MessageType::SET_RECOVERY_POLICY_RESPONSE]       = MessageTopic::GetTopicStr(MessageType::SET_RECOVERY_POLICY_RESPONSE);
+    topic_lists_[MessageType::CTRL_SET_RECOVERY_POLICY_REQUEST]   = MessageTopic::GetTopicStr(MessageType::CTRL_SET_RECOVERY_POLICY_REQUEST);
+    topic_lists_[MessageType::CTRL_SET_RECOVERY_POLICY_RESPONSE]  = MessageTopic::GetTopicStr(MessageType::CTRL_SET_RECOVERY_POLICY_RESPONSE);
 
     return topic_lists_.size();
 
@@ -331,6 +341,38 @@ int32_t EndPointFactory::CreateEndPoints(std::shared_ptr<DDSTransmitter> transmi
 
                 case MessageType::CTRL_STOP_CONTAINER_RESPONSE :{
                     auto ep = std::make_shared<CtrlStopContainerEndPoint>(key, val);
+                    msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndPoint>(ep);
+                    pubsub = PubSubTYpe::PUBLISH_ONLY;
+                }
+                break;
+
+                // F014 follow-up: recovery policy actuator (lifecycle_mgr ↔ adsw)
+                case MessageType::SET_RECOVERY_POLICY_REQUEST :{
+                    auto ep = std::make_shared<SetRecoveryPolicyEndPoint>(key, val);
+                    msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndPoint>(ep);
+                    pubsub = PubSubTYpe::PUBLISH_ONLY;
+                }
+                break;
+
+                case MessageType::SET_RECOVERY_POLICY_RESPONSE :{
+                    auto ep = std::make_shared<SetRecoveryPolicyEndPoint>(
+                        key, val, handlers.on_set_recovery_policy_resp);
+                    msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndPoint>(ep);
+                    pubsub = PubSubTYpe::SUBSCRIBE_ONLY;
+                }
+                break;
+
+                // F014 follow-up: ctrl gate
+                case MessageType::CTRL_SET_RECOVERY_POLICY_REQUEST :{
+                    auto ep = std::make_shared<CtrlSetRecoveryPolicyEndPoint>(
+                        key, val, handlers.on_ctrl_set_recovery_policy);
+                    msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndPoint>(ep);
+                    pubsub = PubSubTYpe::SUBSCRIBE_ONLY;
+                }
+                break;
+
+                case MessageType::CTRL_SET_RECOVERY_POLICY_RESPONSE :{
+                    auto ep = std::make_shared<CtrlSetRecoveryPolicyEndPoint>(key, val);
                     msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndPoint>(ep);
                     pubsub = PubSubTYpe::PUBLISH_ONLY;
                 }

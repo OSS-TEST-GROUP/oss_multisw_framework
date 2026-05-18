@@ -1,0 +1,22 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from mmf_interfaces/msg/LifecycleDiagReport.msg
+// generated code does not contain a copyright notice
+
+#include "mmf_interfaces/msg/ServiceStatus.idl"
+
+module mmf_interfaces {
+  module msg {
+    @verbatim (language="comment", text=
+      "Auto-generated from idl/dds/lifecycle/LifecycleDiagReport.idl" "\n"
+      "Module: lifecyclemgr, Struct: LifecycleDiagReport")
+    struct LifecycleDiagReport {
+      boolean is_started;
+
+      int32 running_service_num;
+
+      int32 total_services_num;
+
+      sequence<mmf_interfaces::msg::ServiceStatus> service_list;
+    };
+  };
+};
