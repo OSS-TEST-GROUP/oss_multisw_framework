@@ -77,6 +77,8 @@ KNOWN_ENUMS = {
     "DiagnosticStatusType",
     "ServiceType", "RecoveryPolicy", "ReturnCode",
     "ServiceMode", "ServiceState", "OsType",
+    # F013: container enums added to LifecycleCommon.idl
+    "ContainerType", "ContainerState",
 }
 
 # Rename DDS struct names → ROS2 .msg names
