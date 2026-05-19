@@ -420,15 +420,39 @@ bool ServiceRegistry::Save() {
         ndservice["exec_type"] = "binary";
       }
 
-      // Convert integers to strings if you need consistent quoting; here leave
-      // as int or convert explicitly
-      ndservice["type"] = static_cast<int32_t>(service->GetServiceType());
-      ndservice["recovery"] =
-          static_cast<int32_t>(service->GetRecoveryPolicy());
+      // Persist as the same string tokens LoadServiceSaved parses
+      // ("NORMAL"/"ONESHOT", "ALWAYS"/"ON_FAILURE"/...).  Earlier code
+      // wrote integer enum values which then failed every if-equals
+      // branch in LoadServiceSaved and silently fell back to defaults
+      // — producing a runaway ON_FAILURE → restart loop after a single
+      // ctrl/SetRecoveryPolicy round-trip.
+      auto type_to_str = [](ServiceType t) -> std::string {
+          switch (t) {
+              case ServiceType::ONESHOT: return "ONESHOT";
+              case ServiceType::NORMAL:
+              default:                   return "NORMAL";
+          }
+      };
+      auto recovery_to_str = [](RecoveryPolicy p) -> std::string {
+          switch (p) {
+              case RecoveryPolicy::ALWAYS:            return "ALWAYS";
+              case RecoveryPolicy::ON_FAILURE:        return "ON_FAILURE";
+              case RecoveryPolicy::ON_SUCCESS:        return "ON_SUCCESS";
+              case RecoveryPolicy::ON_NOT_RESPONDING: return "ON_NOT_RESPONDING";
+              case RecoveryPolicy::MANUAL:            return "MANUAL";
+              case RecoveryPolicy::R_DEFAULT:
+              default:                                return "MANUAL";
+          }
+      };
+      ndservice["type"]     = type_to_str(service->GetServiceType());
+      ndservice["recovery"] = recovery_to_str(service->GetRecoveryPolicy());
 
-      // YAML supports boolean natively; if you want string "true"/"false"
-      // change accordingly
-      ndservice["enabled"] = service->IsEnabled();
+      // LoadServiceSaved compares enabled as a "true"/"false" string;
+      // YAML's native bool would round-trip but the parser there reads
+      // .as<std::string>("") so an explicit quoted string keeps both
+      // sides aligned.
+      ndservice["enabled"] = service->IsEnabled() ? std::string("true")
+                                                  : std::string("false");
 
       ndservice["max"] = service->GetMaxNodes();
 
@@ -559,25 +583,33 @@ bool ServiceRegistry::LoadServiceSaved(const std::string &path) {
             RecoveryPolicy recoveryPolicy = RecoveryPolicy::R_DEFAULT;
             bool enabled = true;
             if (!typeStr.empty()) {
-              if (typeStr == "NORMAL") {
+              if (typeStr == "NORMAL" || typeStr == "0") {
                 serviceType = ServiceType::NORMAL;
-              } else if (typeStr == "ONESHOT") {
+              } else if (typeStr == "ONESHOT" || typeStr == "1") {
                 serviceType = ServiceType::ONESHOT;
               }
             }
 
             if (!recoStr.empty()) {
-              if (recoStr == "ALWAYS") {
+              if (recoStr == "ALWAYS" || recoStr == "1") {
                 recoveryPolicy = RecoveryPolicy::ALWAYS;
-              } else if (recoStr == "ON_FAILURE") {
+              } else if (recoStr == "ON_FAILURE" || recoStr == "2") {
                 recoveryPolicy = RecoveryPolicy::ON_FAILURE;
-              } else if (recoStr == "ON_SUCCESS") {
+              } else if (recoStr == "ON_SUCCESS" || recoStr == "3") {
                 recoveryPolicy = RecoveryPolicy::ON_SUCCESS;
-              } else if (recoStr == "ON_NOT_RESPONDING") {
+              } else if (recoStr == "ON_NOT_RESPONDING" || recoStr == "4") {
                 recoveryPolicy = RecoveryPolicy::ON_NOT_RESPONDING;
-              } else if (recoStr == "MANUAL") {
+              } else if (recoStr == "MANUAL" || recoStr == "5") {
                 recoveryPolicy = RecoveryPolicy::MANUAL;
+              } else if (recoStr == "DEFAULT" || recoStr == "0") {
+                recoveryPolicy = RecoveryPolicy::R_DEFAULT;
               }
+              // Backward compat: pre-fix Save() wrote the enum integer
+              // (e.g. "recovery: 2") which never matched any branch and
+              // silently fell back to R_DEFAULT — masking the bug.  The
+              // numeric tokens here let an old broken yaml still be
+              // interpreted correctly while Save() now emits the canonical
+              // string form.
             }
             if (enableStr == "false") {
               enabled = false; // Default to false if not specified
