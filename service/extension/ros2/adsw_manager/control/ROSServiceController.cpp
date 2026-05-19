@@ -527,11 +527,34 @@ bool ROSServiceController::ProcessServiceStartRequest(lifecyclemgr::StartService
                        failed_containers.count(container_name) > 0;
             };
 
+            // Idempotency guard: if a service is already RUNNING /
+            // INITIALIZING, a duplicate StartServiceRequest must not
+            // spawn another `docker exec ros2 run` — that would orphan
+            // the prior PID, accumulate zombies, and pulse the
+            // monitor-side state RUNNING↔NOT_RUNNING as the per-PID
+            // poller catches each transient.  Count the already-running
+            // ones toward the SUCCESS verdict so the ctrl/* response is
+            // still SUCCESS for the caller.
+            auto already_running = [&](const std::string& svc_name) -> bool {
+                if (!registry) return false;
+                auto svc = registry->GetService(svc_name);
+                if (!svc) return false;
+                ServiceState s = svc->GetServiceState();
+                return s == ServiceState::RUNNING ||
+                       s == ServiceState::INITIALIZING;
+            };
+
             if (is_group) {
                 for (const auto& service : service_list) {
                     if (container_failed(service)) {
                         LOG_ERROR("Skip start of group " << service
                                   << " — its container is down");
+                        continue;
+                    }
+                    if (already_running(service)) {
+                        LOG_DEBUG("Group " << service
+                                  << " already running — skipping respawn");
+                        count++;
                         continue;
                     }
                     if (StartGroup(service) == true) {
@@ -543,6 +566,12 @@ bool ROSServiceController::ProcessServiceStartRequest(lifecyclemgr::StartService
                     if (container_failed(service)) {
                         LOG_ERROR("Skip start of " << service
                                   << " — its container is down");
+                        continue;
+                    }
+                    if (already_running(service)) {
+                        LOG_DEBUG("Service " << service
+                                  << " already running — skipping respawn");
+                        count++;
                         continue;
                     }
                     if (StartService(service) == true){
