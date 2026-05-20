@@ -50,6 +50,34 @@ bool IsServiceAliveInContainer(const std::string& container,
     if (!got) return true;
     return std::string(buf).find("alive") != std::string::npos;
 }
+
+// Look up the PID of a service inside the container using the same token
+// scheme as IsServiceAliveInContainer. Returns 0 when nothing matches (so
+// callers can use 0 to mean "not running / unknown"). The `$` end-anchor
+// excludes the bash wrapper line ending in `$!` and our own check shell.
+//
+// Used for cold-start PID rehydration: when adsw_manager restarts while the
+// service container kept running, ServiceRegistry comes up with pid_=0 for
+// every service and our PID-based liveness path is dead-on-arrival. Probing
+// pgrep recovers the live PID so the poll loop can resume.
+uint64_t LookupServicePidInContainer(const std::string& container,
+                                      const std::string& token) {
+    if (token.empty()) return 0;
+    std::string cmd = "docker exec " + container
+                    + " pgrep -f " + token + "\\$"
+                    + " 2>/dev/null | head -1";
+    FILE* fp = popen(cmd.c_str(), "r");
+    if (!fp) return 0;
+    char buf[32] = {0};
+    bool got = (fgets(buf, sizeof(buf), fp) != nullptr);
+    pclose(fp);
+    if (!got) return 0;
+    try {
+        return std::stoull(buf);
+    } catch (...) {
+        return 0;
+    }
+}
 }  // namespace
 
 ContainerHealthMonitor::ContainerHealthMonitor() {}
@@ -201,19 +229,41 @@ void ContainerHealthMonitor::PollServicesInContainer(const std::string& containe
               << " services=" << services.size()
               << " native=" << (is_native ? "yes" : "no"));
     for (auto& svc : services) {
-        // Poll any service with a known PID. State alone is unreliable:
-        // ROSServiceDiscovery's NodeStarted callback sets state to INITIALIZING
-        // via UpdateServiceState(CREATED) after StartService set it to RUNNING,
-        // so most of the time a healthy service sits at INITIALIZING.
+        // Poll any service that's INITIALIZING or RUNNING. We use this loop
+        // both to detect deaths and to promote freshly-started services from
+        // INITIALIZING to RUNNING once the PID is confirmed alive (see the
+        // promotion block at the bottom). NOT_RUNNING services are skipped —
+        // their next start gets a PID via the StartService path.
         ServiceState st = svc->GetServiceState();
         if (st == ServiceState::NOT_RUNNING) continue;
-        uint64_t pid = svc->GetPID();
-        if (pid == 0) continue;
 
         // Pick the right cmdline token for this service's invocation mode:
         // launchfile / name / package / explicit override.
         const std::string token = svc->ResolveProcessMatchToken(is_native);
         const std::string& sname = svc->GetName();
+
+        uint64_t pid = svc->GetPID();
+        if (pid == 0) {
+            // Cold-start PID rehydration. adsw_manager restarted while the
+            // service container kept running, so ServiceRegistry came up
+            // with pid_=0 and the normal liveness path can't run. Try to
+            // find the live PID via the same pgrep token we'd use to check
+            // liveness; if found, populate it so the rest of the loop can
+            // do its normal job. If not found we leave INITIALIZING alone —
+            // the next StartService call will set a PID via the regex.
+            pid = LookupServicePidInContainer(container_name, token);
+            if (pid == 0) {
+                LOG_DEBUG("PollSvc " << sname
+                          << " pid=0 rehydrate miss (token='" << token
+                          << "') — leaving state="
+                          << static_cast<int>(st));
+                continue;
+            }
+            svc->SetPID(pid);
+            LOG_DEBUG("PollSvc " << sname
+                      << " PID rehydrated to " << pid
+                      << " (token='" << token << "')");
+        }
 
         auto it = prev_service_.find(sname);
         // Reset cache entry if the PID changed (service restarted).
@@ -242,6 +292,21 @@ void ContainerHealthMonitor::PollServicesInContainer(const std::string& containe
             // re-track from there.
             prev_service_.erase(sname);
         } else {
+            // Promote INITIALIZING → RUNNING for services that are
+            // confirmed alive by the in-container PID check. Without this,
+            // non-ROS2 binaries (and ROS2 nodes whose discovery callback
+            // arrives via UpdateServiceState(CREATED)) sit at INITIALIZING
+            // forever and lifecycle_mgr/lfc_monitor never report RUNNING.
+            // Using the per-PID liveness check is the same signal we
+            // already trust for death detection, just applied in the
+            // healthy direction.
+            if (alive && st == ServiceState::INITIALIZING) {
+                svc->SetServiceState(ServiceState::RUNNING);
+                monitor->NotifyServiceState();
+                LOG_DEBUG("ContainerHealthMonitor: service " << sname
+                          << " promoted INITIALIZING -> RUNNING (pid=" << pid
+                          << ", alive by pgrep)");
+            }
             prev_service_[sname] = std::make_pair(pid, alive);
         }
     }

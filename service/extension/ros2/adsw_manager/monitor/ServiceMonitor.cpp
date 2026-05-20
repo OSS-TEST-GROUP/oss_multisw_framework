@@ -45,7 +45,13 @@ void ServiceMonitor::UpdateServiceState(UpdateServiceInfo& info) {
             LOG_DEBUG("ServiceMonitor::UpdateServiceState service: " << info.name << " state: " << static_cast<int>(state));
 
             if (info.service_event == ServiceEvent::CREATED) {
-                service->SetServiceState(ServiceState::INITIALIZING);
+                // Honor the state the caller passed. NodeStarted passes
+                // RUNNING when a ROS2 node first appears; hard-coding
+                // INITIALIZING here stranded healthy services at
+                // INITIALIZING forever because no later event ever upgrades
+                // them (the next callback is STATE_UPDATED for ROS2-aware
+                // services, never CREATED again).
+                service->SetServiceState(info.state);
             } else if (info.service_event == ServiceEvent::DELETED) {
                 service->SetServiceState(ServiceState::NOT_RUNNING);
             } else if (info.service_event == ServiceEvent::STATE_UPDATED) {

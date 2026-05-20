@@ -41,6 +41,7 @@ bool StateManager::StartService(std::shared_ptr<Service> service) {
         start_request_.os_type() = TypeConvert::ToOsType(service->GetOsType());
         start_request_.service_list().push_back(service->GetName());
         start_request_.is_group() = false;
+        ++start_in_flight_;
         return transmitter->SendMessage(MessageType::START_SERVICE_REQUEST, reinterpret_cast<void*>(&start_request_));
     }
 
@@ -56,7 +57,8 @@ void StateManager::StopService(std::shared_ptr<Service> service) {
     {
         stop_request_.os_type() = TypeConvert::ToOsType(service->GetOsType());
         stop_request_.service_list().push_back(service->GetName());
-        stop_request_.is_group() = false;        
+        stop_request_.is_group() = false;
+        ++stop_in_flight_;
         transmitter->SendMessage(MessageType::STOP_SERVICE_REQUEST, reinterpret_cast<void*>(&stop_request_));
     }
 }
@@ -129,6 +131,7 @@ void StateManager::ProcessServiceHandling(std::set<std::shared_ptr<Service>> ser
         start_request_.is_group() = false;
         LOG_DEBUG("StateManager: START " << entry.second.size() << " service(s) for OsType "
                   << static_cast<int>(entry.first));
+        ++start_in_flight_;
         transmitter->SendMessage(MessageType::START_SERVICE_REQUEST, reinterpret_cast<void*>(&start_request_));
     }
 
@@ -138,6 +141,7 @@ void StateManager::ProcessServiceHandling(std::set<std::shared_ptr<Service>> ser
         stop_request_.is_group() = false;
         LOG_DEBUG("StateManager: STOP " << entry.second.size() << " service(s) for OsType "
                   << static_cast<int>(entry.first));
+        ++stop_in_flight_;
         transmitter->SendMessage(MessageType::STOP_SERVICE_REQUEST, reinterpret_cast<void*>(&stop_request_));
     }
 }
@@ -162,7 +166,8 @@ void StateManager::RequestStopAll(){
                     stop_request_.service_list().push_back(*svc);
                 }
                 stop_request_.is_group() = false;
-            
+
+                ++stop_in_flight_;
                 transmitter->SendMessage(MessageType::STOP_SERVICE_REQUEST, reinterpret_cast<void*>(&stop_request_));
             }
         }
@@ -171,6 +176,28 @@ void StateManager::RequestStopAll(){
 
 void StateManager::OnStart(lifecyclemgr::StartServiceResponse* message){
     if (!message) return;
+    // Phantom-response guard. A zombie DDS participant on the same domain can
+    // replay a stale StartServiceResponse(ret_code=FAILED) on
+    // mmf/lifecyclemgr/StartServiceResponse even when we haven't dispatched a
+    // request. Before this guard, those phantoms caused a steady stream of
+    // "Service Start Failure 1" and forwarded a FAILED ctrl response to
+    // lfc_monitor, making the operator think a healthy service was broken.
+    // We only accept a response when at least one of our own StartService
+    // requests is outstanding.
+    int expected = start_in_flight_.load(std::memory_order_acquire);
+    while (expected > 0) {
+        if (start_in_flight_.compare_exchange_weak(expected, expected - 1,
+                                                    std::memory_order_acq_rel)) {
+            break;
+        }
+    }
+    if (expected <= 0) {
+        LOG_DEBUG("OnStart: dropping spurious StartServiceResponse (no in-flight "
+                  "StartServiceRequest); ret_code="
+                  << static_cast<int32_t>(message->ret_code()));
+        return;
+    }
+
     if (message->ret_code() != lifecyclemgr::ReturnCode::SUCCESS){
         LOG_ERROR("Service Start Failure " << static_cast<int32_t>(message->ret_code()));
     }
@@ -186,6 +213,21 @@ void StateManager::OnStart(lifecyclemgr::StartServiceResponse* message){
 
 void StateManager::OnStop(lifecyclemgr::StopServiceResponse* message){
     if (!message) return;
+    // Same phantom guard as OnStart — see commentary there.
+    int expected = stop_in_flight_.load(std::memory_order_acquire);
+    while (expected > 0) {
+        if (stop_in_flight_.compare_exchange_weak(expected, expected - 1,
+                                                   std::memory_order_acq_rel)) {
+            break;
+        }
+    }
+    if (expected <= 0) {
+        LOG_DEBUG("OnStop: dropping spurious StopServiceResponse (no in-flight "
+                  "StopServiceRequest); ret_code="
+                  << static_cast<int32_t>(message->ret_code()));
+        return;
+    }
+
     if (message->ret_code() != lifecyclemgr::ReturnCode::SUCCESS){
         LOG_ERROR("Service Stop Failure " << static_cast<int32_t>(message->ret_code()));
     }
@@ -267,6 +309,7 @@ void StateManager::HandleCtrlStartService(lifecyclemgr::CtrlStartServiceRequest*
         start_request_.service_list() = entry.second;
         start_request_.os_type() = TypeConvert::ToOsType(entry.first);
         start_request_.is_group() = false;
+        ++start_in_flight_;
         transmitter->SendMessage(MessageType::START_SERVICE_REQUEST,
                                   reinterpret_cast<void*>(&start_request_));
     }
@@ -307,6 +350,7 @@ void StateManager::HandleCtrlStopService(lifecyclemgr::CtrlStopServiceRequest* m
         stop_request_.service_list() = entry.second;
         stop_request_.os_type() = TypeConvert::ToOsType(entry.first);
         stop_request_.is_group() = false;
+        ++stop_in_flight_;
         transmitter->SendMessage(MessageType::STOP_SERVICE_REQUEST,
                                   reinterpret_cast<void*>(&stop_request_));
     }

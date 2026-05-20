@@ -1,6 +1,7 @@
 #ifndef LIFECYCLE_STATE_MANAGER_HPP_
 #define LIFECYCLE_STATE_MANAGER_HPP_
 
+#include <atomic>
 #include <memory>
 #include <vector>
 #include <set>
@@ -81,6 +82,17 @@ class StateManager : public ManagerBase {
     lifecyclemgr::CtrlResponse            ctrl_response_;
     // F014 follow-up
     lifecyclemgr::SetRecoveryPolicyRequest set_recovery_request_;
+
+    // In-flight counter for Start/Stop service requests. Used to gate
+    // OnStart/OnStop against phantom StartServiceResponse / StopServiceResponse
+    // samples — e.g. zombie DDS publishers replaying stale FAILED responses on
+    // the response topic when we did not actually send a request. Incremented
+    // when we publish a request to adsw_manager, decremented when we accept a
+    // response. Atomic because the actuator response arrives on the DDS
+    // listener thread while the request is dispatched from the ctrl handler /
+    // policy thread.
+    std::atomic<int> start_in_flight_{0};
+    std::atomic<int> stop_in_flight_{0};
 };
 
 } // namespace lifecycle_manager
