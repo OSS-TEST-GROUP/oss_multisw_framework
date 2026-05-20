@@ -116,6 +116,14 @@ void ADSWManager::Process(){
 
 void ADSWManager::ConfirmUpdateServiceList() {
     auto now = std::chrono::steady_clock::now();
+    // Stamp last_sent_recovery_ here (not at send time): receipt of the
+    // response is what tells us lifecycle_mgr actually has the snapshot.
+    // If the first send raced past lifecycle_mgr's subscriber initialization
+    // we want HasRecoveryChanged() to stay true so the retransmit loop keeps
+    // re-sending until an ack actually comes back.
+    if (service_registry_ != nullptr) {
+        service_registry_->UpdateLastSentRecovery();
+    }
     if (GetState() == AdswState::ADSW_STARTED) {
         LOG_DEBUG("UpdateServiceListResponse received — transitioning to ADSW_RUNNING");
         SetState(AdswState::ADSW_RUNNING);

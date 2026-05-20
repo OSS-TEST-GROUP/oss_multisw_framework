@@ -381,7 +381,16 @@ bool ServiceRegistry::ProcessUpdateServiceListRequest() {
     LOG_DEBUG("UpdateServiceListRequest sent with "
               << message.service_list().size() << " services and "
               << message.container_list().size() << " containers.");
-    UpdateLastSentRecovery();
+    // last_sent_recovery_ is intentionally NOT updated here. Updating on
+    // send means HasRecoveryChanged() goes false immediately, so if the
+    // first send raced past lifecycle_mgr's subscriber initialization
+    // (subscription_matched but not yet wire-ready) the retransmit loop
+    // would skip every subsequent attempt and the service list would
+    // never reach lifecycle_mgr — and downstream lfc_monitor would never
+    // see services grouped under their container.
+    //
+    // The recovery snapshot is now stamped by ConfirmUpdateServiceList()
+    // when lifecycle_mgr's UpdateServiceListResponse actually arrives.
     return true;
   }
 
