@@ -85,6 +85,47 @@ int main(int argc, char** argv) {
     const std::string dp = "/mmf/otamanager/diagnostic_service/";
     ok &= add("NotifyOtaMgrHeartbeat", heartbeat_idl, dp + "NotifyOtaMgrHeartbeat", /*raw→ros*/false);
 
+    // ── lifecyclemgr (F012, lfc_monitor) ───────────────────────────────────
+    // lifecycle_mgr publishes/subscribes on raw DDS topics WITHOUT leading
+    // slash (e.g. "mmf/lifecyclemgr/NotifyServiceState" — see EndPointFactory
+    // in service/core/lifecycle_mgr/endpoint/). OtaManager's bridge uses
+    // leading-slash topics so it can do `"rt" + topic_path`; here we
+    // explicitly construct `rt/<topic>` ourselves so the wire topic on the
+    // ROS-canonical side resolves to `/<topic>` from a roslibdart subscriber.
+    //
+    // Each lifecycle IDL file lives at <idl_root>/lifecycle/<Struct>.idl and
+    // #includes LifecycleCommon.idl (sibling file). The dynamic-IDL parser
+    // resolves includes relative to the .idl file's directory.
+    auto add_lc = [&](const std::string& struct_name,
+                      const std::string& idl_file,
+                      const std::string& raw_topic_no_slash,
+                      bool ros_to_raw) -> bool {
+        return bridge.AddPair({
+            struct_name,
+            idl_file,
+            raw_topic_no_slash,                                  // raw_topic
+            "rt/" + raw_topic_no_slash,                          // ros_topic
+            "lifecyclemgr::" + struct_name,                      // raw_type
+            "lifecyclemgr::msg::dds_::" + struct_name + "_",     // ros_type
+            ros_to_raw,
+        });
+    };
+
+    const std::string lp = "mmf/lifecyclemgr/";
+    // Notifications / responses: lifecycle_mgr → monitor (raw → ros)
+    ok &= add_lc("NotifyServiceState",       "lifecycle/NotifyServiceState.idl",       lp + "NotifyServiceState",       /*raw→ros*/false);
+    ok &= add_lc("GetServiceStateResponse",  "lifecycle/GetServiceStateRequest.idl",   lp + "GetServiceStateResponse",  /*raw→ros*/false);
+    ok &= add_lc("UpdateServiceListResponse","lifecycle/UpdateServiceListRequest.idl", lp + "UpdateServiceListResponse",/*raw→ros*/false);
+    ok &= add_lc("StartServiceResponse",     "lifecycle/StartServiceRequest.idl",      lp + "StartServiceResponse",     /*raw→ros*/false);
+    ok &= add_lc("StopServiceResponse",      "lifecycle/StopServiceRequest.idl",       lp + "StopServiceResponse",      /*raw→ros*/false);
+    ok &= add_lc("SetServiceModeResponse",   "lifecycle/SetServiceModeRequest.idl",    lp + "SetServiceModeResponse",   /*raw→ros*/false);
+    ok &= add_lc("LifecycleDiagReport",      "lifecycle/LifecycleDiagReport.idl",      lp + "LifecycleDiagReport",      /*raw→ros*/false);
+    // Control commands: monitor → lifecycle_mgr (ros → raw)
+    ok &= add_lc("GetServiceStateRequest",   "lifecycle/GetServiceStateRequest.idl",   lp + "GetServiceStateRequest",   /*ros→raw*/true);
+    ok &= add_lc("StartServiceRequest",      "lifecycle/StartServiceRequest.idl",      lp + "StartServiceRequest",      /*ros→raw*/true);
+    ok &= add_lc("StopServiceRequest",       "lifecycle/StopServiceRequest.idl",       lp + "StopServiceRequest",       /*ros→raw*/true);
+    ok &= add_lc("SetServiceModeRequest",    "lifecycle/SetServiceModeRequest.idl",    lp + "SetServiceModeRequest",    /*ros→raw*/true);
+
     if (!ok) {
         std::cerr << "[bridge] one or more pairs failed to register\n";
         return 1;
