@@ -1,11 +1,12 @@
 // dds_bridge entry-point.
 //
-// Wires OtaBridge to the full set of OtaManager topics that
-// ota_monitor (Dart) currently uses, then idles until SIGINT/SIGTERM.
-// All forwarding logic lives in OtaBridge / ForwardListener; this file
-// is the topic table + signal handling.
+// Wires DdsBridge to the full set of bare-DDS topics that the various
+// HMI monitors (Dart) currently use — OtaManager, lifecycle_mgr,
+// adsw_manager — then idles until SIGINT/SIGTERM. All forwarding logic
+// lives in DdsBridge / ForwardListener; this file is the topic table +
+// signal handling.
 
-#include "ota_bridge.h"
+#include "dds_bridge.h"
 
 #include <atomic>
 #include <chrono>
@@ -25,7 +26,7 @@ int main(int argc, char** argv) {
     std::string idl_root = "idl";
     if (argc > 1) idl_root = argv[1];
 
-    OtaBridge bridge;
+    DdsBridge bridge;
     if (!bridge.Initialize(idl_root)) return 1;
 
     // ros_to_raw=true  → subscribe rt/<topic> (ROS-canonical type) +

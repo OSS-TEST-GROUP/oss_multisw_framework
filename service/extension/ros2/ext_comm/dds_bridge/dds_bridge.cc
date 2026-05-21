@@ -1,4 +1,4 @@
-#include "ota_bridge.h"
+#include "dds_bridge.h"
 
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp>
 #include <fastdds/dds/subscriber/SampleInfo.hpp>
@@ -50,9 +50,9 @@ void ForwardListener::on_data_available(DataReader* reader) {
     }
 }
 
-// ── OtaBridge ──────────────────────────────────────────────────────────
+// ── DdsBridge ──────────────────────────────────────────────────────────
 
-bool OtaBridge::Initialize(const std::string& idl_root) {
+bool DdsBridge::Initialize(const std::string& idl_root) {
     idl_root_ = idl_root;
     auto* factory = DomainParticipantFactory::get_instance();
 
@@ -77,7 +77,7 @@ bool OtaBridge::Initialize(const std::string& idl_root) {
     return true;
 }
 
-bool OtaBridge::AddPair(const PairConfig& cfg) {
+bool DdsBridge::AddPair(const PairConfig& cfg) {
     std::string idl_path = idl_root_ + "/" + cfg.idl_file;
     auto builder = DynamicTypeBuilderFactory::get_instance()
         ->create_type_w_uri(idl_path, cfg.struct_name, {idl_root_});
