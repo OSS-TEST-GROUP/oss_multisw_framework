@@ -1,0 +1,70 @@
+// F013: monitor/operator → lifecycle_mgr control commands.
+//
+// New topic family: mmf/lifecyclemgr/ctrl/*  All five command shapes are
+// declared together so a single IDL include suffices on every consumer.
+//
+// Flow:
+//   lfc_monitor publishes one of the CtrlXxxRequest below.
+//   lifecycle_mgr subscribes, runs policy gating (service mode, current
+//     state, registry membership, etc.), and either:
+//       - rejects        → publishes a CtrlResponse with ret_code != SUCCESS,
+//       - accepts        → forwards on the existing actuator topic
+//                          (Start/StopServiceRequest, Start/StopContainerRequest,
+//                           SetServiceModeRequest) to adsw_manager, then
+//                          relays adsw_manager's response back to the same
+//                          CtrlResponse topic.
+//
+// This separation lets lifecycle_mgr stay the single gate-keeper for any
+// runtime change without leaking adsw_manager-direct paths to clients.
+
+#include "LifecycleCommon.idl"
+
+module lifecyclemgr {
+
+    /* TopicName - mmf/lifecyclemgr/ctrl/StartServiceResponse */
+    /* TopicName - mmf/lifecyclemgr/ctrl/StopServiceResponse */
+    /* TopicName - mmf/lifecyclemgr/ctrl/SetServiceModeResponse */
+    /* TopicName - mmf/lifecyclemgr/ctrl/StartContainerResponse */
+    /* TopicName - mmf/lifecyclemgr/ctrl/StopContainerResponse */
+    // Shared response shape for every Ctrl request.  ret_code echoes
+    // lifecycle_mgr's gating verdict (and adsw_manager's response if forwarded).
+    struct CtrlResponse {
+        ReturnCode ret_code;
+    };
+
+    /* TopicName - mmf/lifecyclemgr/ctrl/StartService */
+    struct CtrlStartServiceRequest {
+        sequence<string> service_list;
+    };
+
+    /* TopicName - mmf/lifecyclemgr/ctrl/StopService */
+    struct CtrlStopServiceRequest {
+        sequence<string> service_list;
+    };
+
+    /* TopicName - mmf/lifecyclemgr/ctrl/SetServiceMode */
+    struct CtrlSetServiceModeRequest {
+        sequence<string> service_list;
+        ServiceMode service_mode;
+    };
+
+    /* TopicName - mmf/lifecyclemgr/ctrl/StartContainer */
+    struct CtrlStartContainerRequest {
+        sequence<string> container_list;
+    };
+
+    /* TopicName - mmf/lifecyclemgr/ctrl/StopContainer */
+    struct CtrlStopContainerRequest {
+        sequence<string> container_list;
+    };
+
+    /* TopicName - mmf/lifecyclemgr/ctrl/SetRecoveryPolicy */
+    // F014 follow-up: per-service recovery policy mutation from the
+    // monitor.  Same gating pattern as the other ctrl/* commands;
+    // forwards to adsw_manager which mutates ServiceRegistry + persists
+    // the yaml so the choice survives a process restart.
+    struct CtrlSetRecoveryPolicyRequest {
+        sequence<string> service_list;
+        RecoveryPolicy recovery_policy;
+    };
+};

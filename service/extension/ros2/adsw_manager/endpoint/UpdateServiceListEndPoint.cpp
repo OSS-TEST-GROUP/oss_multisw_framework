@@ -43,6 +43,12 @@ void UpdateServiceListEndPoint::OnDataAvailable(){
         LOG_DEBUG("UpdateServiceListResponse received, ret_code="
                   << static_cast<int32_t>(message->ret_code()));
 
+        // Trust anchor for the phantom guard. UpdateServiceListResponse is
+        // published only by lifecycle_mgr, so the publisher prefix observed
+        // here is the prefix we'll require on every subsequent
+        // Start/StopServiceRequest. Pinning happens once (first sender wins).
+        ADSWManager::Get()->SetKnownLifecyclePublisher(LastPublicationHandle());
+
         ADSWManager::Get()->ConfirmUpdateServiceList();
     }
 

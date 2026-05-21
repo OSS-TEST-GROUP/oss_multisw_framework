@@ -19,6 +19,32 @@ bool ServiceRegistry::UpdateServiceList(UpdateServiceListRequest* update){
     std::vector<lifecyclemgr::Service> *slist = &update->service_list();
     std::set<std::shared_ptr<Service>> service_set;
 
+    // F013: refresh container registry first so the Service↔container link
+    // can be validated against known metadata when we walk the service list.
+    {
+        std::vector<lifecyclemgr::Container>& clist = update->container_list();
+        for (auto& c : clist) {
+            const std::string name = c.name();
+            if (name.empty()) continue;
+            auto existing = GetContainer(name);
+            if (existing) {
+                existing->SetImage(c.image());
+                existing->SetDeployFile(c.deploy_file());
+                existing->SetNamespace(c.container_namespace());
+                existing->SetType(TypeConvert::ToContainerType(c.type()));
+            } else {
+                auto fresh = std::make_shared<Container>(
+                    name,
+                    c.image(),
+                    c.deploy_file(),
+                    c.container_namespace(),
+                    TypeConvert::ToContainerType(c.type()));
+                UpsertContainer(fresh);
+            }
+            LOG_DEBUG("ServiceRegistry: container registered " << name);
+        }
+    }
+
     // Reuse the existing group if any service in the list is already registered.
     // Allocating a new group on every call would cause unbounded group growth
     // and StateMonitor would send redundant GetServiceState requests for empty
@@ -45,6 +71,8 @@ bool ServiceRegistry::UpdateServiceList(UpdateServiceListRequest* update){
             service->SetServiceType(TypeConvert::ToServiceType(svc->service_type()));
             service->SetRecoveryPolicy(TypeConvert::ToRecoveryPolicy(svc->recovery_policy()));
             service->SetEnabled(svc->is_enabled());
+            // F013: container reassignment is allowed on re-registration.
+            service->SetContainerName(svc->container_name());
             LOG_DEBUG("ServiceRegistry: updated service " << svc->name());
         }else{
             // create new service
@@ -53,6 +81,8 @@ bool ServiceRegistry::UpdateServiceList(UpdateServiceListRequest* update){
                                                 TypeConvert::ToRecoveryPolicy(svc->recovery_policy()),
                                                 svc->is_enabled(),
                                                 TypeConvert::ToOsType(svc->os_type()));
+            // F013: stamp container linkage from the wire.
+            service->SetContainerName(svc->container_name());
             // New Service Add to Registry
             AddService(service, group);
         }
@@ -347,9 +377,62 @@ std::string ServiceRegistry::newGroup(){
 
     std::string groupname = "group_" + std::to_string(groupid);
     groupid += 10;
-    
+
     return groupname;
 }
 
+// ── F013: Container registry API ────────────────────────────────────────
+
+std::shared_ptr<Container> ServiceRegistry::GetContainer(const std::string& name) {
+    std::lock_guard<std::mutex> lock(lock_mutex_);
+    auto it = containers_.find(name);
+    return (it != containers_.end()) ? it->second : nullptr;
+}
+
+std::vector<std::shared_ptr<Container>> ServiceRegistry::GetAllContainers() {
+    std::lock_guard<std::mutex> lock(lock_mutex_);
+    std::vector<std::shared_ptr<Container>> out;
+    out.reserve(containers_.size());
+    for (auto& kv : containers_) out.push_back(kv.second);
+    return out;
+}
+
+void ServiceRegistry::UpsertContainer(const std::shared_ptr<Container>& c) {
+    if (!c) return;
+    std::lock_guard<std::mutex> lock(lock_mutex_);
+    containers_[c->GetName()] = c;
+}
+
+void ServiceRegistry::UpdateContainerState(const std::string& name,
+                                           ContainerState state,
+                                           int32_t exit_code) {
+    std::lock_guard<std::mutex> lock(lock_mutex_);
+    auto it = containers_.find(name);
+    if (it == containers_.end()) {
+        // First time we see this container — auto-create a minimal record so
+        // a notification arriving before UpdateServiceList still produces a
+        // visible entry in lfc_monitor.
+        auto fresh = std::make_shared<Container>(
+            name, "", "", "", ContainerType::CT_UNKNOWN);
+        fresh->SetState(state);
+        fresh->SetExitCode(exit_code);
+        containers_[name] = fresh;
+        return;
+    }
+    it->second->SetState(state);
+    it->second->SetExitCode(exit_code);
+}
+
+std::vector<std::string> ServiceRegistry::GetServicesInContainer(
+    const std::string& container_name) {
+    std::lock_guard<std::mutex> lock(lock_mutex_);
+    std::vector<std::string> out;
+    for (auto& kv : services_) {
+        if (kv.second && kv.second->GetContainerName() == container_name) {
+            out.push_back(kv.first);
+        }
+    }
+    return out;
+}
 
 } // namespace lifecycle_manager

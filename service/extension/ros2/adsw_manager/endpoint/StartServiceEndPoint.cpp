@@ -39,6 +39,19 @@ void StartServiceEndPoint::OnDataAvailable(){
 
     if (Read<StartServiceRequest>(req_) == true){
 
+        // Phantom-publisher guard. Only the participant identified by the
+        // first UpdateServiceListResponse (i.e. the real lifecycle_mgr) may
+        // command a service start. Any other publisher writing directly to
+        // the raw mmf/lifecyclemgr/StartServiceRequest topic — zombie DDS
+        // participants, leaked test fixtures, hand-rolled probes — is dropped
+        // here. This is what keeps a MANUAL service from resurrecting on its
+        // own after operator-driven Stop.
+        if (!ADSWManager::Get()->IsKnownLifecyclePublisher(LastPublicationHandle())) {
+            LOG_DEBUG("StartServiceEndPoint: dropping StartServiceRequest "
+                      "from untrusted publisher (phantom guard)");
+            return;
+        }
+
         StartServiceRequest* message = reinterpret_cast<StartServiceRequest*>(&req_);
 
         std::shared_ptr<ROSServiceController> manager = ADSWManager::Get()->GetServiceController();

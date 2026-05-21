@@ -8,6 +8,21 @@
 #include "StopServiceEndPoint.hpp"
 #include "GetServiceStateEndPoint.hpp"
 #include "NotifyServiceStateEndPoint.hpp"
+
+// F013: container actuator + ctrl/* gate endpoints
+#include "NotifyContainerStateEndPoint.hpp"
+#include "StartContainerEndPoint.hpp"
+#include "StopContainerEndPoint.hpp"
+#include "CtrlStartServiceEndPoint.hpp"
+#include "CtrlStopServiceEndPoint.hpp"
+#include "CtrlSetServiceModeEndPoint.hpp"
+#include "CtrlStartContainerEndPoint.hpp"
+#include "CtrlStopContainerEndPoint.hpp"
+
+// F014 follow-up: recovery policy mutation
+#include "SetRecoveryPolicyEndPoint.hpp"
+#include "CtrlSetRecoveryPolicyEndPoint.hpp"
+
 #include "logger/Log.hpp"
 
 namespace lifecycle_manager {
@@ -62,6 +77,34 @@ int32_t EndPointFactory::Initialize(){
 
     topic_lists_[MessageType::UPDATE_SERVICE_LIST_REQUEST] = MessageTopic::GetTopicStr(MessageType::UPDATE_SERVICE_LIST_REQUEST);;
     topic_lists_[MessageType::UPDATE_SERVICE_LIST_RESPONSE] = MessageTopic::GetTopicStr(MessageType::UPDATE_SERVICE_LIST_RESPONSE);;
+
+    // F013: Container management + ctrl/* surface. Topic-string registration
+    // only at this stage — actual endpoint instantiation lives in the
+    // CreateEndPoints() switch (added incrementally in S2b-3).  Unhandled
+    // MessageTypes fall through with pubsub = PUBSUB_NONE so registering
+    // them here is a safe no-op until the switch case lands.
+    topic_lists_[MessageType::NOTIFY_CONTAINER_STATE]   = MessageTopic::GetTopicStr(MessageType::NOTIFY_CONTAINER_STATE);
+    topic_lists_[MessageType::START_CONTAINER_REQUEST]  = MessageTopic::GetTopicStr(MessageType::START_CONTAINER_REQUEST);
+    topic_lists_[MessageType::START_CONTAINER_RESPONSE] = MessageTopic::GetTopicStr(MessageType::START_CONTAINER_RESPONSE);
+    topic_lists_[MessageType::STOP_CONTAINER_REQUEST]   = MessageTopic::GetTopicStr(MessageType::STOP_CONTAINER_REQUEST);
+    topic_lists_[MessageType::STOP_CONTAINER_RESPONSE]  = MessageTopic::GetTopicStr(MessageType::STOP_CONTAINER_RESPONSE);
+
+    topic_lists_[MessageType::CTRL_START_SERVICE_REQUEST]      = MessageTopic::GetTopicStr(MessageType::CTRL_START_SERVICE_REQUEST);
+    topic_lists_[MessageType::CTRL_START_SERVICE_RESPONSE]     = MessageTopic::GetTopicStr(MessageType::CTRL_START_SERVICE_RESPONSE);
+    topic_lists_[MessageType::CTRL_STOP_SERVICE_REQUEST]       = MessageTopic::GetTopicStr(MessageType::CTRL_STOP_SERVICE_REQUEST);
+    topic_lists_[MessageType::CTRL_STOP_SERVICE_RESPONSE]      = MessageTopic::GetTopicStr(MessageType::CTRL_STOP_SERVICE_RESPONSE);
+    topic_lists_[MessageType::CTRL_SET_SERVICE_MODE_REQUEST]   = MessageTopic::GetTopicStr(MessageType::CTRL_SET_SERVICE_MODE_REQUEST);
+    topic_lists_[MessageType::CTRL_SET_SERVICE_MODE_RESPONSE]  = MessageTopic::GetTopicStr(MessageType::CTRL_SET_SERVICE_MODE_RESPONSE);
+    topic_lists_[MessageType::CTRL_START_CONTAINER_REQUEST]    = MessageTopic::GetTopicStr(MessageType::CTRL_START_CONTAINER_REQUEST);
+    topic_lists_[MessageType::CTRL_START_CONTAINER_RESPONSE]   = MessageTopic::GetTopicStr(MessageType::CTRL_START_CONTAINER_RESPONSE);
+    topic_lists_[MessageType::CTRL_STOP_CONTAINER_REQUEST]     = MessageTopic::GetTopicStr(MessageType::CTRL_STOP_CONTAINER_REQUEST);
+    topic_lists_[MessageType::CTRL_STOP_CONTAINER_RESPONSE]    = MessageTopic::GetTopicStr(MessageType::CTRL_STOP_CONTAINER_RESPONSE);
+
+    // F014 follow-up: recovery policy
+    topic_lists_[MessageType::SET_RECOVERY_POLICY_REQUEST]        = MessageTopic::GetTopicStr(MessageType::SET_RECOVERY_POLICY_REQUEST);
+    topic_lists_[MessageType::SET_RECOVERY_POLICY_RESPONSE]       = MessageTopic::GetTopicStr(MessageType::SET_RECOVERY_POLICY_RESPONSE);
+    topic_lists_[MessageType::CTRL_SET_RECOVERY_POLICY_REQUEST]   = MessageTopic::GetTopicStr(MessageType::CTRL_SET_RECOVERY_POLICY_REQUEST);
+    topic_lists_[MessageType::CTRL_SET_RECOVERY_POLICY_RESPONSE]  = MessageTopic::GetTopicStr(MessageType::CTRL_SET_RECOVERY_POLICY_RESPONSE);
 
     return topic_lists_.size();
 
@@ -184,7 +227,161 @@ int32_t EndPointFactory::CreateEndPoints(std::shared_ptr<DDSTransmitter> transmi
                     msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndPoint>(update_svc_resp);
                     pubsub = PubSubTYpe::PUBLISH_ONLY;
                 }
-                break;  
+                break;
+
+                // F013: container actuator surface (lifecycle_mgr ↔ adsw_manager).
+                case MessageType::NOTIFY_CONTAINER_STATE :{
+                    auto ep = std::make_shared<NotifyContainerStateEndPoint>(
+                        key, val, handlers.on_notify_container_state);
+                    msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndPoint>(ep);
+                    pubsub = PubSubTYpe::SUBSCRIBE_ONLY;
+                }
+                break;
+
+                case MessageType::START_CONTAINER_REQUEST :{
+                    auto ep = std::make_shared<StartContainerEndPoint>(key, val);
+                    msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndPoint>(ep);
+                    pubsub = PubSubTYpe::PUBLISH_ONLY;
+                }
+                break;
+
+                case MessageType::START_CONTAINER_RESPONSE :{
+                    auto ep = std::make_shared<StartContainerEndPoint>(
+                        key, val, handlers.on_start_container_resp);
+                    msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndPoint>(ep);
+                    pubsub = PubSubTYpe::SUBSCRIBE_ONLY;
+                }
+                break;
+
+                case MessageType::STOP_CONTAINER_REQUEST :{
+                    auto ep = std::make_shared<StopContainerEndPoint>(key, val);
+                    msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndPoint>(ep);
+                    pubsub = PubSubTYpe::PUBLISH_ONLY;
+                }
+                break;
+
+                case MessageType::STOP_CONTAINER_RESPONSE :{
+                    auto ep = std::make_shared<StopContainerEndPoint>(
+                        key, val, handlers.on_stop_container_resp);
+                    msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndPoint>(ep);
+                    pubsub = PubSubTYpe::SUBSCRIBE_ONLY;
+                }
+                break;
+
+                // F013: ctrl/* gate surface (monitor → lifecycle_mgr requests,
+                // lifecycle_mgr → monitor responses).  lifecycle_mgr SUBs each
+                // request and PUBs the shared CtrlResponse shape.
+                case MessageType::CTRL_START_SERVICE_REQUEST :{
+                    auto ep = std::make_shared<CtrlStartServiceEndPoint>(
+                        key, val, handlers.on_ctrl_start_service);
+                    msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndPoint>(ep);
+                    pubsub = PubSubTYpe::SUBSCRIBE_ONLY;
+                }
+                break;
+
+                case MessageType::CTRL_START_SERVICE_RESPONSE :{
+                    auto ep = std::make_shared<CtrlStartServiceEndPoint>(key, val);
+                    msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndPoint>(ep);
+                    pubsub = PubSubTYpe::PUBLISH_ONLY;
+                }
+                break;
+
+                case MessageType::CTRL_STOP_SERVICE_REQUEST :{
+                    auto ep = std::make_shared<CtrlStopServiceEndPoint>(
+                        key, val, handlers.on_ctrl_stop_service);
+                    msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndPoint>(ep);
+                    pubsub = PubSubTYpe::SUBSCRIBE_ONLY;
+                }
+                break;
+
+                case MessageType::CTRL_STOP_SERVICE_RESPONSE :{
+                    auto ep = std::make_shared<CtrlStopServiceEndPoint>(key, val);
+                    msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndPoint>(ep);
+                    pubsub = PubSubTYpe::PUBLISH_ONLY;
+                }
+                break;
+
+                case MessageType::CTRL_SET_SERVICE_MODE_REQUEST :{
+                    auto ep = std::make_shared<CtrlSetServiceModeEndPoint>(
+                        key, val, handlers.on_ctrl_set_service_mode);
+                    msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndPoint>(ep);
+                    pubsub = PubSubTYpe::SUBSCRIBE_ONLY;
+                }
+                break;
+
+                case MessageType::CTRL_SET_SERVICE_MODE_RESPONSE :{
+                    auto ep = std::make_shared<CtrlSetServiceModeEndPoint>(key, val);
+                    msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndPoint>(ep);
+                    pubsub = PubSubTYpe::PUBLISH_ONLY;
+                }
+                break;
+
+                case MessageType::CTRL_START_CONTAINER_REQUEST :{
+                    auto ep = std::make_shared<CtrlStartContainerEndPoint>(
+                        key, val, handlers.on_ctrl_start_container);
+                    msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndPoint>(ep);
+                    pubsub = PubSubTYpe::SUBSCRIBE_ONLY;
+                }
+                break;
+
+                case MessageType::CTRL_START_CONTAINER_RESPONSE :{
+                    auto ep = std::make_shared<CtrlStartContainerEndPoint>(key, val);
+                    msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndPoint>(ep);
+                    pubsub = PubSubTYpe::PUBLISH_ONLY;
+                }
+                break;
+
+                case MessageType::CTRL_STOP_CONTAINER_REQUEST :{
+                    auto ep = std::make_shared<CtrlStopContainerEndPoint>(
+                        key, val, handlers.on_ctrl_stop_container);
+                    msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndPoint>(ep);
+                    pubsub = PubSubTYpe::SUBSCRIBE_ONLY;
+                }
+                break;
+
+                case MessageType::CTRL_STOP_CONTAINER_RESPONSE :{
+                    auto ep = std::make_shared<CtrlStopContainerEndPoint>(key, val);
+                    msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndPoint>(ep);
+                    pubsub = PubSubTYpe::PUBLISH_ONLY;
+                }
+                break;
+
+                // F014 follow-up: recovery policy actuator (lifecycle_mgr ↔ adsw)
+                case MessageType::SET_RECOVERY_POLICY_REQUEST :{
+                    auto ep = std::make_shared<SetRecoveryPolicyEndPoint>(key, val);
+                    msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndPoint>(ep);
+                    pubsub = PubSubTYpe::PUBLISH_ONLY;
+                }
+                break;
+
+                case MessageType::SET_RECOVERY_POLICY_RESPONSE :{
+                    auto ep = std::make_shared<SetRecoveryPolicyEndPoint>(
+                        key, val, handlers.on_set_recovery_policy_resp);
+                    msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndPoint>(ep);
+                    pubsub = PubSubTYpe::SUBSCRIBE_ONLY;
+                }
+                break;
+
+                // F014 follow-up: ctrl gate
+                case MessageType::CTRL_SET_RECOVERY_POLICY_REQUEST :{
+                    auto ep = std::make_shared<CtrlSetRecoveryPolicyEndPoint>(
+                        key, val, handlers.on_ctrl_set_recovery_policy);
+                    msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndPoint>(ep);
+                    pubsub = PubSubTYpe::SUBSCRIBE_ONLY;
+                }
+                break;
+
+                case MessageType::CTRL_SET_RECOVERY_POLICY_RESPONSE :{
+                    auto ep = std::make_shared<CtrlSetRecoveryPolicyEndPoint>(key, val);
+                    msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndPoint>(ep);
+                    pubsub = PubSubTYpe::PUBLISH_ONLY;
+                }
+                break;
+
+                default:
+                    // Unknown / unhandled MessageType — leave pubsub = PUBSUB_NONE
+                    // so the entry is skipped without instantiating an endpoint.
+                    break;
             }
         }
 

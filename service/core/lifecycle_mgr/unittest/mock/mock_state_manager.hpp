@@ -21,6 +21,15 @@ public:
     MOCK_METHOD(void, OnStart, (lifecyclemgr::StartServiceResponse* message), ());
     MOCK_METHOD(void, OnStop, (lifecyclemgr::StopServiceResponse* message), ());
     MOCK_METHOD(void, RequestStopAll, (), ());
+
+    // F013: container actuator relays + ctrl/* gate handlers
+    MOCK_METHOD(void, OnStartContainer, (lifecyclemgr::StartContainerResponse*), ());
+    MOCK_METHOD(void, OnStopContainer, (lifecyclemgr::StopContainerResponse*), ());
+    MOCK_METHOD(void, HandleCtrlStartService, (lifecyclemgr::CtrlStartServiceRequest*), ());
+    MOCK_METHOD(void, HandleCtrlStopService, (lifecyclemgr::CtrlStopServiceRequest*), ());
+    MOCK_METHOD(void, HandleCtrlSetServiceMode, (lifecyclemgr::CtrlSetServiceModeRequest*), ());
+    MOCK_METHOD(void, HandleCtrlStartContainer, (lifecyclemgr::CtrlStartContainerRequest*), ());
+    MOCK_METHOD(void, HandleCtrlStopContainer, (lifecyclemgr::CtrlStopContainerRequest*), ());
 };
 
 inline MockStateManager* Mock_StateManager = nullptr;
@@ -65,6 +74,36 @@ void StateManager::RequestStopAll() {
         return;
     }
     // Default no-op to avoid performing real actions during unit tests
+}
+
+// F013: container actuator relays + ctrl/* gate handlers — mock-forwarded
+// so LifecycleManagerTest links without dragging in the real StateManager.cpp.
+void StateManager::OnStartContainer(lifecyclemgr::StartContainerResponse* m) {
+    if (Mock_StateManager) Mock_StateManager->OnStartContainer(m);
+}
+void StateManager::OnStopContainer(lifecyclemgr::StopContainerResponse* m) {
+    if (Mock_StateManager) Mock_StateManager->OnStopContainer(m);
+}
+void StateManager::HandleCtrlStartService(lifecyclemgr::CtrlStartServiceRequest* m) {
+    if (Mock_StateManager) Mock_StateManager->HandleCtrlStartService(m);
+}
+void StateManager::HandleCtrlStopService(lifecyclemgr::CtrlStopServiceRequest* m) {
+    if (Mock_StateManager) Mock_StateManager->HandleCtrlStopService(m);
+}
+void StateManager::HandleCtrlSetServiceMode(lifecyclemgr::CtrlSetServiceModeRequest* m) {
+    if (Mock_StateManager) Mock_StateManager->HandleCtrlSetServiceMode(m);
+}
+void StateManager::HandleCtrlStartContainer(lifecyclemgr::CtrlStartContainerRequest* m) {
+    if (Mock_StateManager) Mock_StateManager->HandleCtrlStartContainer(m);
+}
+void StateManager::HandleCtrlStopContainer(lifecyclemgr::CtrlStopContainerRequest* m) {
+    if (Mock_StateManager) Mock_StateManager->HandleCtrlStopContainer(m);
+}
+// PublishCtrlResponse is private; not directly called from LifecycleManager.cpp,
+// but the symbol must be resolvable if StateManager.cpp ever gets linked into a
+// test fixture.  Mock it as a thin no-op stub for safety.
+bool StateManager::PublishCtrlResponse(MessageType, lifecyclemgr::ReturnCode) {
+    return true;
 }
 
 } // namespace lifecycle_manager

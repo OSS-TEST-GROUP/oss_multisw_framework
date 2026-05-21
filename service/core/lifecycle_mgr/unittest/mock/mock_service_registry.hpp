@@ -4,6 +4,8 @@
 #include <gmock/gmock.h>
 #include "service/ServiceRegistry.hpp"
 #include "service/Service.hpp"
+#include "service/Container.hpp"
+#include "include/ContainerState.hpp"
 
 namespace lifecycle_manager {
 
@@ -32,6 +34,13 @@ public:
     MOCK_METHOD(bool, hasService, (std::string), ());
     MOCK_METHOD(std::shared_ptr<lifecycle_manager::Service>, getService, (std::string), ());
     MOCK_METHOD(std::vector<std::string>, GetGroupList, (), ());
+
+    // F013: container surface
+    MOCK_METHOD(std::shared_ptr<lifecycle_manager::Container>, GetContainer, (const std::string&), ());
+    MOCK_METHOD(std::vector<std::shared_ptr<lifecycle_manager::Container>>, GetAllContainers, (), ());
+    MOCK_METHOD(void, UpsertContainer, (const std::shared_ptr<lifecycle_manager::Container>&), ());
+    MOCK_METHOD(void, UpdateContainerState, (const std::string&, lifecycle_manager::ContainerState, int32_t), ());
+    MOCK_METHOD(std::vector<std::string>, GetServicesInContainer, (const std::string&), ());
 };
 
 inline MockServiceRegistry* Mock_ServiceRegistry = nullptr;
@@ -107,6 +116,29 @@ std::shared_ptr<Service> ServiceRegistry::getService(std::string name) {
 
 std::vector<std::string> ServiceRegistry::GetGroupList(){
     return Mock_ServiceRegistry->GetGroupList();
+}
+
+// F013: container surface — mock-forwarded so LifecycleManagerTest links
+// without dragging in the real ServiceRegistry.cpp.
+std::shared_ptr<Container> ServiceRegistry::GetContainer(const std::string& name){
+    return Mock_ServiceRegistry ? Mock_ServiceRegistry->GetContainer(name) : nullptr;
+}
+std::vector<std::shared_ptr<Container>> ServiceRegistry::GetAllContainers(){
+    return Mock_ServiceRegistry ? Mock_ServiceRegistry->GetAllContainers()
+                                : std::vector<std::shared_ptr<Container>>{};
+}
+void ServiceRegistry::UpsertContainer(const std::shared_ptr<Container>& c){
+    if (Mock_ServiceRegistry) Mock_ServiceRegistry->UpsertContainer(c);
+}
+void ServiceRegistry::UpdateContainerState(const std::string& name,
+                                            ContainerState state,
+                                            int32_t exit_code){
+    if (Mock_ServiceRegistry)
+        Mock_ServiceRegistry->UpdateContainerState(name, state, exit_code);
+}
+std::vector<std::string> ServiceRegistry::GetServicesInContainer(const std::string& name){
+    return Mock_ServiceRegistry ? Mock_ServiceRegistry->GetServicesInContainer(name)
+                                : std::vector<std::string>{};
 }
 
 } // namespace lifecycle_manager

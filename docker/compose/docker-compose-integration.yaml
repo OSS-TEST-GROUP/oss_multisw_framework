@@ -55,6 +55,18 @@ services:
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
     volumes:
       - /dev/shm:/dev/shm
+      # F013 — adsw_manager's ContainerController shells out to `docker
+      # start/run/stop` from inside this container.  Bind the host docker
+      # daemon socket so those commands hit the same engine that's
+      # running this compose, not a non-existent in-container daemon.
+      - /var/run/docker.sock:/var/run/docker.sock
+    # F013 — grant ossuser (uid 1000) access to /var/run/docker.sock by
+    # joining the host's docker group at runtime.  Override DOCKER_SOCK_GID
+    # if your host's group differs from the common Ubuntu default 999:
+    #   DOCKER_SOCK_GID=$(stat -c '%g' /var/run/docker.sock) \
+    #     docker compose -f docker/compose/docker-compose-integration.yaml up -d
+    group_add:
+      - "${DOCKER_SOCK_GID:-999}"
     # mmf-core advertises DDS topics first; ext-ros2's rosbridge then
     # subscribes and re-publishes over WebSocket. Starting the bridge
     # after the core avoids "no publisher matched yet" warnings on the

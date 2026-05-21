@@ -7,6 +7,7 @@
 #include <vector>
 #include <mutex>
 
+#include "Container.hpp"
 #include "Service.hpp"
 
 #include "lifecycle/UpdateServiceListRequest.hpp"
@@ -39,6 +40,20 @@ class ServiceRegistry {
     uint64_t GetServiceNumInGroup(std::string group);
     uint64_t GetGroupNum();
 
+    // ── F013: Container registry surface ────────────────────────────────
+    // Populated by UpdateServiceListRequest.container_list (adsw_manager
+    // now also publishes its known containers) and refreshed by
+    // NotifyContainerState arrivals.
+    std::shared_ptr<Container> GetContainer(const std::string& name);
+    std::vector<std::shared_ptr<Container>> GetAllContainers();
+    void UpsertContainer(const std::shared_ptr<Container>& c);
+    void UpdateContainerState(const std::string& name,
+                              ContainerState state,
+                              int32_t exit_code);
+    // Returns the names of services known to live in the given container.
+    // Uses Service::GetContainerName() set during UpdateServiceList.
+    std::vector<std::string> GetServicesInContainer(const std::string& name);
+
   private:
     bool hasGroup(std::string name);
     std::shared_ptr<std::vector<std::string>> getGroup(std::string name);
@@ -54,8 +69,12 @@ class ServiceRegistry {
   private:
     std::map<std::string, std::shared_ptr<Service>> services_;
     std::map<std::string, std::shared_ptr<std::vector<std::string>>> groups_;
-    std::mutex lock_mutex_; 
-    
+    // F013: container metadata keyed by container_name. Distinct from
+    // groups_ — groups_ remains a registration-unit abstraction, containers_
+    // is the per-container metadata + last-known state.
+    std::map<std::string, std::shared_ptr<Container>> containers_;
+    std::mutex lock_mutex_;
+
     UpdateServiceListResponse   udpate_response_;
 
 };

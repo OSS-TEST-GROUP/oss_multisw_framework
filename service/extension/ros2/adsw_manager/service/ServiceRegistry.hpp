@@ -53,10 +53,15 @@ public:
   bool Save();
   bool LoadServiceSaved(const std::string &path);
 
+  // Stamp the "last successfully acked" recovery snapshot. Called by
+  // ADSWManager::ConfirmUpdateServiceList() on UpdateServiceListResponse
+  // receipt — NOT at send time — so the retransmit loop keeps re-sending
+  // until lifecycle_mgr confirms it has the list.
+  void UpdateLastSentRecovery();
+
 private:
   // recovery 값 변경 여부 확인: 마지막으로 lifecycle_mgr에 전송한 값과 비교
   bool HasRecoveryChanged() const;
-  void UpdateLastSentRecovery();
 
   std::unordered_map<std::string, std::shared_ptr<Service>> services_;
   std::unordered_map<std::string, std::set<std::shared_ptr<Service>>> group_;

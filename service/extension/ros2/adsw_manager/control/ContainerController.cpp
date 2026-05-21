@@ -152,7 +152,17 @@ bool ContainerController::StartDockerContainer(std::shared_ptr<Container> contai
         return true;
     }
 
-    std::string run_cmd = "docker run -d --name " + container->GetName()
+    // `--init` injects docker-init (tini) as PID 1, which reap()s child
+    // processes. Without it, services we `docker exec ros2 run`'d into the
+    // container become zombies when they exit, because the container's own
+    // entrypoint (`tail -f /dev/null` in adsw-test-app) never calls wait().
+    // Zombies retain their cmdline only briefly, so a poll cycle later
+    // IsServiceAliveInContainer's `pgrep -f` misses them and reports alive=no
+    // — which under PolicyAlways/OnFailure triggers an auto-restart, which
+    // produces another zombie, and the operator sees an unending Stop/Start
+    // loop. tini fixes the root cause: dead services stay reaped, alive
+    // services stay matched.
+    std::string run_cmd = "docker run -d --init --name " + container->GetName()
                         + " " + container->GetImage();
     if (RunCommand(run_cmd) == 0) {
         LOG_DEBUG("ContainerController::StartDockerContainer new container " << container->GetName());

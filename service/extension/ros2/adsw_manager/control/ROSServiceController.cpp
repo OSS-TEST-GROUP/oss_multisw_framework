@@ -349,12 +349,23 @@ bool ROSServiceController::StopService(std::shared_ptr<Service> service){
             // (launchfile / name / package / explicit override) consistent
             // with the liveness-polling logic, so direct-binary services don't
             // get missed by pkill -f using the service name.
+            //
+            // The pkill pattern MUST end-anchor with `$`, mirroring
+            // IsServiceAliveInContainer. Without it, `pkill -f test_service`
+            // matches its own enclosing `bash -c "... pkill ... test_service ..."`
+            // and the wrapper bash kills itself — docker exec exits 143
+            // (SIGTERM), system() returns nonzero, ProcessServiceStopRequest
+            // reports FAILED to lifecycle_mgr, and lfc_monitor surfaces a
+            // bogus "Stop Service Failed" even though the service actually
+            // died. The token is left unquoted (same as the liveness check)
+            // so the shell sees `\$` and passes literal `$` to pkill as a
+            // regex end-anchor.
             const std::string token =
                 service->ResolveProcessMatchToken(use_native_execution_);
             command = "docker exec " + container_name
                     + " bash -c \"kill " + std::to_string(pid) + " 2>/dev/null || true; "
-                    + "pkill -TERM -f '" + token + "' 2>/dev/null || true; "
-                    + "sleep 1.0; pkill -KILL -f '" + token + "' 2>/dev/null || true\"";
+                    + "pkill -TERM -f " + token + "\\$ 2>/dev/null || true; "
+                    + "sleep 1.0; pkill -KILL -f " + token + "\\$ 2>/dev/null || true\"";
             result = system(command.c_str());
         }
     } 
@@ -478,39 +489,124 @@ bool ROSServiceController::ProcessServiceStartRequest(lifecyclemgr::StartService
             int32_t count = 0;
             LOG_DEBUG("Starting services: " << (is_group ? "Group" : "Individual") << " - " << service_list.size() << " services.");
 
-            // 컨테이너가 실행 중이 아닐 때만 시작한다.
-            // 서비스 상태에 의한 컨테이너 재시작은 하지 않는다.
-            if (container_controller_) {
-                std::shared_ptr<ServiceRegistry> registry = ADSWManager::Get()->GetServiceRegistry();
-                std::set<std::string> started_containers;
+            // Container ownership semantics — services live inside
+            // their container.  Per-container we attempt at most one
+            // start: if the container goes RUNNING (already, or after
+            // our explicit start), services hosted in it proceed.  If
+            // StartContainer fails, every service mapped to that
+            // container is skipped and the overall result reflects that
+            // — instead of silently trying StartService against a
+            // non-existent container, which the docker-exec inside
+            // StartService would then fail at, producing two layers of
+            // confusing error logs and a misleading ctrl/* outcome.
+            std::shared_ptr<ServiceRegistry> registry =
+                ADSWManager::Get()->GetServiceRegistry();
+            std::set<std::string> failed_containers;
+            if (container_controller_ && registry) {
+                std::set<std::string> handled_containers;
                 for (const auto& svc_name : service_list) {
-                    if (!registry) break;
                     std::shared_ptr<Service> svc = registry->GetService(svc_name);
                     if (!svc) continue;
-                    std::string container_name = registry->GetGroupNameByService(svc);
+                    std::string container_name =
+                        registry->GetGroupNameByService(svc);
                     if (container_name.empty()) continue;
-                    if (started_containers.count(container_name)) continue;
+                    if (handled_containers.count(container_name)) continue;
+                    handled_containers.insert(container_name);
 
-                    if (!container_controller_->IsContainerRunning(container_name)) {
-                        LOG_DEBUG("ROSServiceController: container " << container_name
-                                  << " not running, starting it for service " << svc_name);
-                        container_controller_->StartContainer(container_name);
-                    } else {
+                    if (container_controller_->IsContainerRunning(container_name)) {
                         LOG_DEBUG("ROSServiceController: container " << container_name
                                   << " already running, starting service only: " << svc_name);
+                        continue;
                     }
-                    started_containers.insert(container_name);
+                    LOG_DEBUG("ROSServiceController: container " << container_name
+                              << " not running, starting it for service " << svc_name);
+                    if (!container_controller_->StartContainer(container_name)) {
+                        LOG_ERROR("StartContainer failed for " << container_name
+                                  << "; services hosted in it will be skipped");
+                        failed_containers.insert(container_name);
+                    }
                 }
             }
 
+            auto container_failed = [&](const std::string& svc_name) -> bool {
+                if (failed_containers.empty() || !registry) return false;
+                auto svc = registry->GetService(svc_name);
+                if (!svc) return false;
+                const std::string container_name =
+                    registry->GetGroupNameByService(svc);
+                return !container_name.empty() &&
+                       failed_containers.count(container_name) > 0;
+            };
+
+            // Idempotency guard: if a service is already RUNNING /
+            // INITIALIZING **with a real PID**, a duplicate StartServiceRequest
+            // must not spawn another `docker exec ros2 run` — that would
+            // orphan the prior PID, accumulate zombies, and pulse the
+            // monitor-side state RUNNING↔NOT_RUNNING as the per-PID poller
+            // catches each transient. Count the already-running ones toward
+            // the SUCCESS verdict so the ctrl/* response is still SUCCESS.
+            //
+            // INITIALIZING + PID==0 is the cold-start case: ContainerHealthMonitor
+            // sets every service to INITIALIZING when the hosting container
+            // first goes RUNNING, but no process has actually been spawned
+            // yet. PID rehydration can't find one either. Treating this as
+            // "already running" silently swallows the user's Start click —
+            // do NOT skip in that case; let StartService below actually
+            // launch the docker exec.
+            auto already_running = [&](const std::string& svc_name) -> bool {
+                if (!registry) return false;
+                auto svc = registry->GetService(svc_name);
+                if (!svc) return false;
+                ServiceState s = svc->GetServiceState();
+                if (s == ServiceState::RUNNING) return true;
+                if (s == ServiceState::INITIALIZING && svc->GetPID() != 0) return true;
+                return false;
+            };
+
+            // NOTE: a MANUAL+NOT_RUNNING guard once lived here, but MANUAL
+            // means "operator drives start/stop by hand" — that includes
+            // lfc_monitor's Start button click. Refusing the click here
+            // contradicts the policy's meaning. lifecycle_mgr's
+            // PolicyManager already keeps automatic recovery from firing on
+            // MANUAL (PolicyManual::Evaluate returns NONE for every state),
+            // so the supervised pipeline never auto-restarts a MANUAL
+            // service on its own. If a StartServiceRequest still arrives
+            // here for a MANUAL service it's either operator intent or a
+            // stray publisher writing directly to the raw topic — phantom
+            // publishers are a separate problem (see
+            // scripts/probe-stale-publisher.sh) and must be identified and
+            // stopped at the source rather than masked here.
+
             if (is_group) {
                 for (const auto& service : service_list) {
+                    if (container_failed(service)) {
+                        LOG_ERROR("Skip start of group " << service
+                                  << " — its container is down");
+                        continue;
+                    }
+                    if (already_running(service)) {
+                        LOG_DEBUG("Group " << service
+                                  << " already running — skipping respawn");
+                        count++;
+                        continue;
+                    }
                     if (StartGroup(service) == true) {
                         count++;
                     }
                 }
             } else {
                 for (const auto& service : service_list) {
+                    if (container_failed(service)) {
+                        LOG_ERROR("Skip start of " << service
+                                  << " — its container is down");
+                        continue;
+                    }
+                    if (already_running(service)) {
+                        LOG_DEBUG("Service " << service
+                                  << " already running — skipping respawn");
+                        count++;
+                        continue;
+                    }
                     if (StartService(service) == true){
                         count++;
                     }
@@ -532,9 +628,20 @@ bool ROSServiceController::ProcessServiceStartRequest(lifecyclemgr::StartService
             LOG_DEBUG("Service(s) started successfully.");
         }
 
+        // Broadcast a NotifyServiceState immediately so lfc_monitor's UI
+        // flips RUNNING the moment the operator's ctrl/Start completes,
+        // instead of waiting up to the LifecycleDiagReport heartbeat
+        // (~30 s) for the change to surface. We don't gate on `result`
+        // because even a partial / failed start may have mutated some
+        // service entries (e.g. one of several services in the batch
+        // launched fine), and the monitor wants the actual current snapshot.
+        if (auto monitor = ADSWManager::Get()->GetServiceMonitor()) {
+            monitor->NotifyServiceState();
+        }
+
         std::shared_ptr<DDSTransmitter> transmitter = ADSWManager::Get()->GetTransmitter();
 
-        return transmitter->SendMessage(MessageType::START_SERVICE_RESPONSE, 
+        return transmitter->SendMessage(MessageType::START_SERVICE_RESPONSE,
                                         reinterpret_cast<void*>(&start_service_response_));
     }
     return true;
@@ -592,9 +699,17 @@ bool ROSServiceController::ProcessServiceStopRequest(lifecyclemgr::StopServiceRe
             LOG_DEBUG("Service(s) stop successfully.");
         }
 
+        // Same NotifyServiceState push as the start path — see commentary
+        // in ProcessServiceStartRequest. lfc_monitor needs an immediate
+        // state-change event for the badge to flip without waiting on the
+        // periodic LifecycleDiagReport.
+        if (auto monitor = ADSWManager::Get()->GetServiceMonitor()) {
+            monitor->NotifyServiceState();
+        }
+
         std::shared_ptr<DDSTransmitter> transmitter = ADSWManager::Get()->GetTransmitter();
 
-        return transmitter->SendMessage(MessageType::STOP_SERVICE_RESPONSE, 
+        return transmitter->SendMessage(MessageType::STOP_SERVICE_RESPONSE,
                                         reinterpret_cast<void*>(&stop_service_response_));
     }
     return true;

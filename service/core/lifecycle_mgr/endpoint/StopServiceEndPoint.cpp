@@ -2,6 +2,7 @@
 
 #include "lifecycle/StopServiceRequest.hpp"
 #include "logger/Log.hpp"
+#include "manager/LifecycleFactory.hpp"
 
 namespace lifecycle_manager {
 
@@ -25,6 +26,14 @@ void StopServiceEndPoint::OnDataAvailable(){
     LOG_DEBUG("Message Delivery for " << GetTopic() );
 
     if (Read<StopServiceResponse>(resp_) == true){
+
+        // Same phantom guard as StartServiceEndPoint — see commentary there.
+        if (!LifecycleFactory::GetInstance()
+                ->IsKnownAdswPublisher(LastPublicationHandle())) {
+            LOG_DEBUG("StopServiceEndPoint: dropping StopServiceResponse "
+                      "from untrusted publisher (phantom guard)");
+            return;
+        }
 
         StopServiceResponse* message = reinterpret_cast<StopServiceResponse*>(&resp_);
 

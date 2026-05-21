@@ -39,18 +39,29 @@ class DDSMessageEndpoint : public DataWriterListener, public DataReaderListener 
     template<typename T>
     bool Read(T &value) {
         SampleInfo info;
-        
+
         if (data_reader_ == nullptr) {
             return false;
         }
         if (data_reader_->take_next_sample(&value, &info) == eprosima::fastdds::dds::RETCODE_OK)
         {
             if (info.valid_data) {
-                
+                // Cache the publication_handle so the endpoint's
+                // OnDataAvailable can correlate this sample back to a
+                // specific publisher. The phantom-publisher guard in
+                // StartService/StopService endpoints uses this to drop any
+                // samples coming from a participant other than the trusted
+                // lifecycle_mgr (whose prefix we pin via the
+                // UpdateServiceListResponse trust anchor).
+                last_publication_handle_ = info.publication_handle;
                 return true;
             }
         }
         return false;
+    }
+
+    const eprosima::fastdds::dds::InstanceHandle_t& LastPublicationHandle() const {
+        return last_publication_handle_;
     }
 
     uint64_t GetPendingReadData();
@@ -86,6 +97,11 @@ class DDSMessageEndpoint : public DataWriterListener, public DataReaderListener 
     DataWriter* data_writer_;
 
     int16_t matched_;
+
+    // Updated by Read() with the publication_handle of the last sample we
+    // consumed. Subclasses look at LastPublicationHandle() during their
+    // OnDataAvailable handler.
+    eprosima::fastdds::dds::InstanceHandle_t last_publication_handle_;
 };
 
 } // namespace lifecycle_manager

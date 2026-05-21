@@ -60,6 +60,13 @@ class DDSMessageEndPoint : public MessageEndPoint, public DataWriterListener , p
         if (reader_->take_next_sample(&value, &info) == eprosima::fastdds::dds::RETCODE_OK)
         {
             if (info.valid_data) {
+                // Cache the publication_handle so the endpoint's OnDataAvailable
+                // can correlate this sample back to a specific publisher — used
+                // by the phantom-publisher guard in StartServiceEndPoint /
+                // StopServiceEndPoint, which need to drop samples coming from
+                // any participant other than the adsw_manager that registered
+                // through UpdateServiceListRequest.
+                last_publication_handle_ = info.publication_handle;
                 return true;
             }
         }
@@ -78,6 +85,7 @@ class DDSMessageEndPoint : public MessageEndPoint, public DataWriterListener , p
             if (reader_->take_next_sample(&val, &info) == eprosima::fastdds::dds::RETCODE_OK)
             {
                 if (info.valid_data) {
+                    last_publication_handle_ = info.publication_handle;
                     ret_flag = true;
                     continue;
                 }
@@ -85,6 +93,13 @@ class DDSMessageEndPoint : public MessageEndPoint, public DataWriterListener , p
                 return ret_flag;
             }
         }
+    }
+
+    // Publication handle of the most recently read sample. Valid only inside
+    // the OnDataAvailable callback that just consumed it; subsequent Read()
+    // calls overwrite. Used by phantom-guard checks (see StartServiceEndPoint).
+    const eprosima::fastdds::dds::InstanceHandle_t& LastPublicationHandle() const {
+        return last_publication_handle_;
     }
 
     bool is_stopped() {return false;}
@@ -99,6 +114,11 @@ class DDSMessageEndPoint : public MessageEndPoint, public DataWriterListener , p
 
     DataWriter* writer_;
     DataReader* reader_;
+
+    // Updated by Read() with the publication_handle of the last accepted
+    // sample; subclasses consult LastPublicationHandle() in their
+    // OnDataAvailable to identify the publisher.
+    eprosima::fastdds::dds::InstanceHandle_t last_publication_handle_;
 
   private:
     std::mutex mutex_;

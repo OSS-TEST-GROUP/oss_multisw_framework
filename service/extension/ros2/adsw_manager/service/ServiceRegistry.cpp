@@ -344,7 +344,29 @@ bool ServiceRegistry::ProcessUpdateServiceListRequest() {
           TypeConvert::ToRecoveryPolicy(service_ptr->GetRecoveryPolicy());
       service_info.is_enabled() = service_ptr->IsEnabled();
       service_info.os_type() = TypeConvert::ToOsType(OsType::ROS2);
+      // F013: tell lifecycle_mgr which container hosts this service.
+      service_info.container_name() = service_ptr->GetContainerName();
       message.service_list().push_back(service_info);
+    }
+  }
+
+  // F013: ship known containers alongside services so lifecycle_mgr can
+  // populate its registry's containers_ map and expose them to the monitor.
+  auto controller = ADSWManager::Get()->GetServiceController();
+  if (controller) {
+    auto container_ctrl = controller->GetContainer();
+    if (container_ctrl) {
+      for (const auto &container : container_ctrl->GetAllContainers()) {
+        if (container == nullptr) continue;
+        lifecyclemgr::Container container_info;
+        container_info.name()                = container->GetName();
+        container_info.image()               = container->GetImage();
+        container_info.deploy_file()         = container->GetDeployFile();
+        container_info.container_namespace() = container->GetNamespace();
+        container_info.type()                = TypeConvert::ToContainerType(
+            container->GetContainerType());
+        message.container_list().push_back(container_info);
+      }
     }
   }
 
@@ -357,8 +379,18 @@ bool ServiceRegistry::ProcessUpdateServiceListRequest() {
   if (endpoint != nullptr) {
     endpoint->Write(&message);
     LOG_DEBUG("UpdateServiceListRequest sent with "
-              << message.service_list().size() << " services.");
-    UpdateLastSentRecovery();
+              << message.service_list().size() << " services and "
+              << message.container_list().size() << " containers.");
+    // last_sent_recovery_ is intentionally NOT updated here. Updating on
+    // send means HasRecoveryChanged() goes false immediately, so if the
+    // first send raced past lifecycle_mgr's subscriber initialization
+    // (subscription_matched but not yet wire-ready) the retransmit loop
+    // would skip every subsequent attempt and the service list would
+    // never reach lifecycle_mgr — and downstream lfc_monitor would never
+    // see services grouped under their container.
+    //
+    // The recovery snapshot is now stamped by ConfirmUpdateServiceList()
+    // when lifecycle_mgr's UpdateServiceListResponse actually arrives.
     return true;
   }
 
@@ -397,15 +429,39 @@ bool ServiceRegistry::Save() {
         ndservice["exec_type"] = "binary";
       }
 
-      // Convert integers to strings if you need consistent quoting; here leave
-      // as int or convert explicitly
-      ndservice["type"] = static_cast<int32_t>(service->GetServiceType());
-      ndservice["recovery"] =
-          static_cast<int32_t>(service->GetRecoveryPolicy());
+      // Persist as the same string tokens LoadServiceSaved parses
+      // ("NORMAL"/"ONESHOT", "ALWAYS"/"ON_FAILURE"/...).  Earlier code
+      // wrote integer enum values which then failed every if-equals
+      // branch in LoadServiceSaved and silently fell back to defaults
+      // — producing a runaway ON_FAILURE → restart loop after a single
+      // ctrl/SetRecoveryPolicy round-trip.
+      auto type_to_str = [](ServiceType t) -> std::string {
+          switch (t) {
+              case ServiceType::ONESHOT: return "ONESHOT";
+              case ServiceType::NORMAL:
+              default:                   return "NORMAL";
+          }
+      };
+      auto recovery_to_str = [](RecoveryPolicy p) -> std::string {
+          switch (p) {
+              case RecoveryPolicy::ALWAYS:            return "ALWAYS";
+              case RecoveryPolicy::ON_FAILURE:        return "ON_FAILURE";
+              case RecoveryPolicy::ON_SUCCESS:        return "ON_SUCCESS";
+              case RecoveryPolicy::ON_NOT_RESPONDING: return "ON_NOT_RESPONDING";
+              case RecoveryPolicy::MANUAL:            return "MANUAL";
+              case RecoveryPolicy::R_DEFAULT:
+              default:                                return "MANUAL";
+          }
+      };
+      ndservice["type"]     = type_to_str(service->GetServiceType());
+      ndservice["recovery"] = recovery_to_str(service->GetRecoveryPolicy());
 
-      // YAML supports boolean natively; if you want string "true"/"false"
-      // change accordingly
-      ndservice["enabled"] = service->IsEnabled();
+      // LoadServiceSaved compares enabled as a "true"/"false" string;
+      // YAML's native bool would round-trip but the parser there reads
+      // .as<std::string>("") so an explicit quoted string keeps both
+      // sides aligned.
+      ndservice["enabled"] = service->IsEnabled() ? std::string("true")
+                                                  : std::string("false");
 
       ndservice["max"] = service->GetMaxNodes();
 
@@ -533,28 +589,44 @@ bool ServiceRegistry::LoadServiceSaved(const std::string &path) {
                 serviceNode["exec_type"].as<std::string>("");
 
             ServiceType serviceType = ServiceType::NORMAL;
-            RecoveryPolicy recoveryPolicy = RecoveryPolicy::R_DEFAULT;
+            // Default to MANUAL when the yaml omits `recovery` (or supplies a
+            // value we don't recognise). Before this change the default was
+            // R_DEFAULT, which lifecycle_mgr's PolicyManager has no mapping
+            // for — it silently fell through to ServiceControlAction::NONE,
+            // semantically the same as MANUAL but invisible to lfc_monitor's
+            // dropdown (DEFAULT was filtered out). Defaulting to MANUAL
+            // makes "no auto-restart" the explicit, operator-visible choice
+            // for any service whose yaml entry didn't declare a policy.
+            RecoveryPolicy recoveryPolicy = RecoveryPolicy::MANUAL;
             bool enabled = true;
             if (!typeStr.empty()) {
-              if (typeStr == "NORMAL") {
+              if (typeStr == "NORMAL" || typeStr == "0") {
                 serviceType = ServiceType::NORMAL;
-              } else if (typeStr == "ONESHOT") {
+              } else if (typeStr == "ONESHOT" || typeStr == "1") {
                 serviceType = ServiceType::ONESHOT;
               }
             }
 
             if (!recoStr.empty()) {
-              if (recoStr == "ALWAYS") {
+              if (recoStr == "ALWAYS" || recoStr == "1") {
                 recoveryPolicy = RecoveryPolicy::ALWAYS;
-              } else if (recoStr == "ON_FAILURE") {
+              } else if (recoStr == "ON_FAILURE" || recoStr == "2") {
                 recoveryPolicy = RecoveryPolicy::ON_FAILURE;
-              } else if (recoStr == "ON_SUCCESS") {
+              } else if (recoStr == "ON_SUCCESS" || recoStr == "3") {
                 recoveryPolicy = RecoveryPolicy::ON_SUCCESS;
-              } else if (recoStr == "ON_NOT_RESPONDING") {
+              } else if (recoStr == "ON_NOT_RESPONDING" || recoStr == "4") {
                 recoveryPolicy = RecoveryPolicy::ON_NOT_RESPONDING;
-              } else if (recoStr == "MANUAL") {
+              } else if (recoStr == "MANUAL" || recoStr == "5") {
                 recoveryPolicy = RecoveryPolicy::MANUAL;
+              } else if (recoStr == "DEFAULT" || recoStr == "0") {
+                recoveryPolicy = RecoveryPolicy::R_DEFAULT;
               }
+              // Backward compat: pre-fix Save() wrote the enum integer
+              // (e.g. "recovery: 2") which never matched any branch and
+              // silently fell back to R_DEFAULT — masking the bug.  The
+              // numeric tokens here let an old broken yaml still be
+              // interpreted correctly while Save() now emits the canonical
+              // string form.
             }
             if (enableStr == "false") {
               enabled = false; // Default to false if not specified
@@ -573,6 +645,9 @@ bool ServiceRegistry::LoadServiceSaved(const std::string &path) {
             if (execTypeStr == "binary") {
               service->SetDirectExec(true);
             }
+            // F013: stamp the enclosing container name so lifecycle_mgr can
+            // map service ↔ container without re-deriving from the group.
+            service->SetContainerName(groupname);
             AddService(service, groupname);
           }
         }

@@ -69,10 +69,13 @@ void MessageQueue::PublishingLoop()
             LOG_DEBUG("PublishingLoop !! " << static_cast<int32_t>(msg.first) << "::" << topic  );
 
             if (endpoint != nullptr){
-                auto ret = endpoint->Write(msg.second);
-                if (ret != eprosima::fastdds::dds::RETCODE_OK)
+                // DDSMessageEndpoint::Write returns bool (true on RETCODE_OK).
+                // Comparing the bool to RETCODE_OK (=0) inverted the verdict so
+                // every successful write was logged as "Failed".
+                bool ok = endpoint->Write(msg.second);
+                if (!ok)
                 {
-                    LOG_DEBUG("Failed to write message: " << ret  );
+                    LOG_DEBUG("Failed to write message: " << topic  );
                 }
             }
             outgoing_msg_queue_.pop();

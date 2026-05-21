@@ -10,6 +10,13 @@
 #include "UpdateServiceListEndPoint.hpp"
 #include "AdswServiceStatusEndPoint.hpp"
 
+// F013
+#include "NotifyContainerStateEndPoint.hpp"
+#include "StartContainerEndPoint.hpp"
+#include "StopContainerEndPoint.hpp"
+// F014 follow-up
+#include "SetRecoveryPolicyEndPoint.hpp"
+
 namespace ros2 {
 namespace adsw_manager {
 
@@ -30,6 +37,17 @@ bool EndPointFactory::Initialize(){
     topic_lists_[MessageType::UPDATE_SERVICE_LIST_REQUEST] = "mmf/lifecyclemgr/UpdateServiceListRequest";
     topic_lists_[MessageType::UPDATE_SERVICE_LIST_RESPONSE] = "mmf/lifecyclemgr/UpdateServiceListResponse";
     topic_lists_[MessageType::ADSW_SERVICE_STATUS] = "mmf/adswmgr/AdswServiceStatus";
+
+    // F013: container actuator surface (paired with lifecycle_mgr S2b topics)
+    topic_lists_[MessageType::NOTIFY_CONTAINER_STATE]   = "mmf/lifecyclemgr/NotifyContainerState";
+    topic_lists_[MessageType::START_CONTAINER_REQUEST]  = "mmf/lifecyclemgr/StartContainerRequest";
+    topic_lists_[MessageType::START_CONTAINER_RESPONSE] = "mmf/lifecyclemgr/StartContainerResponse";
+    topic_lists_[MessageType::STOP_CONTAINER_REQUEST]   = "mmf/lifecyclemgr/StopContainerRequest";
+    topic_lists_[MessageType::STOP_CONTAINER_RESPONSE]  = "mmf/lifecyclemgr/StopContainerResponse";
+
+    // F014 follow-up: recovery policy actuator
+    topic_lists_[MessageType::SET_RECOVERY_POLICY_REQUEST]  = "mmf/lifecyclemgr/SetRecoveryPolicyRequest";
+    topic_lists_[MessageType::SET_RECOVERY_POLICY_RESPONSE] = "mmf/lifecyclemgr/SetRecoveryPolicyResponse";
 
     return true;
 }
@@ -135,9 +153,60 @@ int32_t EndPointFactory::CreateEndPoints(std::shared_ptr<DDSTransmitter> transmi
             }
             break;
 
+            // F013: container actuator surface
+            case MessageType::NOTIFY_CONTAINER_STATE :{
+                auto ep = std::make_shared<NotifyContainerStateEndPoint>(key, val);
+                msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndpoint>(ep);
+                pubsub = PubSubType::PUBLISH_ONLY;
+            }
+            break;
+
+            case MessageType::START_CONTAINER_REQUEST :{
+                auto ep = std::make_shared<StartContainerEndPoint>(key, val);
+                msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndpoint>(ep);
+                pubsub = PubSubType::SUBSCRIBE_ONLY;
+            }
+            break;
+
+            case MessageType::START_CONTAINER_RESPONSE :{
+                auto ep = std::make_shared<StartContainerEndPoint>(key, val);
+                msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndpoint>(ep);
+                pubsub = PubSubType::PUBLISH_ONLY;
+            }
+            break;
+
+            case MessageType::STOP_CONTAINER_REQUEST :{
+                auto ep = std::make_shared<StopContainerEndPoint>(key, val);
+                msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndpoint>(ep);
+                pubsub = PubSubType::SUBSCRIBE_ONLY;
+            }
+            break;
+
+            case MessageType::STOP_CONTAINER_RESPONSE :{
+                auto ep = std::make_shared<StopContainerEndPoint>(key, val);
+                msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndpoint>(ep);
+                pubsub = PubSubType::PUBLISH_ONLY;
+            }
+            break;
+
+            // F014 follow-up: recovery policy actuator
+            case MessageType::SET_RECOVERY_POLICY_REQUEST :{
+                auto ep = std::make_shared<SetRecoveryPolicyEndPoint>(key, val);
+                msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndpoint>(ep);
+                pubsub = PubSubType::SUBSCRIBE_ONLY;
+            }
+            break;
+
+            case MessageType::SET_RECOVERY_POLICY_RESPONSE :{
+                auto ep = std::make_shared<SetRecoveryPolicyEndPoint>(key, val);
+                msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndpoint>(ep);
+                pubsub = PubSubType::PUBLISH_ONLY;
+            }
+            break;
+
             default:
                 LOG_ERROR("Unknown message type: " << static_cast<int32_t>(key));
-                continue;       
+                continue;
         }
 
         if (msg_endpoint){

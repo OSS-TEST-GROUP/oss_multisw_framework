@@ -140,11 +140,16 @@ FROM runtime AS ros-mmf-base
 ENV ROS_DISTRO=humble
 
 # apt: tooling needed to (a) add the ROS 2 apt source, (b) build
-# tier4_autoware_msgs from source, (c) build per-module ament packages.
+# tier4_autoware_msgs from source, (c) build per-module ament packages,
+# (d) F013 ContainerController shells out to the docker CLI from inside
+# adsw_manager (docker start/run/stop on adsw-test-docker etc.) — needs
+# both the client binary AND /var/run/docker.sock bind-mounted by the
+# compose file at runtime to talk to the host daemon.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates curl dirmngr gnupg2 wget tar gzip \
         build-essential cmake \
+        docker.io \
     && rm -rf /var/lib/apt/lists/*
 
 # ROS 2 humble apt source (signed deb).

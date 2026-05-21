@@ -8,11 +8,20 @@ module lifecyclemgr {
         RecoveryPolicy recovery_policy;
         boolean is_enabled;
         OsType os_type;
+        // F013: which container this service belongs to (empty for native).
+        // Empty string is preserved as "no-container" and is treated as a
+        // distinct group key by the registry.
+        string container_name;
     };
 
     /* TopicName - mmf/lifecyclemgr/UpdateServiceListRequest */
     struct UpdateServiceListRequest {
         sequence<Service> service_list;
+        // F013: adsw_manager now also publishes its known containers so the
+        // lifecycle_mgr registry can store container metadata (image, type,
+        // deploy_file) needed by lfc_monitor's container panel. Empty list
+        // is valid for non-containerised registrations.
+        sequence<Container> container_list;
     };
 
     /* TopicName - mmf/lifecyclemgr/UpdateServiceListResponse */

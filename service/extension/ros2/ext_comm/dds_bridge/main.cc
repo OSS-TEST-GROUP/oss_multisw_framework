@@ -1,11 +1,12 @@
 // dds_bridge entry-point.
 //
-// Wires OtaBridge to the full set of OtaManager topics that
-// ota_monitor (Dart) currently uses, then idles until SIGINT/SIGTERM.
-// All forwarding logic lives in OtaBridge / ForwardListener; this file
-// is the topic table + signal handling.
+// Wires DdsBridge to the full set of bare-DDS topics that the various
+// HMI monitors (Dart) currently use — OtaManager, lifecycle_mgr,
+// adsw_manager — then idles until SIGINT/SIGTERM. All forwarding logic
+// lives in DdsBridge / ForwardListener; this file is the topic table +
+// signal handling.
 
-#include "ota_bridge.h"
+#include "dds_bridge.h"
 
 #include <atomic>
 #include <chrono>
@@ -25,7 +26,7 @@ int main(int argc, char** argv) {
     std::string idl_root = "idl";
     if (argc > 1) idl_root = argv[1];
 
-    OtaBridge bridge;
+    DdsBridge bridge;
     if (!bridge.Initialize(idl_root)) return 1;
 
     // ros_to_raw=true  → subscribe rt/<topic> (ROS-canonical type) +
@@ -125,6 +126,61 @@ int main(int argc, char** argv) {
     ok &= add_lc("StartServiceRequest",      "lifecycle/StartServiceRequest.idl",      lp + "StartServiceRequest",      /*ros→raw*/true);
     ok &= add_lc("StopServiceRequest",       "lifecycle/StopServiceRequest.idl",       lp + "StopServiceRequest",       /*ros→raw*/true);
     ok &= add_lc("SetServiceModeRequest",    "lifecycle/SetServiceModeRequest.idl",    lp + "SetServiceModeRequest",    /*ros→raw*/true);
+
+    // ── F013: container actuator + ctrl/* gate surface (lfc_monitor) ───────
+    //
+    // Topology recap for the new toolbox:
+    //   - adsw_manager  → lifecycle_mgr / monitor : NotifyContainerState
+    //     (raw → ros, so a rosbridge subscriber on `/mmf/lifecyclemgr/
+    //     NotifyContainerState` sees container start/stop transitions).
+    //   - monitor → lifecycle_mgr : ctrl/* requests (ros → raw, monitor
+    //     publishes on `rt/mmf/lifecyclemgr/ctrl/<cmd>`; bridge forwards
+    //     to the bare-DDS topic lifecycle_mgr subscribes on).
+    //   - lifecycle_mgr → monitor : ctrl/* responses (raw → ros). All
+    //     five response topics share the IDL struct `CtrlResponse`, so
+    //     `add_lc` is called five times with the same struct_name but
+    //     different topic suffixes — FastDDS register_type is idempotent
+    //     for same-name same-type re-registrations.
+    //
+    // StartContainerRequest / StopContainerRequest live on the lifecycle_mgr
+    // ↔ adsw_manager link and are NOT exposed to the monitor (the monitor
+    // talks ctrl/StartContainer instead). Same for the Start/StopContainer
+    // Response on that link — only the ctrl/* response shape is bridged.
+
+    // adsw_manager → monitor: container state change notifications.
+    ok &= add_lc("NotifyContainerState",     "lifecycle/NotifyContainerState.idl",
+                 lp + "NotifyContainerState", /*raw→ros*/false);
+
+    // monitor → lifecycle_mgr: ctrl/* command requests.
+    const std::string cp_lc = "mmf/lifecyclemgr/ctrl/";
+    ok &= add_lc("CtrlStartServiceRequest",    "lifecycle/LifecycleCtrlRequest.idl",
+                 cp_lc + "StartService",       /*ros→raw*/true);
+    ok &= add_lc("CtrlStopServiceRequest",     "lifecycle/LifecycleCtrlRequest.idl",
+                 cp_lc + "StopService",        /*ros→raw*/true);
+    ok &= add_lc("CtrlSetServiceModeRequest",  "lifecycle/LifecycleCtrlRequest.idl",
+                 cp_lc + "SetServiceMode",     /*ros→raw*/true);
+    ok &= add_lc("CtrlStartContainerRequest",  "lifecycle/LifecycleCtrlRequest.idl",
+                 cp_lc + "StartContainer",     /*ros→raw*/true);
+    ok &= add_lc("CtrlStopContainerRequest",   "lifecycle/LifecycleCtrlRequest.idl",
+                 cp_lc + "StopContainer",      /*ros→raw*/true);
+
+    // lifecycle_mgr → monitor: ctrl/* command responses (all CtrlResponse).
+    ok &= add_lc("CtrlResponse",               "lifecycle/LifecycleCtrlRequest.idl",
+                 cp_lc + "StartServiceResponse",     /*raw→ros*/false);
+    ok &= add_lc("CtrlResponse",               "lifecycle/LifecycleCtrlRequest.idl",
+                 cp_lc + "StopServiceResponse",      /*raw→ros*/false);
+    ok &= add_lc("CtrlResponse",               "lifecycle/LifecycleCtrlRequest.idl",
+                 cp_lc + "SetServiceModeResponse",   /*raw→ros*/false);
+    ok &= add_lc("CtrlResponse",               "lifecycle/LifecycleCtrlRequest.idl",
+                 cp_lc + "StartContainerResponse",   /*raw→ros*/false);
+    ok &= add_lc("CtrlResponse",               "lifecycle/LifecycleCtrlRequest.idl",
+                 cp_lc + "StopContainerResponse",    /*raw→ros*/false);
+
+    // F014 follow-up: recovery policy gate
+    ok &= add_lc("CtrlSetRecoveryPolicyRequest", "lifecycle/LifecycleCtrlRequest.idl",
+                 cp_lc + "SetRecoveryPolicy",        /*ros→raw*/true);
+    ok &= add_lc("CtrlResponse",               "lifecycle/LifecycleCtrlRequest.idl",
+                 cp_lc + "SetRecoveryPolicyResponse", /*raw→ros*/false);
 
     if (!ok) {
         std::cerr << "[bridge] one or more pairs failed to register\n";

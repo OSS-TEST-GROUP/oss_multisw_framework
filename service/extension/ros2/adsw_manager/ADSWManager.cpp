@@ -116,6 +116,14 @@ void ADSWManager::Process(){
 
 void ADSWManager::ConfirmUpdateServiceList() {
     auto now = std::chrono::steady_clock::now();
+    // Stamp last_sent_recovery_ here (not at send time): receipt of the
+    // response is what tells us lifecycle_mgr actually has the snapshot.
+    // If the first send raced past lifecycle_mgr's subscriber initialization
+    // we want HasRecoveryChanged() to stay true so the retransmit loop keeps
+    // re-sending until an ack actually comes back.
+    if (service_registry_ != nullptr) {
+        service_registry_->UpdateLastSentRecovery();
+    }
     if (GetState() == AdswState::ADSW_STARTED) {
         LOG_DEBUG("UpdateServiceListResponse received — transitioning to ADSW_RUNNING");
         SetState(AdswState::ADSW_RUNNING);
@@ -152,6 +160,53 @@ std::shared_ptr<ROSServiceDiscovery> ADSWManager::GetServiceDiscovery() {
         return service_monitor_->GetServiceDiscovery();
     }
     return nullptr;
+}
+
+namespace {
+constexpr std::size_t kGuidPrefixBytes = 12;
+
+void copy_prefix(const eprosima::fastdds::dds::InstanceHandle_t& handle,
+                 std::array<uint8_t, kGuidPrefixBytes>& out) {
+    const uint8_t* raw = reinterpret_cast<const uint8_t*>(&handle);
+    std::copy_n(raw, kGuidPrefixBytes, out.begin());
+}
+
+bool prefix_equal(const eprosima::fastdds::dds::InstanceHandle_t& handle,
+                  const std::array<uint8_t, kGuidPrefixBytes>& cached) {
+    const uint8_t* raw = reinterpret_cast<const uint8_t*>(&handle);
+    return std::equal(cached.begin(), cached.end(), raw);
+}
+} // namespace
+
+void ADSWManager::SetKnownLifecyclePublisher(
+    const eprosima::fastdds::dds::InstanceHandle_t& handle) {
+    std::lock_guard<std::mutex> lk(lifecycle_prefix_mutex_);
+    if (lifecycle_prefix_set_) return;  // pin first observed and stay.
+    copy_prefix(handle, lifecycle_prefix_);
+    lifecycle_prefix_set_ = true;
+    LOG_DEBUG("ADSWManager: pinned lifecycle_mgr publisher prefix");
+}
+
+bool ADSWManager::IsKnownLifecyclePublisher(
+    const eprosima::fastdds::dds::InstanceHandle_t& handle) {
+    std::lock_guard<std::mutex> lk(lifecycle_prefix_mutex_);
+    // Strict: refuse anything that arrives before lifecycle_mgr has been
+    // identified via UpdateServiceListResponse. The earlier permissive
+    // policy left a boot-time window during which phantom publishers got
+    // their first burst of raw StartServiceRequests through, which then
+    // spawned a real service even under MANUAL recovery — operators saw
+    // "MANUAL but auto-started" right after compose up. lifecycle_mgr's
+    // own PolicyManager never publishes a Start before the handshake
+    // completes (PolicyManual returns NONE, and ProcessServiceHandling
+    // only fires off the back of state updates that come from us anyway),
+    // so refusing pre-handshake doesn't drop any legitimate traffic.
+    if (!lifecycle_prefix_set_) return false;
+    return prefix_equal(handle, lifecycle_prefix_);
+}
+
+bool ADSWManager::KnownLifecyclePublisherSet() {
+    std::lock_guard<std::mutex> lk(lifecycle_prefix_mutex_);
+    return lifecycle_prefix_set_;
 }
 
 

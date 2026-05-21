@@ -81,7 +81,12 @@ specs:
       name: "test_service"
       launchfile: ""
       type: "NORMAL"
-      recovery: "ALWAYS"
+      # ALWAYS would create an infinite restart loop: the image lacks
+      # test_pkg so ros2-run dies immediately, the per-PID monitor reports
+      # NOT_RUNNING within 3s, lifecycle_mgr re-issues StartService, repeat.
+      # MANUAL stops after the first attempt — operator drives restart
+      # explicitly from lfc_monitor.
+      recovery: "MANUAL"
       enabled: "true"
       max: "0"
 
