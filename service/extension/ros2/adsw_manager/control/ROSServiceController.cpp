@@ -349,12 +349,23 @@ bool ROSServiceController::StopService(std::shared_ptr<Service> service){
             // (launchfile / name / package / explicit override) consistent
             // with the liveness-polling logic, so direct-binary services don't
             // get missed by pkill -f using the service name.
+            //
+            // The pkill pattern MUST end-anchor with `$`, mirroring
+            // IsServiceAliveInContainer. Without it, `pkill -f test_service`
+            // matches its own enclosing `bash -c "... pkill ... test_service ..."`
+            // and the wrapper bash kills itself — docker exec exits 143
+            // (SIGTERM), system() returns nonzero, ProcessServiceStopRequest
+            // reports FAILED to lifecycle_mgr, and lfc_monitor surfaces a
+            // bogus "Stop Service Failed" even though the service actually
+            // died. The token is left unquoted (same as the liveness check)
+            // so the shell sees `\$` and passes literal `$` to pkill as a
+            // regex end-anchor.
             const std::string token =
                 service->ResolveProcessMatchToken(use_native_execution_);
             command = "docker exec " + container_name
                     + " bash -c \"kill " + std::to_string(pid) + " 2>/dev/null || true; "
-                    + "pkill -TERM -f '" + token + "' 2>/dev/null || true; "
-                    + "sleep 1.0; pkill -KILL -f '" + token + "' 2>/dev/null || true\"";
+                    + "pkill -TERM -f " + token + "\\$ 2>/dev/null || true; "
+                    + "sleep 1.0; pkill -KILL -f " + token + "\\$ 2>/dev/null || true\"";
             result = system(command.c_str());
         }
     } 
@@ -544,11 +555,38 @@ bool ROSServiceController::ProcessServiceStartRequest(lifecyclemgr::StartService
                        s == ServiceState::INITIALIZING;
             };
 
+            // MANUAL recovery means operator-only restart. lifecycle_mgr's
+            // PolicyManager already enforces this on its publish path
+            // (PolicyManual::Evaluate returns NONE for every state), so a
+            // StartServiceRequest arriving here for a MANUAL+NOT_RUNNING
+            // service came from outside the supervised pipeline — typically
+            // a zombie DDS participant replaying a stale request, or any
+            // peer that wrote directly to mmf/lifecyclemgr/StartServiceRequest.
+            // Refusing it here keeps the operator's "MANUAL means I'm the
+            // only one who restarts this" contract intact. Operators who
+            // really want to start a MANUAL service flip its recovery
+            // policy from the lfc_monitor dropdown first; lfc_monitor's
+            // "Start" button alone is treated as one such auto-restart
+            // signal by design.
+            auto policy_blocks_auto_restart = [&](const std::string& svc_name) -> bool {
+                if (!registry) return false;
+                auto svc = registry->GetService(svc_name);
+                if (!svc) return false;
+                if (svc->GetRecoveryPolicy() != RecoveryPolicy::MANUAL) return false;
+                return svc->GetServiceState() == ServiceState::NOT_RUNNING;
+            };
+
             if (is_group) {
                 for (const auto& service : service_list) {
                     if (container_failed(service)) {
                         LOG_ERROR("Skip start of group " << service
                                   << " — its container is down");
+                        continue;
+                    }
+                    if (policy_blocks_auto_restart(service)) {
+                        LOG_ERROR("Refuse start of group " << service
+                                  << " — recovery policy is MANUAL and service is NOT_RUNNING; "
+                                  << "operator must change policy before restart");
                         continue;
                     }
                     if (already_running(service)) {
@@ -566,6 +604,12 @@ bool ROSServiceController::ProcessServiceStartRequest(lifecyclemgr::StartService
                     if (container_failed(service)) {
                         LOG_ERROR("Skip start of " << service
                                   << " — its container is down");
+                        continue;
+                    }
+                    if (policy_blocks_auto_restart(service)) {
+                        LOG_ERROR("Refuse start of " << service
+                                  << " — recovery policy is MANUAL and service is NOT_RUNNING; "
+                                  << "operator must change policy before restart");
                         continue;
                     }
                     if (already_running(service)) {

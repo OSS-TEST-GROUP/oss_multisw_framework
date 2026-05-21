@@ -589,7 +589,15 @@ bool ServiceRegistry::LoadServiceSaved(const std::string &path) {
                 serviceNode["exec_type"].as<std::string>("");
 
             ServiceType serviceType = ServiceType::NORMAL;
-            RecoveryPolicy recoveryPolicy = RecoveryPolicy::R_DEFAULT;
+            // Default to MANUAL when the yaml omits `recovery` (or supplies a
+            // value we don't recognise). Before this change the default was
+            // R_DEFAULT, which lifecycle_mgr's PolicyManager has no mapping
+            // for — it silently fell through to ServiceControlAction::NONE,
+            // semantically the same as MANUAL but invisible to lfc_monitor's
+            // dropdown (DEFAULT was filtered out). Defaulting to MANUAL
+            // makes "no auto-restart" the explicit, operator-visible choice
+            // for any service whose yaml entry didn't declare a policy.
+            RecoveryPolicy recoveryPolicy = RecoveryPolicy::MANUAL;
             bool enabled = true;
             if (!typeStr.empty()) {
               if (typeStr == "NORMAL" || typeStr == "0") {
