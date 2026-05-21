@@ -162,6 +162,46 @@ std::shared_ptr<ROSServiceDiscovery> ADSWManager::GetServiceDiscovery() {
     return nullptr;
 }
 
+namespace {
+constexpr std::size_t kGuidPrefixBytes = 12;
+
+void copy_prefix(const eprosima::fastdds::dds::InstanceHandle_t& handle,
+                 std::array<uint8_t, kGuidPrefixBytes>& out) {
+    const uint8_t* raw = reinterpret_cast<const uint8_t*>(&handle);
+    std::copy_n(raw, kGuidPrefixBytes, out.begin());
+}
+
+bool prefix_equal(const eprosima::fastdds::dds::InstanceHandle_t& handle,
+                  const std::array<uint8_t, kGuidPrefixBytes>& cached) {
+    const uint8_t* raw = reinterpret_cast<const uint8_t*>(&handle);
+    return std::equal(cached.begin(), cached.end(), raw);
+}
+} // namespace
+
+void ADSWManager::SetKnownLifecyclePublisher(
+    const eprosima::fastdds::dds::InstanceHandle_t& handle) {
+    std::lock_guard<std::mutex> lk(lifecycle_prefix_mutex_);
+    if (lifecycle_prefix_set_) return;  // pin first observed and stay.
+    copy_prefix(handle, lifecycle_prefix_);
+    lifecycle_prefix_set_ = true;
+    LOG_DEBUG("ADSWManager: pinned lifecycle_mgr publisher prefix");
+}
+
+bool ADSWManager::IsKnownLifecyclePublisher(
+    const eprosima::fastdds::dds::InstanceHandle_t& handle) {
+    std::lock_guard<std::mutex> lk(lifecycle_prefix_mutex_);
+    // Permissive before the first UpdateServiceListResponse — refusing here
+    // would block the legitimate first-boot StartContainerRequest that
+    // arrives in the same handshake window.
+    if (!lifecycle_prefix_set_) return true;
+    return prefix_equal(handle, lifecycle_prefix_);
+}
+
+bool ADSWManager::KnownLifecyclePublisherSet() {
+    std::lock_guard<std::mutex> lk(lifecycle_prefix_mutex_);
+    return lifecycle_prefix_set_;
+}
+
 
 const char* ADSWManager::GetTopic(MessageType topic){
     return endpoint_factory_->GetTopic(topic);

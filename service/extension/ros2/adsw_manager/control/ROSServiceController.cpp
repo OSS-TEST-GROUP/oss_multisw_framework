@@ -539,54 +539,49 @@ bool ROSServiceController::ProcessServiceStartRequest(lifecyclemgr::StartService
             };
 
             // Idempotency guard: if a service is already RUNNING /
-            // INITIALIZING, a duplicate StartServiceRequest must not
-            // spawn another `docker exec ros2 run` — that would orphan
-            // the prior PID, accumulate zombies, and pulse the
-            // monitor-side state RUNNING↔NOT_RUNNING as the per-PID
-            // poller catches each transient.  Count the already-running
-            // ones toward the SUCCESS verdict so the ctrl/* response is
-            // still SUCCESS for the caller.
+            // INITIALIZING **with a real PID**, a duplicate StartServiceRequest
+            // must not spawn another `docker exec ros2 run` — that would
+            // orphan the prior PID, accumulate zombies, and pulse the
+            // monitor-side state RUNNING↔NOT_RUNNING as the per-PID poller
+            // catches each transient. Count the already-running ones toward
+            // the SUCCESS verdict so the ctrl/* response is still SUCCESS.
+            //
+            // INITIALIZING + PID==0 is the cold-start case: ContainerHealthMonitor
+            // sets every service to INITIALIZING when the hosting container
+            // first goes RUNNING, but no process has actually been spawned
+            // yet. PID rehydration can't find one either. Treating this as
+            // "already running" silently swallows the user's Start click —
+            // do NOT skip in that case; let StartService below actually
+            // launch the docker exec.
             auto already_running = [&](const std::string& svc_name) -> bool {
                 if (!registry) return false;
                 auto svc = registry->GetService(svc_name);
                 if (!svc) return false;
                 ServiceState s = svc->GetServiceState();
-                return s == ServiceState::RUNNING ||
-                       s == ServiceState::INITIALIZING;
+                if (s == ServiceState::RUNNING) return true;
+                if (s == ServiceState::INITIALIZING && svc->GetPID() != 0) return true;
+                return false;
             };
 
-            // MANUAL recovery means operator-only restart. lifecycle_mgr's
-            // PolicyManager already enforces this on its publish path
-            // (PolicyManual::Evaluate returns NONE for every state), so a
-            // StartServiceRequest arriving here for a MANUAL+NOT_RUNNING
-            // service came from outside the supervised pipeline — typically
-            // a zombie DDS participant replaying a stale request, or any
-            // peer that wrote directly to mmf/lifecyclemgr/StartServiceRequest.
-            // Refusing it here keeps the operator's "MANUAL means I'm the
-            // only one who restarts this" contract intact. Operators who
-            // really want to start a MANUAL service flip its recovery
-            // policy from the lfc_monitor dropdown first; lfc_monitor's
-            // "Start" button alone is treated as one such auto-restart
-            // signal by design.
-            auto policy_blocks_auto_restart = [&](const std::string& svc_name) -> bool {
-                if (!registry) return false;
-                auto svc = registry->GetService(svc_name);
-                if (!svc) return false;
-                if (svc->GetRecoveryPolicy() != RecoveryPolicy::MANUAL) return false;
-                return svc->GetServiceState() == ServiceState::NOT_RUNNING;
-            };
+            // NOTE: a MANUAL+NOT_RUNNING guard once lived here, but MANUAL
+            // means "operator drives start/stop by hand" — that includes
+            // lfc_monitor's Start button click. Refusing the click here
+            // contradicts the policy's meaning. lifecycle_mgr's
+            // PolicyManager already keeps automatic recovery from firing on
+            // MANUAL (PolicyManual::Evaluate returns NONE for every state),
+            // so the supervised pipeline never auto-restarts a MANUAL
+            // service on its own. If a StartServiceRequest still arrives
+            // here for a MANUAL service it's either operator intent or a
+            // stray publisher writing directly to the raw topic — phantom
+            // publishers are a separate problem (see
+            // scripts/probe-stale-publisher.sh) and must be identified and
+            // stopped at the source rather than masked here.
 
             if (is_group) {
                 for (const auto& service : service_list) {
                     if (container_failed(service)) {
                         LOG_ERROR("Skip start of group " << service
                                   << " — its container is down");
-                        continue;
-                    }
-                    if (policy_blocks_auto_restart(service)) {
-                        LOG_ERROR("Refuse start of group " << service
-                                  << " — recovery policy is MANUAL and service is NOT_RUNNING; "
-                                  << "operator must change policy before restart");
                         continue;
                     }
                     if (already_running(service)) {
@@ -604,12 +599,6 @@ bool ROSServiceController::ProcessServiceStartRequest(lifecyclemgr::StartService
                     if (container_failed(service)) {
                         LOG_ERROR("Skip start of " << service
                                   << " — its container is down");
-                        continue;
-                    }
-                    if (policy_blocks_auto_restart(service)) {
-                        LOG_ERROR("Refuse start of " << service
-                                  << " — recovery policy is MANUAL and service is NOT_RUNNING; "
-                                  << "operator must change policy before restart");
                         continue;
                     }
                     if (already_running(service)) {

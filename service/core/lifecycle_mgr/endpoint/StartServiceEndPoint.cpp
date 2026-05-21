@@ -2,6 +2,7 @@
 
 #include "lifecycle/StartServiceRequest.hpp"
 #include "logger/Log.hpp"
+#include "manager/LifecycleFactory.hpp"
 
 namespace lifecycle_manager {
 
@@ -26,6 +27,18 @@ void StartServiceEndPoint::OnDataAvailable(){
     LOG_DEBUG("Message Delivery for " << GetTopic() );
 
     if (Read<StartServiceResponse>(resp_) == true){
+
+        // Drop samples coming from any participant other than the
+        // adsw_manager we pinned in LifecycleFactory. Without this, phantom
+        // publishers on the same DDS domain that replay stale FAILED
+        // responses get matched by OnStart's in-flight counter and corrupt
+        // the ctrl/StartServiceResponse verdict the monitor sees.
+        if (!LifecycleFactory::GetInstance()
+                ->IsKnownAdswPublisher(LastPublicationHandle())) {
+            LOG_DEBUG("StartServiceEndPoint: dropping StartServiceResponse "
+                      "from untrusted publisher (phantom guard)");
+            return;
+        }
 
         StartServiceResponse* message = reinterpret_cast<StartServiceResponse*>(&resp_);
 

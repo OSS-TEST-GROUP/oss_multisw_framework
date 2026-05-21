@@ -2,6 +2,7 @@
 
 #include "lifecycle/UpdateServiceListRequest.hpp"
 #include "logger/Log.hpp"
+#include "manager/LifecycleFactory.hpp"
 
 namespace lifecycle_manager {
 
@@ -26,6 +27,14 @@ void UpdateServiceListEndPoint::OnDataAvailable(){
     if (Read<UpdateServiceListRequest>(data_) == true){
 
         UpdateServiceListRequest* message = reinterpret_cast<UpdateServiceListRequest*>(&data_);
+
+        // UpdateServiceListRequest is the trust anchor for our phantom guard:
+        // adsw_manager is the only legitimate writer of this topic in the
+        // deployment, so the publisher prefix learned here is the prefix we
+        // expect on Start/Stop responses too (different writers in the same
+        // participant share the prefix). See LifecycleFactory commentary.
+        LifecycleFactory::GetInstance()
+            ->SetKnownAdswPublisher(LastPublicationHandle());
 
         if (on_data_cb_) {
             on_data_cb_(message);

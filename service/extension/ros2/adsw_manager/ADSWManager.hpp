@@ -1,7 +1,12 @@
 #ifndef ROS2_ADSW_MANAGER_ADSW_MANAGER_HPP_
 #define ROS2_ADSW_MANAGER_ADSW_MANAGER_HPP_
 
+#include <array>
 #include <chrono>
+#include <cstdint>
+#include <mutex>
+
+#include <fastdds/dds/subscriber/SampleInfo.hpp>
 
 #include "transmitter/DDSTransmitter.hpp"
 #include "service/ServiceRegistry.hpp"
@@ -49,6 +54,21 @@ class ADSWManager {
     // UpdateServiceListResponse 수신 시 호출 — ADSW_RUNNING 전환
     virtual void ConfirmUpdateServiceList();
 
+    // Phantom-publisher guard. adsw_manager learns the GuidPrefix of the
+    // trusted lifecycle_mgr when it first receives UpdateServiceListResponse
+    // (only lifecycle_mgr writes that topic), then drops any
+    // Start/StopServiceRequest sample arriving from a different publisher.
+    // Without this, a stray publisher writing directly to the raw
+    // StartServiceRequest topic — e.g. a zombie DDS participant on the same
+    // domain — actually spawns the docker exec ros2 run and resurrects a
+    // service the operator just stopped (the very "MANUAL auto-restart"
+    // symptom we're chasing).
+    void SetKnownLifecyclePublisher(
+        const eprosima::fastdds::dds::InstanceHandle_t& handle);
+    bool IsKnownLifecyclePublisher(
+        const eprosima::fastdds::dds::InstanceHandle_t& handle);
+    bool KnownLifecyclePublisherSet();
+
   private:
     static std::shared_ptr<ADSWManager> getShared();
     static void SetShared(std::shared_ptr<ADSWManager> instance);
@@ -69,6 +89,12 @@ class ADSWManager {
     std::chrono::steady_clock::time_point last_update_list_sent_;
     bool update_list_sent_{false};
 
+    // GuidPrefix (first 12 bytes of an InstanceHandle_t) of the participant
+    // we trust as lifecycle_mgr. Empty until the first
+    // UpdateServiceListResponse pins it.
+    std::mutex              lifecycle_prefix_mutex_;
+    bool                    lifecycle_prefix_set_ = false;
+    std::array<uint8_t, 12> lifecycle_prefix_{};
 };
 
 } // namespace adsw_manager

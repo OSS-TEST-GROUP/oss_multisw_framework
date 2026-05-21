@@ -38,6 +38,13 @@ void StopServiceEndPoint::OnDataAvailable(){
 
     if (Read<StopServiceRequest>(req_) == true){
 
+        // Same phantom guard as StartServiceEndPoint — see commentary there.
+        if (!ADSWManager::Get()->IsKnownLifecyclePublisher(LastPublicationHandle())) {
+            LOG_DEBUG("StopServiceEndPoint: dropping StopServiceRequest "
+                      "from untrusted publisher (phantom guard)");
+            return;
+        }
+
         StopServiceRequest* message = reinterpret_cast<StopServiceRequest*>(&req_);
 
         std::shared_ptr<ROSServiceController> manager = ADSWManager::Get()->GetServiceController();
