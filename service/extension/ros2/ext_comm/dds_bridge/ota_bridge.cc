@@ -26,6 +26,23 @@ void ForwardListener::on_data_available(DataReader* reader) {
     SampleInfo info;
     if (reader->take_next_sample(&data, &info) != RETCODE_OK) return;
     if (!info.valid_data) return;
+
+    // Trust-on-first-use: cache the first observed publisher's prefix and
+    // drop samples from any other participant. See header for the why.
+    // GuidPrefix is the first 12 bytes of the 16-byte InstanceHandle_t value.
+    {
+        std::lock_guard<std::mutex> lk(trust_mutex_);
+        const uint8_t* raw = reinterpret_cast<const uint8_t*>(&info.publication_handle);
+        if (!trust_set_) {
+            std::copy_n(raw, 12, trusted_prefix_.begin());
+            trust_set_ = true;
+            std::cout << "[bridge] " << tag_ << " trust pinned\n";
+        } else if (!std::equal(trusted_prefix_.begin(), trusted_prefix_.end(), raw)) {
+            std::cout << "[bridge] " << tag_ << " dropped (untrusted publisher)\n";
+            return;
+        }
+    }
+
     if (writer_->write(&data) == RETCODE_OK) {
         std::cout << "[bridge] " << tag_ << " forwarded\n";
     } else {

@@ -93,9 +93,14 @@ void LifecycleFactory::SetKnownAdswPublisher(
 bool LifecycleFactory::IsKnownAdswPublisher(
     const eprosima::fastdds::dds::InstanceHandle_t& handle) {
     std::lock_guard<std::mutex> lk(adsw_prefix_mutex_);
-    // Before the first UpdateServiceListRequest pins the trusted prefix,
-    // be permissive — refusing here would block legitimate first-boot traffic.
-    if (!adsw_prefix_set_) return true;
+    // Strict: nothing is trusted until the first UpdateServiceListRequest
+    // arrives. The earlier permissive policy let phantom Start/Stop
+    // responses sneak through during the boot window, which corrupted
+    // OnStart's in-flight counter and surfaced bogus FAILED verdicts to
+    // the monitor. adsw_manager publishes UpdateServiceListRequest very
+    // early in its own boot (right after CreateEndPoints), so no
+    // legitimate response can arrive before the trust anchor is in place.
+    if (!adsw_prefix_set_) return false;
     return prefix_equal(handle, adsw_prefix_);
 }
 

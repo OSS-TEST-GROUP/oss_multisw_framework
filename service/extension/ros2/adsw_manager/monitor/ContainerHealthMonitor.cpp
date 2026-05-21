@@ -229,13 +229,14 @@ void ContainerHealthMonitor::PollServicesInContainer(const std::string& containe
               << " services=" << services.size()
               << " native=" << (is_native ? "yes" : "no"));
     for (auto& svc : services) {
-        // Poll any service that's INITIALIZING or RUNNING. We use this loop
-        // both to detect deaths and to promote freshly-started services from
-        // INITIALIZING to RUNNING once the PID is confirmed alive (see the
-        // promotion block at the bottom). NOT_RUNNING services are skipped —
-        // their next start gets a PID via the StartService path.
+        // Poll every service in the container — including NOT_RUNNING ones.
+        // The reason we don't skip NOT_RUNNING anymore: operators (or the
+        // container's own entrypoint) can `docker exec` the service binary
+        // directly, outside the StartService control path. lifecycle_mgr
+        // should still notice and report RUNNING in that case. So if we
+        // find a matching process for a NOT_RUNNING service, we promote it
+        // through INITIALIZING → RUNNING the same way we do on cold-start.
         ServiceState st = svc->GetServiceState();
-        if (st == ServiceState::NOT_RUNNING) continue;
 
         // Pick the right cmdline token for this service's invocation mode:
         // launchfile / name / package / explicit override.
@@ -244,25 +245,43 @@ void ContainerHealthMonitor::PollServicesInContainer(const std::string& containe
 
         uint64_t pid = svc->GetPID();
         if (pid == 0) {
-            // Cold-start PID rehydration. adsw_manager restarted while the
-            // service container kept running, so ServiceRegistry came up
-            // with pid_=0 and the normal liveness path can't run. Try to
-            // find the live PID via the same pgrep token we'd use to check
-            // liveness; if found, populate it so the rest of the loop can
-            // do its normal job. If not found we leave INITIALIZING alone —
-            // the next StartService call will set a PID via the regex.
+            // PID rehydration. Two callers land here:
+            //   1) Cold-start: adsw_manager restarted while the container
+            //      kept running; registry comes back with pid_=0 even
+            //      though the service is alive in the container.
+            //   2) External start: operator ran `docker exec /path/to/svc`
+            //      without going through StartService.
+            // In both cases we look up the live PID via the same pgrep
+            // token IsServiceAliveInContainer uses; if found, populate it.
             pid = LookupServicePidInContainer(container_name, token);
             if (pid == 0) {
-                LOG_DEBUG("PollSvc " << sname
-                          << " pid=0 rehydrate miss (token='" << token
-                          << "') — leaving state="
-                          << static_cast<int>(st));
+                // No live process. NOT_RUNNING stays NOT_RUNNING (nothing
+                // to do); INITIALIZING/RUNNING also wait for next cycle
+                // since we have no PID to liveness-check.
+                if (st != ServiceState::NOT_RUNNING) {
+                    LOG_DEBUG("PollSvc " << sname
+                              << " pid=0 rehydrate miss (token='" << token
+                              << "') — leaving state="
+                              << static_cast<int>(st));
+                }
                 continue;
             }
             svc->SetPID(pid);
-            LOG_DEBUG("PollSvc " << sname
-                      << " PID rehydrated to " << pid
-                      << " (token='" << token << "')");
+            // Externally-started service: lift from NOT_RUNNING to
+            // INITIALIZING so the promotion block below can elevate it to
+            // RUNNING on this same iteration (alive check will pass).
+            if (st == ServiceState::NOT_RUNNING) {
+                svc->SetServiceState(ServiceState::INITIALIZING);
+                st = ServiceState::INITIALIZING;
+                monitor->NotifyServiceState();
+                LOG_DEBUG("PollSvc " << sname
+                          << " externally started — adopting pid=" << pid
+                          << ", lifting NOT_RUNNING -> INITIALIZING");
+            } else {
+                LOG_DEBUG("PollSvc " << sname
+                          << " PID rehydrated to " << pid
+                          << " (token='" << token << "')");
+            }
         }
 
         auto it = prev_service_.find(sname);

@@ -628,9 +628,20 @@ bool ROSServiceController::ProcessServiceStartRequest(lifecyclemgr::StartService
             LOG_DEBUG("Service(s) started successfully.");
         }
 
+        // Broadcast a NotifyServiceState immediately so lfc_monitor's UI
+        // flips RUNNING the moment the operator's ctrl/Start completes,
+        // instead of waiting up to the LifecycleDiagReport heartbeat
+        // (~30 s) for the change to surface. We don't gate on `result`
+        // because even a partial / failed start may have mutated some
+        // service entries (e.g. one of several services in the batch
+        // launched fine), and the monitor wants the actual current snapshot.
+        if (auto monitor = ADSWManager::Get()->GetServiceMonitor()) {
+            monitor->NotifyServiceState();
+        }
+
         std::shared_ptr<DDSTransmitter> transmitter = ADSWManager::Get()->GetTransmitter();
 
-        return transmitter->SendMessage(MessageType::START_SERVICE_RESPONSE, 
+        return transmitter->SendMessage(MessageType::START_SERVICE_RESPONSE,
                                         reinterpret_cast<void*>(&start_service_response_));
     }
     return true;
@@ -688,9 +699,17 @@ bool ROSServiceController::ProcessServiceStopRequest(lifecyclemgr::StopServiceRe
             LOG_DEBUG("Service(s) stop successfully.");
         }
 
+        // Same NotifyServiceState push as the start path — see commentary
+        // in ProcessServiceStartRequest. lfc_monitor needs an immediate
+        // state-change event for the badge to flip without waiting on the
+        // periodic LifecycleDiagReport.
+        if (auto monitor = ADSWManager::Get()->GetServiceMonitor()) {
+            monitor->NotifyServiceState();
+        }
+
         std::shared_ptr<DDSTransmitter> transmitter = ADSWManager::Get()->GetTransmitter();
 
-        return transmitter->SendMessage(MessageType::STOP_SERVICE_RESPONSE, 
+        return transmitter->SendMessage(MessageType::STOP_SERVICE_RESPONSE,
                                         reinterpret_cast<void*>(&stop_service_response_));
     }
     return true;

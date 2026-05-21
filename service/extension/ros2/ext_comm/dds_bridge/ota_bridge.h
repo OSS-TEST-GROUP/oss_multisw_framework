@@ -30,7 +30,10 @@
 #include <fastdds/dds/subscriber/Subscriber.hpp>
 #include <fastdds/dds/xtypes/dynamic_types/DynamicType.hpp>
 
+#include <array>
+#include <cstdint>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -65,6 +68,21 @@ private:
     eprosima::fastdds::dds::DataWriter* writer_;
     eprosima::fastdds::dds::DynamicType::_ref_type type_;
     std::string tag_;
+
+    // Trust-on-first-use guard against phantom publishers. The first
+    // sample's publisher prefix gets cached; subsequent samples from any
+    // other participant on the domain are dropped instead of forwarded
+    // to ROS. Without this, lfc_monitor's GetServiceStateResponse
+    // subscription saw a steady NOT_RUNNING↔RUNNING oscillation because
+    // a stray publisher was writing NOT_RUNNING to the raw topic and
+    // the bridge faithfully forwarded both streams. The trade-off: if a
+    // phantom happens to publish before the legitimate first publisher,
+    // we trust the wrong one — acceptable because the legitimate
+    // publishers (adsw_manager / lifecycle_mgr) come up well before any
+    // ROS-side subscriber starts consuming the bridged topic.
+    std::mutex              trust_mutex_;
+    bool                    trust_set_ = false;
+    std::array<uint8_t, 12> trusted_prefix_{};
 };
 
 // Owns a single FastDDS participant + publisher/subscriber and a set of

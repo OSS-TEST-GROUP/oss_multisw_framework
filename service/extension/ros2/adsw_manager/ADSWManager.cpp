@@ -190,10 +190,17 @@ void ADSWManager::SetKnownLifecyclePublisher(
 bool ADSWManager::IsKnownLifecyclePublisher(
     const eprosima::fastdds::dds::InstanceHandle_t& handle) {
     std::lock_guard<std::mutex> lk(lifecycle_prefix_mutex_);
-    // Permissive before the first UpdateServiceListResponse — refusing here
-    // would block the legitimate first-boot StartContainerRequest that
-    // arrives in the same handshake window.
-    if (!lifecycle_prefix_set_) return true;
+    // Strict: refuse anything that arrives before lifecycle_mgr has been
+    // identified via UpdateServiceListResponse. The earlier permissive
+    // policy left a boot-time window during which phantom publishers got
+    // their first burst of raw StartServiceRequests through, which then
+    // spawned a real service even under MANUAL recovery — operators saw
+    // "MANUAL but auto-started" right after compose up. lifecycle_mgr's
+    // own PolicyManager never publishes a Start before the handshake
+    // completes (PolicyManual returns NONE, and ProcessServiceHandling
+    // only fires off the back of state updates that come from us anyway),
+    // so refusing pre-handshake doesn't drop any legitimate traffic.
+    if (!lifecycle_prefix_set_) return false;
     return prefix_equal(handle, lifecycle_prefix_);
 }
 
