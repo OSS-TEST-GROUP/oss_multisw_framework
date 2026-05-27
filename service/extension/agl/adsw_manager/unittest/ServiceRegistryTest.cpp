@@ -39,10 +39,11 @@ protected:
 TEST_F(ServiceRegistryTest, Initialize_PopulatesInitialApps_UsingNameStatePairs) {
     auto pairs = registry.GetNameStatePairs();
 
-    EXPECT_EQ(pairs.size(), 3u);
+    EXPECT_EQ(pairs.size(), 4u);
     EXPECT_TRUE(ContainsName(pairs, "adsw_monitor"));
-    EXPECT_TRUE(ContainsName(pairs, "map"));
-    EXPECT_TRUE(ContainsName(pairs, "radio"));
+    EXPECT_TRUE(ContainsName(pairs, "ota_monitor"));
+    EXPECT_TRUE(ContainsName(pairs, "lfc_monitor"));
+    EXPECT_TRUE(ContainsName(pairs, "hmi_launcher"));
 }
 
 // ----------------------------- AddApp -----------------------------
@@ -70,8 +71,8 @@ TEST_F(ServiceRegistryTest, AddApp_WithInitialState_SetsThatState) {
 TEST_F(ServiceRegistryTest, AddApp_DuplicateName_DoesNotAddAgain) {
     auto before = registry.GetNameStatePairs();
 
-    // 이미 존재하는 "map" 추가 시도
-    auto dup = MakeService("map");
+    // 이미 존재하는 "ota_monitor" 추가 시도
+    auto dup = MakeService("ota_monitor");
     registry.AddApp(dup);
 
     auto after = registry.GetNameStatePairs();
@@ -81,15 +82,15 @@ TEST_F(ServiceRegistryTest, AddApp_DuplicateName_DoesNotAddAgain) {
 // ----------------------------- RemoveApp -----------------------------
 
 TEST_F(ServiceRegistryTest, RemoveApp_RemovesCorrectApp) {
-    // 사전조건: "map" 존재
-    ASSERT_EQ(registry.GetAppState("map") == ServiceState::NOT_RUNNING ||
-              registry.GetAppState("map") == ServiceState::RUNNING ||
+    // 사전조건: "ota_monitor" 존재
+    ASSERT_EQ(registry.GetAppState("ota_monitor") == ServiceState::NOT_RUNNING ||
+              registry.GetAppState("ota_monitor") == ServiceState::RUNNING ||
               true, true); // 존재 확인 겸, 상태는 무엇이든 상관 X
 
-    registry.RemoveApp("map");
+    registry.RemoveApp("ota_monitor");
 
     auto list = registry.GetNameStatePairs();
-    EXPECT_FALSE(ContainsName(list, "map"));
+    EXPECT_FALSE(ContainsName(list, "ota_monitor"));
 }
 
 TEST_F(ServiceRegistryTest, RemoveApp_UnknownName_NoCrash) {
@@ -126,10 +127,10 @@ TEST_F(ServiceRegistryTest, GetAppState_ReturnsNotRunningForUnknown) {
 // ----------------------------- GetAppInfo -----------------------------
 
 TEST_F(ServiceRegistryTest, GetAppInfo_ReturnsPairForExisting) {
-    auto info = registry.GetAppInfo("radio");
+    auto info = registry.GetAppInfo("hmi_launcher");
     ASSERT_TRUE(info.has_value());
     const auto& [svc, state] = *info;
-    EXPECT_EQ(svc.name(), "radio");
+    EXPECT_EQ(svc.name(), "hmi_launcher");
 }
 
 TEST_F(ServiceRegistryTest, GetAppInfo_ReturnsNulloptForNonexistent) {

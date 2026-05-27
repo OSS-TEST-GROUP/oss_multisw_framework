@@ -37,6 +37,7 @@ TEST_F(ServiceControllerTest, Initialize_Fails_WhenAppControllerInitFails) {
 
 TEST_F(ServiceControllerTest, StartService_AppNotRunning_LaunchSuccess_ReturnsTrue) {
     InSequence s;
+    EXPECT_CALL(*app,  CanControlApp("app1")).WillOnce(Return(true));
     EXPECT_CALL(*app,  IsAppRunning("app1")).WillOnce(Return(false));
     EXPECT_CALL(*app,  LaunchApp("app1")).WillOnce(Return(true));
 
@@ -45,6 +46,7 @@ TEST_F(ServiceControllerTest, StartService_AppNotRunning_LaunchSuccess_ReturnsTr
 
 TEST_F(ServiceControllerTest, StartService_AppNotRunning_LaunchFail_ReturnsFalse) {
     InSequence s;
+    EXPECT_CALL(*app,  CanControlApp("app1")).WillOnce(Return(true));
     EXPECT_CALL(*app,  IsAppRunning("app1")).WillOnce(Return(false));
     EXPECT_CALL(*app,  LaunchApp("app1")).WillOnce(Return(false));
 
@@ -52,15 +54,25 @@ TEST_F(ServiceControllerTest, StartService_AppNotRunning_LaunchFail_ReturnsFalse
 }
 
 TEST_F(ServiceControllerTest, StartService_AppAlreadyRunning_ReturnsTrue) {
+    EXPECT_CALL(*app,  CanControlApp("app1")).WillOnce(Return(true));
     EXPECT_CALL(*app,  IsAppRunning("app1")).WillOnce(Return(true));
 
     EXPECT_TRUE(sut->StartService("app1"));
+}
+
+TEST_F(ServiceControllerTest, StartService_AppNotControllable_ReturnsFalse) {
+    EXPECT_CALL(*app,  CanControlApp("app1")).WillOnce(Return(false));
+    EXPECT_CALL(*app,  IsAppRunning("app1")).Times(0);
+    EXPECT_CALL(*app,  LaunchApp("app1")).Times(0);
+
+    EXPECT_FALSE(sut->StartService("app1"));
 }
 
 // ----------------------------- StopService ----------------------------
 
 TEST_F(ServiceControllerTest, StopService_AppRunning_TerminateOk_StopOk_ReturnsTrue) {
     InSequence s;
+    EXPECT_CALL(*app,  CanControlApp("app1")).WillOnce(Return(true));
     EXPECT_CALL(*app,  IsAppRunning("app1")).WillOnce(Return(true));
     EXPECT_CALL(*app,  TerminateApp("app1")).WillOnce(Return(true));
 
@@ -69,6 +81,7 @@ TEST_F(ServiceControllerTest, StopService_AppRunning_TerminateOk_StopOk_ReturnsT
 
 TEST_F(ServiceControllerTest, StopService_AppRunning_TerminateFail_ReturnsFalse) {
     InSequence s;
+    EXPECT_CALL(*app,  CanControlApp("app1")).WillOnce(Return(true));
     EXPECT_CALL(*app,  IsAppRunning("app1")).WillOnce(Return(true));
     EXPECT_CALL(*app,  TerminateApp("app1")).WillOnce(Return(false));
 
@@ -76,7 +89,16 @@ TEST_F(ServiceControllerTest, StopService_AppRunning_TerminateFail_ReturnsFalse)
 }
 
 TEST_F(ServiceControllerTest, StopService_AppNotRunning_StopOk_ReturnsTrue) {
+    EXPECT_CALL(*app,  CanControlApp("app1")).WillOnce(Return(true));
     EXPECT_CALL(*app,  IsAppRunning("app1")).WillOnce(Return(false));
 
     EXPECT_TRUE(sut->StopService("app1"));
+}
+
+TEST_F(ServiceControllerTest, StopService_AppNotControllable_ReturnsFalse) {
+    EXPECT_CALL(*app,  CanControlApp("app1")).WillOnce(Return(false));
+    EXPECT_CALL(*app,  IsAppRunning("app1")).Times(0);
+    EXPECT_CALL(*app,  TerminateApp("app1")).Times(0);
+
+    EXPECT_FALSE(sut->StopService("app1"));
 }

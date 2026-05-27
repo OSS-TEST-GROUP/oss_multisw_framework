@@ -57,8 +57,8 @@ TEST_F(MessageTransmitterTest, PublishAppState_UsesNameStatePairs_AndPublishes) 
 
     std::vector<std::pair<std::string, ServiceState>> pairs = {
         {"adsw_monitor", ServiceState::NOT_RUNNING},
-        {"map",          ServiceState::RUNNING},
-        {"radio",        ServiceState::RUNNING_NO_RESPONSE}
+        {"ota_monitor",  ServiceState::RUNNING},
+        {"lfc_monitor",  ServiceState::RUNNING_NO_RESPONSE}
     };
 
     EXPECT_CALL(*registry, GetNameStatePairs())
@@ -67,7 +67,7 @@ TEST_F(MessageTransmitterTest, PublishAppState_UsesNameStatePairs_AndPublishes) 
     EXPECT_CALL(*dds_manager, PublishNotifyAppState(_))
         .WillOnce(Invoke([&](const NotifyServiceState& msg){
             EXPECT_THAT(msg.service_list(), 
-                        ContainerEq(std::vector<std::string>{"adsw_monitor","map","radio"}));
+                        ContainerEq(std::vector<std::string>{"adsw_monitor","ota_monitor","lfc_monitor"}));
             EXPECT_THAT(msg.service_state_list(), 
                         ContainerEq(std::vector<ServiceState>{
                             ServiceState::NOT_RUNNING,
@@ -84,7 +84,7 @@ TEST_F(MessageTransmitterTest, PublishAppState_UsesNameStatePairs_AndPublishes) 
 TEST_F(MessageTransmitterTest, PublishAppList_PassesVectorService) {
     std::vector<Service> apps;
     Service a; a.name("adsw_monitor");
-    Service b; b.name("map");
+    Service b; b.name("hmi_launcher");
     apps.push_back(a);
     apps.push_back(b);
 
@@ -95,7 +95,7 @@ TEST_F(MessageTransmitterTest, PublishAppList_PassesVectorService) {
         .WillOnce(Invoke([&](const UpdateServiceListRequest& msg){
             ASSERT_EQ(msg.service_list().size(), 2u);
             EXPECT_EQ(msg.service_list()[0].name(), "adsw_monitor");
-            EXPECT_EQ(msg.service_list()[1].name(), "map");
+            EXPECT_EQ(msg.service_list()[1].name(), "hmi_launcher");
         }));
 
     tx->PublishAppList();

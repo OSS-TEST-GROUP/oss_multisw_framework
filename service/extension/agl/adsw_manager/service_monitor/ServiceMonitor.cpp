@@ -56,9 +56,14 @@ namespace adsw_manager::agl {
             if (heartbeat_ok) {
                 expected = ServiceState::RUNNING;
             } else if (use_docker_fallback_ && app_controller_) {
-                expected = app_controller_->IsAppRunning(app_name)
-                               ? ServiceState::RUNNING
-                               : ServiceState::NOT_RUNNING;
+                const auto docker = service_registry_->GetDockerInfo(app_name);
+                if (!docker || docker->image.empty()) {
+                    expected = ServiceState::NOT_RUNNING;
+                } else {
+                    expected = app_controller_->IsAppRunning(app_name)
+                                   ? ServiceState::RUNNING
+                                   : ServiceState::NOT_RUNNING;
+                }
             } else {
                 expected = ServiceState::NOT_RUNNING;
             }
@@ -70,8 +75,8 @@ namespace adsw_manager::agl {
             if (current != expected) {
                 std::cout << "[ServiceMonitor] App state update : [["
                           << info->first.name() << "]] "
-                          << static_cast<int>(current) << " >>> "
-                          << static_cast<int>(expected) << std::endl;
+                          << current << " >>> "
+                          << expected << std::endl;
 
                 service_registry_->UpdateAppState(app_name, expected);
                 message_transmitter_->PublishAppState();

@@ -14,6 +14,7 @@ namespace adsw_manager::agl {
     struct AppDockerInfo {
         std::string image;
         std::vector<std::string> extra_args;
+        std::vector<std::string> command_args;
     };
 
     class ServiceRegistry {

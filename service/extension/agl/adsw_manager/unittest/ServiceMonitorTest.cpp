@@ -12,6 +12,7 @@
 #include "mock/MockServiceRegistry.hpp"
 #include "mock/MockMessageTransmitter.hpp"
 #include "mock/MockAppStateReader.hpp"
+#include "mock/MockAppController.hpp"
 
 #include <fastdds/dds/domain/DomainParticipant.hpp>
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp>
@@ -22,6 +23,7 @@ using namespace eprosima::fastdds::dds;
 using ::testing::_;
 using ::testing::Return;
 using ::testing::ByMove;
+using ::testing::NiceMock;
 
 namespace {
 
@@ -126,7 +128,7 @@ TEST_F(ServiceMonitorTest, CheckAppState_Timeout_MakesNOT_RUNNING_AndPublishes) 
 }
 
 TEST_F(ServiceMonitorTest, CheckAppState_RecentMessage_KeepsRUNNING_NoPublish) {
-    const std::string app = "map";
+    const std::string app = "ota_monitor";
     auto now = std::chrono::steady_clock::now();
     EmplaceReader(app, now - std::chrono::milliseconds(100)); // 타임아웃 이내 → 기대 상태 RUNNING
 
@@ -143,7 +145,7 @@ TEST_F(ServiceMonitorTest, CheckAppState_RecentMessage_KeepsRUNNING_NoPublish) {
 }
 
 TEST_F(ServiceMonitorTest, CheckAppState_Timeout_ButAlreadyNOT_RUNNING_NoPublish) {
-    const std::string app = "radio";
+    const std::string app = "lfc_monitor";
     auto now = std::chrono::steady_clock::now();
     EmplaceReader(app, now - std::chrono::seconds(5)); // 타임아웃 초과 → 기대 상태 NOT_RUNNING
 
@@ -155,6 +157,54 @@ TEST_F(ServiceMonitorTest, CheckAppState_Timeout_ButAlreadyNOT_RUNNING_NoPublish
     // 이미 기대 상태와 동일 → 변경/퍼블리시 없음
     EXPECT_CALL(*registry, UpdateAppState(_, _)).Times(0);
     EXPECT_CALL(*transmitter, PublishAppState()).Times(0);
+
+    monitor.CheckAppState();
+}
+
+TEST_F(ServiceMonitorTest, CheckAppState_Timeout_EmbeddedAppDoesNotUseDockerFallback) {
+    NiceMock<MockAppController> app_controller;
+    ASSERT_TRUE(monitor.Initialize(participant, registry, transmitter, &app_controller));
+
+    const std::string app = "ota_monitor";
+    auto now = std::chrono::steady_clock::now();
+    EmplaceReader(app, now - std::chrono::seconds(5));
+
+    EXPECT_CALL(*registry, GetDockerInfo(app))
+        .WillOnce(Return(std::optional<AppDockerInfo>{}));
+
+    Service svc = MakeService(app);
+    auto current_pair = std::make_pair(svc, ServiceState::RUNNING);
+    EXPECT_CALL(*registry, GetAppInfo(app))
+        .WillOnce(Return(std::optional<decltype(current_pair)>(current_pair)));
+
+    EXPECT_CALL(app_controller, IsAppRunning(_)).Times(0);
+    EXPECT_CALL(*registry, UpdateAppState(app, ServiceState::NOT_RUNNING)).Times(1);
+    EXPECT_CALL(*transmitter, PublishAppState()).Times(1);
+
+    monitor.CheckAppState();
+}
+
+TEST_F(ServiceMonitorTest, CheckAppState_Timeout_DockerBackedAppCanUseDockerFallback) {
+    NiceMock<MockAppController> app_controller;
+    ASSERT_TRUE(monitor.Initialize(participant, registry, transmitter, &app_controller));
+
+    const std::string app = "hmi_launcher";
+    auto now = std::chrono::steady_clock::now();
+    EmplaceReader(app, now - std::chrono::seconds(5));
+
+    AppDockerInfo docker;
+    docker.image = "hmi-launcher:latest";
+    EXPECT_CALL(*registry, GetDockerInfo(app))
+        .WillOnce(Return(std::optional<AppDockerInfo>{docker}));
+    EXPECT_CALL(app_controller, IsAppRunning(app)).WillOnce(Return(true));
+
+    Service svc = MakeService(app);
+    auto current_pair = std::make_pair(svc, ServiceState::NOT_RUNNING);
+    EXPECT_CALL(*registry, GetAppInfo(app))
+        .WillOnce(Return(std::optional<decltype(current_pair)>(current_pair)));
+
+    EXPECT_CALL(*registry, UpdateAppState(app, ServiceState::RUNNING)).Times(1);
+    EXPECT_CALL(*transmitter, PublishAppState()).Times(1);
 
     monitor.CheckAppState();
 }

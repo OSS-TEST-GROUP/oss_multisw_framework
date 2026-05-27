@@ -3,6 +3,7 @@
 
 #include "service_registry/ServiceRegistry.hpp"
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -15,12 +16,14 @@ namespace adsw_manager::agl {
             virtual bool LaunchApp(std::string app_name);
             virtual bool TerminateApp(std::string app_name);
             virtual bool IsAppRunning(std::string app_name);
+            virtual bool CanControlApp(std::string app_name) const;
 
             void SetServiceRegistry(ServiceRegistry* registry);
 
         private:
             ServiceRegistry* service_registry_ {nullptr};
 
+            std::optional<AppDockerInfo> GetDockerConfig(const std::string& app_name) const;
             int RunDocker(const std::vector<std::string>& args);
             bool ReadDockerOutput(const std::string& cmd, std::string& out);
 

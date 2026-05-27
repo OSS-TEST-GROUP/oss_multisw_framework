@@ -37,6 +37,26 @@ namespace adsw_manager::agl::testhook {
 
 namespace adsw_manager::agl
 {
+    namespace {
+        constexpr const char* kDefaultImage = "registry.obigo.com/oss/oss-hmi-launcher-workspace:latest";
+
+        const std::vector<std::string>& DefaultExtraArgs()
+        {
+            static const std::vector<std::string> args = {
+                "-it",
+                "--net=host",
+                "--privileged",
+                "-v", "/dev:/dev",
+                "-v", "/run/user/1001:/run/user/1001",
+                "-v", "/usr/share/flutter:/usr/share/flutter:ro",
+                "-v", "/tmp/models:/tmp/models:ro",
+                "-v", "/usr/share/fonts:/usr/share/fonts:ro",
+                "-v", "/etc/fonts:/etc/fonts:ro",
+                "-v", "/tmp/fontconfig:/var/cache/fontconfig"
+            };
+            return args;
+        }
+    }
 
     void AppController::SetServiceRegistry(ServiceRegistry* registry) {
         service_registry_ = registry;
@@ -51,6 +71,12 @@ namespace adsw_manager::agl
     }
 
     bool AppController::LaunchApp(std::string app_name) {
+        const auto docker = GetDockerConfig(app_name);
+        if (!docker.has_value()) {
+            std::cout << "[AppController] " << app_name
+                      << " is not Docker-controllable." << std::endl;
+            return false;
+        }
 
         int st = RunDocker({"container", "inspect", app_name});
         bool exists = (st >= 0 && WIFEXITED(st) && WEXITSTATUS(st) == 0);
@@ -61,32 +87,25 @@ namespace adsw_manager::agl
             return (rc >= 0 && WIFEXITED(rc) && WEXITSTATUS(rc) == 0);
         }
 
-        // Build docker run args from registry or fallback to hardcoded defaults
-        std::string image = "registry.obigo.com/oss/oss-hmi-agl-aarch64:latest";
-        std::vector<std::string> extra_args = {
-            "--net=host",
-            "--device=/dev/dri:/dev/dri",
-            "-v=/run/user/1001:/run/user/1001",
-            "--privileged"
-        };
+        std::cout << "[AppController] " << app_name
+                  << " container does not exist. Start it with docker compose." << std::endl;
+        return false;
 
-        if (service_registry_) {
-            auto info = service_registry_->GetDockerInfo(app_name);
-            if (info && !info->image.empty()) {
-                image = info->image;
-                extra_args = info->extra_args;
-            }
-        }
-
-        std::vector<std::string> run_args = {"run", "-d", "--name", app_name};
-        for (const auto& arg : extra_args) {
-            run_args.push_back(arg);
-        }
-        run_args.push_back(image);
-
-        int rc = RunDocker(run_args);
-
-        return (rc >= 0 && WIFEXITED(rc) && WEXITSTATUS(rc) == 0);
+        // If this service is no longer managed by docker compose, restore this
+        // block to create the container directly.
+        //
+        // std::vector<std::string> run_args = {"run", "-d", "--name", app_name};
+        // for (const auto& arg : docker->extra_args) {
+        //     run_args.push_back(arg);
+        // }
+        // run_args.push_back(docker->image);
+        // for (const auto& arg : docker->command_args) {
+        //     run_args.push_back(arg);
+        // }
+        //
+        // int rc = RunDocker(run_args);
+        //
+        // return (rc >= 0 && WIFEXITED(rc) && WEXITSTATUS(rc) == 0);
 
         // std::string cmd = "/usr/bin/flutter-auto -b /usr/share/flutter/" + app_name + "/3.24.2/release --xdg-shell-app-id " + app_name;
         // int result = std::system(cmd.c_str());
@@ -108,6 +127,12 @@ namespace adsw_manager::agl
 
     bool AppController::TerminateApp(std::string app_name)
     {
+        if (!GetDockerConfig(app_name).has_value()) {
+            std::cout << "[AppController] " << app_name
+                      << " is not Docker-controllable." << std::endl;
+            return false;
+        }
+
         int rc = RunDocker({"stop", app_name});
         return (rc >= 0 && WIFEXITED(rc) && WEXITSTATUS(rc) == 0);
 
@@ -131,6 +156,9 @@ namespace adsw_manager::agl
 
     bool AppController::IsAppRunning(std::string app_name)
     {
+        if (!GetDockerConfig(app_name).has_value()) {
+            return false;
+        }
 
         std::string out;
         if (!ReadDockerOutput(
@@ -184,6 +212,29 @@ namespace adsw_manager::agl
         // // }
         // // std::cout << "Subcommand failed  (exit code: " << exit_code << ")" << std::endl;
         // // return false;
+    }
+
+    bool AppController::CanControlApp(std::string app_name) const
+    {
+        return GetDockerConfig(app_name).has_value();
+    }
+
+    std::optional<AppDockerInfo> AppController::GetDockerConfig(const std::string& app_name) const
+    {
+        if (!service_registry_) {
+            AppDockerInfo docker;
+            docker.image = kDefaultImage;
+            docker.extra_args = DefaultExtraArgs();
+            docker.command_args = {"hmi_launcher"};
+            return docker;
+        }
+
+        auto info = service_registry_->GetDockerInfo(app_name);
+        if (!info || info->image.empty()) {
+            return std::nullopt;
+        }
+
+        return info;
     }
 
     int AppController::RunDocker(const std::vector<std::string> &args)
