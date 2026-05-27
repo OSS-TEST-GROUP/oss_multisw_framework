@@ -12,6 +12,7 @@ public:
     MOCK_METHOD(bool, LaunchApp, (std::string), (override));
     MOCK_METHOD(bool, TerminateApp, (std::string), (override));
     MOCK_METHOD(bool, IsAppRunning, (std::string), (override));
+    MOCK_METHOD(bool, CanControlApp, (std::string), (const, override));
 };
 
 #endif

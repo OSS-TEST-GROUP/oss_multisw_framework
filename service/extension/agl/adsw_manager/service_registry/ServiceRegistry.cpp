@@ -52,6 +52,11 @@ namespace adsw_manager::agl {
                         docker.extra_args.push_back(arg.as<std::string>());
                     }
                 }
+                if (entry["command_args"]) {
+                    for (const auto& arg : entry["command_args"]) {
+                        docker.command_args.push_back(arg.as<std::string>());
+                    }
+                }
                 docker_info_.emplace(name, std::move(docker));
 
                 Service svc;
@@ -104,13 +109,33 @@ namespace adsw_manager::agl {
             RecoveryPolicy::R_DEFAULT, true,
             OsType::AGL, ServiceState::NOT_RUNNING);
 
-        add("map", ServiceType::NORMAL,
+        add("ota_monitor", ServiceType::NORMAL,
             RecoveryPolicy::R_DEFAULT, true,
             OsType::AGL, ServiceState::NOT_RUNNING);
 
-        add("radio", ServiceType::NORMAL,
+        add("lfc_monitor", ServiceType::NORMAL,
             RecoveryPolicy::R_DEFAULT, true,
             OsType::AGL, ServiceState::NOT_RUNNING);
+
+        add("hmi_launcher", ServiceType::NORMAL,
+            RecoveryPolicy::R_DEFAULT, true,
+            OsType::AGL, ServiceState::NOT_RUNNING);
+        docker_info_["hmi_launcher"] = AppDockerInfo{
+            "registry.obigo.com/oss/oss-hmi-launcher-workspace:latest",
+            {
+                "-it",
+                "--net=host",
+                "--privileged",
+                "-v", "/dev:/dev",
+                "-v", "/run/user/1001:/run/user/1001",
+                "-v", "/usr/share/flutter:/usr/share/flutter:ro",
+                "-v", "/tmp/models:/tmp/models:ro",
+                "-v", "/usr/share/fonts:/usr/share/fonts:ro",
+                "-v", "/etc/fonts:/etc/fonts:ro",
+                "-v", "/tmp/fontconfig:/var/cache/fontconfig"
+            },
+            {"hmi_launcher"}
+        };
 
         return true;
     }

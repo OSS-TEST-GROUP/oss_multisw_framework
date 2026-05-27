@@ -17,6 +17,11 @@ namespace adsw_manager::agl {
 
     bool ServiceController::StartService(std::string app_name) {
 
+        if (!app_controller_->CanControlApp(app_name)) {
+            std::cout << "[[ " << app_name << " ]] is not controllable by ADSW manager." << std::endl;
+            return false;
+        }
+
         if(!app_controller_->IsAppRunning(app_name)) {
             bool result = app_controller_->LaunchApp(app_name);
             return result;
@@ -28,6 +33,11 @@ namespace adsw_manager::agl {
     }
 
     bool ServiceController::StopService(std::string app_name) {
+
+        if (!app_controller_->CanControlApp(app_name)) {
+            std::cout << "[[ " << app_name << " ]] is not controllable by ADSW manager." << std::endl;
+            return false;
+        }
 
         if(app_controller_->IsAppRunning(app_name)) {
             bool result = app_controller_->TerminateApp(app_name);

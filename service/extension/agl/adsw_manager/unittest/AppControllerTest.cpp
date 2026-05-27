@@ -9,6 +9,7 @@
 #include <cstring>
 #include <string>
 #include <fstream>
+#include <sstream>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -52,6 +53,14 @@ void MkdirP(const std::string& path)
 void Touch(const std::string& path)
 {
     std::ofstream ofs(path, std::ios::app);
+}
+
+std::string ReadFile(const std::string& path)
+{
+    std::ifstream ifs(path);
+    std::ostringstream oss;
+    oss << ifs.rdbuf();
+    return oss.str();
 }
 
 std::string ExistsFile(const std::string& name)   { return g_state_dir + "/exists_" + name; }
@@ -177,19 +186,114 @@ TEST_F(AppControllerTest, IsAppRunning_FalseWhenInspectFails)
     EXPECT_FALSE(c.IsAppRunning(name));
 }
 
-TEST_F(AppControllerTest, LaunchApp_WhenNotExists_RunSuccess_CreatesStateAndRunning)
+TEST_F(AppControllerTest, RegistryConfig_AllowsDockerOnlyForAppsWithImage)
+{
+    const std::string config_path = g_state_dir + "/service-list.yaml";
+    {
+        std::ofstream yaml(config_path);
+        yaml << "services:\n"
+             << "- name: ota_monitor\n"
+             << "  service_type: NORMAL\n"
+             << "  recovery_policy: R_DEFAULT\n"
+             << "  is_enabled: true\n"
+             << "  os_type: AGL\n"
+             << "  init_state: NOT_RUNNING\n"
+             << "- name: hmi_launcher\n"
+             << "  service_type: NORMAL\n"
+             << "  recovery_policy: R_DEFAULT\n"
+             << "  is_enabled: true\n"
+             << "  os_type: AGL\n"
+             << "  init_state: NOT_RUNNING\n"
+             << "  image: registry.obigo.com/oss/oss-hmi-launcher-workspace:latest\n"
+             << "  extra_args:\n"
+             << "  - \"-it\"\n"
+             << "  - --net=host\n"
+             << "  - --privileged\n"
+             << "  - \"-v\"\n"
+             << "  - /dev:/dev\n"
+             << "  - \"-v\"\n"
+             << "  - /run/user/1001:/run/user/1001\n"
+             << "  - \"-v\"\n"
+             << "  - /usr/share/flutter:/usr/share/flutter:ro\n"
+             << "  - \"-v\"\n"
+             << "  - /tmp/models:/tmp/models:ro\n"
+             << "  - \"-v\"\n"
+             << "  - /usr/share/fonts:/usr/share/fonts:ro\n"
+             << "  - \"-v\"\n"
+             << "  - /etc/fonts:/etc/fonts:ro\n"
+             << "  - \"-v\"\n"
+             << "  - /tmp/fontconfig:/var/cache/fontconfig\n"
+             << "  command_args:\n"
+             << "  - hmi_launcher\n";
+    }
+
+    ServiceRegistry registry;
+    ASSERT_TRUE(registry.Initialize(config_path));
+
+    AppController c;
+    c.SetServiceRegistry(&registry);
+
+    Touch(ExistsFile("ota_monitor"));
+    Touch(RunningFile("ota_monitor"));
+    EXPECT_FALSE(c.CanControlApp("ota_monitor"));
+    EXPECT_FALSE(c.IsAppRunning("ota_monitor"));
+    EXPECT_FALSE(c.LaunchApp("ota_monitor"));
+
+    Touch(ExistsFile("hmi_launcher"));
+    Touch(RunningFile("hmi_launcher"));
+    EXPECT_TRUE(c.CanControlApp("hmi_launcher"));
+    EXPECT_TRUE(c.IsAppRunning("hmi_launcher"));
+}
+
+TEST_F(AppControllerTest, LaunchApp_WhenContainerMissing_DoesNotRunNewContainer)
+{
+    const std::string config_path = g_state_dir + "/service-list.yaml";
+    {
+        std::ofstream yaml(config_path);
+        yaml << "services:\n"
+             << "- name: hmi_launcher\n"
+             << "  service_type: NORMAL\n"
+             << "  recovery_policy: R_DEFAULT\n"
+             << "  is_enabled: true\n"
+             << "  os_type: AGL\n"
+             << "  init_state: NOT_RUNNING\n"
+             << "  image: registry.obigo.com/oss/oss-hmi-launcher-workspace:latest\n"
+             << "  extra_args:\n"
+             << "  - \"-it\"\n"
+             << "  - --net=host\n"
+             << "  - --privileged\n"
+             << "  - \"-v\"\n"
+             << "  - /dev:/dev\n"
+             << "  command_args:\n"
+             << "  - hmi_launcher\n";
+    }
+
+    ServiceRegistry registry;
+    ASSERT_TRUE(registry.Initialize(config_path));
+
+    AppController c;
+    c.SetServiceRegistry(&registry);
+
+    EXPECT_FALSE(c.LaunchApp("hmi_launcher"));
+
+    const auto log = ReadFile(g_log_path);
+    EXPECT_NE(log.find("docker container inspect hmi_launcher"), std::string::npos);
+    EXPECT_EQ(log.find("docker run"), std::string::npos);
+}
+
+TEST_F(AppControllerTest, LaunchApp_WhenNotExists_ReturnsFalseWithoutCreatingContainer)
 {
     AppController c;
     const std::string name = "app_launch_run_ok";
 
-    EXPECT_TRUE(c.LaunchApp(name));
+    EXPECT_FALSE(c.LaunchApp(name));
 
     std::ifstream f1(ExistsFile(name));
     std::ifstream f2(RunningFile(name));
-    EXPECT_TRUE(f1.good());
-    EXPECT_TRUE(f2.good());
+    EXPECT_FALSE(f1.good());
+    EXPECT_FALSE(f2.good());
 
-    EXPECT_TRUE(c.IsAppRunning(name));
+    EXPECT_FALSE(c.IsAppRunning(name));
 }
 
 TEST_F(AppControllerTest, LaunchApp_WhenExists_StartSuccess_SetsRunning)
@@ -217,7 +321,7 @@ TEST_F(AppControllerTest, LaunchApp_WhenExists_StartFail_ReturnsFalse)
     EXPECT_FALSE(c.LaunchApp(name));
 }
 
-TEST_F(AppControllerTest, LaunchApp_WhenNotExists_RunFail_ReturnsFalse)
+TEST_F(AppControllerTest, LaunchApp_WhenNotExists_DoesNotCallDockerRun)
 {
     AppController c;
     const std::string name = "app_launch_run_fail";
@@ -225,21 +329,27 @@ TEST_F(AppControllerTest, LaunchApp_WhenNotExists_RunFail_ReturnsFalse)
     SetFail("run");
 
     EXPECT_FALSE(c.LaunchApp(name));
+
+    const auto log = ReadFile(g_log_path);
+    EXPECT_EQ(log.find("docker run"), std::string::npos);
 }
 
-TEST_F(AppControllerTest, LaunchApp_WhenContainerInspectFails_FallsBackToRun)
+TEST_F(AppControllerTest, LaunchApp_WhenContainerInspectFails_ReturnsFalseWithoutRun)
 {
     AppController c;
     const std::string name = "app_inspect_fail_fallback_run";
 
     SetFail("container_inspect");
 
-    EXPECT_TRUE(c.LaunchApp(name));
+    EXPECT_FALSE(c.LaunchApp(name));
 
     std::ifstream f1(ExistsFile(name));
     std::ifstream f2(RunningFile(name));
-    EXPECT_TRUE(f1.good());
-    EXPECT_TRUE(f2.good());
+    EXPECT_FALSE(f1.good());
+    EXPECT_FALSE(f2.good());
+
+    const auto log = ReadFile(g_log_path);
+    EXPECT_EQ(log.find("docker run"), std::string::npos);
 }
 
 TEST_F(AppControllerTest, TerminateApp_StopSuccessAndFail)

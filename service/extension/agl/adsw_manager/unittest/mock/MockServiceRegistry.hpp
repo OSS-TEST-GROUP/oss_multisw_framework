@@ -14,6 +14,7 @@ public:
     MOCK_METHOD((std::optional<std::pair<Service, ServiceState>>), GetAppInfo, (const std::string& app_name), (const, override));
     MOCK_METHOD((std::vector<std::pair<std::string, ServiceState>>), GetNameStatePairs, (), (const, override));
     MOCK_METHOD(ServiceState, GetAppState, (const std::string&), (const, override));
+    MOCK_METHOD((std::optional<adsw_manager::agl::AppDockerInfo>), GetDockerInfo, (const std::string&), (const, override));
 };
 
 #endif
