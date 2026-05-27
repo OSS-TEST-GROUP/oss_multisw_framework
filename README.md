@@ -11,16 +11,16 @@ git clone git@github.com:obigo-gov/oss_multisw_framework.git
 
 For x86-64(unittest, static analysis, debugging)
 ```
-.build.sh
+./build.sh
 or
-.build.sh --build-unittest
+./build.sh --build-unittest
 ```
 
 For aarch64(AGL, AADP, etc)
 ```
-.build.sh --aarch64 --set-extension-platform=ROS2
+./build.sh --aarch64 --set-extension-platform=ROS2
 or
-.build.sh --aarch64 --set-extension-platform=AGL
+./build.sh --aarch64 --set-extension-platform=AGL
 ```
 
 ## How to run containers
@@ -50,13 +50,14 @@ Binary path
 
 You can build the container images after build MMF to release
 ```
-./build --release --aarch64
+./build.sh --release --aarch64
 
 docker buildx create --name mmf-buildx --driver docker-container --use || true
 
 docker buildx build \
     --no-cache --platform="linux/arm64" \
     --build-arg BUILD_TYPE=Release \
+    --build-arg TARGETARCH=aarch64 \
     -f docker/Dockerfile.rel \
     --target runtime-mmf-core \
     --load \
@@ -66,17 +67,19 @@ docker buildx build \
 docker buildx build \
     --no-cache --platform="linux/arm64" \
     --build-arg BUILD_TYPE=Release \
+    --build-arg TARGETARCH=aarch64 \
     -f docker/Dockerfile.rel \
     --target runtime-mmf-ext-ros2 \
     --load \
     -t registry.obigo.com/oss/oss-mmf-ext-ros2:latest \
     .
 
-./build --release --aarch64 --set-extension-platform=AGL
+./build.sh --release --aarch64 --set-extension-platform=AGL
 
 docker buildx build \
     --no-cache --platform="linux/arm64" \
     --build-arg BUILD_TYPE=Release \
+    --build-arg TARGETARCH=aarch64 \
     -f docker/Dockerfile.rel \
     --target runtime-mmf-ext-agl \
     --load \
