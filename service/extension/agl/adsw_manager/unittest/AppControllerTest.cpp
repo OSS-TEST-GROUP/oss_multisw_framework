@@ -204,13 +204,19 @@ TEST_F(AppControllerTest, RegistryConfig_AllowsDockerOnlyForAppsWithImage)
              << "  is_enabled: true\n"
              << "  os_type: AGL\n"
              << "  init_state: NOT_RUNNING\n"
-             << "  image: registry.obigo.com/oss/oss-hmi-launcher-workspace:latest\n"
+             << "  image: registry.obigo.com/oss/oss-hmi-launcher:latest\n"
              << "  extra_args:\n"
              << "  - \"-it\"\n"
              << "  - --net=host\n"
              << "  - --privileged\n"
-             << "  - \"-v\"\n"
-             << "  - /dev:/dev\n"
+             << "  - --restart\n"
+             << "  - unless-stopped\n"
+             << "  - --cap-add\n"
+             << "  - NET_RAW\n"
+             << "  - --cap-add\n"
+             << "  - NET_ADMIN\n"
+             << "  - --device\n"
+             << "  - /dev/dri:/dev/dri\n"
              << "  - \"-v\"\n"
              << "  - /run/user/1001:/run/user/1001\n"
              << "  - \"-v\"\n"
@@ -222,7 +228,9 @@ TEST_F(AppControllerTest, RegistryConfig_AllowsDockerOnlyForAppsWithImage)
              << "  - \"-v\"\n"
              << "  - /etc/fonts:/etc/fonts:ro\n"
              << "  - \"-v\"\n"
-             << "  - /tmp/fontconfig:/var/cache/fontconfig\n"
+             << "  - /root/oss/hmi_launcher_config.json:/etc/hmi_launcher/config.json:rw\n"
+             << "  - \"-e\"\n"
+             << "  - HMI_LAUNCHER_CONFIG=/etc/hmi_launcher/config.json\n"
              << "  command_args:\n"
              << "  - hmi_launcher\n";
     }
@@ -245,7 +253,7 @@ TEST_F(AppControllerTest, RegistryConfig_AllowsDockerOnlyForAppsWithImage)
     EXPECT_TRUE(c.IsAppRunning("hmi_launcher"));
 }
 
-TEST_F(AppControllerTest, LaunchApp_WhenContainerMissing_DoesNotRunNewContainer)
+TEST_F(AppControllerTest, LaunchApp_WhenContainerMissing_RunsNewContainer)
 {
     const std::string config_path = g_state_dir + "/service-list.yaml";
     {
@@ -257,13 +265,23 @@ TEST_F(AppControllerTest, LaunchApp_WhenContainerMissing_DoesNotRunNewContainer)
              << "  is_enabled: true\n"
              << "  os_type: AGL\n"
              << "  init_state: NOT_RUNNING\n"
-             << "  image: registry.obigo.com/oss/oss-hmi-launcher-workspace:latest\n"
+             << "  image: registry.obigo.com/oss/oss-hmi-launcher:latest\n"
              << "  extra_args:\n"
              << "  - \"-it\"\n"
              << "  - --net=host\n"
              << "  - --privileged\n"
+             << "  - --restart\n"
+             << "  - unless-stopped\n"
+             << "  - --cap-add\n"
+             << "  - NET_RAW\n"
+             << "  - --cap-add\n"
+             << "  - NET_ADMIN\n"
+             << "  - --device\n"
+             << "  - /dev/dri:/dev/dri\n"
              << "  - \"-v\"\n"
-             << "  - /dev:/dev\n"
+             << "  - /run/user/1001:/run/user/1001\n"
+             << "  - \"-e\"\n"
+             << "  - HMI_LAUNCHER_CONFIG=/etc/hmi_launcher/config.json\n"
              << "  command_args:\n"
              << "  - hmi_launcher\n";
     }
@@ -274,26 +292,27 @@ TEST_F(AppControllerTest, LaunchApp_WhenContainerMissing_DoesNotRunNewContainer)
     AppController c;
     c.SetServiceRegistry(&registry);
 
-    EXPECT_FALSE(c.LaunchApp("hmi_launcher"));
+    EXPECT_TRUE(c.LaunchApp("hmi_launcher"));
 
     const auto log = ReadFile(g_log_path);
     EXPECT_NE(log.find("docker container inspect hmi_launcher"), std::string::npos);
-    EXPECT_EQ(log.find("docker run"), std::string::npos);
+    EXPECT_NE(log.find("docker run -d --name hmi_launcher -it --net=host --privileged --restart unless-stopped --cap-add NET_RAW --cap-add NET_ADMIN --device /dev/dri:/dev/dri -v /run/user/1001:/run/user/1001 -e HMI_LAUNCHER_CONFIG=/etc/hmi_launcher/config.json registry.obigo.com/oss/oss-hmi-launcher:latest hmi_launcher"),
+              std::string::npos);
 }
 
-TEST_F(AppControllerTest, LaunchApp_WhenNotExists_ReturnsFalseWithoutCreatingContainer)
+TEST_F(AppControllerTest, LaunchApp_WhenNotExists_RunSuccess_CreatesStateAndRunning)
 {
     AppController c;
     const std::string name = "app_launch_run_ok";
 
-    EXPECT_FALSE(c.LaunchApp(name));
+    EXPECT_TRUE(c.LaunchApp(name));
 
     std::ifstream f1(ExistsFile(name));
     std::ifstream f2(RunningFile(name));
-    EXPECT_FALSE(f1.good());
-    EXPECT_FALSE(f2.good());
+    EXPECT_TRUE(f1.good());
+    EXPECT_TRUE(f2.good());
 
-    EXPECT_FALSE(c.IsAppRunning(name));
+    EXPECT_TRUE(c.IsAppRunning(name));
 }
 
 TEST_F(AppControllerTest, LaunchApp_WhenExists_StartSuccess_SetsRunning)
@@ -321,7 +340,7 @@ TEST_F(AppControllerTest, LaunchApp_WhenExists_StartFail_ReturnsFalse)
     EXPECT_FALSE(c.LaunchApp(name));
 }
 
-TEST_F(AppControllerTest, LaunchApp_WhenNotExists_DoesNotCallDockerRun)
+TEST_F(AppControllerTest, LaunchApp_WhenNotExists_RunFail_ReturnsFalse)
 {
     AppController c;
     const std::string name = "app_launch_run_fail";
@@ -329,27 +348,21 @@ TEST_F(AppControllerTest, LaunchApp_WhenNotExists_DoesNotCallDockerRun)
     SetFail("run");
 
     EXPECT_FALSE(c.LaunchApp(name));
-
-    const auto log = ReadFile(g_log_path);
-    EXPECT_EQ(log.find("docker run"), std::string::npos);
 }
 
-TEST_F(AppControllerTest, LaunchApp_WhenContainerInspectFails_ReturnsFalseWithoutRun)
+TEST_F(AppControllerTest, LaunchApp_WhenContainerInspectFails_FallsBackToRun)
 {
     AppController c;
     const std::string name = "app_inspect_fail_fallback_run";
 
     SetFail("container_inspect");
 
-    EXPECT_FALSE(c.LaunchApp(name));
+    EXPECT_TRUE(c.LaunchApp(name));
 
     std::ifstream f1(ExistsFile(name));
     std::ifstream f2(RunningFile(name));
-    EXPECT_FALSE(f1.good());
-    EXPECT_FALSE(f2.good());
-
-    const auto log = ReadFile(g_log_path);
-    EXPECT_EQ(log.find("docker run"), std::string::npos);
+    EXPECT_TRUE(f1.good());
+    EXPECT_TRUE(f2.good());
 }
 
 TEST_F(AppControllerTest, TerminateApp_StopSuccessAndFail)
@@ -363,7 +376,23 @@ TEST_F(AppControllerTest, TerminateApp_StopSuccessAndFail)
     EXPECT_TRUE(c.TerminateApp(name));
     std::ifstream f2(RunningFile(name));
     EXPECT_FALSE(f2.good());
+    EXPECT_FALSE(c.ShouldAutoRestartApp(name));
 
+}
+
+TEST_F(AppControllerTest, LaunchApp_ClearsManualStopForRestart)
+{
+    AppController c;
+    const std::string name = "app_manual_restart";
+
+    Touch(ExistsFile(name));
+    Touch(RunningFile(name));
+
+    EXPECT_TRUE(c.TerminateApp(name));
+    EXPECT_FALSE(c.ShouldAutoRestartApp(name));
+
+    EXPECT_TRUE(c.LaunchApp(name));
+    EXPECT_TRUE(c.ShouldAutoRestartApp(name));
 }
 
 TEST_F(AppControllerTest, TerminateApp_StopFail_WhenNotExists)

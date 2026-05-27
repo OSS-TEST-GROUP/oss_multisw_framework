@@ -38,7 +38,7 @@ namespace adsw_manager::agl::testhook {
 namespace adsw_manager::agl
 {
     namespace {
-        constexpr const char* kDefaultImage = "registry.obigo.com/oss/oss-hmi-launcher-workspace:latest";
+        constexpr const char* kDefaultImage = "registry.obigo.com/oss/oss-hmi-launcher:latest";
 
         const std::vector<std::string>& DefaultExtraArgs()
         {
@@ -46,13 +46,17 @@ namespace adsw_manager::agl
                 "-it",
                 "--net=host",
                 "--privileged",
-                "-v", "/dev:/dev",
+                "--restart", "unless-stopped",
+                "--cap-add", "NET_RAW",
+                "--cap-add", "NET_ADMIN",
+                "--device", "/dev/dri:/dev/dri",
                 "-v", "/run/user/1001:/run/user/1001",
                 "-v", "/usr/share/flutter:/usr/share/flutter:ro",
                 "-v", "/tmp/models:/tmp/models:ro",
                 "-v", "/usr/share/fonts:/usr/share/fonts:ro",
                 "-v", "/etc/fonts:/etc/fonts:ro",
-                "-v", "/tmp/fontconfig:/var/cache/fontconfig"
+                "-v", "/root/oss/hmi_launcher_config.json:/etc/hmi_launcher/config.json:rw",
+                "-e", "HMI_LAUNCHER_CONFIG=/etc/hmi_launcher/config.json"
             };
             return args;
         }
@@ -84,28 +88,36 @@ namespace adsw_manager::agl
         if (exists)
         {
             int rc = RunDocker({"start", app_name});
-            return (rc >= 0 && WIFEXITED(rc) && WEXITSTATUS(rc) == 0);
+            const bool ok = (rc >= 0 && WIFEXITED(rc) && WEXITSTATUS(rc) == 0);
+            if (ok) {
+                manually_stopped_apps_.erase(app_name);
+            }
+            return ok;
         }
 
-        std::cout << "[AppController] " << app_name
-                  << " container does not exist. Start it with docker compose." << std::endl;
-        return false;
+        std::vector<std::string> run_args = {"run", "-d", "--name", app_name};
+        for (const auto& arg : docker->extra_args) {
+            run_args.push_back(arg);
+        }
+        run_args.push_back(docker->image);
+        for (const auto& arg : docker->command_args) {
+            run_args.push_back(arg);
+        }
 
-        // If this service is no longer managed by docker compose, restore this
-        // block to create the container directly.
+        int rc = RunDocker(run_args);
+
+        const bool ok = (rc >= 0 && WIFEXITED(rc) && WEXITSTATUS(rc) == 0);
+        if (ok) {
+            manually_stopped_apps_.erase(app_name);
+        }
+        return ok;
+
+        // If hmi_launcher becomes docker-compose-managed again, replace the
+        // direct docker run block above with this guard.
         //
-        // std::vector<std::string> run_args = {"run", "-d", "--name", app_name};
-        // for (const auto& arg : docker->extra_args) {
-        //     run_args.push_back(arg);
-        // }
-        // run_args.push_back(docker->image);
-        // for (const auto& arg : docker->command_args) {
-        //     run_args.push_back(arg);
-        // }
-        //
-        // int rc = RunDocker(run_args);
-        //
-        // return (rc >= 0 && WIFEXITED(rc) && WEXITSTATUS(rc) == 0);
+        // std::cout << "[AppController] " << app_name
+        //           << " container does not exist. Start it with docker compose." << std::endl;
+        // return false;
 
         // std::string cmd = "/usr/bin/flutter-auto -b /usr/share/flutter/" + app_name + "/3.24.2/release --xdg-shell-app-id " + app_name;
         // int result = std::system(cmd.c_str());
@@ -134,7 +146,11 @@ namespace adsw_manager::agl
         }
 
         int rc = RunDocker({"stop", app_name});
-        return (rc >= 0 && WIFEXITED(rc) && WEXITSTATUS(rc) == 0);
+        const bool ok = (rc >= 0 && WIFEXITED(rc) && WEXITSTATUS(rc) == 0);
+        if (ok) {
+            manually_stopped_apps_.insert(app_name);
+        }
+        return ok;
 
         // std::string cmd = "pkill flutter-auto";
         // int result = std::system(cmd.c_str());
@@ -217,6 +233,12 @@ namespace adsw_manager::agl
     bool AppController::CanControlApp(std::string app_name) const
     {
         return GetDockerConfig(app_name).has_value();
+    }
+
+    bool AppController::ShouldAutoRestartApp(std::string app_name) const
+    {
+        return CanControlApp(app_name) &&
+               manually_stopped_apps_.find(app_name) == manually_stopped_apps_.end();
     }
 
     std::optional<AppDockerInfo> AppController::GetDockerConfig(const std::string& app_name) const

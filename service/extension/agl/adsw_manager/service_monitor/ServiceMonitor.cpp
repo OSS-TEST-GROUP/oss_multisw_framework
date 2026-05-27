@@ -50,7 +50,8 @@ namespace adsw_manager::agl {
 
         for (auto& [app_name, reader] : readers_) {
             const auto last_time = reader->GetLastReceivedTime();
-            const bool heartbeat_ok = (now - last_time <= timeout_);
+            const bool has_received = (last_time != std::chrono::steady_clock::time_point::min());
+            const bool heartbeat_ok = has_received && (now - last_time <= timeout_);
 
             ServiceState expected;
             if (heartbeat_ok) {
@@ -59,10 +60,16 @@ namespace adsw_manager::agl {
                 const auto docker = service_registry_->GetDockerInfo(app_name);
                 if (!docker || docker->image.empty()) {
                     expected = ServiceState::NOT_RUNNING;
-                } else {
-                    expected = app_controller_->IsAppRunning(app_name)
+                } else if (app_controller_->IsAppRunning(app_name)) {
+                    expected = ServiceState::RUNNING;
+                } else if (app_controller_->ShouldAutoRestartApp(app_name)) {
+                    std::cout << "[ServiceMonitor] Restarting Docker-backed app : [["
+                              << app_name << "]]" << std::endl;
+                    expected = app_controller_->LaunchApp(app_name)
                                    ? ServiceState::RUNNING
                                    : ServiceState::NOT_RUNNING;
+                } else {
+                    expected = ServiceState::NOT_RUNNING;
                 }
             } else {
                 expected = ServiceState::NOT_RUNNING;

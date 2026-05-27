@@ -42,6 +42,8 @@ namespace adsw_manager::agl {
             void ConfirmUpdateServiceList();
 
         private:
+            bool StartDockerBackedServices();
+
             eprosima::fastdds::dds::DomainParticipant* participant_ {nullptr};
 
             std::shared_ptr<ServiceRegistry> service_registry_;

@@ -4,6 +4,7 @@
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp>
 
 using namespace eprosima::fastdds::dds;
+using namespace lifecyclemgr;
 
 namespace adsw_manager::agl {
 
@@ -66,6 +67,10 @@ namespace adsw_manager::agl {
 
     bool ADSWManager::StartService() {
 
+        if (!StartDockerBackedServices()) {
+            return false;
+        }
+
         message_transmitter_->PublishAppList();
         service_monitor_->StartMonitoring();
 
@@ -73,6 +78,23 @@ namespace adsw_manager::agl {
         last_publish_time_ = std::chrono::steady_clock::now();
 
         LOG_INFO("[ADSWManager] Service started. State -> ADSW_STARTED");
+        return true;
+    }
+
+    bool ADSWManager::StartDockerBackedServices() {
+        for (const auto& app : service_registry_->GetAppList()) {
+            const auto app_name = app.name();
+            if (!app_controller_->CanControlApp(app_name)) {
+                continue;
+            }
+
+            LOG_INFO("[ADSWManager] Starting Docker-backed service: " << app_name);
+            if (!service_controller_->StartService(app_name)) {
+                LOG_ERROR("[ADSWManager] Failed to start Docker-backed service: " << app_name);
+                return false;
+            }
+        }
+
         return true;
     }
 
