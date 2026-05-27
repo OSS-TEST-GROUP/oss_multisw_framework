@@ -118,21 +118,25 @@ namespace adsw_manager::agl {
             OsType::AGL, ServiceState::NOT_RUNNING);
 
         add("hmi_launcher", ServiceType::NORMAL,
-            RecoveryPolicy::R_DEFAULT, true,
+            RecoveryPolicy::ALWAYS, true,
             OsType::AGL, ServiceState::NOT_RUNNING);
         docker_info_["hmi_launcher"] = AppDockerInfo{
-            "registry.obigo.com/oss/oss-hmi-launcher-workspace:latest",
+            "registry.obigo.com/oss/oss-hmi-launcher:latest",
             {
                 "-it",
                 "--net=host",
                 "--privileged",
-                "-v", "/dev:/dev",
+                "--restart", "unless-stopped",
+                "--cap-add", "NET_RAW",
+                "--cap-add", "NET_ADMIN",
+                "--device", "/dev/dri:/dev/dri",
                 "-v", "/run/user/1001:/run/user/1001",
                 "-v", "/usr/share/flutter:/usr/share/flutter:ro",
                 "-v", "/tmp/models:/tmp/models:ro",
                 "-v", "/usr/share/fonts:/usr/share/fonts:ro",
                 "-v", "/etc/fonts:/etc/fonts:ro",
-                "-v", "/tmp/fontconfig:/var/cache/fontconfig"
+                "-v", "/root/oss/hmi_launcher_config.json:/etc/hmi_launcher/config.json:rw",
+                "-e", "HMI_LAUNCHER_CONFIG=/etc/hmi_launcher/config.json"
             },
             {"hmi_launcher"}
         };

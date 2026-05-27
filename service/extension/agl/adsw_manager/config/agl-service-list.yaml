@@ -19,7 +19,7 @@ services:
   init_state: NOT_RUNNING
 - name: hmi_launcher
   service_type: NORMAL
-  recovery_policy: R_DEFAULT
+  recovery_policy: ALWAYS
   is_enabled: true
   os_type: AGL
   init_state: NOT_RUNNING
@@ -28,8 +28,14 @@ services:
   - "-it"
   - --net=host
   - --privileged
-  - "-v"
-  - /dev:/dev
+  - --restart
+  - unless-stopped
+  - --cap-add
+  - NET_RAW
+  - --cap-add
+  - NET_ADMIN
+  - --device
+  - /dev/dri:/dev/dri
   - "-v"
   - /run/user/1001:/run/user/1001
   - "-v"
@@ -41,6 +47,8 @@ services:
   - "-v"
   - /etc/fonts:/etc/fonts:ro
   - "-v"
-  - /tmp/fontconfig:/var/cache/fontconfig
+  - /root/oss/hmi_launcher_config.json:/etc/hmi_launcher/config.json:rw
+  - "-e"
+  - HMI_LAUNCHER_CONFIG=/etc/hmi_launcher/config.json
   command_args:
   - hmi_launcher

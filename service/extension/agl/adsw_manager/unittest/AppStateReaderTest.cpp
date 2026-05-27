@@ -36,12 +36,10 @@ protected:
 
 // ----------------------------- GetLastReceivedTime -----------------------------
 
-TEST_F(AppStateReaderTest, InitializesAndReturnsValidTime) {
+TEST_F(AppStateReaderTest, InitializesWithoutReceivedSample) {
     AppStateReader reader(participant, "test_app");
-    auto now = steady_clock::now();
     auto last = reader.GetLastReceivedTime();
-    // 생성 시점에 now로 초기화되므로 1초 이내로 가까움
-    EXPECT_LE(std::chrono::duration_cast<seconds>(now - last).count(), 1);
+    EXPECT_EQ(last, steady_clock::time_point::min());
 }
 
 // ----------------------------- on_data_available -----------------------------

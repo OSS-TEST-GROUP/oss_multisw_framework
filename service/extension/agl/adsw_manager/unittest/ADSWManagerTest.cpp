@@ -19,6 +19,7 @@
 
 using namespace testing;
 using namespace adsw_manager::agl;
+using namespace lifecyclemgr;
 
 class ADSWManagerTestFixture : public ::testing::Test {
 protected:
@@ -61,6 +62,12 @@ protected:
         }
     }
 };
+
+static Service MakeService(const std::string& name) {
+    Service svc;
+    svc.name(name);
+    return svc;
+}
 
 // ----------------------------- Initialize -----------------------------
 
@@ -247,16 +254,35 @@ TEST_F(ADSWManagerTestFixture, Initialize_Fails_WhenServiceMonitorInitFails) {
 // ----------------------------- StartService -----------------------------
 
 TEST_F(ADSWManagerTestFixture, StartService_PublishesAppList_Then_StartsMonitoring) {
-    // StartService는 PublishAppList() → StartMonitoring() 순
-
     ADSWManager manager(participant, mock_registry, mock_app_controller, 
         mock_controller, mock_ddsmanager, mock_transmitter, mock_monitor);
 
+    std::vector<Service> apps{MakeService("adsw_monitor"), MakeService("hmi_launcher")};
+
     InSequence seq;
+    EXPECT_CALL(*mock_registry, GetAppList()).WillOnce(Return(apps));
+    EXPECT_CALL(*mock_app_controller, CanControlApp("adsw_monitor")).WillOnce(Return(false));
+    EXPECT_CALL(*mock_app_controller, CanControlApp("hmi_launcher")).WillOnce(Return(true));
+    EXPECT_CALL(*mock_controller, StartService("hmi_launcher")).WillOnce(Return(true));
     EXPECT_CALL(*mock_transmitter, PublishAppList()).Times(1);
     EXPECT_CALL(*mock_monitor, StartMonitoring()).Times(1);
 
     EXPECT_TRUE(manager.StartService());
+}
+
+TEST_F(ADSWManagerTestFixture, StartService_Fails_WhenDockerBackedServiceStartFails) {
+    ADSWManager manager(participant, mock_registry, mock_app_controller,
+        mock_controller, mock_ddsmanager, mock_transmitter, mock_monitor);
+
+    std::vector<Service> apps{MakeService("hmi_launcher")};
+
+    EXPECT_CALL(*mock_registry, GetAppList()).WillOnce(Return(apps));
+    EXPECT_CALL(*mock_app_controller, CanControlApp("hmi_launcher")).WillOnce(Return(true));
+    EXPECT_CALL(*mock_controller, StartService("hmi_launcher")).WillOnce(Return(false));
+    EXPECT_CALL(*mock_transmitter, PublishAppList()).Times(0);
+    EXPECT_CALL(*mock_monitor, StartMonitoring()).Times(0);
+
+    EXPECT_FALSE(manager.StartService());
 }
 
 // ----------------------------- StopService -----------------------------

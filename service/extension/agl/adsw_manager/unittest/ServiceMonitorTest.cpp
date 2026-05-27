@@ -208,3 +208,57 @@ TEST_F(ServiceMonitorTest, CheckAppState_Timeout_DockerBackedAppCanUseDockerFall
 
     monitor.CheckAppState();
 }
+
+TEST_F(ServiceMonitorTest, CheckAppState_Timeout_DockerBackedAppRestartsWhenDown) {
+    NiceMock<MockAppController> app_controller;
+    ASSERT_TRUE(monitor.Initialize(participant, registry, transmitter, &app_controller));
+
+    const std::string app = "hmi_launcher";
+    auto now = std::chrono::steady_clock::now();
+    EmplaceReader(app, now - std::chrono::seconds(5));
+
+    AppDockerInfo docker;
+    docker.image = "hmi-launcher:latest";
+    EXPECT_CALL(*registry, GetDockerInfo(app))
+        .WillOnce(Return(std::optional<AppDockerInfo>{docker}));
+    EXPECT_CALL(app_controller, IsAppRunning(app)).WillOnce(Return(false));
+    EXPECT_CALL(app_controller, ShouldAutoRestartApp(app)).WillOnce(Return(true));
+    EXPECT_CALL(app_controller, LaunchApp(app)).WillOnce(Return(true));
+
+    Service svc = MakeService(app);
+    auto current_pair = std::make_pair(svc, ServiceState::NOT_RUNNING);
+    EXPECT_CALL(*registry, GetAppInfo(app))
+        .WillOnce(Return(std::optional<decltype(current_pair)>(current_pair)));
+
+    EXPECT_CALL(*registry, UpdateAppState(app, ServiceState::RUNNING)).Times(1);
+    EXPECT_CALL(*transmitter, PublishAppState()).Times(1);
+
+    monitor.CheckAppState();
+}
+
+TEST_F(ServiceMonitorTest, CheckAppState_Timeout_ManualStopDoesNotRestartDockerBackedApp) {
+    NiceMock<MockAppController> app_controller;
+    ASSERT_TRUE(monitor.Initialize(participant, registry, transmitter, &app_controller));
+
+    const std::string app = "hmi_launcher";
+    auto now = std::chrono::steady_clock::now();
+    EmplaceReader(app, now - std::chrono::seconds(5));
+
+    AppDockerInfo docker;
+    docker.image = "hmi-launcher:latest";
+    EXPECT_CALL(*registry, GetDockerInfo(app))
+        .WillOnce(Return(std::optional<AppDockerInfo>{docker}));
+    EXPECT_CALL(app_controller, IsAppRunning(app)).WillOnce(Return(false));
+    EXPECT_CALL(app_controller, ShouldAutoRestartApp(app)).WillOnce(Return(false));
+    EXPECT_CALL(app_controller, LaunchApp(app)).Times(0);
+
+    Service svc = MakeService(app);
+    auto current_pair = std::make_pair(svc, ServiceState::RUNNING);
+    EXPECT_CALL(*registry, GetAppInfo(app))
+        .WillOnce(Return(std::optional<decltype(current_pair)>(current_pair)));
+
+    EXPECT_CALL(*registry, UpdateAppState(app, ServiceState::NOT_RUNNING)).Times(1);
+    EXPECT_CALL(*transmitter, PublishAppState()).Times(1);
+
+    monitor.CheckAppState();
+}

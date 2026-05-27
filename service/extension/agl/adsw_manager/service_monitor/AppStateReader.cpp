@@ -5,6 +5,8 @@
 
 #include "agl/String_PubSubTypes.hpp"
 
+#include <iostream>
+
 using namespace eprosima::fastdds::dds;
 using namespace std_msgs::msg::dds_;
 
@@ -33,11 +35,11 @@ namespace adsw_manager::agl {
             this
         );
 
-        last_received_time_ = std::chrono::steady_clock::now();
+        last_received_time_ = std::chrono::steady_clock::time_point::min();
 
     }
 
-    AppStateReader::AppStateReader() : last_received_time_(std::chrono::steady_clock::now()) {}
+    AppStateReader::AppStateReader() : last_received_time_(std::chrono::steady_clock::time_point::min()) {}
 
     AppStateReader::~AppStateReader() {
         if (subscriber_ && reader_) {
@@ -65,6 +67,8 @@ namespace adsw_manager::agl {
             if (info.instance_state == ALIVE_INSTANCE_STATE) {
                 std::lock_guard<std::mutex> lock(mutex_);
                 last_received_time_ = std::chrono::steady_clock::now();
+                std::cout << "[AppStateReader] app_status received : [["
+                          << app_name_ << "]] " << msg.data() << std::endl;
             }
         }
     }
