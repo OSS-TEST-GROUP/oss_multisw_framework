@@ -1,33 +1,4 @@
 services:
-  rosbridge:
-    container_name: oss-rosbridge-server
-    image: registry.obigo.com/oss/oss-rosbridge-server-arm64:latest
-    privileged: true
-    network_mode: "host"
-    cap_add:
-      - NET_RAW
-      - NET_ADMIN
-    restart: unless-stopped
-
-  hmi:
-    container_name: oss-hmi-agl-aarch64
-    image: registry.obigo.com/oss/oss-hmi-agl-aarch64:latest
-    privileged: true
-    network_mode: "host"
-    cap_add:
-      - NET_RAW
-      - NET_ADMIN
-    devices:
-      - /dev/dri:/dev/dri
-    volumes:
-      - /run/user/1001:/run/user/1001
-      - /root/oss/config.json:/etc/adsw/config.json
-    environment:
-      ADSW_CONFIG: /etc/adsw/config.json
-    tty: true
-    stdin_open: true
-    restart: unless-stopped
-
   mmf:
     container_name: oss-mmf-ext-agl
     image: registry.obigo.com/oss/oss-mmf-ext-agl:latest
@@ -39,6 +10,9 @@ services:
     volumes:
       - /dev/shm:/dev/shm
       - /run/user/1001:/run/user/1000
+      - /var/run/docker.sock:/var/run/docker.sock
+    group_add:
+      - "${DOCKER_SOCK_GID:-999}"
     tty: true
     stdin_open: true
     restart: unless-stopped
