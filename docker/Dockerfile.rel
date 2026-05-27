@@ -270,6 +270,10 @@ FROM runtime AS runtime-mmf-ext-agl-x86_64
 
 ARG BUILD_TYPE=Release
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends docker.io \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --chown=ossuser:ossuser docker/entrypoint/agl_entrypoint.sh /oss/entrypoint.sh
 COPY --chown=ossuser:ossuser output/x86_64/${BUILD_TYPE}/extension/agl/bin /oss/bin
 COPY --chown=ossuser:ossuser output/x86_64/lib /oss/lib
@@ -294,6 +298,10 @@ ENTRYPOINT ["/oss/entrypoint.sh"]
 FROM runtime AS runtime-mmf-ext-agl-aarch64
 
 ARG BUILD_TYPE=Release
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends docker.io \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY --chown=ossuser:ossuser docker/entrypoint/agl_entrypoint.sh /oss/entrypoint.sh
 COPY --chown=ossuser:ossuser output/aarch64/${BUILD_TYPE}/extension/agl/bin /oss/bin

@@ -46,5 +46,5 @@ install ( TARGETS ${PROJECT_NAME}
 )
 
 install ( FILES config/ota_client_config.json
-    DESTINATION config
+    DESTINATION bin/config
 )
