@@ -114,8 +114,21 @@ int main(int argc, char** argv) {
 
     const std::string lp = "mmf/lifecyclemgr/";
     // Notifications / responses: lifecycle_mgr → monitor (raw → ros)
-    ok &= add_lc("NotifyServiceState",       "lifecycle/NotifyServiceState.idl",       lp + "NotifyServiceState",       /*raw→ros*/false);
-    ok &= add_lc("GetServiceStateResponse",  "lifecycle/GetServiceStateRequest.idl",   lp + "GetServiceStateResponse",  /*raw→ros*/false);
+    //
+    // Single-aggregator policy (dual-responder fix): NotifyServiceState and
+    // GetServiceStateResponse are PUBLISHED by each adsw_manager (ros2 + agl),
+    // not by lifecycle_mgr — so with more than one adsw_manager on the domain
+    // there are multiple publishers on these topics and the ForwardListener's
+    // trust-on-first-use pin drops all but the first-seen, losing one variant's
+    // data on the monitor side. We therefore do NOT bridge these per-responder
+    // topics to the monitor. lifecycle_mgr is the SOLE publisher of the
+    // aggregated LifecycleDiagReport (carries name/service_state/recovery_policy/
+    // container_name for every registered service), which lfc_monitor's
+    // _onDiagReport already consumes as its authoritative Services-panel source.
+    // adsw_managers still publish Notify/GetServiceStateResponse on the raw DDS
+    // topics; lifecycle_mgr subscribes and folds them into DiagReport.
+    //   ok &= add_lc("NotifyServiceState",      "lifecycle/NotifyServiceState.idl",     lp + "NotifyServiceState",      false);
+    //   ok &= add_lc("GetServiceStateResponse", "lifecycle/GetServiceStateRequest.idl", lp + "GetServiceStateResponse", false);
     ok &= add_lc("UpdateServiceListResponse","lifecycle/UpdateServiceListRequest.idl", lp + "UpdateServiceListResponse",/*raw→ros*/false);
     ok &= add_lc("StartServiceResponse",     "lifecycle/StartServiceRequest.idl",      lp + "StartServiceResponse",     /*raw→ros*/false);
     ok &= add_lc("StopServiceResponse",      "lifecycle/StopServiceRequest.idl",       lp + "StopServiceResponse",      /*raw→ros*/false);
