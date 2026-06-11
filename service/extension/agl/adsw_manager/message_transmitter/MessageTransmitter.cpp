@@ -55,6 +55,39 @@ namespace adsw_manager::agl {
         dds_manager_->PublishNotifyAppState(msg);
     }
 
+    // F009 (C-1): publish container state for docker-backed (image-bearing) AGL
+    // apps. lfc_monitor renders a container card per entry; the matching service
+    // (registered with container_name == app name) nests under it. Apps without
+    // a docker image are skipped — they surface via the monitor's
+    // "Services (no container)" section instead.
+    void MessageTransmitter::PublishContainerState() {
+
+        auto pairs = service_registry_->GetNameStatePairs();
+
+        NotifyContainerState msg;
+        msg.container_list().reserve(pairs.size());
+        msg.container_state_list().reserve(pairs.size());
+        msg.exit_code_list().reserve(pairs.size());
+
+        for (auto& [name, state] : pairs) {
+            const auto docker = service_registry_->GetDockerInfo(name);
+            if (!docker || docker->image.empty()) {
+                continue;  // not docker-managed → skip (shown as service-only)
+            }
+            msg.container_list().push_back(name);
+            msg.container_state_list().push_back(
+                state == ServiceState::RUNNING ? ContainerState::CONTAINER_RUNNING
+                                               : ContainerState::CONTAINER_STOPPED);
+            msg.exit_code_list().push_back(-1);  // -1: unknown sentinel (matches ros2)
+        }
+
+        if (msg.container_list().empty()) {
+            return;  // nothing docker-managed → nothing to advertise
+        }
+
+        dds_manager_->PublishNotifyContainerState(msg);
+    }
+
     void MessageTransmitter::PublishAppList() {
 
         UpdateServiceListRequest msg;

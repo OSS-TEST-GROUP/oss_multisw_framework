@@ -65,6 +65,12 @@ namespace adsw_manager::agl {
                 svc.recovery_policy(recovery_policy);
                 svc.is_enabled(is_enabled);
                 svc.os_type(os_type);
+                // F009 (C-1): docker-backed apps carry container_name (== app name)
+                // so lifecycle_mgr's DiagReport links the service to its container
+                // card in lfc_monitor. Image-less apps leave it empty (service-only).
+                if (entry["image"]) {
+                    svc.container_name(name);
+                }
 
                 app_list_.try_emplace(std::move(svc), init_state);
             }

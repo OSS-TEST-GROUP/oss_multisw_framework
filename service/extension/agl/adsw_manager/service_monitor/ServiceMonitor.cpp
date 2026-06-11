@@ -25,6 +25,10 @@ namespace adsw_manager::agl {
             readers_[app.name()] = std::make_unique<AppStateReader>(participant_, app.name());
         }
 
+        // F009 (C-1): initial container-state snapshot so docker-backed AGL apps
+        // surface as container cards in lfc_monitor even before any transition.
+        message_transmitter_->PublishContainerState();
+
         running_ = true;
         monitoring_thread_ = std::thread([this]() {
             while (running_) {
@@ -90,6 +94,11 @@ namespace adsw_manager::agl {
             }
         }
 
+        // F009 (C-1): publish container state every poll (not only on transition)
+        // so a late-joining lifecycle_mgr / dds_bridge / lfc_monitor always
+        // converges on the current container view — mirrors ros2 adsw_manager's
+        // ContainerHealthMonitor periodic publish (volatile QoS has no history).
+        message_transmitter_->PublishContainerState();
     }
 
 }
