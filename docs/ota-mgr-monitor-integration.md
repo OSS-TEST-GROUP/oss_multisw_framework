@@ -95,6 +95,24 @@ publisher 를 계속 pin 한 채 신규 publisher 메시지를 `dropped (untrust
 또는 기동 순서를 매니저 → 브리지로 둔다. (lifecycle 의 zombie/trust-pin 이슈와 동일
 근본 원인 — `docs/dds-bridge-single-aggregator.md` 참조.)
 
+## agl ota_client 변형 검증 (x86 로컬)
+
+ota_client 은 ros2 / agl 두 변형이 있다. 소스 비교 결과 **거의 동일**(main.cc↔main.cpp 는
+namespace + iostream/fprintf 차이뿐, OtacManagerService 도 ~20줄 차이)이고 **동일한
+`otamanager::` DDS 토픽**(SetOtaClientRegistration/NotifyOtaManagerReady/NotifyAppUpdateStatus)을 사용한다.
+
+x86 빌드 산출물(`output/x86_64/Debug/extension/agl/bin/agl_ota_client`)을 ext-ros2 컨테이너
+(OtaManager 와 동일 DDS 도메인, `LD_LIBRARY_PATH=/oss/lib`)에서 실행해 검증:
+
+- ✅ 등록 성공: OtaManager 로그 `Received registration from client: agl_ota_client` →
+  `Assigned client_id=2` → `result=SUCCESS`, agl 클라이언트는 응답 `Client id: 2/ result: 1` 수신(양방향).
+- ✅ 고유 앱명(agl-demo-app)으로 등록 시 GetAppList 에 distinct owner 로 노출:
+  `owner_client_names=[ros2_ota_client, agl_ota_client, f011-smoke]` → ota_monitor App List 에
+  ros2 클라이언트와 나란히 표시됨.
+
+→ **agl ota_client 도 ros2 와 동일하게 monitor↔manager 제어 평면에서 정상 동작**(등록/응답/앱목록).
+ros2 vs agl 차이는 실제 앱 적용(설치/재배포) 실행 경로이며, 그것은 L2(Orin/AGL afm 환경)에서 검증.
+
 ## 범위 밖 (L2 타겟)
 
 - NotifyAppUpdateStatus 이벤트: 실제 앱 업데이트 흐름(다운로드→적용)에서만 발행.
