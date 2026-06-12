@@ -130,14 +130,25 @@ int main(int argc, char** argv) {
     //   ok &= add_lc("NotifyServiceState",      "lifecycle/NotifyServiceState.idl",     lp + "NotifyServiceState",      false);
     //   ok &= add_lc("GetServiceStateResponse", "lifecycle/GetServiceStateRequest.idl", lp + "GetServiceStateResponse", false);
     ok &= add_lc("UpdateServiceListResponse","lifecycle/UpdateServiceListRequest.idl", lp + "UpdateServiceListResponse",/*raw→ros*/false);
-    ok &= add_lc("StartServiceResponse",     "lifecycle/StartServiceRequest.idl",      lp + "StartServiceResponse",     /*raw→ros*/false);
-    ok &= add_lc("StopServiceResponse",      "lifecycle/StopServiceRequest.idl",       lp + "StopServiceResponse",      /*raw→ros*/false);
     ok &= add_lc("SetServiceModeResponse",   "lifecycle/SetServiceModeRequest.idl",    lp + "SetServiceModeResponse",   /*raw→ros*/false);
     ok &= add_lc("LifecycleDiagReport",      "lifecycle/LifecycleDiagReport.idl",      lp + "LifecycleDiagReport",      /*raw→ros*/false);
-    // Control commands: monitor → lifecycle_mgr (ros → raw)
-    ok &= add_lc("GetServiceStateRequest",   "lifecycle/GetServiceStateRequest.idl",   lp + "GetServiceStateRequest",   /*ros→raw*/true);
-    ok &= add_lc("StartServiceRequest",      "lifecycle/StartServiceRequest.idl",      lp + "StartServiceRequest",      /*ros→raw*/true);
-    ok &= add_lc("StopServiceRequest",       "lifecycle/StopServiceRequest.idl",       lp + "StopServiceRequest",       /*ros→raw*/true);
+    // F008 follow-up — monitor ↔ lifecycle_mgr ONLY (no monitor↔adsw_manager
+    // direct path). These were monitor-facing per-adsw topics and are removed:
+    //   StartServiceResponse / StopServiceResponse  (raw→ros) — PUBLISHED by
+    //     adsw_manager, not lifecycle_mgr → direct adsw→monitor. lfc_monitor
+    //     consumes ctrl/*Response (lifecycle-published) instead.
+    //   GetServiceStateRequest / StartServiceRequest / StopServiceRequest
+    //     (ros→raw) — SUBSCRIBED by adsw_manager → direct monitor→adsw. The
+    //     monitor polls via lifecycle_mgr's periodic LifecycleDiagReport and
+    //     mutates via ctrl/* (lifecycle-gated); lifecycle_mgr itself polls adsw
+    //     with GetServiceStateRequest (StateMonitor).
+    //   ok &= add_lc("StartServiceResponse", ... );   // adsw→monitor (removed)
+    //   ok &= add_lc("StopServiceResponse",  ... );   // adsw→monitor (removed)
+    //   ok &= add_lc("GetServiceStateRequest", ... ); // monitor→adsw (removed)
+    //   ok &= add_lc("StartServiceRequest",  ... );   // monitor→adsw (removed)
+    //   ok &= add_lc("StopServiceRequest",   ... );   // monitor→adsw (removed)
+    // SetServiceModeRequest is SUBSCRIBED by lifecycle_mgr (monitor→lifecycle),
+    // so it stays — not an adsw-direct path.
     ok &= add_lc("SetServiceModeRequest",    "lifecycle/SetServiceModeRequest.idl",    lp + "SetServiceModeRequest",    /*ros→raw*/true);
 
     // ── F013: container actuator + ctrl/* gate surface (lfc_monitor) ───────
