@@ -68,6 +68,15 @@ namespace adsw_manager::agl {
             return false;
         }
 
+        // F009 (C-1): container-state writer for docker app-containers.
+        if (!notify_container_state_writer_) {
+            notify_container_state_writer_ = std::make_unique<NotifyContainerStateWriter>();
+        }
+        if (!notify_container_state_writer_->Initialize(publisher_, participant_)) {
+            std::cerr << "[DDSManager] Failed to initialize NotifyContainerStateWriter.\n";
+            return false;
+        }
+
         if (!update_app_list_handler_) {
             update_app_list_handler_ = std::make_unique<UpdateAppListHandler>();
         }
@@ -86,6 +95,12 @@ namespace adsw_manager::agl {
     void DDSManager::PublishNotifyAppState(const NotifyServiceState& msg) {
         if (notify_app_state_writer_) {
             notify_app_state_writer_->Publish(msg);
+        }
+    }
+
+    void DDSManager::PublishNotifyContainerState(const NotifyContainerState& msg) {
+        if (notify_container_state_writer_) {
+            notify_container_state_writer_->Publish(msg);
         }
     }
 

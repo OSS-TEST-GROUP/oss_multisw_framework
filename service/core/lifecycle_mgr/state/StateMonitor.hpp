@@ -15,6 +15,7 @@
 #include "lifecycle/GetServiceStateRequest.hpp"
 #include "lifecycle/NotifyServiceState.hpp"
 #include "lifecycle/LifecycleDiagReport.hpp"
+#include "lifecycle/NotifyContainerState.hpp"  // F008: aggregated container report
 
 namespace lifecycle_manager {
 
@@ -62,6 +63,9 @@ class StateMonitor : public ManagerBase {
 
     lifecyclemgr::GetServiceStateRequest get_request_;
     lifecyclemgr::LifecycleDiagReport diag_report_;
+    // F008: member (not local) — SendMessage queues the pointer and the publish
+    // loop derefs it asynchronously, so the buffer must outlive the call.
+    lifecyclemgr::NotifyContainerState container_report_;
 
     int32_t loop_count_;
 

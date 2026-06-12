@@ -80,10 +80,10 @@ TEST_F(OtacMainTest, Start_PublishesTwice_WhenStartOkAndFirstPublishOk) {
         .Times(1)
         .WillOnce(Return(apps));
 
-    EXPECT_CALL(*reg_,       Create("/mmf/otamanager/otaclient_service/SetOtaClientRegistration",        true,  false)).WillOnce(Return(true));
-    EXPECT_CALL(*reg_resp_,  Create("/mmf/otamanager/otaclient_service/SetOtaClientRegistrationResponse", false, true )).WillOnce(Return(true));
-    EXPECT_CALL(*mgr_ready_, Create("/mmf/otamanager/otaclient_service/NotifyOtaManagerReady",             false, true )).WillOnce(Return(true));
-    EXPECT_CALL(*upd_,       Create("/mmf/otamanager/otaclient_service/NotifyAppUpdateStatus",            false, true )).WillOnce(Return(true));
+    EXPECT_CALL(*reg_,       Create("/mmf/otamanager/otaclient_service/SetOtaClientRegistration",        true, false, _)).WillOnce(Return(true));
+    EXPECT_CALL(*reg_resp_,  Create("/mmf/otamanager/otaclient_service/SetOtaClientRegistrationResponse", false, true, _)).WillOnce(Return(true));
+    EXPECT_CALL(*mgr_ready_, Create("/mmf/otamanager/otaclient_service/NotifyOtaManagerReady",             false, true, _)).WillOnce(Return(true));
+    EXPECT_CALL(*upd_,       Create("/mmf/otamanager/otaclient_service/NotifyAppUpdateStatus",            false, true, _)).WillOnce(Return(true));
 
     std::vector<std::shared_ptr<void>> writes;
     EXPECT_CALL(*reg_, Write(_))
@@ -113,7 +113,7 @@ TEST_F(OtacMainTest, Start_WhenManagerStartFails_NoPublish) {
         .Times(1)
         .WillOnce(Return(apps));
 
-    EXPECT_CALL(*reg_, Create("/mmf/otamanager/otaclient_service/SetOtaClientRegistration", true, false))
+    EXPECT_CALL(*reg_, Create("/mmf/otamanager/otaclient_service/SetOtaClientRegistration", true, false, _))
         .WillOnce(Return(false));
     EXPECT_CALL(*reg_, Write(_)).Times(0);
 
@@ -126,10 +126,10 @@ TEST_F(OtacMainTest, Start_WhenFirstPublishFails_NoSecondPublish) {
         .Times(1)
         .WillOnce(Return(apps));
 
-    EXPECT_CALL(*reg_,       Create("/mmf/otamanager/otaclient_service/SetOtaClientRegistration",        true,  false)).WillOnce(Return(true));
-    EXPECT_CALL(*reg_resp_,  Create("/mmf/otamanager/otaclient_service/SetOtaClientRegistrationResponse", false, true )).WillOnce(Return(true));
-    EXPECT_CALL(*mgr_ready_, Create("/mmf/otamanager/otaclient_service/NotifyOtaManagerReady",             false, true )).WillOnce(Return(true));
-    EXPECT_CALL(*upd_,       Create("/mmf/otamanager/otaclient_service/NotifyAppUpdateStatus",            false, true )).WillOnce(Return(true));
+    EXPECT_CALL(*reg_,       Create("/mmf/otamanager/otaclient_service/SetOtaClientRegistration",        true, false, _)).WillOnce(Return(true));
+    EXPECT_CALL(*reg_resp_,  Create("/mmf/otamanager/otaclient_service/SetOtaClientRegistrationResponse", false, true, _)).WillOnce(Return(true));
+    EXPECT_CALL(*mgr_ready_, Create("/mmf/otamanager/otaclient_service/NotifyOtaManagerReady",             false, true, _)).WillOnce(Return(true));
+    EXPECT_CALL(*upd_,       Create("/mmf/otamanager/otaclient_service/NotifyAppUpdateStatus",            false, true, _)).WillOnce(Return(true));
 
     EXPECT_CALL(*reg_, Write(_))
         .Times(1)

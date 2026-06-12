@@ -5,6 +5,7 @@
 #include "transmitter/DDSTransmitter.hpp"
 #include "service/ServiceRegistry.hpp"
 #include "include/TypeConvert.hpp"
+#include "lifecycle/NotifyContainerState.hpp"  // F008: aggregated container report
 #include "logger/Log.hpp"
 
 
@@ -131,6 +132,27 @@ void StateMonitor::NotifyLifecycleDiagnosticInfo(bool all){
         diag_report_.running_service_num() = running_cnt;
         LOG_DEBUG("StateMonitor::NotifyLifecycleDiagnosticInfo - running service num = " << running_cnt);
         transmitter->SendMessage(MessageType::LIFECYCLE_DIAG_REPORT, reinterpret_cast<void*>(&diag_report_));
+
+        // F008: publish the aggregated container view. lifecycle_mgr is the SOLE
+        // publisher of CONTAINER_STATE_REPORT, so the monitor (via dds_bridge)
+        // sees every container regardless of how many adsw_managers (ros2 + agl)
+        // reported them — no dds_bridge trust-on-first-use drop of a 2nd publisher.
+        if (registry){
+            // container_report_ is a member: SendMessage queues this pointer and
+            // the publish loop reads it asynchronously, so it must outlive the call.
+            container_report_.container_list().clear();
+            container_report_.container_state_list().clear();
+            container_report_.exit_code_list().clear();
+            std::vector<std::shared_ptr<Container>> containers = registry->GetAllContainers();
+            for (auto& c : containers){
+                container_report_.container_list().push_back(c->GetName());
+                container_report_.container_state_list().push_back(
+                    TypeConvert::ToContainerState(c->GetState()));
+                container_report_.exit_code_list().push_back(c->GetExitCode());
+            }
+            transmitter->SendMessage(MessageType::CONTAINER_STATE_REPORT,
+                                     reinterpret_cast<void*>(&container_report_));
+        }
     }
 }
 

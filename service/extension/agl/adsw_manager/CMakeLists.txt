@@ -12,6 +12,7 @@ set(MESSAGE_TRANSMITTER
 	message_transmitter/StartAppHandler.cpp
 	message_transmitter/StopAppHandler.cpp
 	message_transmitter/NotifyAppStateWriter.cpp
+	message_transmitter/NotifyContainerStateWriter.cpp
 	message_transmitter/UpdateAppListHandler.cpp
 )
 

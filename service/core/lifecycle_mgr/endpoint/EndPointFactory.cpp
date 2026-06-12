@@ -88,6 +88,7 @@ int32_t EndPointFactory::Initialize(){
     topic_lists_[MessageType::START_CONTAINER_RESPONSE] = MessageTopic::GetTopicStr(MessageType::START_CONTAINER_RESPONSE);
     topic_lists_[MessageType::STOP_CONTAINER_REQUEST]   = MessageTopic::GetTopicStr(MessageType::STOP_CONTAINER_REQUEST);
     topic_lists_[MessageType::STOP_CONTAINER_RESPONSE]  = MessageTopic::GetTopicStr(MessageType::STOP_CONTAINER_RESPONSE);
+    topic_lists_[MessageType::CONTAINER_STATE_REPORT]   = MessageTopic::GetTopicStr(MessageType::CONTAINER_STATE_REPORT);
 
     topic_lists_[MessageType::CTRL_START_SERVICE_REQUEST]      = MessageTopic::GetTopicStr(MessageType::CTRL_START_SERVICE_REQUEST);
     topic_lists_[MessageType::CTRL_START_SERVICE_RESPONSE]     = MessageTopic::GetTopicStr(MessageType::CTRL_START_SERVICE_RESPONSE);
@@ -235,6 +236,16 @@ int32_t EndPointFactory::CreateEndPoints(std::shared_ptr<DDSTransmitter> transmi
                         key, val, handlers.on_notify_container_state);
                     msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndPoint>(ep);
                     pubsub = PubSubTYpe::SUBSCRIBE_ONLY;
+                }
+                break;
+                // F008: aggregated container-state report — lifecycle_mgr is the
+                // SOLE publisher of this topic; StateMonitor sends the merged
+                // container view each poll. dds_bridge forwards this (not the
+                // per-adsw NotifyContainerState) to the monitor.
+                case MessageType::CONTAINER_STATE_REPORT :{
+                    auto ep = std::make_shared<NotifyContainerStateEndPoint>(key, val);
+                    msg_endpoint = std::dynamic_pointer_cast<DDSMessageEndPoint>(ep);
+                    pubsub = PubSubTYpe::PUBLISH_ONLY;
                 }
                 break;
 

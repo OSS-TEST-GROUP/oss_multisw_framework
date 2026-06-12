@@ -28,6 +28,13 @@ enum class MessageType {
     STOP_CONTAINER_REQUEST,         // lifecycle_mgr → adsw_manager  (pub)
     STOP_CONTAINER_RESPONSE,        // adsw_manager → lifecycle_mgr  (sub)
 
+    // F008: aggregated container-state report. lifecycle_mgr collects every
+    // adsw_manager's NotifyContainerState into its container registry and
+    // re-publishes the merged view on a SINGLE topic (pub) so the monitor
+    // sees all containers (ros2 + agl) without dds_bridge trust-on-first-use
+    // dropping a second per-adsw publisher.
+    CONTAINER_STATE_REPORT,         // lifecycle_mgr → monitor       (pub)
+
     // F014 follow-up: per-service recovery-policy mutation actuator.
     // adsw_manager owns saved-service-list.yaml and persists the change.
     SET_RECOVERY_POLICY_REQUEST,    // lifecycle_mgr → adsw_manager  (pub)
@@ -113,6 +120,7 @@ class MessageTopic {
             case MessageType::CTRL_START_CONTAINER_RESPONSE  : return "mmf/lifecyclemgr/ctrl/StartContainerResponse";
             case MessageType::CTRL_STOP_CONTAINER_REQUEST    : return "mmf/lifecyclemgr/ctrl/StopContainer";
             case MessageType::CTRL_STOP_CONTAINER_RESPONSE   : return "mmf/lifecyclemgr/ctrl/StopContainerResponse";
+            case MessageType::CONTAINER_STATE_REPORT         : return "mmf/lifecyclemgr/ContainerStateReport";
 
             case MessageType::CTRL_SET_RECOVERY_POLICY_REQUEST  : return "mmf/lifecyclemgr/ctrl/SetRecoveryPolicy";
             case MessageType::CTRL_SET_RECOVERY_POLICY_RESPONSE : return "mmf/lifecyclemgr/ctrl/SetRecoveryPolicyResponse";

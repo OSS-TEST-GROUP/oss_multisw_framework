@@ -6,6 +6,7 @@
 #include <fastdds/dds/subscriber/Subscriber.hpp>
 
 #include "NotifyAppStateWriter.hpp"
+#include "NotifyContainerStateWriter.hpp"
 #include "UpdateAppListHandler.hpp"
 #include "AppStateHandler.hpp"
 #include "StartAppHandler.hpp"
@@ -24,6 +25,7 @@ namespace adsw_manager::agl {
             virtual bool Initialize(eprosima::fastdds::dds::DomainParticipant* participant);
 
             virtual void PublishNotifyAppState(const lifecyclemgr::NotifyServiceState& msg);
+            virtual void PublishNotifyContainerState(const lifecyclemgr::NotifyContainerState& msg);
             virtual void PublishUpdateAppList(const lifecyclemgr::UpdateServiceListRequest& msg);
 
             virtual void SetOnGetAppStateRequest(std::function<void(const lifecyclemgr::GetServiceStateRequest&)> cb);
@@ -64,6 +66,7 @@ namespace adsw_manager::agl {
             std::unique_ptr<StopAppHandler> stop_app_handler_;
 
             std::unique_ptr<NotifyAppStateWriter> notify_app_state_writer_;
+            std::unique_ptr<NotifyContainerStateWriter> notify_container_state_writer_;
             std::unique_ptr<UpdateAppListHandler> update_app_list_handler_;
             
             std::function<void(const lifecyclemgr::GetServiceStateRequest&)> on_get_app_state_request_;

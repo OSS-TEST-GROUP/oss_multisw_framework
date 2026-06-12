@@ -114,17 +114,41 @@ int main(int argc, char** argv) {
 
     const std::string lp = "mmf/lifecyclemgr/";
     // Notifications / responses: lifecycle_mgr → monitor (raw → ros)
-    ok &= add_lc("NotifyServiceState",       "lifecycle/NotifyServiceState.idl",       lp + "NotifyServiceState",       /*raw→ros*/false);
-    ok &= add_lc("GetServiceStateResponse",  "lifecycle/GetServiceStateRequest.idl",   lp + "GetServiceStateResponse",  /*raw→ros*/false);
+    //
+    // Single-aggregator policy (dual-responder fix): NotifyServiceState and
+    // GetServiceStateResponse are PUBLISHED by each adsw_manager (ros2 + agl),
+    // not by lifecycle_mgr — so with more than one adsw_manager on the domain
+    // there are multiple publishers on these topics and the ForwardListener's
+    // trust-on-first-use pin drops all but the first-seen, losing one variant's
+    // data on the monitor side. We therefore do NOT bridge these per-responder
+    // topics to the monitor. lifecycle_mgr is the SOLE publisher of the
+    // aggregated LifecycleDiagReport (carries name/service_state/recovery_policy/
+    // container_name for every registered service), which lfc_monitor's
+    // _onDiagReport already consumes as its authoritative Services-panel source.
+    // adsw_managers still publish Notify/GetServiceStateResponse on the raw DDS
+    // topics; lifecycle_mgr subscribes and folds them into DiagReport.
+    //   ok &= add_lc("NotifyServiceState",      "lifecycle/NotifyServiceState.idl",     lp + "NotifyServiceState",      false);
+    //   ok &= add_lc("GetServiceStateResponse", "lifecycle/GetServiceStateRequest.idl", lp + "GetServiceStateResponse", false);
     ok &= add_lc("UpdateServiceListResponse","lifecycle/UpdateServiceListRequest.idl", lp + "UpdateServiceListResponse",/*raw→ros*/false);
-    ok &= add_lc("StartServiceResponse",     "lifecycle/StartServiceRequest.idl",      lp + "StartServiceResponse",     /*raw→ros*/false);
-    ok &= add_lc("StopServiceResponse",      "lifecycle/StopServiceRequest.idl",       lp + "StopServiceResponse",      /*raw→ros*/false);
     ok &= add_lc("SetServiceModeResponse",   "lifecycle/SetServiceModeRequest.idl",    lp + "SetServiceModeResponse",   /*raw→ros*/false);
     ok &= add_lc("LifecycleDiagReport",      "lifecycle/LifecycleDiagReport.idl",      lp + "LifecycleDiagReport",      /*raw→ros*/false);
-    // Control commands: monitor → lifecycle_mgr (ros → raw)
-    ok &= add_lc("GetServiceStateRequest",   "lifecycle/GetServiceStateRequest.idl",   lp + "GetServiceStateRequest",   /*ros→raw*/true);
-    ok &= add_lc("StartServiceRequest",      "lifecycle/StartServiceRequest.idl",      lp + "StartServiceRequest",      /*ros→raw*/true);
-    ok &= add_lc("StopServiceRequest",       "lifecycle/StopServiceRequest.idl",       lp + "StopServiceRequest",       /*ros→raw*/true);
+    // F008 follow-up — monitor ↔ lifecycle_mgr ONLY (no monitor↔adsw_manager
+    // direct path). These were monitor-facing per-adsw topics and are removed:
+    //   StartServiceResponse / StopServiceResponse  (raw→ros) — PUBLISHED by
+    //     adsw_manager, not lifecycle_mgr → direct adsw→monitor. lfc_monitor
+    //     consumes ctrl/*Response (lifecycle-published) instead.
+    //   GetServiceStateRequest / StartServiceRequest / StopServiceRequest
+    //     (ros→raw) — SUBSCRIBED by adsw_manager → direct monitor→adsw. The
+    //     monitor polls via lifecycle_mgr's periodic LifecycleDiagReport and
+    //     mutates via ctrl/* (lifecycle-gated); lifecycle_mgr itself polls adsw
+    //     with GetServiceStateRequest (StateMonitor).
+    //   ok &= add_lc("StartServiceResponse", ... );   // adsw→monitor (removed)
+    //   ok &= add_lc("StopServiceResponse",  ... );   // adsw→monitor (removed)
+    //   ok &= add_lc("GetServiceStateRequest", ... ); // monitor→adsw (removed)
+    //   ok &= add_lc("StartServiceRequest",  ... );   // monitor→adsw (removed)
+    //   ok &= add_lc("StopServiceRequest",   ... );   // monitor→adsw (removed)
+    // SetServiceModeRequest is SUBSCRIBED by lifecycle_mgr (monitor→lifecycle),
+    // so it stays — not an adsw-direct path.
     ok &= add_lc("SetServiceModeRequest",    "lifecycle/SetServiceModeRequest.idl",    lp + "SetServiceModeRequest",    /*ros→raw*/true);
 
     // ── F013: container actuator + ctrl/* gate surface (lfc_monitor) ───────
@@ -147,9 +171,22 @@ int main(int argc, char** argv) {
     // talks ctrl/StartContainer instead). Same for the Start/StopContainer
     // Response on that link — only the ctrl/* response shape is bridged.
 
-    // adsw_manager → monitor: container state change notifications.
-    ok &= add_lc("NotifyContainerState",     "lifecycle/NotifyContainerState.idl",
-                 lp + "NotifyContainerState", /*raw→ros*/false);
+    // F008: container state → monitor. We bridge lifecycle_mgr's AGGREGATED
+    // report (mmf/lifecyclemgr/ContainerStateReport) — NOT the per-adsw
+    // mmf/lifecyclemgr/NotifyContainerState — so the monitor sees every
+    // container (ros2 + agl) from a SINGLE publisher and the ForwardListener
+    // trust-on-first-use never drops a second adsw_manager's containers.
+    // The ROS-side topic the monitor subscribes stays unchanged
+    // (rt/mmf/lifecyclemgr/NotifyContainerState) so lfc_monitor needs no change.
+    ok &= bridge.AddPair({
+        "NotifyContainerState",                          // struct_name
+        "lifecycle/NotifyContainerState.idl",            // idl_file
+        lp + "ContainerStateReport",                     // raw_topic (lifecycle_mgr agg, single pub)
+        "rt/" + lp + "NotifyContainerState",             // ros_topic (monitor-facing, unchanged)
+        "lifecyclemgr::NotifyContainerState",            // raw_type
+        "lifecyclemgr::msg::dds_::NotifyContainerState_", // ros_type
+        /*ros_to_raw*/false,                             // raw → ros
+    });
 
     // monitor → lifecycle_mgr: ctrl/* command requests.
     const std::string cp_lc = "mmf/lifecyclemgr/ctrl/";

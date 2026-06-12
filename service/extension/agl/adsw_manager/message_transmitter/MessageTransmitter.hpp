@@ -25,6 +25,9 @@ namespace adsw_manager::agl {
 
             virtual bool Initialize(eprosima::fastdds::dds::DomainParticipant* participant);
             virtual void PublishAppState();
+            // F009 (C-1): publish NotifyContainerState for docker-backed AGL apps
+            // so lfc_monitor renders them as container cards.
+            virtual void PublishContainerState();
             virtual void PublishAppList();
 
             void SetOnUpdateListConfirm(std::function<void()> cb) {
