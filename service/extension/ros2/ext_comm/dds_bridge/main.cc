@@ -160,9 +160,22 @@ int main(int argc, char** argv) {
     // talks ctrl/StartContainer instead). Same for the Start/StopContainer
     // Response on that link — only the ctrl/* response shape is bridged.
 
-    // adsw_manager → monitor: container state change notifications.
-    ok &= add_lc("NotifyContainerState",     "lifecycle/NotifyContainerState.idl",
-                 lp + "NotifyContainerState", /*raw→ros*/false);
+    // F008: container state → monitor. We bridge lifecycle_mgr's AGGREGATED
+    // report (mmf/lifecyclemgr/ContainerStateReport) — NOT the per-adsw
+    // mmf/lifecyclemgr/NotifyContainerState — so the monitor sees every
+    // container (ros2 + agl) from a SINGLE publisher and the ForwardListener
+    // trust-on-first-use never drops a second adsw_manager's containers.
+    // The ROS-side topic the monitor subscribes stays unchanged
+    // (rt/mmf/lifecyclemgr/NotifyContainerState) so lfc_monitor needs no change.
+    ok &= bridge.AddPair({
+        "NotifyContainerState",                          // struct_name
+        "lifecycle/NotifyContainerState.idl",            // idl_file
+        lp + "ContainerStateReport",                     // raw_topic (lifecycle_mgr agg, single pub)
+        "rt/" + lp + "NotifyContainerState",             // ros_topic (monitor-facing, unchanged)
+        "lifecyclemgr::NotifyContainerState",            // raw_type
+        "lifecyclemgr::msg::dds_::NotifyContainerState_", // ros_type
+        /*ros_to_raw*/false,                             // raw → ros
+    });
 
     // monitor → lifecycle_mgr: ctrl/* command requests.
     const std::string cp_lc = "mmf/lifecyclemgr/ctrl/";

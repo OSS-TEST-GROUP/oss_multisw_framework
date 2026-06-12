@@ -8,7 +8,11 @@ namespace lifecycle_manager {
 NotifyContainerStateEndPoint::NotifyContainerStateEndPoint(
     MessageType msgtype, std::string topic, Callback cb)
     : DDSMessageEndPoint(topic), on_data_cb_(std::move(cb)) {
-    if (msgtype == MessageType::NOTIFY_CONTAINER_STATE) {
+    // F008: same NotifyContainerState payload reused both as inbound
+    // adsw→lifecycle subscription (NOTIFY_CONTAINER_STATE) and outbound
+    // aggregated lifecycle→monitor publish (CONTAINER_STATE_REPORT).
+    if (msgtype == MessageType::NOTIFY_CONTAINER_STATE ||
+        msgtype == MessageType::CONTAINER_STATE_REPORT) {
         SetTypeSupport(std::make_shared<TypeSupport>(
             new NotifyContainerStatePubSubType()));
     }
