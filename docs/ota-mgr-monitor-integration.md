@@ -53,8 +53,33 @@ republish writer 를 **의도적으로 VOLATILE 로 강제**한다
 9s = 3 × 3s 발행주기)가 Manager Status 카드를 구동하며, `NotifyOtaManagerReady`
 기반 `_managerReady` 는 best-effort 보조 신호다.
 
-→ 라이브 매니저-ready 표시는 heartbeat 로 충족. ready one-shot 의 신뢰 전달이 필요하면
-브리지 republish QoS 를 토픽별로 TRANSIENT_LOCAL 허용하도록 확장해야 함(후속 검토).
+→ 라이브 매니저-ready 표시는 heartbeat 로 충족.
+
+### 소견 1-후속 — bridge durable QoS 확장 (F011 2차) + 잔여 한계
+
+ready one-shot 의 신뢰 전달을 위해 dds_bridge 에 **per-pair `durable` 플래그**를 추가했다
+(`dds_bridge.h` PairConfig.durable, `dds_bridge.cc` reader/writer TRANSIENT_LOCAL +
+KEEP_LAST(1), `main.cc` 에서 NotifyOtaManagerReady 만 durable=true). 검증 결과:
+
+- ✅ 브리지 republish writer 가 `Durability: TRANSIENT_LOCAL` 로 광고됨 (`ros2 topic info -v`).
+- ✅ rosbridge_server 는 TRANSIENT_LOCAL 퍼블리셔를 감지하면 구독을 자동으로
+  TRANSIENT_LOCAL 로 승격한다 (`rosbridge_library/internal/subscribers.py:146`). → rosbridge hop 은 병목 아님.
+- ✅ 디스커버리 안정 후 수동 기동한 bridge 인스턴스는 매니저의 retained ready 를
+  `trust pinned`+`forwarded` 로 정상 포착.
+- ⚠️ **잔여 한계 (근본 원인은 소스의 one-shot 성격)**: NotifyOtaManagerReady 는 매니저 Init 에서
+  단 1회 발행된다. end-to-end 전달은 "브리지의 durable reader 가 그 단 하나의 샘플을 브리지 자신의
+  기동 시점에 포착" 하는 데 의존하는데, 자동 기동된 백그라운드 브리지는 dynamic-type + trust-pin +
+  디스커버리 타이밍 때문에 이를 신뢰성 있게 포착하지 못한다(네이티브 TL 리더로도 retained 샘플 0).
+  **bridge QoS 만으로는 소스가 1회성인 신호를 신뢰 전달로 만들 수 없다.**
+
+**신뢰 전달을 위한 소스측 옵션(권장, 후속 결정 필요)**:
+- (A) ota_mgr 가 NotifyOtaManagerReady 를 주기 재발행(heartbeat 와 동조) — 늦게 접속한
+  모니터도 다음 주기에 ready 수신. bridge TL + rosbridge auto-TL 이미 갖춰져 있어 소스 주기화만 더하면 됨.
+- (B) ota_monitor 가 첫 heartbeat 수신을 "manager ready" 로 간주 — 앱측 변경, 추가 토픽 불필요
+  (heartbeat 는 이미 RELIABLE·연속, 본 통합에서 검증됨).
+
+bridge durable 플래그는 그대로 유지(올바르고 필요한 개선 — 타이밍이 맞을 때 ready 전달을 가능케 하며
+회귀 없음). 소스측 (A)/(B) 중 하나를 더해야 late-join 신뢰 전달이 완성된다.
 
 ## 아키텍처 소견 2 — 매니저 재기동 시 dds_bridge 재기동 필요 (trust-on-first-use)
 
