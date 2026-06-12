@@ -1,0 +1,185 @@
+// MMF integration-test pipeline (L0, x86_64).
+//
+// Companion to Jenkinsfile (static analysis: SlocCount/Clang-tidy/Cppcheck/
+// CppLint) and Jenkinsfile.unittest (build + gtest + coverage). This one
+// stands the runtime stack up via docker-compose-integration.yaml and runs
+// tests/integration/integration_smoke.py against rosbridge, verifying the
+// monitor-facing periodic signals (LifecycleDiagReport + NotifyOtaMgrHeartbeat)
+// flow end-to-end (lifecycle_mgr/OtaManager → dds_bridge → rosbridge → client).
+pipeline {
+    agent {
+        label 'OSS-Agent'
+    }
+
+    parameters {
+        string(name: 'GIT_BRANCH', defaultValue: 'develop', description: 'branch')
+    }
+
+    environment {
+        AGENT_LABEL      = "OSS-Agent"
+        IMAGE_REGISTRY   = "registry.obigo.com"
+        IMAGE_NAMESPACE  = "oss"
+        APP_NAME         = "oss-mmf"
+        REGISTRY_ID      = "builder"
+        REGISTRY_PWD     = "Obigoam1@se"
+        BUILDER_IMAGE    = "${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${APP_NAME}-builder:latest"
+
+        BUILD_UNITTEST   = 'FALSE'
+        EXTENSION_PLATFORM = 'ROS2'
+        BUILD_MODE       = 'Debug'
+
+        GITHUB_CREDENTIALS = 'github-cred'
+        REGISTRY_CREDENTIALS = 'Harbor_Jenkins'
+        GITHUB_REPO_URL  = 'https://github.com/obigo-gov/oss_multisw_framework.git'
+        TARGET_BRANCH    = "${params.GIT_BRANCH}"
+
+        SDK_DIR          = "${HOME}/obigo-sdk"
+
+        COMPOSE_FILE     = 'docker/compose/docker-compose-integration.yaml'
+        ROSBRIDGE_WS_URL = 'ws://127.0.0.1:9090'
+        // give DDS discovery + rosbridge startup time before sampling
+        SMOKE_TIMEOUT_SEC = '60'
+    }
+
+    options {
+        timeout(time: 90, unit: 'MINUTES')
+        disableConcurrentBuilds()
+        timestamps()
+    }
+
+    stages {
+        stage('Login Registry') {
+            steps {
+                sh '''
+                    if cat ${HOME}/.docker/config.json 2>/dev/null | grep "${IMAGE_REGISTRY}:80"; then
+                        docker logout "${IMAGE_REGISTRY}:80"
+                    fi
+                    if ! cat ${HOME}/.docker/config.json 2>/dev/null | grep "${IMAGE_REGISTRY}"; then
+                        echo "${REGISTRY_PWD}" | docker login ${IMAGE_REGISTRY} -u ${REGISTRY_ID} --password-stdin
+                    fi
+                '''
+            }
+        }
+
+        stage('Sync Sources') {
+            steps {
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: "*/${TARGET_BRANCH}"]],
+                    userRemoteConfigs: [[
+                        url: "${GITHUB_REPO_URL}",
+                        credentialsId: "${GITHUB_CREDENTIALS}"
+                    ]]
+                ])
+                // Dependency library — FastDDS (same as Jenkinsfile.unittest)
+                sh '''
+                    if [ ! -d ${SDK_DIR}/Fast-DDS ]; then
+                        if [ ! -d ${SDK_DIR}/venv ]; then
+                            python3 -m venv ${SDK_DIR}/venv
+                        fi
+                        . ${SDK_DIR}/venv/bin/activate
+                        if [ -z $(which vcs) ]; then
+                            pip3 install --no-cache-dir colcon-common-extensions vcstool >/dev/null 2>&1
+                        fi
+                        mkdir -p ${SDK_DIR}/Fast-DDS/src
+                        cd ${SDK_DIR}/Fast-DDS
+                        wget https://raw.githubusercontent.com/eProsima/Fast-DDS/3.2.2/fastdds.repos
+                        vcs import src < fastdds.repos
+                        sed -i "s#-Wpedantic##g" ${SDK_DIR}/Fast-DDS/src/fastdds/CMakeLists.txt
+                        deactivate
+                    fi
+                '''
+            }
+        }
+
+        stage('Pull Builder Container') {
+            steps {
+                sh 'docker pull ${BUILDER_IMAGE} || true'
+            }
+        }
+
+        stage('Build for x86_64') {
+            steps {
+                sh '''
+                    mkdir -p ${WORKSPACE}/output ${WORKSPACE}/.build
+                '''
+                script {
+                    def dockerArgs = [
+                        '-u 1000:1000',
+                        '-w /home/ossuser/workspace',
+                        "-e BUILD_MODE=${BUILD_MODE}",
+                        "-v ${SDK_DIR}:/opt",
+                        "-v ${WORKSPACE}/.build:/home/ossuser/workspace/.build",
+                        "-v ${WORKSPACE}/docker/scripts/build.sh:/home/ossuser/workspace/build.sh",
+                        "-v ${WORKSPACE}/CMakeLists.txt:/home/ossuser/workspace/CMakeLists.txt",
+                        "-v ${WORKSPACE}/idl:/home/ossuser/workspace/idl",
+                        "-v ${WORKSPACE}/service:/home/ossuser/workspace/service",
+                        "-v ${WORKSPACE}/output:/home/ossuser/workspace/output"
+                    ].join(' ')
+                    docker.image("${BUILDER_IMAGE}").inside(dockerArgs) {
+                        sh '''
+                            set -e
+                            cd /home/ossuser/workspace
+                            ./build.sh --set-extension-platform=ROS2
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Build Runtime Images (x86_64)') {
+            steps {
+                // build_local.sh assembles oss-mmf-core:local + oss-mmf-ext-ros2:local
+                // from the output/ tree produced above (Dockerfile.rel, --load).
+                sh '''
+                    set -e
+                    BUILD_TYPE=${BUILD_MODE} ./docker/build_local.sh
+                    docker images | grep -E "oss-mmf-(core|ext-ros2)\\s+local" || \
+                        docker images | grep -E "oss-mmf-(core|ext-ros2)"
+                '''
+            }
+        }
+
+        stage('Integration Smoke') {
+            steps {
+                sh '''
+                    set -e
+                    # Fresh stack each run.
+                    docker compose -f ${COMPOSE_FILE} down --remove-orphans || true
+                    docker compose -f ${COMPOSE_FILE} up -d
+                    docker compose -f ${COMPOSE_FILE} ps
+
+                    # Wait for rosbridge_server to accept WebSocket connections.
+                    for i in $(seq 1 30); do
+                        if docker logs oss-mmf-ext-ros2 2>&1 | grep -q "Rosbridge WebSocket server started"; then
+                            echo "[ci] rosbridge up"; break
+                        fi
+                        sleep 3
+                    done
+
+                    # Run the smoke in an isolated venv (stdlib + websocket-client).
+                    python3 -m venv ${WORKSPACE}/.smoke-venv
+                    . ${WORKSPACE}/.smoke-venv/bin/activate
+                    pip3 install --no-cache-dir websocket-client >/dev/null
+                    ROSBRIDGE_WS_URL=${ROSBRIDGE_WS_URL} TIMEOUT_SEC=${SMOKE_TIMEOUT_SEC} \
+                        python3 tests/integration/integration_smoke.py
+                    deactivate
+                '''
+            }
+        }
+    }
+
+    post {
+        always {
+            // Capture container logs for debugging, then tear the stack down.
+            sh '''
+                mkdir -p ${WORKSPACE}/output/integration-logs
+                docker logs oss-mmf-core    > ${WORKSPACE}/output/integration-logs/mmf-core.log    2>&1 || true
+                docker logs oss-mmf-ext-ros2 > ${WORKSPACE}/output/integration-logs/mmf-ext-ros2.log 2>&1 || true
+                docker compose -f ${COMPOSE_FILE} down --remove-orphans || true
+                rm -rf ${WORKSPACE}/.smoke-venv || true
+            '''
+            archiveArtifacts artifacts: 'output/integration-logs/*.log', allowEmptyArchive: true
+        }
+    }
+}
