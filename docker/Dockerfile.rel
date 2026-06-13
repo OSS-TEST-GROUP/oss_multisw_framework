@@ -78,6 +78,12 @@ ENV MMF_CONFIG_PATH=/oss/bin/config
 ENV DIAG_CONFIG_PATH=/oss/bin/config
 ENV VEHICLE_CONFIG_PATH=/oss/bin/config
 ENV OTAM_CONFIG_PATH=/oss/bin/config
+# OtamServerService(ArgoCD client) reads the FULL config file path from
+# $OTAM_CONFIG (not OTAM_CONFIG_PATH, not the cwd-relative default
+# "config/otam_config.json"). Without this it falls back to
+# http://localhost:8080 + empty creds and ArgoCD integration silently
+# breaks inside the container.
+ENV OTAM_CONFIG=/oss/bin/config/otam_config.json
 ENV DIAG_IDL_PATH=/oss/bin/idl
 
 ENTRYPOINT ["/oss/entrypoint.sh"]
@@ -114,6 +120,12 @@ ENV MMF_CONFIG_PATH=/oss/bin/config
 ENV DIAG_CONFIG_PATH=/oss/bin/config
 ENV VEHICLE_CONFIG_PATH=/oss/bin/config
 ENV OTAM_CONFIG_PATH=/oss/bin/config
+# OtamServerService(ArgoCD client) reads the FULL config file path from
+# $OTAM_CONFIG (not OTAM_CONFIG_PATH, not the cwd-relative default
+# "config/otam_config.json"). Without this it falls back to
+# http://localhost:8080 + empty creds and ArgoCD integration silently
+# breaks inside the container.
+ENV OTAM_CONFIG=/oss/bin/config/otam_config.json
 ENV DIAG_IDL_PATH=/oss/bin/idl
 
 ENTRYPOINT ["/oss/entrypoint.sh"]
