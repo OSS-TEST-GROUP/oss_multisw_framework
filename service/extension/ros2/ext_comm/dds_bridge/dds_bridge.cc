@@ -117,15 +117,36 @@ bool DdsBridge::AddPair(const PairConfig& cfg) {
     rqos.type_consistency().m_ignore_string_bounds = true;
     rqos.type_consistency().m_ignore_sequence_bounds = true;
     rqos.type_consistency().m_prevent_type_widening = false;
+    // Durable pairs (cfg.durable) keep the latest single sample so a bridge
+    // that starts AFTER the producer still picks up a retained one-shot
+    // (e.g. NotifyOtaManagerReady, published TRANSIENT_LOCAL at OtaManager
+    // startup). KEEP_LAST(1) bounds it to one sample — no backlog.
+    if (cfg.durable) {
+        rqos.durability().kind = TRANSIENT_LOCAL_DURABILITY_QOS;
+        rqos.history().kind = KEEP_LAST_HISTORY_QOS;
+        rqos.history().depth = 1;
+    }
 
     DataWriterQos wqos = DATAWRITER_QOS_DEFAULT;
     wqos.reliability().kind = RELIABLE_RELIABILITY_QOS;
-    // Force VOLATILE durability so the bridge doesn't replay
-    // historical samples to late-subscribing peers. OtaManager
-    // publishes responses with TRANSIENT_LOCAL, and without this
-    // override probe runs would receive the cumulative backlog of
-    // previous response samples on every reconnect.
-    wqos.durability().kind = VOLATILE_DURABILITY_QOS;
+    // Default: force VOLATILE durability so the bridge doesn't replay
+    // historical samples to late-subscribing peers. OtaManager publishes
+    // responses with TRANSIENT_LOCAL, and without this override probe runs
+    // would receive the cumulative backlog of previous response samples on
+    // every reconnect.
+    //
+    // Durable pairs OVERRIDE this: republish TRANSIENT_LOCAL + KEEP_LAST(1)
+    // so the retained one-shot survives to a late-joining ROS/rosbridge
+    // subscriber. Safe only for single-sample latched topics (the depth-1
+    // history means at most one sample is ever replayed) — never enable for
+    // response streams.
+    if (cfg.durable) {
+        wqos.durability().kind = TRANSIENT_LOCAL_DURABILITY_QOS;
+        wqos.history().kind = KEEP_LAST_HISTORY_QOS;
+        wqos.history().depth = 1;
+    } else {
+        wqos.durability().kind = VOLATILE_DURABILITY_QOS;
+    }
 
     DataReader* reader = nullptr;
     DataWriter* writer = nullptr;

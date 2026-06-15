@@ -53,6 +53,12 @@ struct PairConfig {
     std::string raw_type;      // bare IDL type name, e.g. "otamanager::GetAppList"
     std::string ros_type;      // ROS-canonical alias, e.g. "otamanager::msg::dds_::GetAppList_"
     bool ros_to_raw;           // direction of forwarding
+    bool durable = false;      // TRANSIENT_LOCAL + KEEP_LAST(1) on both reader/writer
+                               // (instead of the default forced VOLATILE) so a
+                               // one-shot startup broadcast (e.g. NotifyOtaManagerReady)
+                               // survives to late-joining subscribers. Only enable for
+                               // single-sample latched topics — never for response
+                               // streams (would replay backlog).
 };
 
 // FastDDS DataReader listener that hands every received sample off to a

@@ -34,6 +34,11 @@ export MMF_CONFIG_PATH="${MMF_CONFIG_PATH:-/oss/bin/config}"
 export DIAG_CONFIG_PATH="${DIAG_CONFIG_PATH:-/oss/bin/config}"
 export VEHICLE_CONFIG_PATH="${VEHICLE_CONFIG_PATH:-/oss/bin/config}"
 export OTAM_CONFIG_PATH="${OTAM_CONFIG_PATH:-/oss/bin/config}"
+# OtamServerService(ArgoCD client) reads the FULL config file path from
+# $OTAM_CONFIG; without it the cwd-relative default isn't found and it
+# falls back to http://localhost:8080 + empty creds (ArgoCD integration
+# breaks inside the container).
+export OTAM_CONFIG="${OTAM_CONFIG:-/oss/bin/config/otam_config.json}"
 export DIAG_IDL_PATH="${DIAG_IDL_PATH:-/oss/bin/idl}"
 
 LOG_TAG="[core_entrypoint]"

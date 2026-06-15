@@ -38,7 +38,8 @@ int main(int argc, char** argv) {
     auto add = [&](const std::string& struct_name,
                    const std::string& idl_file,
                    const std::string& topic_path,
-                   bool ros_to_raw) -> bool {
+                   bool ros_to_raw,
+                   bool durable = false) -> bool {
         return bridge.AddPair({
             struct_name, idl_file,
             topic_path,
@@ -46,6 +47,7 @@ int main(int argc, char** argv) {
             "otamanager::" + struct_name,
             "otamanager::msg::dds_::" + struct_name + "_",
             ros_to_raw,
+            durable,
         });
     };
 
@@ -75,7 +77,11 @@ int main(int argc, char** argv) {
     const std::string cp = "/mmf/otamanager/otaclient_service/";
     ok &= add("SetOtaClientRegistration",         client_idl, cp + "SetOtaClientRegistration",         /*ros→raw*/true);
     ok &= add("SetOtaClientRegistrationResponse", client_idl, cp + "SetOtaClientRegistrationResponse", /*raw→ros*/false);
-    ok &= add("NotifyOtaManagerReady",            client_idl, cp + "NotifyOtaManagerReady",            /*raw→ros*/false);
+    // F011: NotifyOtaManagerReady is a one-shot startup broadcast (OtaManager
+    // publishes it once at Init with TRANSIENT_LOCAL). Mark the bridge pair
+    // durable so a late-joining ota_monitor still receives the retained
+    // "manager ready" sample instead of missing it entirely.
+    ok &= add("NotifyOtaManagerReady",            client_idl, cp + "NotifyOtaManagerReady",            /*raw→ros*/false, /*durable*/true);
     ok &= add("NotifyAppUpdateStatus",            client_idl, cp + "NotifyAppUpdateStatus",            /*raw→ros*/false);
 
     // ── diagnostic_service: heartbeat (Manager → monitor only) ─────────────

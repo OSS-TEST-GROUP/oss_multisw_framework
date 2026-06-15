@@ -57,3 +57,25 @@ monitor 는 **lifecycle_mgr 가 단일 발행하는 집계 토픽 `LifecycleDiag
   관측됨(DiagReport service_list 가 마지막 등록자 기준으로 바뀜) — 별도 후속 확인 필요.
 - DiagReport/UpdateServiceListResponse 에 잔여 trust-pin 드롭이 보이나, 이는 stray/zombie
   participant 억제(기존 동작)이며 monitor 일관성은 유지됨.
+
+## F008 후속: monitor ↔ lifecycle_mgr 전용 (adsw-직접 경로 제거)
+
+원칙: **lfc_monitor 는 lifecycle_mgr 하고만 통신한다. ros2/agl adsw_manager 와는 직접 통신하지 않는다.**
+
+dds_bridge 의 lifecycle 토픽을 publisher/subscriber 주체 기준으로 감사해, monitor-facing
+경로 중 상대가 adsw_manager 인 것을 모두 제거:
+
+| 토픽 | 방향 | 상대 | 처리 |
+|---|---|---|---|
+| StartServiceResponse / StopServiceResponse | raw→ros | adsw 발행 | 제거 (monitor 는 ctrl/*Response 사용) |
+| GetServiceStateRequest / StartServiceRequest / StopServiceRequest | ros→raw | adsw 구독 | 제거 (monitor 는 ctrl/* + DiagReport) |
+| NotifyServiceState / GetServiceStateResponse | raw→ros | adsw 발행 | 이미 제거(F002) |
+| LifecycleDiagReport, SetServiceModeResponse, UpdateServiceListResponse, ctrl/*Response, ContainerStateReport→NotifyContainerState | raw→ros | **lifecycle_mgr 발행** | 유지 |
+| ctrl/* 요청, SetServiceModeRequest | ros→raw | **lifecycle_mgr 구독** | 유지 |
+
+lifecycle_mgr 가 adsw 를 GetServiceStateRequest 로 주기 폴링(StateMonitor)하고 NotifyServiceState/
+GetServiceStateResponse/NotifyContainerState 를 구독·집계해 DiagReport + ContainerStateReport 로
+monitor 에 단일 발행한다. → monitor 는 lifecycle_mgr 단일 창구만 본다.
+
+검증: monitor 수신 = LifecycleDiagReport + NotifyContainerState[ros2+agl], NotifyServiceState/
+GetServiceStateResponse = 0.
