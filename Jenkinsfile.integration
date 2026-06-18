@@ -179,7 +179,9 @@ pipeline {
                 docker compose -f ${COMPOSE_FILE} down --remove-orphans || true
                 rm -rf ${WORKSPACE}/.smoke-venv || true
             '''
-            archiveArtifacts artifacts: 'output/integration-logs/*.log', allowEmptyArchive: true
+            // 통합 스모크 결과(JUnit 포맷, 신호별 testcase) 발행 — 단위(GoogleTest)와 동일 컨벤션.
+            junit testResults: 'output/integration-results/**/*.xml', allowEmptyResults: true
+            archiveArtifacts artifacts: 'output/integration-logs/*.log, output/integration-results/**/*.xml', allowEmptyArchive: true
         }
     }
 }
