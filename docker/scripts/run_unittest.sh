@@ -26,6 +26,7 @@ do
 	ctest \
 		--test-dir ${testdir} \
 		--label-add ${label} \
+		--timeout ${CTEST_TIMEOUT:-60} \
 		--output-junit ${RESULT_DIR}/${label}/junit_results.xml \
 		--output-on-failure \
 		--no-compress-output || true

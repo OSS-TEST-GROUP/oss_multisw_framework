@@ -58,6 +58,13 @@ install ( TARGETS otam_main_tests
     ARCHIVE DESTINATION lib
     )
 
+# Register gtest cases with CTest so run_unittest.sh(ctest) picks them up
+# (mirrors lifecycle_mgr/diagnostics unittest dirs). 순수 단위테스트만 등록 —
+# test_otam_integration.cc 는 otam_main_tests 소스에 미포함이라 통합테스트는 딸려오지 않음.
+enable_testing()
+include(GoogleTest)
+gtest_discover_tests(otam_main_tests)
+
 ##################
 # otam_server_service
 ##################
