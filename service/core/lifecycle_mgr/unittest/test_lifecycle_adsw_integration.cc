@@ -46,6 +46,27 @@ using namespace eprosima::fastdds::rtps;
 using ::testing::_;
 using ::testing::AtLeast;
 
+// Minimal LifecycleFactory stubs so this integration test links without
+// dragging in the full manager graph from LifecycleFactory.cpp. The endpoints
+// under test call GetInstance()->IsKnownAdswPublisher() in OnDataAvailable;
+// the phantom guard is kept permissive here so the test's own injected samples
+// are never dropped (real prefix-pinning is covered by L3 integration).
+#include "manager/LifecycleFactory.hpp"
+namespace lifecycle_manager {
+LifecycleFactory::LifecycleFactory() {}
+LifecycleFactory::~LifecycleFactory() {}
+LifecycleFactory* LifecycleFactory::GetInstance() {
+    static LifecycleFactory instance;
+    return &instance;
+}
+void LifecycleFactory::SetKnownAdswPublisher(
+        const eprosima::fastdds::dds::InstanceHandle_t&) {}
+bool LifecycleFactory::IsKnownAdswPublisher(
+        const eprosima::fastdds::dds::InstanceHandle_t&) {
+    return true;
+}
+} // namespace lifecycle_manager
+
 /**
  * @brief Create a DDS participant with UDP-only transport (no SHM).
  * SHM transport causes inter-participant futex deadlocks in same-process tests

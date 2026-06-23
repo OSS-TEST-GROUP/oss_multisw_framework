@@ -49,6 +49,16 @@ std::shared_ptr<ServiceRegistry> LifecycleFactory::GetRegistry(){
     return Mock_LifecycleFactory->GetRegistry();
 }
 
+// F013 phantom-publisher guard — permissive no-op stubs for unit tests so
+// endpoint fixtures don't drop their own injected samples. The real prefix-
+// pinning logic lives in LifecycleFactory.cpp (exercised by integration tests).
+void LifecycleFactory::SetKnownAdswPublisher(
+        const eprosima::fastdds::dds::InstanceHandle_t&) {}
+bool LifecycleFactory::IsKnownAdswPublisher(
+        const eprosima::fastdds::dds::InstanceHandle_t&) {
+    return true;
+}
+
 } // namespace lifecycle_manager
 
 #endif // MOCK_LIFECYCLE_FACTORY_HPP_
