@@ -146,6 +146,7 @@ rapidjson::Value any_to_json_value(const std::any& val, rapidjson::Document::All
 
     if (!val.has_value()) {
         v.SetNull();
+        LOG_ERROR << "No value found for type";
         return v;
     }
 
@@ -212,6 +213,16 @@ rapidjson::Value any_to_json_value(const std::any& val, rapidjson::Document::All
             rapidjson::Value item_v(item_val.c_str(), allocator);
             v.AddMember(item_k, item_v, allocator);
         }
+    } else if (val.type() == typeid(std::vector<std::string>)) {
+        v.SetArray();
+        const auto& vec = std::any_cast<const std::vector<std::string>&>(val);
+        for (const auto& str : vec) {
+            rapidjson::Value s;
+            s.SetString(str.c_str(), allocator);
+            v.PushBack(s, allocator);
+        }
+    } else {
+        LOG_ERROR << "Unsupported type: " << type.name();
     }
     // Note: Other vector types like vector<any> could be added here if needed.
 
@@ -280,4 +291,69 @@ long long parseTimePeriod(const std::string& timePeriod) {
     if (!currentNumber.empty()) return 0; // Number without unit
 
     return totalMilliseconds;
+}
+
+std::string json_value_to_string(const std::string& datatype, const rapidjson::Value& value) {
+    auto value_to_str = [](const rapidjson::Value& v) -> std::string {
+        if (v.IsString()) return v.GetString();
+        if (v.IsInt()) return std::to_string(v.GetInt());
+        if (v.IsUint()) return std::to_string(v.GetUint());
+        if (v.IsInt64()) return std::to_string(v.GetInt64());
+        if (v.IsUint64()) return std::to_string(v.GetUint64());
+        if (v.IsDouble()) return std::to_string(v.GetDouble());
+        if (v.IsBool()) return v.GetBool() ? "true" : "false";
+        return "";
+    };
+
+    bool is_array = (datatype.size() >= 2 && datatype.compare(datatype.size() - 2, 2, "[]") == 0);
+
+    if (is_array && value.IsArray()) {
+        std::string result = "[";
+        for (rapidjson::SizeType i = 0; i < value.Size(); ++i) {
+            if (i > 0) result += ",";
+            result += "\"" + value_to_str(value[i]) + "\"";
+        }
+        result += "]";
+        return result;
+    }
+
+    // Fallback: if it's an array but datatype isn't, or vice-versa, still try to return something sensible
+    if (value.IsArray()) {
+        std::string result = "[";
+        for (rapidjson::SizeType i = 0; i < value.Size(); ++i) {
+            if (i > 0) result += ",";
+            result += value_to_str(value[i]);
+        }
+        result += "]";
+        return result;
+    }
+
+    return value_to_str(value);
+}
+
+std::vector<std::string> parse_json_array_string(const std::string& json_array_str) {
+    std::vector<std::string> result;
+    std::string data = json_array_str;
+    if (data.empty()) return result;
+
+    // Handle potential single quotes by replacing them with double quotes (standard JSON)
+    std::replace(data.begin(), data.end(), '\'', '\"');
+
+    rapidjson::Document d;
+    d.Parse(data.c_str());
+
+    if (d.HasParseError() || !d.IsArray()) {
+        return result;
+    }
+
+    for (const auto& item : d.GetArray()) {
+        if (item.IsString()) {
+            result.push_back(item.GetString());
+        } else if (item.IsInt()) {
+            result.push_back(std::to_string(item.GetInt()));
+        } else if (item.IsDouble()) {
+            result.push_back(std::to_string(item.GetDouble()));
+        }
+    }
+    return result;
 }

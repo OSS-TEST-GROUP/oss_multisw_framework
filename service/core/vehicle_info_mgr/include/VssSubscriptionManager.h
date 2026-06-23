@@ -69,8 +69,6 @@ public:
     };
     
 private:
-    std::map<std::string, std::shared_ptr<Subscription>> getAllSubscriptions();
-
     long nextSubscriptionId = 1;
     // Holds all active subscriptions, keyed by subscriptionId.
     std::map<std::string, std::shared_ptr<Subscription>> m_subscriptions;

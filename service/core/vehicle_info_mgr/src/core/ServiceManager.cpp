@@ -107,17 +107,17 @@ void ServiceManager::processRequest(std::shared_ptr<RequestData> request) {
             if (subscription_manager->removeSubscription(subscriptionId)) {
                 response_doc->AddMember("subscriptionId", rapidjson::Value(subscriptionId.c_str(), allocator), allocator);
             } else {
-                response_doc->AddMember("error", StatusCodes::NOT_FOUND("Subscription ID not found.").Move(), allocator);
+                response_doc->AddMember("error", rapidjson::Value(StatusCodes::NOT_FOUND("Subscription ID not found."), allocator), allocator);
             }
         } else {
-            response_doc->AddMember("error", StatusCodes::BAD_REQUEST("Unsubscribe request must contain a 'subscriptionId'.").Move(), allocator);
+            response_doc->AddMember("error", rapidjson::Value(StatusCodes::BAD_REQUEST("Unsubscribe request must contain a 'subscriptionId'."), allocator), allocator);
         }
     } else if (action == "get") {
         std::string path = req_doc["path"].GetString();
         std::vector<std::string> paths = vss_tree_->getPaths(path, request->request_doc.get());
 
         if (paths.empty()) {
-            response_doc->AddMember("error", StatusCodes::NOT_FOUND().Move(), allocator);
+            response_doc->AddMember("error", rapidjson::Value(StatusCodes::NOT_FOUND(), allocator), allocator);
         } else {
             // Find if a history filter exists to get the time period
             std::string timePeriod = "";
@@ -171,7 +171,10 @@ void ServiceManager::processRequest(std::shared_ptr<RequestData> request) {
                 rapidjson::Value data_array(rapidjson::kArrayType);
                 for (const auto& p : paths) {
                 auto values = storage->getValues(p, timePeriod);
-                if (values.empty()) continue;
+                if (values.empty()) {
+                    LOG_WARN << "Values are empty for path " << p;
+                    continue;
+                }
 
                 rapidjson::Value dp_list(rapidjson::kArrayType);
                 for (const auto& point : values) {
@@ -202,11 +205,11 @@ void ServiceManager::processRequest(std::shared_ptr<RequestData> request) {
     } else if (action == "subscribe") {
         std::string path = req_doc["path"].GetString();
         if (vss_tree_->getPaths(path, request->request_doc.get()).empty()) {
-            response_doc->AddMember("error", StatusCodes::NOT_FOUND("The path is not available in the VSS tree. " + path).Move(), allocator);
+            response_doc->AddMember("error", rapidjson::Value(StatusCodes::NOT_FOUND("The path is not available in the VSS tree. " + path), allocator), allocator);
         } else {
             std::string subscriptionId = subscription_manager->addSubscription(request);
             if(subscriptionId.empty()) {
-                response_doc->AddMember("error", StatusCodes::BAD_REQUEST("The request is malformed or invalid. ").Move(), allocator);
+                response_doc->AddMember("error", rapidjson::Value(StatusCodes::BAD_REQUEST("The request is malformed or invalid. "), allocator), allocator);
             } else {
                 response_doc->AddMember("subscriptionId", rapidjson::Value(subscriptionId.c_str(), allocator), allocator);
             }
@@ -215,9 +218,9 @@ void ServiceManager::processRequest(std::shared_ptr<RequestData> request) {
         std::string path = req_doc["path"].GetString();
         auto node = vss_tree_->findNode(path);
         if (node == nullptr) {
-            response_doc->AddMember("error", StatusCodes::NOT_FOUND().Move(), allocator);
+            response_doc->AddMember("error", rapidjson::Value(StatusCodes::NOT_FOUND(), allocator), allocator);
         } else if (node->NodeType != viss::NodeTypes::ACTUATOR) {
-            response_doc->AddMember("error", StatusCodes::INVALID_DATA("Update of a " + node->getTypeAsString() + " is not supported.").Move(), allocator);
+            response_doc->AddMember("error", rapidjson::Value(StatusCodes::INVALID_DATA("Update of a " + node->getTypeAsString() + " is not supported."), allocator), allocator);
         } else {
             /*
             const auto& value_node = req_doc["value"];
@@ -239,7 +242,7 @@ void ServiceManager::processRequest(std::shared_ptr<RequestData> request) {
             }
         }
     } else {
-        response_doc->AddMember("error", StatusCodes::BAD_REQUEST().Move(), allocator);
+        response_doc->AddMember("error", rapidjson::Value(StatusCodes::BAD_REQUEST(), allocator), allocator);
     }
 
     response_doc->AddMember("ts", rapidjson::Value(getCurrentTimestamp().c_str(), allocator), allocator);

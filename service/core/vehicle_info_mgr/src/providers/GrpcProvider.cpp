@@ -1,6 +1,7 @@
 #include "GrpcProvider.h"
 #include "Utils.h"
 #include "Logger.h"
+#include "ConfigManager.h"
 #include <iostream>
 #include <chrono>
 
@@ -112,9 +113,10 @@ void GrpcProvider::Subscription::run() {
 
 // --- GrpcProvider Implementation ---
 
-GrpcProvider::GrpcProvider(const std::string& server_address)
-    : m_name("GrpcProvider"),
-      m_server_address(server_address) {
+GrpcProvider::GrpcProvider()
+    : m_name("GrpcProvider") {
+    auto& config = ConfigManager::getInstance();
+    m_server_address = config.provider.grpcAddress;
     m_channel = grpc::CreateChannel(m_server_address, grpc::InsecureChannelCredentials());
     m_stub = grpcProtobufMessages::VISS::NewStub(m_channel);
 }

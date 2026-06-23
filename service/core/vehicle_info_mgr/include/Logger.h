@@ -29,7 +29,7 @@ public:
 #ifdef BUILD_FOR_ANDROID
         __android_log_write(static_cast<int>(priority_), LOG_TAG, str().c_str());
 #else
-        std::ostream& stream = (priority_ == LogPriority::INFO) ? std::cout : std::cerr;
+        std::ostream& stream = (priority_ >= LogPriority::WARN) ? std::cerr : std::cout;
         stream << str() << std::endl;
 #endif
     }

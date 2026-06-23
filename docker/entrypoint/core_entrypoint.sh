@@ -77,7 +77,9 @@ sleep 1
 start_bg /oss/bin/diagnostics
 sleep 1
 
-start_bg /oss/bin/vehicle_info_manager_app
+start_bg /oss/bin/viss-server
+sleep 1
+start_bg /oss/bin/vehicle_info_manager
 sleep 1
 
 # OtaManager ignores argv entirely (main.cc takes argc/argv but doesn't read

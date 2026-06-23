@@ -3,7 +3,7 @@
 // generated code does not contain a copyright notice
 
 #include "NavSatStatus.idl"
-#include "Header.idl"
+#include "std_msgs/msg/Header.idl"
 
 module sensor_msgs {
   module msg {

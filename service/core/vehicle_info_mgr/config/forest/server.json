@@ -1,0 +1,343 @@
+{
+  "Server": {
+    "children": {
+      "Config": {
+        "children": {
+          "AccessControl": {
+            "children": {
+              "AgtsPortNum": {
+                "datatype": "uint32",
+                "default": 7443,
+                "description": "Access Token Server port number.",
+                "type": "attribute"
+              },
+              "AgtsUrl": {
+                "datatype": "string",
+                "description": "Access Grant Token Server URL including port number and path.",
+                "type": "attribute"
+              },
+              "AtsPortNum": {
+                "datatype": "uint32",
+                "default": 8443,
+                "description": "Access Token Server port number.",
+                "type": "attribute"
+              },
+              "Flow": {
+                "datatype": "string[]",
+                "default": [
+                  "short-term",
+                  "long-term"
+                ],
+                "description": "Supported access control flows.",
+                "type": "attribute"
+              }
+            },
+            "description": "Access control configuration.",
+            "type": "branch"
+          },
+          "Consent": {
+            "children": {
+              "Ecf": {
+                "datatype": "string",
+                "description": "External Consent Framework description.",
+                "type": "attribute"
+              }
+            },
+            "description": "Consent configuration.",
+            "type": "branch"
+          },
+          "Protocol": {
+            "children": {
+              "Grpc": {
+                "children": {
+                  "Protobuf": {
+                    "children": {
+                      "PortNum": {
+                        "datatype": "uint32",
+                        "default": 5443,
+                        "description": "gRPC port number for the protobuf encoded payload format.",
+                        "type": "attribute"
+                      }
+                    },
+                    "description": "gRPC configuration with the protobuf encoded payload format.",
+                    "type": "branch"
+                  }
+                },
+                "description": "Top branch for the server supported gRPC protocol.",
+                "type": "branch"
+              },
+              "Http": {
+                "children": {
+                  "Primary": {
+                    "children": {
+                      "PortNum": {
+                        "datatype": "uint32",
+                        "default": 7443,
+                        "description": "HTTP port number for the primary payload format.",
+                        "type": "attribute"
+                      },
+                      "CertPath": {
+                        "datatype": "string",
+                        "default": "security/cert.pem",
+                        "description": "Certificate file path.",
+                        "type": "attribute"
+                      },
+                      "KeyPath": {
+                        "datatype": "string",
+                        "default": "security/key.pem",
+                        "description": "Private key file path.",
+                        "type": "attribute"
+                      }
+                    },
+                    "description": "HTTP configuration for the primary payload format.",
+                    "type": "branch"
+                  }
+                },
+                "description": "Top branch for the server supported HTTP protocol.",
+                "type": "branch"
+              },
+              "Mqtt": {
+                "children": {
+                  "PortNum": {
+                    "datatype": "uint32",
+                    "default": 8883,
+                    "description": "MQTT port number.",
+                    "type": "attribute"
+                  },
+                  "Primary": {
+                    "children": {
+                      "Topic": {
+                        "datatype": "string",
+                        "description": "MQTT topic name for the primary payload format.",
+                        "type": "attribute"
+                      }
+                    },
+                    "description": "MQTT configuration for the primary payload format.",
+                    "type": "branch"
+                  },
+                  "Protobuf": {
+                    "children": {
+                      "Topic": {
+                        "datatype": "string",
+                        "description": "Postfix '/protobuf' added to the MQTT topic name for the protobuf encoded payload format.",
+                        "type": "attribute"
+                      }
+                    },
+                    "description": "MQTT configuration for the protobuf encoded payload format.",
+                    "type": "branch"
+                  }
+                },
+                "description": "Top branch for the server supported MQTT protocol.",
+                "type": "branch"
+              },
+              "Dds": {
+                "children": {
+                  "DomainId": {
+                    "datatype": "uint32",
+                    "default": 0,
+                    "description": "DDS Domain ID.",
+                    "type": "attribute"
+                  },
+                  "TopicPrefix": {
+                    "datatype": "string",
+                    "default": "viss",
+                    "description": "Prefix for DDS topic names.",
+                    "type": "attribute"
+                  }
+                },
+                "description": "Top branch for the server supported DDS protocol.",
+                "type": "branch"
+              },
+              "Websocket": {
+                "children": {
+                  "FileTransfer": {
+                    "children": {
+                      "Mode": {
+                        "datatype": "string[]",
+                        "default": [
+                          "upload",
+                          "download"
+                        ],
+                        "description": "Websocket protocol port number for the primary payload format.",
+                        "type": "attribute"
+                      },
+                      "PortNum": {
+                        "datatype": "uint32",
+                        "default": 8002,
+                        "description": "Websocket protocol port number for the primary payload format.",
+                        "type": "attribute"
+                      }
+                    },
+                    "description": "Websocket filetransfer.",
+                    "type": "branch"
+                  },
+                  "Primary": {
+                    "children": {
+                      "PortNum": {
+                        "datatype": "uint32",
+                        "default": 6443,
+                        "description": "Websocket protocol port number for the primary payload format.",
+                        "type": "attribute"
+                      },
+                      "CertPath": {
+                        "datatype": "string",
+                        "default": "security/cert.pem",
+                        "description": "Certificate file path.",
+                        "type": "attribute"
+                      },
+                      "KeyPath": {
+                        "datatype": "string",
+                        "default": "security/key.pem",
+                        "description": "Private key file path.",
+                        "type": "attribute"
+                      }
+                    },
+                    "description": "Websocket configuration for the primary payload format.",
+                    "type": "branch"
+                  },
+                  "Protobuf": {
+                    "children": {
+                      "SubProtocol": {
+                        "datatype": "string",
+                        "default": "VISS-protoenc",
+                        "description": "Websocket sub-protocol for the protobuf encoded payload format.",
+                        "type": "attribute"
+                      }
+                    },
+                    "description": "Websocket configuration for the protobuf encoded payload format.",
+                    "type": "branch"
+                  }
+                },
+                "description": "Top branch for the server supported Websocket protocol.",
+                "type": "branch"
+              },
+              "Uds": {
+                "children": {
+                  "Path": {
+                    "datatype": "string",
+                    "default": "var/tmp/vissv3/udsMgr.sock",
+                    "description": "UDS path for the primary payload format.",
+                    "type": "attribute"
+                  }
+                },
+                "description": "UDS configuration for the primary payload format.",
+                "type": "branch"
+              }
+            },
+            "description": "Top branch declaring the configuration of server supported protocols.",
+            "type": "branch"
+          },
+          "Provider": {
+            "children": {
+              "SupportedProtocols": {
+                "datatype": "string[]",
+                "default": [
+                  "Grpc",
+                  "Uds",
+                  "DDS"
+                ],
+                "description": "List of protocols used to connect to the data provider.",
+                "type": "attribute"
+              },
+              "Grpc": {
+                "children": {
+                  "Address": {
+                    "datatype": "string",
+                    "default": "localhost:50051",
+                    "description": "gRPC address of the data provider.",
+                    "type": "attribute"
+                  }
+                },
+                "type": "branch"
+              },
+              "Uds": {
+                "children": {
+                  "Path": {
+                    "datatype": "string",
+                    "default": "var/tmp/vissv3/provider.sock",
+                    "description": "UDS path of the data provider.",
+                    "type": "attribute"
+                  }
+                },
+                "type": "branch"
+              }
+            },
+            "description": "Configuration for connecting to the data provider.",
+            "type": "branch"
+          }
+        },
+        "description": "Top branch declaring the configuration of server supported features.",
+        "type": "branch"
+      },
+      "Support": {
+        "children": {
+          "DataCompression": {
+            "datatype": "string[]",
+            "default": [
+              "2+1"
+            ],
+            "description": "List of supported data compression features.",
+            "type": "attribute"
+          },
+          "Encoding": {
+            "datatype": "string[]",
+            "default": [
+              "protobuf"
+            ],
+            "description": "List of supported payload encoding features.",
+            "type": "attribute"
+          },
+          "Filetransfer": {
+            "datatype": "string[]",
+            "default": [
+              "upload",
+              "download"
+            ],
+            "description": "List of supported file transfer features.",
+            "type": "attribute"
+          },
+          "Filter": {
+            "datatype": "string[]",
+            "default": [
+              "timebased",
+              "change",
+              "range",
+              "curvelog",
+              "paths",
+              "metadata"
+            ],
+            "description": "List of supported filter features.",
+            "type": "attribute"
+          },
+          "Protocol": {
+            "datatype": "string[]",
+            "default": [
+              "HTTPS",
+              "WSS",
+              "MQTTS",
+              "gRPC",
+              "DDS",
+              "UDS"
+            ],
+            "description": "List of supported transport protocols.",
+            "type": "attribute"
+          },
+          "Security": {
+            "datatype": "string[]",
+            "default": [
+              "TLSv1.2",
+              "access-control",
+              "ecf"
+            ],
+            "description": "List of supported security related features.",
+            "type": "attribute"
+          }
+        },
+        "description": "Top branch declaring the server supported features.",
+        "type": "branch"
+      }
+    },
+    "description": "Root for the server capabilities.",
+    "type": "branch"
+  }
+}

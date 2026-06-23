@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <csignal>
 #include <optional>
+#include <set>
 
 #include "VissServerApp.h"
 #include "Logger.h"
@@ -20,18 +21,20 @@
 #include "dds_transport.h"
 #include "DDSProvider.h"
 #endif
-#include "CANProvider.h"
-#include "NetworkProvider.h"
+
+#include "UdsProvider.h"
 #include "GrpcProvider.h"
 #include "VssTree.h"
 #include "Utils.h"
 #include "JsonSchemaValidator.h"
+#include "viss_websocket_transport.h"
+#include "ConfigManager.h"
+#include "Utils.h"
 
 // ################### Class Implementations ###################
 
 // VissServerApp
-VissServerApp::VissServerApp(const std::string& himPath, const std::string& grpc_provider_addr) 
-    : m_grpc_provider_addr(grpc_provider_addr) {
+VissServerApp::VissServerApp(const std::string& himPath) {
     vss_tree = std::make_shared<viss::VSSTree>(himPath);
     if (!vss_tree->isValid()) {
         LOG_ERROR << "Error: Failed to load or parse HIM file from " << himPath;
@@ -42,20 +45,60 @@ VissServerApp::VissServerApp(const std::string& himPath, const std::string& grpc
     requestQueue = std::make_shared<ThreadSafeQueue<std::shared_ptr<RequestData>>>();
     service_manager = std::make_shared<ServiceManager>(requestQueue, vss_tree);
 
-    // Add Providers
-#ifndef BUILD_FOR_ANDROID
-    service_manager->addProvider(std::make_unique<DDSProvider>());
-    service_manager->addProvider(std::make_unique<CANProvider>());
-#endif
-    //service_manager->addProvider(std::make_unique<NetworkProvider>());
-    service_manager->addProvider(std::make_unique<GrpcProvider>(m_grpc_provider_addr));
 
-    // Add Transports
-    transports.push_back(std::make_unique<GrpcTransport>(request_pool_, requestQueue));
+
+
+
+
+    // Initialize ConfigManager from the loaded VSS tree
+    auto& config = ConfigManager::getInstance();
+    config.initializeFromTree(vss_tree);
+
+    // Add Providers based on Config
+    for (const auto& proto : config.provider.supportedProtocols) {
+        if (proto == "Grpc") {
+            service_manager->addProvider(std::make_unique<GrpcProvider>());
+            LOG_INFO << "[VissServerApp] Added GrpcProvider";
+        } else if (proto == "Uds") {
+            service_manager->addProvider(std::make_unique<UdsProvider>());
+            LOG_INFO << "[VissServerApp] Added UdsProvider";
+        }
 #ifndef BUILD_FOR_ANDROID
-    //transports.push_back(std::make_unique<MqttTransport>(request_pool_, requestQueue));
-    transports.push_back(std::make_unique<DDSTransport>(request_pool_, requestQueue));
+        else if (proto == "DDS") {
+            service_manager->addProvider(std::make_unique<DDSProvider>());
+            LOG_INFO << "[VissServerApp] Added DDSProvider";
+        }
+
 #endif
+    }
+
+    // Add Transports based on supported protocols in Config
+    const auto& protocols = ConfigManager::getInstance().getSupportedProtocols();
+    
+    // Shared instance for transports that can handle multiple protocols
+    std::shared_ptr<VissWebsocketTransport> ws_shared;
+
+    for (const auto& proto : protocols) {
+        if (proto == "gRPC") {
+            transports[proto] = std::make_shared<GrpcTransport>(request_pool_, requestQueue);
+            LOG_INFO << "[VissServerApp] Added GrpcTransport for protocol: " << proto;
+        } else if (proto == "WSS" || proto == "UDS" || proto == "HTTPS" || proto == "MQTTS") {
+            if (!ws_shared) {
+                ws_shared = std::make_shared<VissWebsocketTransport>(request_pool_, requestQueue);
+            }
+            transports[proto] = ws_shared;
+            LOG_INFO << "[VissServerApp] Mapping protocol " << proto << " to VissWebsocketTransport";
+        } 
+#ifndef BUILD_FOR_ANDROID
+        else if (proto == "DDS") {
+            transports[proto] = std::make_shared<DDSTransport>(request_pool_, requestQueue);
+            LOG_INFO << "[VissServerApp] Added DDSTransport for protocol: " << proto;
+        }
+#endif
+        else {
+            LOG_WARN << "[VissServerApp] Protocol " << proto << " is requested but not yet implemented.";
+        }
+    }
 }
 
 VissServerApp::~VissServerApp() {
@@ -80,8 +123,12 @@ void VissServerApp::run() {
 
     m_service_manager_thread = std::thread(&ServiceManager::run, service_manager);
 
-    // Start all transports.
-    for (auto& transport : transports) {
+    // Start all unique transports.
+    std::set<std::shared_ptr<ITransport>> unique_transports;
+    for (auto const& [key, val] : transports) {
+        unique_transports.insert(val);
+    }
+    for (auto& transport : unique_transports) {
         transport->start();
     }
     LOG_INFO << "Server components initialized. Waiting for shutdown signal...";
@@ -103,8 +150,12 @@ void VissServerApp::stop() {
 
     LOG_INFO << "VissServerApp::stop() called.";
 
-    // Stop all transports to unblock their threads. These are blocking calls.
-    for (auto& transport : transports) {
+    // Stop all unique transports to unblock their threads.
+    std::set<std::shared_ptr<ITransport>> unique_transports;
+    for (auto const& [key, val] : transports) {
+        unique_transports.insert(val);
+    }
+    for (auto& transport : unique_transports) {
         transport->stop();
     }
 
