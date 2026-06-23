@@ -46,7 +46,8 @@ add_executable ( ADSWServiceMonitorTest ServiceMonitorTest.cpp
                  mock/MockADSWManager.cpp
                  ../monitor/ServiceMonitor.cpp
                  ../monitor/UpdateServiceInfo.cpp
-                 ../service/Service.cpp
+                 # Service is mocked via unittest/mock/MockService.hpp — linking the
+                 # real Service.cpp here would be a duplicate definition.
                  ${GENERATED_DIR}/lifecycle/NotifyServiceStatePubSubTypes.cxx
                  ${GENERATED_DIR}/lifecycle/NotifyServiceStateTypeObjectSupport.cxx
                  ${GENERATED_DIR}/lifecycle/LifecycleCommonPubSubTypes.cxx
