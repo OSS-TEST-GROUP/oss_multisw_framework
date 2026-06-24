@@ -41,7 +41,8 @@ MockService* Mock_Service;
 
 Service::Service(const std::string& name, ServiceType service_type, RecoveryPolicy recovery_policy, bool is_enable)
     : name_(name), service_type_(service_type), recovery_policy_(recovery_policy), is_enabled_(is_enable),
-      service_state_(ServiceState::NOT_RUNNING), launch_file_(""), max_nodes_(0), current_nodes_(0), pid_(0){
+      service_state_(ServiceState::NOT_RUNNING), launch_file_(""), max_nodes_(0), current_nodes_(0), pid_(0),
+      exit_code_(0), is_direct_exec_(false){
 }
 Service::~Service() {
 }
@@ -103,6 +104,28 @@ void Service::SetPID(uint64_t pid) {
 uint64_t Service::GetPID()  {
     if (Mock_Service) return Mock_Service->GetPID();
     return pid_;
+}
+
+void Service::SetExitCode(int32_t code) {
+    exit_code_ = code;
+}
+int32_t Service::GetExitCode() {
+    return exit_code_;
+}
+
+// F013: process-match pattern + direct-exec accessors — backed by real members
+// (mirrors Service.cpp) so ServiceRegistry/monitor link in unit tests.
+void Service::SetProcessMatchPattern(const std::string& pattern) {
+    match_pattern_ = pattern;
+}
+const std::string& Service::GetProcessMatchPattern() const {
+    return match_pattern_;
+}
+void Service::SetDirectExec(bool direct) {
+    is_direct_exec_ = direct;
+}
+bool Service::IsDirectExec() const {
+    return is_direct_exec_;
 }
 
 }

@@ -81,6 +81,9 @@ add_executable ( EndPointFactoryTest EndPointFactoryTest.cpp
                 ../endpoint/CtrlSetServiceModeEndPoint.cpp
                 ../endpoint/CtrlStartContainerEndPoint.cpp
                 ../endpoint/CtrlStopContainerEndPoint.cpp
+                # F014 per-service recovery policy endpoints
+                ../endpoint/SetRecoveryPolicyEndPoint.cpp
+                ../endpoint/CtrlSetRecoveryPolicyEndPoint.cpp
                 ${GENERATED_DDS_FILES}
                 )
 add_executable ( MWServiceManagerTest MWServiceManagerTest.cpp ../service/MWServiceManager.cpp)
@@ -93,7 +96,7 @@ add_executable ( LFPolicyManagerTest PolicyManagerTest.cpp
                 ../policy/PolicyOnSuccess.cpp
                 ../policy/PolicyOnNotResponding.cpp
                 )
-add_executable ( ServiceRegistryTest ServiceRegistryTest.cpp ../service/ServiceRegistry.cpp)
+add_executable ( ServiceRegistryTest ServiceRegistryTest.cpp ../service/ServiceRegistry.cpp ../service/Container.cpp ../logger/Logger.cpp )
 add_executable ( ServiceTest ServiceTest.cpp ../service/Service.cpp )
 add_executable ( StateManagerTest StateManagerTest.cpp ../state/StateManager.cpp )
 add_executable ( StateMonitorTest StateMonitorTest.cpp ../state/StateMonitor.cpp)

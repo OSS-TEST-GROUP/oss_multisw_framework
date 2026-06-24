@@ -80,10 +80,11 @@ void DDSTransmitter::Finalize(){
 
 bool DDSTransmitter::AddMessageEndpoint(std::shared_ptr<DDSMessageEndpoint> endpoint){
 
-    if (endpoint){
-        endpoints_[endpoint->GetTopic()] = endpoint;
+    if (!endpoint){
+        return false;
     }
 
+    endpoints_[endpoint->GetTopic()] = endpoint;
     return true;
 
 }

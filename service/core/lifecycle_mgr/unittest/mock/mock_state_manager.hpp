@@ -30,6 +30,10 @@ public:
     MOCK_METHOD(void, HandleCtrlSetServiceMode, (lifecyclemgr::CtrlSetServiceModeRequest*), ());
     MOCK_METHOD(void, HandleCtrlStartContainer, (lifecyclemgr::CtrlStartContainerRequest*), ());
     MOCK_METHOD(void, HandleCtrlStopContainer, (lifecyclemgr::CtrlStopContainerRequest*), ());
+
+    // F014: per-service recovery policy mutation relays
+    MOCK_METHOD(void, OnSetRecoveryPolicy, (lifecyclemgr::SetRecoveryPolicyResponse*), ());
+    MOCK_METHOD(void, HandleCtrlSetRecoveryPolicy, (lifecyclemgr::CtrlSetRecoveryPolicyRequest*), ());
 };
 
 inline MockStateManager* Mock_StateManager = nullptr;
@@ -98,6 +102,14 @@ void StateManager::HandleCtrlStartContainer(lifecyclemgr::CtrlStartContainerRequ
 }
 void StateManager::HandleCtrlStopContainer(lifecyclemgr::CtrlStopContainerRequest* m) {
     if (Mock_StateManager) Mock_StateManager->HandleCtrlStopContainer(m);
+}
+// F014: per-service recovery policy mutation relays — mock-forwarded so
+// LifecycleManagerTest links without dragging in the real StateManager.cpp.
+void StateManager::OnSetRecoveryPolicy(lifecyclemgr::SetRecoveryPolicyResponse* m) {
+    if (Mock_StateManager) Mock_StateManager->OnSetRecoveryPolicy(m);
+}
+void StateManager::HandleCtrlSetRecoveryPolicy(lifecyclemgr::CtrlSetRecoveryPolicyRequest* m) {
+    if (Mock_StateManager) Mock_StateManager->HandleCtrlSetRecoveryPolicy(m);
 }
 // PublishCtrlResponse is private; not directly called from LifecycleManager.cpp,
 // but the symbol must be resolvable if StateManager.cpp ever gets linked into a

@@ -83,5 +83,15 @@ namespace adsw_manager {
         shared_instance_ = instance;
     }
 
+    // F013 phantom-publisher guard — permissive no-op stubs for unit tests so
+    // endpoints don't drop their own injected samples. Real prefix-pinning logic
+    // lives in ADSWManager.cpp (exercised by integration tests).
+    void ADSWManager::SetKnownLifecyclePublisher(
+            const eprosima::fastdds::dds::InstanceHandle_t&) {}
+    bool ADSWManager::IsKnownLifecyclePublisher(
+            const eprosima::fastdds::dds::InstanceHandle_t&) {
+        return true;
+    }
+
 } // namespace adsw_manager
 } // namespace ros2

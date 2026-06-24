@@ -35,6 +35,7 @@ public:
     MOCK_METHOD(bool, ProcessUpdateServiceListRequest, (), ());
     MOCK_METHOD(bool, Save, (), ());
     MOCK_METHOD(bool, LoadServiceSaved, (const std::string& path), ());
+    MOCK_METHOD(void, UpdateLastSentRecovery, (), ());
 
 
 };
@@ -96,6 +97,10 @@ bool ServiceRegistry::Save() {
 }
 bool ServiceRegistry::LoadServiceSaved(const std::string& path) {
     return Mock_ServiceRegistry->LoadServiceSaved(path);
+}
+// F014: recovery-policy bookkeeping relay
+void ServiceRegistry::UpdateLastSentRecovery() {
+    if (Mock_ServiceRegistry) Mock_ServiceRegistry->UpdateLastSentRecovery();
 }
 
 

@@ -49,6 +49,10 @@ std::string Container::GetNamespace() const {
 std::string Container::GetPodName() const {
     return Mock_Container->GetPodName();
 }
+// F013: container-type accessor — backed by the real member set in the ctor.
+ContainerType Container::GetContainerType() const {
+    return container_type_;
+}
 
 
 } // namespace adsw_manager

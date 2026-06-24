@@ -27,6 +27,9 @@ public:
     MOCK_METHOD(int32_t, GetRecoveredCount, (), ());
     MOCK_METHOD(int32_t, GetExitCode, (), ());
     MOCK_METHOD(void, SetExitCode, (int32_t), ());
+    MOCK_METHOD(void, SetServiceType, (ServiceType), ());
+    MOCK_METHOD(void, SetRecoveryPolicy, (RecoveryPolicy), ());
+    MOCK_METHOD(void, SetEnabled, (bool), ());
 
 private:
     int32_t recovered_count_;
@@ -102,6 +105,18 @@ int32_t Service::GetExitCode() {
 
 void Service::SetExitCode(int32_t code) {
     Mock_Service->SetExitCode(code);
+}
+
+void Service::SetServiceType(ServiceType type) {
+    Mock_Service->SetServiceType(type);
+}
+
+void Service::SetRecoveryPolicy(RecoveryPolicy policy) {
+    Mock_Service->SetRecoveryPolicy(policy);
+}
+
+void Service::SetEnabled(bool enabled) {
+    Mock_Service->SetEnabled(enabled);
 }
 
 } // namespace lifecycle_manager
