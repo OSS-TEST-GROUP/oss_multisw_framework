@@ -29,6 +29,8 @@ public:
     MOCK_METHOD(void, NotifyAdswStatus, (int32_t status_code, std::string status_msg), ());
     MOCK_METHOD(void, OnContainerStateChanged,
                 (const std::string& container_name, bool is_running, int32_t exit_code), ());
+    MOCK_METHOD(void, OnServiceProcessDied,
+                (const std::string& service_name, int32_t exit_code), ());
 
 };
 
@@ -71,6 +73,10 @@ void ServiceMonitor::NotifyAdswStatus(int32_t status_code, std::string status_ms
 void ServiceMonitor::OnContainerStateChanged(const std::string& container_name,
                                              bool is_running, int32_t exit_code) {
     Mock_ServiceMonitor->OnContainerStateChanged(container_name, is_running, exit_code);
+}
+// F013: process-death relay (ContainerHealthMonitor → ServiceMonitor)
+void ServiceMonitor::OnServiceProcessDied(const std::string& service_name, int32_t exit_code) {
+    if (Mock_ServiceMonitor) Mock_ServiceMonitor->OnServiceProcessDied(service_name, exit_code);
 }
 
 }
