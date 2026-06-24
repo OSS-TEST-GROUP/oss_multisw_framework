@@ -37,6 +37,9 @@ set(GENERATED_DDS_FILES ${GENERATED_DIR}/lifecycle/LifecycleCommonPubSubTypes.cx
                         ${GENERATED_DIR}/lifecycle/StopContainerRequestTypeObjectSupport.cxx
                         ${GENERATED_DIR}/lifecycle/LifecycleCtrlRequestPubSubTypes.cxx
                         ${GENERATED_DIR}/lifecycle/LifecycleCtrlRequestTypeObjectSupport.cxx
+                        # F014 per-service recovery policy (Request+Response defined in one IDL)
+                        ${GENERATED_DIR}/lifecycle/SetRecoveryPolicyRequestPubSubTypes.cxx
+                        ${GENERATED_DIR}/lifecycle/SetRecoveryPolicyRequestTypeObjectSupport.cxx
 )
 
 ## Source
