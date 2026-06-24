@@ -257,13 +257,11 @@ TEST_F(DDSTransmitterTest, SendMessage_NullPtr_TC004) {
 // ============================================================================
 
 TEST_F(DDSTransmitterTest, AddMessageEndpoint_NullEndpoint_TC005) {
-    // AddMessageEndpoint with nullptr should return false or handle gracefully
-    // Currently returns true even for nullptr - this is a bug but we test current behavior
+    // AddMessageEndpoint with nullptr must reject and return false (matches
+    // AddNullEndpoint_TC001). The earlier null-check bug — returning true while
+    // silently dropping the endpoint — is fixed in DDSTransmitter.cpp.
     std::shared_ptr<MockDDSMessageEndpoint> null_endpoint = nullptr;
-    
-    // The current implementation checks "if (endpoint)" but still returns true
-    // This test documents the current behavior
-    EXPECT_TRUE(ins->AddMessageEndpoint(null_endpoint));
+    EXPECT_FALSE(ins->AddMessageEndpoint(null_endpoint));
 }
 
 TEST_F(DDSTransmitterTest, AddMessageEndpoint_DuplicateTopic_TC006) {
