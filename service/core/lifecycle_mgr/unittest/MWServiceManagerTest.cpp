@@ -1,4 +1,5 @@
 // Unit tests for MWServiceManager class.
+#include <cstdlib>
 //
 // F011: lifecycle_mgr no longer fork/exec's middleware services; the
 // container's entrypoint script (docker/entrypoint/core_entrypoint.sh) does.
@@ -201,9 +202,23 @@ TEST_F(MWServiceManagerTest, LoadConfigK3sModeDefaultsFalse) {
 }
 
 TEST_F(MWServiceManagerTest, InitializeReturnsFalseWithoutConfig) {
+    // run_unittest.sh exports MMF_CONFIG_PATH for the whole suite, and once
+    // core install runs that dir holds a real config_middleware.yaml — so the
+    // old "rely on env being unset" assumption no longer holds. Point the env
+    // at a guaranteed-nonexistent dir to deterministically exercise the
+    // missing-config path.
+    const char* saved = std::getenv("MMF_CONFIG_PATH");
+    std::string saved_str = saved ? saved : "";
+    setenv("MMF_CONFIG_PATH", "/nonexistent_mmf_config_dir", 1);
+
     MWServiceManager mgr;
-    // No MMF_CONFIG_PATH set and no ./config dir → Initialize fails.
     EXPECT_FALSE(mgr.Initialize());
+
+    if (saved) {
+        setenv("MMF_CONFIG_PATH", saved_str.c_str(), 1);
+    } else {
+        unsetenv("MMF_CONFIG_PATH");
+    }
 }
 
 TEST_F(MWServiceManagerTest, StartReturnsTrue) {
