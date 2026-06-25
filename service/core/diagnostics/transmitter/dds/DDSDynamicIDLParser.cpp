@@ -19,7 +19,12 @@ bool DDSDynamicIDLParser::Initialize(const std::string& idl_directory)
 {
     LOG_DEBUG("IDL directory path: " << idl_directory);
 
-    if (!fs::exists(idl_directory) || !fs::is_directory(idl_directory))
+    // Use the non-throwing (error_code) overloads: pathological inputs such as
+    // an over-long path raise filesystem_error("File name too long") from the
+    // throwing overloads, which must not escape Initialize. On any such error
+    // exists() reports false and we reject the directory gracefully.
+    std::error_code ec;
+    if (!fs::exists(idl_directory, ec) || !fs::is_directory(idl_directory, ec))
     {
         LOG_ERROR("IDL directory not found or is not a directory: " << idl_directory);
         return false;
