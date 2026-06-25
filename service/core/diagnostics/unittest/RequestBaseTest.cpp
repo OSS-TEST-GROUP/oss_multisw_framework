@@ -21,14 +21,17 @@ TEST_F(RequestBaseTest, GetRequestId_TC001) {
 }
 
 TEST_F(RequestBaseTest, GetRequestId_TC002_increasing_id) {
-    EXPECT_EQ(0x02, ins->GetRequestId());
+    // next_request_id_ is a process-global atomic counter. ctest runs each test
+    // in its own process (gtest_discover_tests), so we can't assume an absolute
+    // starting id — verify the *increasing* contract relative to the first id.
+    uint64_t base = ins->GetRequestId();
 
     RequestBase req3;
-    EXPECT_EQ(0x03, req3.GetRequestId());
+    EXPECT_EQ(base + 1, req3.GetRequestId());
     RequestBase req4;
-    EXPECT_EQ(0x04, req4.GetRequestId());
+    EXPECT_EQ(base + 2, req4.GetRequestId());
     RequestBase req5;
-    EXPECT_EQ(0x05, req5.GetRequestId());
+    EXPECT_EQ(base + 3, req5.GetRequestId());
 }
 
 TEST_F(RequestBaseTest, GetRequestedTime_TC001) {
