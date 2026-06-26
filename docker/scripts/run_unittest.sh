@@ -14,6 +14,12 @@ export SAVED_REGISTRY_BACKUP=${OUTPUT_DIR}/extension/ros2/bin/unittest/adsw_mana
 
 mkdir -p ${RESULT_DIR}
 
+# Integration / runtime-dependent tests live in a separate lane (run by
+# run_integration.sh). Exclude them here so the unit lane stays deterministic.
+# Single source of truth: integration-tests.regex (strip comments/blanks).
+INTEGRATION_RE=$(grep -vE '^\s*#|^\s*$' "${WORK_DIR}/docker/scripts/integration-tests.regex" 2>/dev/null \
+                 || grep -vE '^\s*#|^\s*$' "$( dirname "${BASH_SOURCE[0]}" )/integration-tests.regex")
+
 for testdir in $(find .build/ -not -path "*/_deps/*" -name CTestTestfile.cmake -exec dirname {} \;)
 do
 	label=
@@ -26,6 +32,7 @@ do
 	ctest \
 		--test-dir ${testdir} \
 		--label-add ${label} \
+		${INTEGRATION_RE:+--exclude-regex "${INTEGRATION_RE}"} \
 		--timeout ${CTEST_TIMEOUT:-60} \
 		--output-junit ${RESULT_DIR}/${label}/junit_results.xml \
 		--output-on-failure \

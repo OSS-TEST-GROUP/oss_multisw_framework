@@ -88,7 +88,7 @@ TEST(UtilsTest, AnyValueChanged) {
 TEST(UtilsTest, AnyToString) {
     // Basic types
     EXPECT_EQ(any_to_string(123), "123");
-    EXPECT_EQ(any_to_string(123.456), "123.456000"); // Note: double to string conversion format
+    EXPECT_EQ(any_to_string(123.456), "123.456"); // shortest round-trip (std::to_chars)
     EXPECT_EQ(any_to_string(true), "true");
     EXPECT_EQ(any_to_string(false), "false");
     EXPECT_EQ(any_to_string(std::string("hello")), "hello");

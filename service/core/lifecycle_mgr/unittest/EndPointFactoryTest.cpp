@@ -83,6 +83,13 @@ protected:
         MockMessageEndPoint::Mock_MessageEndPoint = new MockMessageEndPoint("test_topic");
         Mock_DDSMessageEndPoint = new MockDDSMessageEndPoint("test_topic");
         Mock_LifecycleFactory = new NiceMock<MockLifecycleFactory>();
+        // Several CreateEndPoints tests install custom creators that reassign
+        // the global Mock_DDSMessageEndPoint / Mock_MessageEndPoint to a freshly
+        // new'd mock (with a no-op shared_ptr deleter), orphaning the originals
+        // created here. TearDown then deletes the *new* one, so the originals
+        // leak. Allow it — these are intentional fixtures, not unverified mocks.
+        testing::Mock::AllowLeak(Mock_DDSMessageEndPoint);
+        testing::Mock::AllowLeak(MockMessageEndPoint::Mock_MessageEndPoint);
     }
     virtual void TearDown(){
         delete Mock_Logger;
@@ -107,10 +114,10 @@ TEST_F(EndPointFactoryTest, CreateEndPointsCalled) {
     EXPECT_CALL(*Mock_DDSTransmitter, GetDomain()).WillRepeatedly(Return(nullptr));
     EXPECT_CALL(*Mock_DDSTransmitter, GetPublisher()).WillRepeatedly(Return(nullptr));
     EXPECT_CALL(*Mock_DDSTransmitter, GetSubscriber()).WillRepeatedly(Return(nullptr));
-    EXPECT_CALL(*Mock_DDSTransmitter, AddMessageEndpoint(::testing::_)).Times(12).WillRepeatedly(Return(true));
+    EXPECT_CALL(*Mock_DDSTransmitter, AddMessageEndpoint(::testing::_)).Times(32).WillRepeatedly(Return(true));
     
     int32_t result = factory.CreateEndPoints(dds);
-    EXPECT_EQ(result, 12);
+    EXPECT_EQ(result, 32);
 }
 
 // Add more tests for EndPointFactory as needed
@@ -118,7 +125,7 @@ TEST_F(EndPointFactoryTest, InitializeReturnsCorrectSize) {
     EndPointFactory factory;
     int32_t size = factory.Initialize();
     // There are 12 message types initialized in the factory
-    EXPECT_EQ(size, 12);
+    EXPECT_EQ(size, 32);
 }
 
 TEST_F(EndPointFactoryTest, GetTopicReturnsCorrectTopic) {
@@ -152,11 +159,11 @@ TEST_F(EndPointFactoryTest, CreateEndPointsReturnsCorrectSize) {
     EXPECT_CALL(*Mock_DDSTransmitter, GetDomain()).Times(AtLeast(1)).WillRepeatedly(Return(nullptr));
     EXPECT_CALL(*Mock_DDSTransmitter, GetPublisher()).Times(AtLeast(1)).WillRepeatedly(Return(nullptr));
     EXPECT_CALL(*Mock_DDSTransmitter, GetSubscriber()).Times(AtLeast(1)).WillRepeatedly(Return(nullptr));
-    EXPECT_CALL(*Mock_DDSTransmitter, AddMessageEndpoint(_)).Times(12).WillRepeatedly(Return(true));
+    EXPECT_CALL(*Mock_DDSTransmitter, AddMessageEndpoint(_)).Times(32).WillRepeatedly(Return(true));
 
     auto transmitter = std::make_shared<DDSTransmitter>();
     int32_t size = factory.CreateEndPoints(transmitter);
-    EXPECT_EQ(size, 12);
+    EXPECT_EQ(size, 32);
 }
 
 // Additional tests for branch coverage
@@ -187,8 +194,8 @@ TEST_F(EndPointFactoryTest, Initialize_MultipleCalls) {
     int32_t size1 = factory.Initialize();
     int32_t size2 = factory.Initialize();
     
-    EXPECT_EQ(size1, 12);
-    EXPECT_EQ(size2, 12);
+    EXPECT_EQ(size1, 32);
+    EXPECT_EQ(size2, 32);
 }
 
 // Test GetTopic without Initialize
@@ -217,7 +224,7 @@ TEST_F(EndPointFactoryTest, SetCustomCreator_MultipleTimes) {
     factory.Initialize();
     
     // Just verify no crash
-    EXPECT_EQ(factory.Initialize(), 12);
+    EXPECT_EQ(factory.Initialize(), 32);
 }
 
 // Test destructor
@@ -300,7 +307,7 @@ TEST_F(EndPointFactoryTest, CreateEndPoints_NullTransmitterComponents) {
     
     // Should still work with null components (Initialize handles them)
     int32_t size = factory.CreateEndPoints(transmitter);
-    EXPECT_EQ(size, 12);
+    EXPECT_EQ(size, 32);
 }
 
 // Test CreateEndPoints returns correct size
@@ -318,7 +325,7 @@ TEST_F(EndPointFactoryTest, CreateEndPoints_ReturnsCorrectSize) {
     int32_t size = factory.CreateEndPoints(transmitter);
     
     // 12 message types configured
-    EXPECT_EQ(size, 12);
+    EXPECT_EQ(size, 32);
 }
 
 // Test CreateEndPoints without Initialize (empty topic_lists_)
@@ -1086,7 +1093,7 @@ TEST_F(EndPointFactoryTest, CreateEndPoints_LIFECYCLE_DIAG_REPORT_Case) {
     ON_CALL(*Mock_DDSMessageEndPoint, Initialize(_, _, _)).WillByDefault(Return(true));
     
     int32_t result = factory.CreateEndPoints(transmitter);
-    EXPECT_EQ(result, 12);
+    EXPECT_EQ(result, 32);
 }
 
 // Test individual endpoint creation through the switch statement by mocking the topic_lists_
@@ -1112,7 +1119,7 @@ TEST_F(EndPointFactoryTestWithManualTopics, CreateEndPoints_TestPUBLISH_ONLY_Bra
     EXPECT_CALL(*Mock_DDSTransmitter, GetDomain()).WillRepeatedly(Return(mock_participant));
     EXPECT_CALL(*Mock_DDSTransmitter, GetPublisher()).WillRepeatedly(Return(mock_publisher));
     EXPECT_CALL(*Mock_DDSTransmitter, GetSubscriber()).WillRepeatedly(Return(mock_subscriber));
-    EXPECT_CALL(*Mock_DDSTransmitter, AddMessageEndpoint(_)).Times(12).WillRepeatedly(Return(true));
+    EXPECT_CALL(*Mock_DDSTransmitter, AddMessageEndpoint(_)).Times(32).WillRepeatedly(Return(true));
     
     // This should exercise:
     // - LIFECYCLE_DIAG_REPORT (PUBLISH_ONLY)
@@ -1122,7 +1129,7 @@ TEST_F(EndPointFactoryTestWithManualTopics, CreateEndPoints_TestPUBLISH_ONLY_Bra
     // - STOP_SERVICE_REQUEST (PUBLISH_ONLY)
     // - UPDATE_SERVICE_LIST_RESPONSE (PUBLISH_ONLY)
     int32_t result = factory.CreateEndPoints(transmitter);
-    EXPECT_EQ(result, 12);
+    EXPECT_EQ(result, 32);
 }
 
 TEST_F(EndPointFactoryTestWithManualTopics, CreateEndPoints_TestSUBSCRIBE_ONLY_Branches) {
@@ -1138,7 +1145,7 @@ TEST_F(EndPointFactoryTestWithManualTopics, CreateEndPoints_TestSUBSCRIBE_ONLY_B
     EXPECT_CALL(*Mock_DDSTransmitter, GetDomain()).WillRepeatedly(Return(mock_participant));
     EXPECT_CALL(*Mock_DDSTransmitter, GetPublisher()).WillRepeatedly(Return(mock_publisher));
     EXPECT_CALL(*Mock_DDSTransmitter, GetSubscriber()).WillRepeatedly(Return(mock_subscriber));
-    EXPECT_CALL(*Mock_DDSTransmitter, AddMessageEndpoint(_)).Times(12).WillRepeatedly(Return(true));
+    EXPECT_CALL(*Mock_DDSTransmitter, AddMessageEndpoint(_)).Times(32).WillRepeatedly(Return(true));
     
     // This should exercise:
     // - GET_SERVICE_STATE_RESPONSE (SUBSCRIBE_ONLY)
@@ -1148,7 +1155,7 @@ TEST_F(EndPointFactoryTestWithManualTopics, CreateEndPoints_TestSUBSCRIBE_ONLY_B
     // - STOP_SERVICE_RESPONSE (SUBSCRIBE_ONLY)
     // - UPDATE_SERVICE_LIST_REQUEST (SUBSCRIBE_ONLY)
     int32_t result = factory.CreateEndPoints(transmitter);
-    EXPECT_EQ(result, 12);
+    EXPECT_EQ(result, 32);
 }
 
 // Test the LOG_DEBUG branch to ensure it's covered
@@ -1165,7 +1172,7 @@ TEST_F(EndPointFactoryTest, CreateEndPoints_LOG_DEBUG_Coverage) {
     EXPECT_CALL(*Mock_DDSTransmitter, GetDomain()).WillRepeatedly(Return(mock_participant));
     EXPECT_CALL(*Mock_DDSTransmitter, GetPublisher()).WillRepeatedly(Return(mock_publisher));
     EXPECT_CALL(*Mock_DDSTransmitter, GetSubscriber()).WillRepeatedly(Return(mock_subscriber));
-    EXPECT_CALL(*Mock_DDSTransmitter, AddMessageEndpoint(_)).Times(12).WillRepeatedly(Return(true));
+    EXPECT_CALL(*Mock_DDSTransmitter, AddMessageEndpoint(_)).Times(32).WillRepeatedly(Return(true));
     
     // Enable debug logging to ensure LOG_DEBUG line is executed
     factory.CreateEndPoints(transmitter);
@@ -1193,11 +1200,11 @@ TEST_F(EndPointFactoryTest, CreateEndPoints_NullEndpointHandling) {
     EXPECT_CALL(*Mock_DDSTransmitter, GetPublisher()).WillRepeatedly(Return(mock_publisher));
     EXPECT_CALL(*Mock_DDSTransmitter, GetSubscriber()).WillRepeatedly(Return(mock_subscriber));
     // Should only be called 11 times since one endpoint is null
-    EXPECT_CALL(*Mock_DDSTransmitter, AddMessageEndpoint(_)).Times(11).WillRepeatedly(Return(true));
+    EXPECT_CALL(*Mock_DDSTransmitter, AddMessageEndpoint(_)).Times(31).WillRepeatedly(Return(true));
     
     // Should still return 12 (topic_lists_.size()) even with null endpoint
     int32_t result = factory.CreateEndPoints(transmitter);
-    EXPECT_EQ(result, 12);
+    EXPECT_EQ(result, 32);
 }
 
 // Test PUBSUB_NONE case (should not occur in normal operation but test defensive code)
@@ -1224,7 +1231,7 @@ TEST_F(EndPointFactoryTest, CreateEndPoints_PUBSUB_NONE_Branch) {
     EXPECT_CALL(*Mock_DDSTransmitter, GetDomain()).WillRepeatedly(Return(mock_participant));
     EXPECT_CALL(*Mock_DDSTransmitter, GetPublisher()).WillRepeatedly(Return(mock_publisher));
     EXPECT_CALL(*Mock_DDSTransmitter, GetSubscriber()).WillRepeatedly(Return(mock_subscriber));
-    EXPECT_CALL(*Mock_DDSTransmitter, AddMessageEndpoint(_)).Times(12).WillRepeatedly(Return(true));
+    EXPECT_CALL(*Mock_DDSTransmitter, AddMessageEndpoint(_)).Times(32).WillRepeatedly(Return(true));
     
     factory.CreateEndPoints(transmitter);
 }

@@ -454,6 +454,10 @@ TEST_F(StateMonitorTest, NotifyLifecycleDiagnosticInfo_AllServices) {
     
     EXPECT_CALL(*Mock_DDSTransmitter, SendMessage(MessageType::LIFECYCLE_DIAG_REPORT, _))
         .WillOnce(Return(true));
+    // F008: NotifyLifecycleDiagnosticInfo also publishes the aggregated
+    // CONTAINER_STATE_REPORT when a registry is present (StateMonitor.cpp).
+    EXPECT_CALL(*Mock_DDSTransmitter, SendMessage(MessageType::CONTAINER_STATE_REPORT, _))
+        .WillRepeatedly(Return(true));
     
     EXPECT_NO_THROW(monitor.NotifyLifecycleDiagnosticInfo(true));
 }
@@ -492,6 +496,10 @@ TEST_F(StateMonitorTest, NotifyLifecycleDiagnosticInfo_UpdatedServicesOnly) {
     
     EXPECT_CALL(*Mock_DDSTransmitter, SendMessage(MessageType::LIFECYCLE_DIAG_REPORT, _))
         .WillOnce(Return(true));
+    // F008: NotifyLifecycleDiagnosticInfo also publishes the aggregated
+    // CONTAINER_STATE_REPORT when a registry is present (StateMonitor.cpp).
+    EXPECT_CALL(*Mock_DDSTransmitter, SendMessage(MessageType::CONTAINER_STATE_REPORT, _))
+        .WillRepeatedly(Return(true));
     
     EXPECT_NO_THROW(monitor.NotifyLifecycleDiagnosticInfo(false));
 }
@@ -550,6 +558,10 @@ TEST_F(StateMonitorTest, NotifyLifecycleDiagnosticInfo_CountRunningServices) {
     
     EXPECT_CALL(*Mock_DDSTransmitter, SendMessage(MessageType::LIFECYCLE_DIAG_REPORT, _))
         .WillOnce(Return(true));
+    // F008: NotifyLifecycleDiagnosticInfo also publishes the aggregated
+    // CONTAINER_STATE_REPORT when a registry is present (StateMonitor.cpp).
+    EXPECT_CALL(*Mock_DDSTransmitter, SendMessage(MessageType::CONTAINER_STATE_REPORT, _))
+        .WillRepeatedly(Return(true));
     
     EXPECT_NO_THROW(monitor.NotifyLifecycleDiagnosticInfo(true));
 }
@@ -796,6 +808,10 @@ TEST_F(StateMonitorTest, NotifyLifecycleDiagnosticInfo_DifferentStates) {
     
     EXPECT_CALL(*Mock_DDSTransmitter, SendMessage(MessageType::LIFECYCLE_DIAG_REPORT, _))
         .WillOnce(Return(true));
+    // F008: NotifyLifecycleDiagnosticInfo also publishes the aggregated
+    // CONTAINER_STATE_REPORT when a registry is present (StateMonitor.cpp).
+    EXPECT_CALL(*Mock_DDSTransmitter, SendMessage(MessageType::CONTAINER_STATE_REPORT, _))
+        .WillRepeatedly(Return(true));
     
     // Should count 2 running services
     EXPECT_NO_THROW(monitor.NotifyLifecycleDiagnosticInfo(true));

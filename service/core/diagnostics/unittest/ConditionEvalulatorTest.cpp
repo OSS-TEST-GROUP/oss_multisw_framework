@@ -241,9 +241,13 @@ TEST_F(ConditionEvaluatorTest, EvaluateOperandType_MixedConstantAndVariable_Floa
 }
 
 TEST_F(ConditionEvaluatorTest, EvaluateOperandType_UnknownDueToInvalidPath) {
+    // EvaluateOperandType intentionally falls back to the *known* operand type
+    // when only one side is UNKNOWN (see ConditionEvaluator.cpp). To exercise
+    // the genuinely-unknown result, both operands must resolve to UNKNOWN —
+    // use two invalid (non-constant) paths.
     ConditionExpression expr;
     expr.lh = "NonExistent.path";
-    expr.rh = "true";
+    expr.rh = "AnotherNonExistent.path";
     expr.operator_type = ConditionOperatorType::EQUAL;
 
     ConditionOperandType type = ins->EvaluateOperandType(expr);

@@ -1,0 +1,25 @@
+# Integration / runtime-dependent test patterns (ctest -R/-E regex, matched
+# against "Suite.Test" names). These need a real runtime that the plain unit
+# CI does not provide — an external gRPC server, a ROS graph, multi-participant
+# DDS discovery timing, or a docker container — so they are split out of the
+# unit lane (run_unittest.sh excludes them) and run in a separate integration
+# lane (run_integration.sh runs only them), mirroring the HMI ci.yml split of
+# unit-test vs integration vs ros-e2e jobs.
+#
+# Keep this as ONE extended-regex on a single logical line (comments/blank
+# lines are stripped by the runners). Add new integration tests here.
+#
+# ── whole integration suites ──────────────────────────────────────────────
+#  GrpcTransportTest            : opens a real gRPC channel to localhost:5443
+#  ConcreteEndpointIntegrationTest / LifecycleAdswIntegrationTest : real DDS pub→sub
+#  *AutowareE2ETest / L3AutowareE2ETest : real autoware docker container
+# ── specific runtime/flaky tests inside otherwise-unit suites ──────────────
+#  MessageTransmitterTest .*ROS : ROS-forwarding paths need a ROS graph
+#  DDSProtocol* (3)             : real DDS reader/writer + xcdr round-trip
+#  GrpcProviderTest (whole)     : background subscribe/set worker-thread timing
+#                                 (SetValueSuccess / SubscribeFailsWithErrorResponse
+#                                  flake across runs) — gRPC stub is mocked but the
+#                                  provider drives a worker thread.
+#  VssSubscriptionManagerTest.SubscriptionWithPathsFilter : period-timer timing
+#  OtamActorServiceTest.F012_.. : actor signal/timeout thread timing
+GrpcTransportTest\.|ConcreteEndpointIntegrationTest\.|LifecycleAdswIntegrationTest\.|Autoware.*E2ETest\.|L3AutowareE2ETest\.|MessageTransmitterTest\..*ROS|DDSProtocolTest\.delete_datareader_TC002_with_writer|DDSProtocolDeserializeTest\.Deserialize_Direct_TC016_sequence_string|DDSProtocolBranchCoverageTest\.register_type_object_TC003_comprehensive_sequence|GrpcProviderTest\.|VssSubscriptionManagerTest\.SubscriptionWithPathsFilter|OtamActorServiceTest\.F012_AllSignalsBeforeTimeout_NoTimeout
