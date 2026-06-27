@@ -15,11 +15,13 @@
 #  *AutowareE2ETest / L3AutowareE2ETest : real autoware docker container
 # ── specific runtime/flaky tests inside otherwise-unit suites ──────────────
 #  MessageTransmitterTest .*ROS : ROS-forwarding paths need a ROS graph
-#  DDSProtocol* (3)             : real DDS reader/writer + xcdr round-trip
+#  DDSProtocolTest .*_with_(reader|writer) : 실 DDS DataReader/DataWriter 생성·해제
+#                                 (UnsubscribeMessage_TC003_with_reader 등은 단위
+#                                  환경에서 90s timeout/hang), + 특정 xcdr 직렬화 케이스
 #  GrpcProviderTest (whole)     : background subscribe/set worker-thread timing
 #                                 (SetValueSuccess / SubscribeFailsWithErrorResponse
 #                                  flake across runs) — gRPC stub is mocked but the
 #                                  provider drives a worker thread.
 #  VssSubscriptionManagerTest.SubscriptionWithPathsFilter : period-timer timing
 #  OtamActorServiceTest.F012_.. : actor signal/timeout thread timing
-GrpcTransportTest\.|ConcreteEndpointIntegrationTest\.|LifecycleAdswIntegrationTest\.|Autoware.*E2ETest\.|L3AutowareE2ETest\.|MessageTransmitterTest\..*ROS|DDSProtocolTest\.delete_datareader_TC002_with_writer|DDSProtocolDeserializeTest\.Deserialize_Direct_TC016_sequence_string|DDSProtocolBranchCoverageTest\.register_type_object_TC003_comprehensive_sequence|GrpcProviderTest\.|VssSubscriptionManagerTest\.SubscriptionWithPathsFilter|OtamActorServiceTest\.F012_AllSignalsBeforeTimeout_NoTimeout
+GrpcTransportTest\.|ConcreteEndpointIntegrationTest\.|LifecycleAdswIntegrationTest\.|Autoware.*E2ETest\.|L3AutowareE2ETest\.|MessageTransmitterTest\..*ROS|DDSProtocolTest\..*_with_(reader|writer)|DDSProtocolDeserializeTest\.Deserialize_Direct_TC016_sequence_string|DDSProtocolBranchCoverageTest\.register_type_object_TC003_comprehensive_sequence|GrpcProviderTest\.|VssSubscriptionManagerTest\.SubscriptionWithPathsFilter|OtamActorServiceTest\.F012_AllSignalsBeforeTimeout_NoTimeout
