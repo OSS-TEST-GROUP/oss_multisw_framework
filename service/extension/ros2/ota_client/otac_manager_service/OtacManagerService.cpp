@@ -67,7 +67,10 @@ namespace ros2::ota_client
 
         std::cout << "It is OtacManagerService::Start.\n";
 
-        if (!registration_dds_->Create("/mmf/otamanager/otaclient_service/SetOtaClientRegistration", true, false))
+        // Fix②: 등록 writer 를 TRANSIENT_LOCAL 로 — core(리더)가 늦게 디스커버리돼도
+        // 마지막 등록 샘플을 retained 로 수신한다(동일 호스트 기동 레이스로 ros2 등록
+        // 유실되던 문제 해결).
+        if (!registration_dds_->Create("/mmf/otamanager/otaclient_service/SetOtaClientRegistration", true, false, true))
         {
             return false;
         }
@@ -129,6 +132,12 @@ namespace ros2::ota_client
 
     void OtacManagerService::OnClientRegistrationResponse(const otamanager::SetOtaClientRegistrationResponse &msg)
     {
+        // Fix①: 응답은 공유 토픽에 브로드캐스트되므로, 응답에 echo 된 client_name 이
+        // 내 client_name 과 다르면 (타 클라이언트/잔존 응답) 무시한다.
+        if (msg.client_name() != status_store_->GetClientName())
+        {
+            return;
+        }
         std::cout << "Client id: " << msg.client_id() << "/ result: " << static_cast<std::int32_t>(msg.ret_code()) << std::endl;
     }
 
