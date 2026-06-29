@@ -374,6 +374,10 @@ bool ServiceRegistry::ProcessUpdateServiceListRequest() {
 
   std::shared_ptr<DDSTransmitter> transmitter =
       ADSWManager::Get()->GetTransmitter();
+  if (transmitter == nullptr) {
+    LOG_ERROR("No transmitter available for UpdateServiceListRequest");
+    return false;
+  }
   const char *topic =
       ADSWManager::Get()->GetTopic(MessageType::UPDATE_SERVICE_LIST_REQUEST);
   std::shared_ptr<DDSMessageEndpoint> endpoint =

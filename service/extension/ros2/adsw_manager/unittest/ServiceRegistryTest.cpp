@@ -57,6 +57,12 @@ protected:
             .WillByDefault(Return(mock_service_controller_));
         ON_CALL(*mock_service_controller_, GetContainer())
             .WillByDefault(Return(mock_container_controller_));
+        // GetTopic() feeds a std::string ctor in the ready-path of
+        // ProcessUpdateServiceListRequest; without a default the mock returns a
+        // null const char* → std::string(nullptr) throws. Mirror the default
+        // used by the other adsw fixtures (GetServiceStateEndPointTest etc.).
+        ON_CALL(*mock_adsw_manager_, GetTopic(_))
+            .WillByDefault(Return("mock_topic"));
 
         // Don't allocate Mock_Service here - each test that needs it will create one
         // and set Mock_Service to the raw pointer for forwarding
