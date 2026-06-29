@@ -326,12 +326,14 @@ TEST_F(DDSTransmitterTest, Finalize_WithMultipleEndpoints_TC008) {
     ins->AddMessageEndpoint(endpoint3);
     
     ins->Initialize();
-    
-    // Finalize should call Finalize on all endpoints
-    EXPECT_CALL(*endpoint1, Finalize()).Times(testing::AtLeast(1));
-    EXPECT_CALL(*endpoint2, Finalize()).Times(testing::AtLeast(1));
-    EXPECT_CALL(*endpoint3, Finalize()).Times(testing::AtLeast(1));
-    
+
+    // DDSMessageEndpoint::Finalize() stub (in MockDDSMessageEndpoint.hpp) always
+    // routes through Mock_DDSMessageEndpoint, which is endpoint3 at this point.
+    // So all three endpoint Finalize() calls in DDSTransmitter::Finalize() reach
+    // endpoint3's mock — once per endpoint registered in endpoints_ map (3 total).
+    // endpoint1 and endpoint2 mock Finalize() are never called directly.
+    EXPECT_CALL(*endpoint3, Finalize()).Times(testing::AtLeast(3));
+
     ins->Finalize();
     MarkFinalized();
 }
