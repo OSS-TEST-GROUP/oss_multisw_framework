@@ -24,4 +24,21 @@
 #                                  provider drives a worker thread.
 #  VssSubscriptionManagerTest.SubscriptionWithPathsFilter : period-timer timing
 #  OtamActorServiceTest.F012_.. : actor signal/timeout thread timing
-GrpcTransportTest\.|ConcreteEndpointIntegrationTest\.|LifecycleAdswIntegrationTest\.|Autoware.*E2ETest\.|L3AutowareE2ETest\.|MessageTransmitterTest\..*ROS|DDSProtocolTest\..*_with_(reader|writer)|DDSProtocolDeserializeTest\.Deserialize_Direct_TC016_sequence_string|DDSProtocolBranchCoverageTest\.register_type_object_TC003_comprehensive_sequence|GrpcProviderTest\.|VssSubscriptionManagerTest\.SubscriptionWithPathsFilter|OtamActorServiceTest\.F012_AllSignalsBeforeTimeout_NoTimeout
+# ── adsw_manager ROS2 extension — runtime-dependent tests ─────────────────
+#  ADSWManagerTest (5 tests)    : InitializeAndStartStop / InitializeMultipleTimes /
+#                                 StartAndStopMultipleTimes / Process_InStartedState /
+#                                 Process_UpdateServiceListRequestFails
+#                                 — all require a real ROS2 DDS participant + graph
+#  ContainerDockerComposeTest (4 tests) : StartComposeContainer_Success_IT010 /
+#                                 GetContainerStatusStr_Running_IT011 /
+#                                 StopComposeContainer_Success_IT012 /
+#                                 RestartComposeContainer_IT013
+#                                 — invoke `docker compose` subprocess at runtime
+#  ROSDiscoveryInfoEndpointTest (6 tests) : OnDataAvailable_DirectCall_ReadFails /
+#                                 OnDataAvailable_MultipleCalls /
+#                                 InitializeAndFinalize /
+#                                 Testable_OnDataAvailable_ReadSucceeds_ManagerValid /
+#                                 Testable_OnDataAvailable_WithMockInfo /
+#                                 Testable_OnDataAvailable_MultipleCalls
+#                                 — require real FastDDS DataReader participant
+GrpcTransportTest\.|ConcreteEndpointIntegrationTest\.|LifecycleAdswIntegrationTest\.|Autoware.*E2ETest\.|L3AutowareE2ETest\.|MessageTransmitterTest\..*ROS|DDSProtocolTest\..*_with_(reader|writer)|DDSProtocolDeserializeTest\.Deserialize_Direct_TC016_sequence_string|DDSProtocolBranchCoverageTest\.register_type_object_TC003_comprehensive_sequence|GrpcProviderTest\.|VssSubscriptionManagerTest\.SubscriptionWithPathsFilter|OtamActorServiceTest\.F012_AllSignalsBeforeTimeout_NoTimeout|ADSWManagerTest\.(InitializeAndStartStop|InitializeMultipleTimes|StartAndStopMultipleTimes|Process_InStartedState|Process_UpdateServiceListRequestFails)|ContainerDockerComposeTest\.(StartComposeContainer_Success_IT010|GetContainerStatusStr_Running_IT011|StopComposeContainer_Success_IT012|RestartComposeContainer_IT013)|ROSDiscoveryInfoEndpointTest\.(OnDataAvailable_DirectCall_ReadFails|OnDataAvailable_MultipleCalls|InitializeAndFinalize|Testable_OnDataAvailable_ReadSucceeds_ManagerValid|Testable_OnDataAvailable_WithMockInfo|Testable_OnDataAvailable_MultipleCalls)
