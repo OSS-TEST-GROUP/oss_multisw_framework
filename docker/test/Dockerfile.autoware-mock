@@ -1,0 +1,16 @@
+# 경량 autoware mock 이미지 (L3 autoware E2E 단위테스트용)
+#
+# 실제 autoware 이미지(ghcr.io/autowarefoundation/autoware:...-cuda-..., 21.7GB)는
+# CUDA 등 무거운 의존성을 포함하지만, lifecycle_mgr/adsw_manager 의 L3 E2E 테스트는
+# 컨테이너에서 표준 ROS2 데모 노드(logging_demo → /logger_usage_demo)만 띄우고
+# docker start/stop + ros2 run + `ros2 node list` 로 복구 로직을 검증한다.
+# autoware 기능은 전혀 쓰지 않으므로 ros:humble-ros-base + logging_demo 로 충분하다.
+#
+# 빌드:
+#   docker build -f docker/test/Dockerfile.autoware-mock -t mmf-autoware-mock:humble .
+# 크기: ~760MB (실제 이미지의 1/28)
+FROM ros:humble-ros-base
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ros-humble-logging-demo \
+ && rm -rf /var/lib/apt/lists/*
