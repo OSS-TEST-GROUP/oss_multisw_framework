@@ -134,7 +134,9 @@ namespace ros2::ota_client
     {
         // Fix①: 응답은 공유 토픽에 브로드캐스트되므로, 응답에 echo 된 client_name 이
         // 내 client_name 과 다르면 (타 클라이언트/잔존 응답) 무시한다.
-        if (msg.client_name() != status_store_->GetClientName())
+        // status_store_ 가 없으면 (식별자 부재) 필터링할 기준이 없으므로 수용한다 —
+        // null 일 때 GetClientName() 역참조로 죽지 않도록 가드한다.
+        if (status_store_ && msg.client_name() != status_store_->GetClientName())
         {
             return;
         }
