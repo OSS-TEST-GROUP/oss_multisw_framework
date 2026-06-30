@@ -72,6 +72,16 @@ public:
 
     void on_data_available(eprosima::fastdds::dds::DataReader* reader) override;
 
+    // Self-heal the trust pin: when the currently-trusted publisher leaves
+    // the domain (producer restart / crash), clear the pin so the next live
+    // publisher's first sample re-pins. Without this a pin outlives the
+    // participant it points at, and every sample from the restarted producer
+    // is dropped forever (only a manual bridge restart recovered it). See
+    // on_data_available for the trust-on-first-use rationale.
+    void on_subscription_matched(
+        eprosima::fastdds::dds::DataReader* reader,
+        const eprosima::fastdds::dds::SubscriptionMatchedStatus& info) override;
+
 private:
     eprosima::fastdds::dds::DataWriter* writer_;
     eprosima::fastdds::dds::DynamicType::_ref_type type_;
@@ -88,6 +98,10 @@ private:
     // we trust the wrong one — acceptable because the legitimate
     // publishers (adsw_manager / lifecycle_mgr) come up well before any
     // ROS-side subscriber starts consuming the bridged topic.
+    //
+    // The pin is NOT permanent: on_subscription_matched clears it when the
+    // trusted participant unmatches, so a restarted producer re-pins instead
+    // of being dropped forever.
     std::mutex              trust_mutex_;
     bool                    trust_set_ = false;
     std::array<uint8_t, 12> trusted_prefix_{};

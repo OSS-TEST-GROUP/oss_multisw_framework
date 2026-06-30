@@ -50,6 +50,25 @@ void ForwardListener::on_data_available(DataReader* reader) {
     }
 }
 
+void ForwardListener::on_subscription_matched(
+    DataReader* /*reader*/, const SubscriptionMatchedStatus& info) {
+    // Only react to a publisher leaving (a match removal).
+    if (info.current_count_change >= 0) return;
+
+    std::lock_guard<std::mutex> lk(trust_mutex_);
+    if (!trust_set_) return;
+
+    // GuidPrefix is the first 12 bytes of the 16-byte InstanceHandle_t value
+    // — same slice used when the pin was set in on_data_available.
+    const uint8_t* raw =
+        reinterpret_cast<const uint8_t*>(&info.last_publication_handle);
+    if (std::equal(trusted_prefix_.begin(), trusted_prefix_.end(), raw)) {
+        trust_set_ = false;
+        std::cout << "[bridge] " << tag_
+                  << " trusted publisher left — re-pinning on next sample\n";
+    }
+}
+
 // ── DdsBridge ──────────────────────────────────────────────────────────
 
 bool DdsBridge::Initialize(const std::string& idl_root) {
