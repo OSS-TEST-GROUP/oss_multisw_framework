@@ -39,11 +39,18 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 
 target_include_directories(${PROJECT_NAME} PRIVATE ../service_monitor mock ${GENERATED_IDL_DIR})
 
+# 단위테스트는 helpers/docker(+systemctl) stub 을 PATH 에 얹어 실제 docker 대신 쓴다.
+# CI 의 Run-Unittest 컨테이너는 .build/idl/output 만 마운트하고 service/ 소스트리는
+# 마운트하지 않으므로, 소스경로(${CMAKE_CURRENT_SOURCE_DIR}/helpers)는 런타임에 부재해
+# execvp 가 ENOENT 로 실패한다. 빌드 디렉토리(.build 하위, Run 에 마운트됨)로 복사하고
+# 그 경로를 가리킨다. file(COPY) 는 실행 비트를 보존한다.
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/helpers DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+
 target_compile_definitions(${PROJECT_NAME} PRIVATE
   UNIT_TEST
   MOCK_SYSCTL_DIR="${CMAKE_CURRENT_SOURCE_DIR}/unittest/helpers"
   MOCK_SYSCTL_LOG="${CMAKE_CURRENT_BINARY_DIR}/sysctl.log"
-  ADSW_HELPERS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/helpers"
+  ADSW_HELPERS_DIR="${CMAKE_CURRENT_BINARY_DIR}/helpers"
 )
 
 gtest_discover_tests (${PROJECT_NAME})
