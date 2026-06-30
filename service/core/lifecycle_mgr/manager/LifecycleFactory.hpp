@@ -4,6 +4,7 @@
 #include <array>
 #include <cstdint>
 #include <mutex>
+#include <set>
 
 #include <fastdds/dds/subscriber/SampleInfo.hpp>
 
@@ -50,9 +51,11 @@ class LifecycleFactory {
 
     // GuidPrefix (first 12 bytes of an InstanceHandle_t) of the participant
     // we trust. Empty until the first UpdateServiceListRequest pins it.
-    std::mutex              adsw_prefix_mutex_;
-    bool                    adsw_prefix_set_ = false;
-    std::array<uint8_t, 12> adsw_prefix_{};
+    std::mutex                                 adsw_prefix_mutex_;
+    // Set of trusted adsw_manager participant GUID prefixes (12 bytes each).
+    // Populated on every UpdateServiceListRequest so producer restarts and
+    // multiple adsw_managers are all trusted; empty = strict-deny boot window.
+    std::set<std::array<uint8_t, 12>>          known_adsw_prefixes_;
 };
 
 
