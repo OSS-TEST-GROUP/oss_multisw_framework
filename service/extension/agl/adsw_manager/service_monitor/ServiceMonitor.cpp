@@ -90,9 +90,18 @@ namespace adsw_manager::agl {
                           << expected << std::endl;
 
                 service_registry_->UpdateAppState(app_name, expected);
-                message_transmitter_->PublishAppState();
             }
         }
+
+        // Publish the full app-state snapshot (NotifyServiceState) every poll,
+        // not only when a state transitions. NotifyServiceState is VOLATILE, so
+        // an event-only publish is missed entirely by any subscriber that
+        // connects after the last transition — which is exactly why
+        // lfc_monitor, opened well after hmi_launcher last went RUNNING, kept
+        // showing NOT_RUNNING. A periodic full-snapshot publish lets a
+        // late-joining lfc_monitor / dds_bridge converge on the current state
+        // within one poll. Mirrors PublishContainerState below.
+        message_transmitter_->PublishAppState();
 
         // F009 (C-1): publish container state every poll (not only on transition)
         // so a late-joining lifecycle_mgr / dds_bridge / lfc_monitor always

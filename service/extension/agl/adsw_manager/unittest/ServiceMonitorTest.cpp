@@ -127,24 +127,26 @@ TEST_F(ServiceMonitorTest, CheckAppState_Timeout_MakesNOT_RUNNING_AndPublishes) 
     monitor.CheckAppState();
 }
 
-TEST_F(ServiceMonitorTest, CheckAppState_RecentMessage_KeepsRUNNING_NoPublish) {
+TEST_F(ServiceMonitorTest, CheckAppState_RecentMessage_KeepsRUNNING_StillPublishesSnapshot) {
     const std::string app = "ota_monitor";
     auto now = std::chrono::steady_clock::now();
     EmplaceReader(app, now - std::chrono::milliseconds(100)); // 타임아웃 이내 → 기대 상태 RUNNING
 
-    // 이미 RUNNING이면 업데이트/퍼블리시 없어야 함
+    // 이미 RUNNING이면 상태 변경(UpdateAppState)은 없지만, NotifyServiceState는
+    // 매 poll 전체 스냅샷으로 발행한다(VOLATILE QoS — 늦게 접속한 lfc_monitor가
+    // 마지막 전환을 놓쳐 NOT_RUNNING 으로 굳던 문제 수정).
     Service svc = MakeService(app);
     auto current_pair = std::make_pair(svc, ServiceState::RUNNING);
     EXPECT_CALL(*registry, GetAppInfo(app))
         .WillOnce(Return(std::optional<decltype(current_pair)>(current_pair)));
 
-    EXPECT_CALL(*registry, UpdateAppState(_, _)).Times(0);
-    EXPECT_CALL(*transmitter, PublishAppState()).Times(0);
+    EXPECT_CALL(*registry, UpdateAppState(_, _)).Times(0);   // 전환 없음
+    EXPECT_CALL(*transmitter, PublishAppState()).Times(1);   // 매 poll 스냅샷
 
     monitor.CheckAppState();
 }
 
-TEST_F(ServiceMonitorTest, CheckAppState_Timeout_ButAlreadyNOT_RUNNING_NoPublish) {
+TEST_F(ServiceMonitorTest, CheckAppState_Timeout_ButAlreadyNOT_RUNNING_StillPublishesSnapshot) {
     const std::string app = "lfc_monitor";
     auto now = std::chrono::steady_clock::now();
     EmplaceReader(app, now - std::chrono::seconds(5)); // 타임아웃 초과 → 기대 상태 NOT_RUNNING
@@ -154,9 +156,9 @@ TEST_F(ServiceMonitorTest, CheckAppState_Timeout_ButAlreadyNOT_RUNNING_NoPublish
     EXPECT_CALL(*registry, GetAppInfo(app))
         .WillOnce(Return(std::optional<decltype(current_pair)>(current_pair)));
 
-    // 이미 기대 상태와 동일 → 변경/퍼블리시 없음
+    // 이미 기대 상태와 동일 → 상태 변경 없음. 그래도 전체 스냅샷은 매 poll 발행.
     EXPECT_CALL(*registry, UpdateAppState(_, _)).Times(0);
-    EXPECT_CALL(*transmitter, PublishAppState()).Times(0);
+    EXPECT_CALL(*transmitter, PublishAppState()).Times(1);
 
     monitor.CheckAppState();
 }
