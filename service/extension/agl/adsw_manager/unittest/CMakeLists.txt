@@ -43,6 +43,7 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
   UNIT_TEST
   MOCK_SYSCTL_DIR="${CMAKE_CURRENT_SOURCE_DIR}/unittest/helpers"
   MOCK_SYSCTL_LOG="${CMAKE_CURRENT_BINARY_DIR}/sysctl.log"
+  ADSW_HELPERS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/helpers"
 )
 
 gtest_discover_tests (${PROJECT_NAME})

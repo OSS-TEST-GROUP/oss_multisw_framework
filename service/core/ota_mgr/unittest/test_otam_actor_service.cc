@@ -343,6 +343,12 @@ TEST_F(OtamActorServiceTest, F009_Success_DoesNotNotifyFailed) {
     EXPECT_CALL(*mock_server_, RunOtaUpdate("f009_ok_app"))
         .WillOnce(Return(ReturnValue::SUCCESS));
     EXPECT_CALL(*mock_client_, NotifyAppUpdateStatus(_, "FAILED")).Times(0);
+    // SUCCESS 후 actor 는 백그라운드 폴링 스레드에서 NotifyAppUpdateStatus(app, "Unknown"/
+    // "Running" 등)을 호출한다. "FAILED" 에 EXPECT_CALL 을 걸면 NiceMock 이라도 이 메서드의
+    // 모든 호출이 검사 대상이 되어, FAILED 이외 호출이 "Unexpected mock call" 실패가 된다.
+    // FAILED 이외 상태는 허용해 폴링 스레드 노이즈를 흡수한다(회귀 의도 = FAILED 미발행).
+    EXPECT_CALL(*mock_client_, NotifyAppUpdateStatus(_, ::testing::Ne("FAILED")))
+        .Times(::testing::AnyNumber());
 
     CreatePendingRequest("f009_ok_app", 312);
     SendServiceModeSuccess();
