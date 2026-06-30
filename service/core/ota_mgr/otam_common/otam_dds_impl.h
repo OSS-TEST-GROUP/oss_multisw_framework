@@ -332,13 +332,17 @@ void OtamDdsImpl<MessageType>::Create(const std::string& topic,
         std::cout << "Create Subscriber!!!!!" << std::endl;  // keep legacy log
 
         // Create DataReader on shared Subscriber
-        // Durability: VOLATILE - keeps FastDDS default (also matches TRANSIENT_LOCAL publishers)
-        // DDS QoS compatibility rule: VOLATILE subscriber can receive from TRANSIENT_LOCAL publisher
         eprosima::fastdds::dds::DataReaderQos reader_qos = eprosima::fastdds::dds::DATAREADER_QOS_DEFAULT;
         // F011: see writer counterpart — disable shm data_sharing to silence
         // "Failed to open segment" noise from sibling-container writers.
         reader_qos.data_sharing().off();
         reader_qos.reliability().kind = eprosima::fastdds::dds::RELIABLE_RELIABILITY_QOS;
+        // Fix②: transient_local 리더는 TRANSIENT_LOCAL writer 가 retained 한 히스토리
+        // 샘플을 매칭 시점에 받는다. (VOLATILE 리더는 매칭 이후 샘플만 받으므로,
+        // 클라이언트가 먼저 등록을 발행하고 core 리더가 늦게 붙으면 등록을 놓쳤다.)
+        if (transient_local) {
+            reader_qos.durability().kind = eprosima::fastdds::dds::TRANSIENT_LOCAL_DURABILITY_QOS;
+        }
         reader_ = subscriber->create_datareader(topic_, reader_qos, listener_);
         if (!reader_) {
             throw std::runtime_error("DDS Exception: Failed to create DataReader for: " + topic_name_);

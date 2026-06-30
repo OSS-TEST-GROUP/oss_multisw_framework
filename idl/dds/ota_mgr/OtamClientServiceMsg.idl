@@ -17,6 +17,10 @@ module otamanager {
     struct SetOtaClientRegistrationResponse {
         long client_id;
         ReturnValue ret_code;
+        // 응답 수신처 식별자. 응답은 공유 토픽에 발행되어 모든 ota_client 가
+        // 구독하므로, 클라이언트는 이 값이 자기 client_name 과 일치할 때만
+        // 응답을 채택해야 한다(타 클라이언트/잔존 응답 오채택 방지).
+        string client_name;
     };
 };
 
