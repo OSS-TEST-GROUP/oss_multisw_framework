@@ -204,7 +204,14 @@ pipeline {
                         "-v ${WORKSPACE}/.build:/home/ossuser/workspace/.build",
                         "-v ${WORKSPACE}/idl:/home/ossuser/workspace/idl",
                         "-v ${WORKSPACE}/output:/home/ossuser/workspace/output",
-                        "-v ${WORKSPACE}/docker/scripts/run_unittest.sh:/home/ossuser/workspace/run_unittest.sh"
+                        "-v ${WORKSPACE}/docker/scripts/run_unittest.sh:/home/ossuser/workspace/run_unittest.sh",
+                        // run_unittest.sh reads docker/scripts/integration-tests.regex to
+                        // exclude the runtime-dependent integration tests. The script is
+                        // mounted standalone at the workspace root, so without ALSO mounting
+                        // the regex next to it INTEGRATION_RE comes back empty and every
+                        // integration test runs (and fails) in the unit lane. Mount it at the
+                        // path the script probes first.
+                        "-v ${WORKSPACE}/docker/scripts/integration-tests.regex:/home/ossuser/workspace/docker/scripts/integration-tests.regex"
                     ].join(' ')
                     docker.image("${BUILDER_IMAGE}").inside(dockerArgs) {
                         sh '''

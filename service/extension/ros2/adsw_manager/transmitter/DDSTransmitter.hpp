@@ -35,9 +35,11 @@ class DDSTransmitter {
     bool SendMessage(MessageType mtype, void* ptr);
 
   private:
-    DomainParticipant* participant_;
-    Publisher* publisher_;
-    Subscriber* subscriber_;
+    // In-class initializers ensure members are null after default construction
+    // (works even when the stub DDSTransmitter::DDSTransmitter(){} body is empty).
+    DomainParticipant* participant_ = nullptr;
+    Publisher*         publisher_   = nullptr;
+    Subscriber*        subscriber_  = nullptr;
 
     std::shared_ptr<MessageQueue> message_queue_;
 

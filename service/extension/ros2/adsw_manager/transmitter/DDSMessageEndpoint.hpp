@@ -87,16 +87,21 @@ class DDSMessageEndpoint : public DataWriterListener, public DataReaderListener 
     // testability: allow injection of mock DataReader
 
   private:
-    DomainParticipant* participant_;
-    Publisher* publisher_;
-    Subscriber* subscriber_;
+    // In-class initializers ensure these are null even when the stub
+    // DDSMessageEndpoint::DDSMessageEndpoint(){} in MockDDSMessageEndpoint.hpp
+    // is linked instead of the real constructor (which has the same initializers
+    // in its member-initializer-list).  Without these, the stub constructor
+    // leaves the pointers uninitialised, causing Read<T> to dereference garbage.
+    DomainParticipant* participant_ = nullptr;
+    Publisher*         publisher_   = nullptr;
+    Subscriber*        subscriber_  = nullptr;
 
-    Topic* dds_topic_;
+    Topic*      dds_topic_   = nullptr;
 
-    DataReader* data_reader_;
-    DataWriter* data_writer_;
+    DataReader* data_reader_ = nullptr;
+    DataWriter* data_writer_ = nullptr;
 
-    int16_t matched_;
+    int16_t matched_ = 0;
 
     // Updated by Read() with the publication_handle of the last sample we
     // consumed. Subclasses look at LastPublicationHandle() during their
