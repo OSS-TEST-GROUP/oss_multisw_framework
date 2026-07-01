@@ -67,6 +67,11 @@ public:
             return;
         }
 
+        // Per-run DDS domain isolation
+        int domain = E2EDomainId();
+        std::string fastdds_profile = E2EWriteFastDdsProfile(domain);
+        std::string domain_str = std::to_string(domain);
+
         // Kill stale processes from prior runs to avoid DDS domain interference.
         // Use basename only — execl(path, "argv0") sets cmdline to argv0, not the full path.
         ExecShell("pkill -9 lifecycle_mgr 2>/dev/null");
@@ -121,12 +126,14 @@ public:
         }
 
         // 3. Start autoware container (network host for DDS multicast)
+        // ROS_DOMAIN_ID=domain isolates the container's ros2 stack from domain 0.
         ExecShell(std::string("docker stop ") + AUTOWARE_CONTAINER + " 2>/dev/null; docker rm " + AUTOWARE_CONTAINER + " 2>/dev/null");
         std::this_thread::sleep_for(std::chrono::seconds(1));
         ExecShell(std::string("docker run -d --name ") + AUTOWARE_CONTAINER
                   + " --network host"
                   + " -v " + CYCLONE_XML_PATH + ":/tmp/cyclonedds_e2e.xml"
                   + " -e CYCLONEDDS_URI=file:///tmp/cyclonedds_e2e.xml"
+                  + " -e ROS_DOMAIN_ID=" + domain_str
                   + " " + AutowareImage() + " sleep infinity");
 
         bool container_ok = WaitForCondition([]() {
@@ -143,7 +150,6 @@ public:
         // 4. Build LD_LIBRARY_PATH for child processes
         std::string ld_path = MmfBuildLdPath();
         std::string lf_config = MmfLfConfig();
-        std::string fastdds_profile = MmfFastDdsProfile();
 
         // 5. Fork lifecycle_mgr
         lifecycle_pid_ = fork();
@@ -151,6 +157,7 @@ public:
             setenv("MMF_CONFIG_PATH", lf_config.c_str(), 1);
             setenv("LD_LIBRARY_PATH", ld_path.c_str(), 1);
             setenv("FASTDDS_DEFAULT_PROFILES_FILE", fastdds_profile.c_str(), 1);
+            setenv("ROS_DOMAIN_ID", domain_str.c_str(), 1);
             execl(MmfLfBin().c_str(), "lifecycle_mgr", nullptr);
             _exit(127);
         }
@@ -161,6 +168,7 @@ public:
             setenv("SAVED_REGISTRY_BACKUP", E2E_CONFIG_DIR, 1);
             setenv("LD_LIBRARY_PATH", ld_path.c_str(), 1);
             setenv("FASTDDS_DEFAULT_PROFILES_FILE", fastdds_profile.c_str(), 1);
+            setenv("ROS_DOMAIN_ID", domain_str.c_str(), 1);
             execl(MmfAdswBin().c_str(), "adsw_manager", nullptr);
             _exit(127);
         }
@@ -168,6 +176,7 @@ public:
         // 7. Wait for logging_demo_main to appear in container (up to 60s)
         // Flow: adsw starts → sends UpdateServiceList → lifecycle responds → sends StartServiceRequest
         //       → adsw docker execs ros2 run → node appears in ros2 node list
+        // Container's ROS_DOMAIN_ID=domain ensures ros2 node list queries domain N.
         setup_ok_ = WaitForCondition([]() {
             std::string out = ExecShell(
                 "docker exec autoware-test bash -c "

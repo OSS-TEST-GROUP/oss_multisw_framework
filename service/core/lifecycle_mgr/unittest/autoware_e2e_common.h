@@ -7,21 +7,28 @@
 //   - All paths are env-overridable so the unit CI runner can inject them; when
 //     the env vars are absent a CMake-injected compile definition provides a
 //     correct default for local development too.
+//   - Provide per-run DDS domain isolation so tests running concurrently with a
+//     live oss-mmf-core/oss-mmf-ext-ros2 stack (domain 0) do not cross-talk.
 //
 // Usage in each test file:
 //   #include "autoware_e2e_common.h"
 //   ... in SetUpTestSuite():
 //     std::string skip_reason;
 //     if (!AutowareE2EPrereqs(skip_reason)) { GTEST_SKIP() << skip_reason; return; }
+//     int domain = E2EDomainId();
+//     std::string profile = E2EWriteFastDdsProfile(domain);
 //   ... replace AUTOWARE_IMAGE with AutowareImage()
 //   ... replace path constants with MmfOutputDir() / MmfLfBin() etc.
+//   ... pass domain / profile to StartContainer(), docker exec, and child setenv.
 
 #pragma once
 
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
 #include <string>
 #include <sys/stat.h>
+#include <unistd.h>
 
 // ── Image selector ──────────────────────────────────────────────────────────
 //
@@ -87,6 +94,86 @@ inline std::string MmfBuildLdPath() {
     const char* existing = std::getenv("LD_LIBRARY_PATH");
     if (existing && strlen(existing) > 0) ld += std::string(":") + existing;
     return ld;
+}
+
+// ── Per-run DDS domain isolation ────────────────────────────────────────────
+//
+// E2EDomainId() returns a unique-per-process DDS domain in [1,200].
+// Domain 0 is reserved for the production oss-mmf-core/oss-mmf-ext-ros2 stack.
+// Using PID % 200 + 1 guarantees a fresh domain for each test binary invocation.
+//
+// E2EWriteFastDdsProfile(domain) writes a per-run Fast DDS XML profile to
+// /tmp/mmf_e2e_fastdds_<domain>.xml.  It reads the repo's canonical profile
+// (MmfFastDdsProfile()) and injects <domainId>N</domainId> into the default
+// participant block so every create_participant_with_default_profile() call
+// joins domain N instead of domain 0.  The file is per-process-unique so
+// parallel test binaries never share or overwrite each other's profile.
+//
+// Container isolation: pass "-e ROS_DOMAIN_ID=N" when starting the container
+// with docker run so that ros2 node list (CycloneDDS inside the container)
+// also uses domain N.  docker exec inherits the container's environment, so
+// subsequent ros2 node list / ros2 run calls inside the container are
+// automatically on domain N without further flags.
+inline int E2EDomainId() {
+    // Stable within one process; different for each test binary invocation.
+    static int domain = 1 + (static_cast<int>(getpid()) % 200);
+    return domain;
+}
+
+// Read the canonical Fast DDS profile and inject <domainId>N</domainId>,
+// write the result to a per-domain temp file, and return that path.
+// Falls back to the unmodified canonical profile path if any I/O step fails
+// (preserving old behaviour rather than crashing the test suite).
+inline std::string E2EWriteFastDdsProfile(int domain) {
+    std::string src_path = MmfFastDdsProfile();
+    std::string dst_path = "/tmp/mmf_e2e_fastdds_" + std::to_string(domain) + ".xml";
+
+    // Read canonical profile
+    std::ifstream src(src_path);
+    if (!src.is_open()) return src_path;  // fallback: unmodified (domain 0)
+    std::string content((std::istreambuf_iterator<char>(src)),
+                         std::istreambuf_iterator<char>());
+    src.close();
+
+    // Inject <domainId>N</domainId> immediately after the <rtps> opening tag
+    // inside the is_default_profile="true" participant block.
+    // The canonical profile has a single participant block with <rtps>; we
+    // insert the domain element right after the first <rtps> occurrence.
+    // If the profile already has <domainId> we replace it to stay idempotent.
+    const std::string domain_tag = "<domainId>" + std::to_string(domain) + "</domainId>";
+
+    // Remove any existing <domainId>...</domainId>
+    std::string::size_type d_start = content.find("<domainId>");
+    while (d_start != std::string::npos) {
+        std::string::size_type d_end = content.find("</domainId>", d_start);
+        if (d_end == std::string::npos) break;
+        d_end += std::string("</domainId>").size();
+        content.erase(d_start, d_end - d_start);
+        d_start = content.find("<domainId>");
+    }
+
+    // Fast DDS XML schema: <domainId> must be a direct child of <participant>,
+    // NOT inside <rtps>. Insert right before the opening <rtps> tag.
+    // The canonical profile structure is:
+    //   <participant profile_name="..." is_default_profile="true">
+    //       <rtps> ... </rtps>
+    //   </participant>
+    // We want:
+    //   <participant profile_name="..." is_default_profile="true">
+    //       <domainId>N</domainId>
+    //       <rtps> ... </rtps>
+    //   </participant>
+    std::string::size_type rtps_pos = content.find("<rtps>");
+    if (rtps_pos != std::string::npos) {
+        content.insert(rtps_pos, domain_tag + "\n        ");
+    }
+
+    // Write result
+    std::ofstream dst(dst_path);
+    if (!dst.is_open()) return src_path;  // fallback
+    dst << content;
+    dst.close();
+    return dst_path;
 }
 
 // ── Prerequisite checker ────────────────────────────────────────────────────

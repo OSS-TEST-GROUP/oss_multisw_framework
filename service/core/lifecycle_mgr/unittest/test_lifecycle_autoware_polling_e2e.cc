@@ -100,6 +100,10 @@ public:
             return;
         }
 
+        // Per-run DDS domain isolation — declared early so docker run can use it.
+        int domain = E2EDomainId();
+        std::string domain_str = std::to_string(domain);
+
         // Kill stale processes from prior runs to avoid DDS domain interference.
         ExecShell("pkill -9 lifecycle_mgr 2>/dev/null");
         ExecShell("pkill -9 adsw_manager 2>/dev/null");
@@ -157,6 +161,7 @@ public:
                   + " --network host"
                   + " -v " + CYCLONE_XML_PATH + ":/tmp/cyclonedds_polling_e2e.xml"
                   + " -e CYCLONEDDS_URI=file:///tmp/cyclonedds_polling_e2e.xml"
+                  + " -e ROS_DOMAIN_ID=" + domain_str
                   + " " + AutowareImage() + " sleep infinity");
 
         bool container_ok = WaitForCondition([]() {
@@ -174,7 +179,7 @@ public:
         // 4. Build LD_LIBRARY_PATH for child processes
         std::string ld_path = MmfBuildLdPath();
         std::string lf_config = MmfLfConfig();
-        std::string fastdds_profile = MmfFastDdsProfile();
+        std::string fastdds_profile = E2EWriteFastDdsProfile(domain);
         setenv("FASTDDS_DEFAULT_PROFILES_FILE", fastdds_profile.c_str(), 1);
 
         // 5. Fork lifecycle_mgr
@@ -183,6 +188,7 @@ public:
             setenv("MMF_CONFIG_PATH", lf_config.c_str(), 1);
             setenv("LD_LIBRARY_PATH", ld_path.c_str(), 1);
             setenv("FASTDDS_DEFAULT_PROFILES_FILE", fastdds_profile.c_str(), 1);
+            setenv("ROS_DOMAIN_ID", domain_str.c_str(), 1);
             execl(MmfLfBin().c_str(), "lifecycle_mgr", nullptr);
             _exit(127);
         }
@@ -194,6 +200,7 @@ public:
             setenv("SAVED_REGISTRY_BACKUP", E2E_CONFIG_DIR, 1);
             setenv("LD_LIBRARY_PATH", ld_path.c_str(), 1);
             setenv("FASTDDS_DEFAULT_PROFILES_FILE", fastdds_profile.c_str(), 1);
+            setenv("ROS_DOMAIN_ID", domain_str.c_str(), 1);
             execl(MmfAdswBin().c_str(), "adsw_manager", nullptr);
             _exit(127);
         }

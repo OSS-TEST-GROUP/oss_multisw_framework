@@ -75,9 +75,12 @@ static DomainParticipant* CreateUdpOnlyParticipant(int domain_id, const char* na
 }
 
 // ── DDS SetServiceMode Request Publisher ─────────────────────────────────────
+// domain_id is E2EDomainId() so the publisher reaches the test's isolated
+// lifecycle_mgr (domain N) instead of the production stack (domain 0).
 class SetModePublisher : public DDSMessageEndPoint {
 public:
-    SetModePublisher() : DDSMessageEndPoint(SET_MODE_TOPIC) {
+    explicit SetModePublisher(int domain_id)
+        : DDSMessageEndPoint(SET_MODE_TOPIC), domain_id_(domain_id) {
         SetTypeSupport(std::make_shared<TypeSupport>(
             new lifecyclemgr::SetServiceModeRequestPubSubType()));
     }
@@ -85,12 +88,15 @@ public:
     ~SetModePublisher() { Cleanup(); }
 
     bool Initialize() {
-        participant_ = CreateUdpOnlyParticipant(0, "OtaTestModePublisher");
+        participant_ = CreateUdpOnlyParticipant(domain_id_, "OtaTestModePublisher");
         if (!participant_) return false;
         publisher_ = participant_->create_publisher(PUBLISHER_QOS_DEFAULT);
         if (!publisher_) return false;
         return DDSMessageEndPoint::Initialize(participant_, publisher_, nullptr);
     }
+
+private:
+    int domain_id_;
 
     void Cleanup() {
         if (participant_) {
@@ -154,7 +160,10 @@ public:
             return;
         }
 
-        std::string fastdds_profile = MmfFastDdsProfile();
+        // Per-run DDS domain isolation
+        int domain = E2EDomainId();
+        std::string fastdds_profile = E2EWriteFastDdsProfile(domain);
+        std::string domain_str = std::to_string(domain);
         setenv("FASTDDS_DEFAULT_PROFILES_FILE", fastdds_profile.c_str(), 1);
 
         ExecShell("pkill -9 adsw_manager 2>/dev/null");
@@ -208,6 +217,7 @@ public:
                   + " --network host"
                   + " -v " + CYCLONE_XML + ":/tmp/cyclonedds_ota_e2e.xml"
                   + " -e CYCLONEDDS_URI=file:///tmp/cyclonedds_ota_e2e.xml"
+                  + " -e ROS_DOMAIN_ID=" + domain_str
                   + " " + AutowareImage() + " sleep infinity");
 
         bool container_ok = WaitForCondition([]() {
@@ -232,6 +242,7 @@ public:
             setenv("MMF_CONFIG_PATH", lf_config.c_str(), 1);
             setenv("LD_LIBRARY_PATH", ld_path.c_str(), 1);
             setenv("FASTDDS_DEFAULT_PROFILES_FILE", fastdds_profile.c_str(), 1);
+            setenv("ROS_DOMAIN_ID", domain_str.c_str(), 1);
             execl(MmfLfBin().c_str(), "lifecycle_mgr", nullptr);
             _exit(127);
         }
@@ -243,6 +254,7 @@ public:
             setenv("SAVED_REGISTRY_BACKUP", E2E_OTA_CONFIG_DIR, 1);
             setenv("LD_LIBRARY_PATH", ld_path.c_str(), 1);
             setenv("FASTDDS_DEFAULT_PROFILES_FILE", fastdds_profile.c_str(), 1);
+            setenv("ROS_DOMAIN_ID", domain_str.c_str(), 1);
             execl(MmfAdswBin().c_str(), "adsw_manager", nullptr);
             _exit(127);
         }
@@ -261,7 +273,8 @@ public:
         }
 
         // Phase 2: Switch to OTA_MODE, then crash container.
-        auto mode_pub = std::make_shared<SetModePublisher>();
+        // The publisher uses the per-run domain to reach our isolated lifecycle_mgr.
+        auto mode_pub = std::make_shared<SetModePublisher>(domain);
         if (!mode_pub->Initialize()) {
             ADD_FAILURE() << "Failed to initialize SetModePublisher";
             return;

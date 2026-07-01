@@ -53,8 +53,11 @@ std::string BuildLdPath() {
     return MmfBuildLdPath();
 }
 
-// Start autoware container for the test (network host for DDS multicast)
-bool StartContainer(const char* container_name) {
+// Start autoware container for the test (network host for DDS multicast).
+// domain: the per-run DDS domain ID — passed as ROS_DOMAIN_ID so that the
+// container's ros2 node list / ros2 run commands join the isolated domain
+// instead of domain 0 (used by the production oss-mmf stack).
+bool StartContainer(const char* container_name, int domain) {
     std::string iface = ExecShell("ip route show default 2>/dev/null | awk '{print $5; exit}'");
     while (!iface.empty() && (iface.back() == '\n' || iface.back() == '\r' || iface.back() == ' '))
         iface.pop_back();
@@ -75,6 +78,7 @@ bool StartContainer(const char* container_name) {
               + " --network host"
               + " -v " + xml_path + ":/tmp/cyclonedds_e2e.xml"
               + " -e CYCLONEDDS_URI=file:///tmp/cyclonedds_e2e.xml"
+              + " -e ROS_DOMAIN_ID=" + std::to_string(domain)
               + " " + AutowareImage() + " sleep infinity");
 
     return WaitForCondition([&]() {
@@ -141,7 +145,12 @@ public:
             return;
         }
 
-        std::string fastdds_profile = MmfFastDdsProfile();
+        // Per-run DDS domain isolation: pick a unique domain in [1,200] so this
+        // test binary does not cross-talk with the production oss-mmf stack (domain 0)
+        // or other concurrently running E2E test binaries.
+        int domain = E2EDomainId();
+        std::string fastdds_profile = E2EWriteFastDdsProfile(domain);
+        std::string domain_str = std::to_string(domain);
         setenv("FASTDDS_DEFAULT_PROFILES_FILE", fastdds_profile.c_str(), 1);
 
         ExecShell("pkill -9 adsw_manager 2>/dev/null");
@@ -153,7 +162,10 @@ public:
             return;
         }
 
-        if (!StartContainer(ALWAYS_CONTAINER)) {
+        // Start container with ROS_DOMAIN_ID=domain so that:
+        //   - ros2 node list inside the container uses domain N (not 0)
+        //   - docker start (recovery path) inherits the env and also uses domain N
+        if (!StartContainer(ALWAYS_CONTAINER, domain)) {
             ADD_FAILURE() << "Container " << ALWAYS_CONTAINER << " did not start within 30s";
             return;
         }
@@ -166,6 +178,7 @@ public:
             setenv("MMF_CONFIG_PATH", lf_config.c_str(), 1);
             setenv("LD_LIBRARY_PATH", ld_path.c_str(), 1);
             setenv("FASTDDS_DEFAULT_PROFILES_FILE", fastdds_profile.c_str(), 1);
+            setenv("ROS_DOMAIN_ID", domain_str.c_str(), 1);
             execl(MmfLfBin().c_str(), "lifecycle_mgr", nullptr);
             _exit(127);
         }
@@ -176,11 +189,14 @@ public:
             setenv("SAVED_REGISTRY_BACKUP", ALWAYS_CONFIG_DIR, 1);
             setenv("LD_LIBRARY_PATH", ld_path.c_str(), 1);
             setenv("FASTDDS_DEFAULT_PROFILES_FILE", fastdds_profile.c_str(), 1);
+            setenv("ROS_DOMAIN_ID", domain_str.c_str(), 1);
             execl(MmfAdswBin().c_str(), "adsw_manager", nullptr);
             _exit(127);
         }
 
-        // Phase 1: Wait for F003 chain — logging_demo_main running
+        // Phase 1: Wait for F003 chain — logging_demo_main running.
+        // The docker exec inherits the container's ROS_DOMAIN_ID=N env, so
+        // ros2 node list queries domain N (our isolated domain).
         node_started_ok_ = WaitForCondition([&]() {
             std::string out = ExecShell(
                 std::string("docker exec ") + ALWAYS_CONTAINER + " bash -c "
@@ -211,7 +227,9 @@ public:
 
         // Phase 3: Wait for ALWAYS recovery — lifecycle_mgr sends StartServiceRequest →
         //          adsw_manager does docker start + ros2 run → node reappears.
-        // docker start takes ~3-5s, then ros2 run + node init takes ~20-30s.
+        // docker start preserves the container's ROS_DOMAIN_ID=N so the recovered
+        // ros2 node also joins domain N, and our ros2 node list query (also domain N)
+        // can see it.  docker start takes ~3-5s, then ros2 run + node init ~20-30s.
         node_recovered_ok_ = WaitForCondition([&]() {
             std::string out = ExecShell(
                 std::string("docker exec ") + ALWAYS_CONTAINER + " bash -c "
@@ -222,7 +240,8 @@ public:
 
         if (!node_recovered_ok_) {
             ADD_FAILURE() << "Phase 3 failed: /logger_usage_demo did not reappear within 90s after crash. "
-                          << "Expected ALWAYS recovery to send StartServiceRequest → docker start → ros2 run.";
+                          << "Expected ALWAYS recovery to send StartServiceRequest → docker start → ros2 run. "
+                          << "(DDS domain: " << domain << ", profile: " << fastdds_profile << ")";
         }
     }
 
@@ -291,7 +310,10 @@ public:
             return;
         }
 
-        std::string fastdds_profile = MmfFastDdsProfile();
+        // Per-run DDS domain isolation (same process → same domain as the ALWAYS suite)
+        int domain = E2EDomainId();
+        std::string fastdds_profile = E2EWriteFastDdsProfile(domain);
+        std::string domain_str = std::to_string(domain);
         setenv("FASTDDS_DEFAULT_PROFILES_FILE", fastdds_profile.c_str(), 1);
 
         ExecShell("pkill -9 adsw_manager 2>/dev/null");
@@ -303,7 +325,7 @@ public:
             return;
         }
 
-        if (!StartContainer(MANUAL_CONTAINER)) {
+        if (!StartContainer(MANUAL_CONTAINER, domain)) {
             ADD_FAILURE() << "Container " << MANUAL_CONTAINER << " did not start within 30s";
             return;
         }
@@ -316,6 +338,7 @@ public:
             setenv("MMF_CONFIG_PATH", lf_config.c_str(), 1);
             setenv("LD_LIBRARY_PATH", ld_path.c_str(), 1);
             setenv("FASTDDS_DEFAULT_PROFILES_FILE", fastdds_profile.c_str(), 1);
+            setenv("ROS_DOMAIN_ID", domain_str.c_str(), 1);
             execl(MmfLfBin().c_str(), "lifecycle_mgr", nullptr);
             _exit(127);
         }
@@ -326,6 +349,7 @@ public:
             setenv("SAVED_REGISTRY_BACKUP", MANUAL_CONFIG_DIR, 1);
             setenv("LD_LIBRARY_PATH", ld_path.c_str(), 1);
             setenv("FASTDDS_DEFAULT_PROFILES_FILE", fastdds_profile.c_str(), 1);
+            setenv("ROS_DOMAIN_ID", domain_str.c_str(), 1);
             execl(MmfAdswBin().c_str(), "adsw_manager", nullptr);
             _exit(127);
         }
@@ -340,7 +364,7 @@ public:
         // Wait 15 more seconds (> 1 poll cycle of 10s) to confirm node never starts.
         std::this_thread::sleep_for(std::chrono::seconds(15));
 
-        // MANUAL policy: node must NOT appear in ros2 node list
+        // MANUAL policy: node must NOT appear in ros2 node list (domain N)
         std::string out = ExecShell(
             std::string("docker exec ") + MANUAL_CONTAINER + " bash -c "
             "'source /opt/ros/humble/setup.bash 2>/dev/null && ros2 node list 2>/dev/null'"
