@@ -12,25 +12,11 @@
 #include <functional>
 #include <sys/stat.h>
 
+#include "autoware_e2e_common.h"
+
 namespace {
 
-constexpr const char* AUTOWARE_IMAGE =
-    "ghcr.io/autowarefoundation/autoware:universe-dependencies-cuda-humble-20260423-amd64";
 constexpr const char* AUTOWARE_CONTAINER = "autoware-test";
-
-constexpr const char* LIFECYCLE_MGR_BIN =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework/output/x86_64/Debug/core/bin/lifecycle_mgr";
-constexpr const char* ADSW_MANAGER_BIN =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework/output/x86_64/Debug/extension/ros2/bin/adsw_manager";
-constexpr const char* FASTDDS_LIB_PATH =
-    "/home/obigo/obigo-sdk/Fast-DDS/output/ros2_x86_64/lib";
-constexpr const char* LF_LIB_PATH =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework/output/x86_64/Debug/core/lib";
-constexpr const char* ADSW_LIB_PATH =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework/output/x86_64/Debug/extension/ros2/lib";
-constexpr const char* LF_CONFIG_PATH =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework/service/core/lifecycle_mgr/config";
-constexpr const char* E2E_CONFIG_DIR = "/tmp/autoware_e2e_test";
 
 std::string ExecShell(const std::string& cmd) {
     std::string result;
@@ -73,6 +59,14 @@ public:
     static void SetUpTestSuite() {
         setup_ok_ = false;
 
+        // Fast-skip: check docker, mock image, and MMF binaries before any
+        // blocking I/O. This exits in <1s on machines without prerequisites.
+        std::string skip_reason;
+        if (!AutowareE2EPrereqs(skip_reason)) {
+            GTEST_SKIP() << skip_reason;
+            return;
+        }
+
         // Kill stale processes from prior runs to avoid DDS domain interference.
         // Use basename only — execl(path, "argv0") sets cmdline to argv0, not the full path.
         ExecShell("pkill -9 lifecycle_mgr 2>/dev/null");
@@ -80,6 +74,7 @@ public:
         std::this_thread::sleep_for(std::chrono::seconds(2));
 
         // 1. Create config dir and write saved-service-list.yaml
+        const char* E2E_CONFIG_DIR = "/tmp/autoware_e2e_test";
         mkdir(E2E_CONFIG_DIR, 0755);
         std::string yaml_path = std::string(E2E_CONFIG_DIR) + "/saved-service-list.yaml";
         std::ofstream f(yaml_path);
@@ -91,7 +86,7 @@ public:
           << "specs:\n"
           << "  - containers:\n"
           << "      - name: autoware-test\n"
-          << "        image: \"" << AUTOWARE_IMAGE << "\"\n"
+          << "        image: \"" << AutowareImage() << "\"\n"
           << "        container-type: \"docker\"\n"
           << "        services:\n"
           << "          - package: \"logging_demo\"\n"
@@ -107,7 +102,7 @@ public:
         std::string iface = ExecShell("ip route show default 2>/dev/null | awk '{print $5; exit}'");
         while (!iface.empty() && (iface.back() == '\n' || iface.back() == '\r' || iface.back() == ' '))
             iface.pop_back();
-        if (iface.empty()) iface = "enp128s31f6";  // fallback for this machine
+        if (iface.empty()) iface = "enp128s31f6";  // fallback
 
         // Write a working CycloneDDS config using the detected interface
         const char* CYCLONE_XML_PATH = "/tmp/cyclonedds_e2e.xml";
@@ -126,13 +121,13 @@ public:
         }
 
         // 3. Start autoware container (network host for DDS multicast)
-        ExecShell(std::string("docker rm -f ") + AUTOWARE_CONTAINER + " 2>/dev/null");
+        ExecShell(std::string("docker stop ") + AUTOWARE_CONTAINER + " 2>/dev/null; docker rm " + AUTOWARE_CONTAINER + " 2>/dev/null");
         std::this_thread::sleep_for(std::chrono::seconds(1));
         ExecShell(std::string("docker run -d --name ") + AUTOWARE_CONTAINER
                   + " --network host"
                   + " -v " + CYCLONE_XML_PATH + ":/tmp/cyclonedds_e2e.xml"
                   + " -e CYCLONEDDS_URI=file:///tmp/cyclonedds_e2e.xml"
-                  + " " + AUTOWARE_IMAGE + " sleep infinity");
+                  + " " + AutowareImage() + " sleep infinity");
 
         bool container_ok = WaitForCondition([]() {
             std::string out = ExecShell(
@@ -146,24 +141,17 @@ public:
         }
 
         // 4. Build LD_LIBRARY_PATH for child processes
-        std::string ld_path = std::string(LF_LIB_PATH) + ":"
-                            + ADSW_LIB_PATH + ":"
-                            + FASTDDS_LIB_PATH;
-        const char* existing_ld = std::getenv("LD_LIBRARY_PATH");
-        if (existing_ld && strlen(existing_ld) > 0) ld_path += std::string(":") + existing_ld;
-
-        // FastDDS UDP-only profile to avoid SHM transport errors on host
-        const char* FASTDDS_PROFILE =
-            "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework"
-            "/docker/build_environment/fastdds-profile.xml";
+        std::string ld_path = MmfBuildLdPath();
+        std::string lf_config = MmfLfConfig();
+        std::string fastdds_profile = MmfFastDdsProfile();
 
         // 5. Fork lifecycle_mgr
         lifecycle_pid_ = fork();
         if (lifecycle_pid_ == 0) {
-            setenv("MMF_CONFIG_PATH", LF_CONFIG_PATH, 1);
+            setenv("MMF_CONFIG_PATH", lf_config.c_str(), 1);
             setenv("LD_LIBRARY_PATH", ld_path.c_str(), 1);
-            setenv("FASTDDS_DEFAULT_PROFILES_FILE", FASTDDS_PROFILE, 1);
-            execl(LIFECYCLE_MGR_BIN, "lifecycle_mgr", nullptr);
+            setenv("FASTDDS_DEFAULT_PROFILES_FILE", fastdds_profile.c_str(), 1);
+            execl(MmfLfBin().c_str(), "lifecycle_mgr", nullptr);
             _exit(127);
         }
 
@@ -172,18 +160,14 @@ public:
         if (adsw_pid_ == 0) {
             setenv("SAVED_REGISTRY_BACKUP", E2E_CONFIG_DIR, 1);
             setenv("LD_LIBRARY_PATH", ld_path.c_str(), 1);
-            setenv("FASTDDS_DEFAULT_PROFILES_FILE", FASTDDS_PROFILE, 1);
-            execl(ADSW_MANAGER_BIN, "adsw_manager", nullptr);
+            setenv("FASTDDS_DEFAULT_PROFILES_FILE", fastdds_profile.c_str(), 1);
+            execl(MmfAdswBin().c_str(), "adsw_manager", nullptr);
             _exit(127);
         }
 
         // 7. Wait for logging_demo_main to appear in container (up to 60s)
         // Flow: adsw starts → sends UpdateServiceList → lifecycle responds → sends StartServiceRequest
         //       → adsw docker execs ros2 run → node appears in ros2 node list
-        // Wait up to 60s for E2E chain: adsw startup + UpdateServiceList handshake +
-        // StartServiceRequest + docker exec + ROS2 node initialization.
-        // AC8's "5s timeout" applies to StartServiceResponse DDS message specifically;
-        // the full node readiness check here allows for container ROS2 startup time.
         setup_ok_ = WaitForCondition([]() {
             std::string out = ExecShell(
                 "docker exec autoware-test bash -c "
@@ -199,8 +183,8 @@ public:
     static void TearDownTestSuite() {
         KillAndWait(adsw_pid_);
         KillAndWait(lifecycle_pid_);
-        ExecShell(std::string("docker rm -f ") + AUTOWARE_CONTAINER + " 2>/dev/null");
-        ExecShell(std::string("rm -rf ") + E2E_CONFIG_DIR);
+        ExecShell(std::string("docker stop ") + AUTOWARE_CONTAINER + " 2>/dev/null; docker rm " + AUTOWARE_CONTAINER + " 2>/dev/null");
+        ExecShell("rm -rf /tmp/autoware_e2e_test");
         ExecShell("rm -f /tmp/cyclonedds_e2e.xml");
         adsw_pid_ = -1;
         lifecycle_pid_ = -1;
@@ -237,7 +221,7 @@ TEST_F(L3AutowareE2ETest, TC003_LoggingDemoNodeStartedInContainer) {
         "docker exec autoware-test bash -c "
         "'source /opt/ros/humble/setup.bash 2>/dev/null && ros2 node list 2>/dev/null'");
     EXPECT_NE(out.find("/logger_usage_demo"), std::string::npos)
-        << "Expected /logger_usage_demo in ros2 node list (logging_demo_main creates /logger_usage_demo + /logger_config), got: " << out;
+        << "Expected /logger_usage_demo in ros2 node list, got: " << out;
 }
 
 // AC8: Verify node appeared within timeout (60s covers handshake + startup time)

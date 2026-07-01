@@ -26,28 +26,12 @@
 #include <functional>
 #include <sys/stat.h>
 
+#include "autoware_e2e_common.h"
+
 namespace {
 
-constexpr const char* AUTOWARE_IMAGE =
-    "ghcr.io/autowarefoundation/autoware:universe-dependencies-cuda-humble-20260423-amd64";
 constexpr const char* AUTOWARE_CONTAINER = "autoware-test-launchkill";
-
-constexpr const char* LIFECYCLE_MGR_BIN =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework/output/x86_64/Debug/core/bin/lifecycle_mgr";
-constexpr const char* ADSW_MANAGER_BIN =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework/output/x86_64/Debug/extension/ros2/bin/adsw_manager";
-constexpr const char* LF_LIB_PATH =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework/output/x86_64/Debug/core/lib";
-constexpr const char* ADSW_LIB_PATH =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework/output/x86_64/Debug/extension/ros2/lib";
-constexpr const char* FASTDDS_LIB_PATH =
-    "/home/obigo/obigo-sdk/Fast-DDS/output/ros2_x86_64/lib";
-constexpr const char* LF_CONFIG_PATH =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework/service/core/lifecycle_mgr/config";
 constexpr const char* CONFIG_DIR = "/tmp/autoware_launchkill_e2e_test";
-constexpr const char* FASTDDS_PROFILE =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework"
-    "/docker/build_environment/fastdds-profile.xml";
 
 // The launch file we use is shipped with ROS2 humble's diagnostic_aggregator
 // (small example available out of the box). Its launch supervisor's cmdline
@@ -121,12 +105,22 @@ public:
     static bool  launch_recovered_;
 
     static void SetUpTestSuite() {
-        setenv("FASTDDS_DEFAULT_PROFILES_FILE", FASTDDS_PROFILE, 1);
         launch_started_ok_   = false;
         process_died_logged_ = false;
         notify_published_    = false;
         notify_received_     = false;
         launch_recovered_    = false;
+
+        // Fast-skip: check docker, mock image, and MMF binaries before any
+        // blocking I/O. This exits in <1s on machines without prerequisites.
+        std::string skip_reason;
+        if (!AutowareE2EPrereqs(skip_reason)) {
+            GTEST_SKIP() << skip_reason;
+            return;
+        }
+
+        std::string fastdds_profile = MmfFastDdsProfile();
+        setenv("FASTDDS_DEFAULT_PROFILES_FILE", fastdds_profile.c_str(), 1);
 
         ExecShell("pkill -9 adsw_manager 2>/dev/null");
         ExecShell("pkill -9 lifecycle_mgr 2>/dev/null");
@@ -139,7 +133,7 @@ public:
               << "specs:\n"
               << "  - containers:\n"
               << "      - name: " << AUTOWARE_CONTAINER << "\n"
-              << "        image: \"" << AUTOWARE_IMAGE << "\"\n"
+              << "        image: \"" << AutowareImage() << "\"\n"
               << "        container-type: \"docker\"\n"
               << "        services:\n"
               << "          - package: \"" << SVC_PACKAGE << "\"\n"
@@ -165,13 +159,13 @@ public:
                << "</Interfaces></General></Domain></CycloneDDS>\n";
         }
 
-        ExecShell(std::string("docker rm -f ") + AUTOWARE_CONTAINER + " 2>/dev/null");
+        ExecShell(std::string("docker stop ") + AUTOWARE_CONTAINER + " 2>/dev/null; docker rm " + AUTOWARE_CONTAINER + " 2>/dev/null");
         std::this_thread::sleep_for(std::chrono::seconds(1));
         ExecShell(std::string("docker run -d --name ") + AUTOWARE_CONTAINER
                   + " --network host"
                   + " -v " + CYCLONE_XML + ":/tmp/cyclonedds_launchkill.xml"
                   + " -e CYCLONEDDS_URI=file:///tmp/cyclonedds_launchkill.xml"
-                  + " " + AUTOWARE_IMAGE + " sleep infinity");
+                  + " " + AutowareImage() + " sleep infinity");
 
         bool container_ok = WaitForCondition([]() {
             std::string out = ExecShell(
@@ -184,16 +178,15 @@ public:
             return;
         }
 
-        std::string ld_path = std::string(LF_LIB_PATH) + ":" + ADSW_LIB_PATH + ":" + FASTDDS_LIB_PATH;
-        const char* existing_ld = std::getenv("LD_LIBRARY_PATH");
-        if (existing_ld && strlen(existing_ld) > 0) ld_path += std::string(":") + existing_ld;
+        std::string ld_path = MmfBuildLdPath();
+        std::string lf_config = MmfLfConfig();
 
         lifecycle_pid_ = fork();
         if (lifecycle_pid_ == 0) {
-            setenv("MMF_CONFIG_PATH", LF_CONFIG_PATH, 1);
+            setenv("MMF_CONFIG_PATH", lf_config.c_str(), 1);
             setenv("LD_LIBRARY_PATH", ld_path.c_str(), 1);
-            setenv("FASTDDS_DEFAULT_PROFILES_FILE", FASTDDS_PROFILE, 1);
-            execl(LIFECYCLE_MGR_BIN, "lifecycle_mgr", nullptr);
+            setenv("FASTDDS_DEFAULT_PROFILES_FILE", fastdds_profile.c_str(), 1);
+            execl(MmfLfBin().c_str(), "lifecycle_mgr", nullptr);
             _exit(127);
         }
         std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -202,15 +195,12 @@ public:
         if (adsw_pid_ == 0) {
             setenv("SAVED_REGISTRY_BACKUP", CONFIG_DIR, 1);
             setenv("LD_LIBRARY_PATH", ld_path.c_str(), 1);
-            setenv("FASTDDS_DEFAULT_PROFILES_FILE", FASTDDS_PROFILE, 1);
-            execl(ADSW_MANAGER_BIN, "adsw_manager", nullptr);
+            setenv("FASTDDS_DEFAULT_PROFILES_FILE", fastdds_profile.c_str(), 1);
+            execl(MmfAdswBin().c_str(), "adsw_manager", nullptr);
             _exit(127);
         }
 
         // Phase 1: F003 chain — StartService for diagnostic_aggregator fires
-        // and the launch supervisor process is up. We confirm via adsw.log
-        // (since `ros2 node list` is unreliable here — diagnostic_aggregator
-        // node names aren't fixed across versions).
         launch_started_ok_ = WaitForCondition([]() {
             return CountLinesContaining("adsw.log",
                 std::string("StartService for :: ") + SVC_PACKAGE, 0) >= 1;
@@ -227,16 +217,11 @@ public:
         size_t adsw_baseline = CountLines("adsw.log");
         size_t lf_baseline   = CountLines("lifecycle_mgr.log");
 
-        // Phase 2: pkill the launch supervisor.  pkill -9 -f catches both the
-        // bash wrapper (cmdline ends with `$!`) and the ros2-launch python
-        // process (cmdline ends with `example.launch.py`).  The latter is what
-        // PID polling watches via Service::ResolveProcessMatchToken().
+        // Phase 2: pkill the launch supervisor.
         ExecShell(std::string("docker exec ") + AUTOWARE_CONTAINER
                   + " pkill -9 -f " + SVC_LAUNCHFILE + " 2>/dev/null");
 
-        // Phase 3: detection chain — within 15s adsw_manager must log
-        // OnServiceProcessDied and publish NotifyServiceState; lifecycle_mgr
-        // must receive it.
+        // Phase 3: detection chain — within 15s
         process_died_logged_ = WaitForCondition([adsw_baseline]() {
             return CountLinesContaining("adsw.log",
                 std::string("OnServiceProcessDied service=") + SVC_NAME,
@@ -254,7 +239,6 @@ public:
         }, 5);
 
         // Phase 4: ALWAYS recovery — second StartService for the package
-        // (above the baseline count from Phase 1).
         launch_recovered_ = WaitForCondition([adsw_baseline]() {
             return CountLinesContaining("adsw.log",
                 std::string("StartService for :: ") + SVC_PACKAGE,
@@ -265,7 +249,7 @@ public:
     static void TearDownTestSuite() {
         KillAndWait(adsw_pid_);
         KillAndWait(lifecycle_pid_);
-        ExecShell(std::string("docker rm -f ") + AUTOWARE_CONTAINER + " 2>/dev/null");
+        ExecShell(std::string("docker stop ") + AUTOWARE_CONTAINER + " 2>/dev/null; docker rm " + AUTOWARE_CONTAINER + " 2>/dev/null");
         ExecShell(std::string("rm -rf ") + CONFIG_DIR);
         ExecShell("rm -f /tmp/cyclonedds_launchkill_e2e.xml");
     }

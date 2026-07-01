@@ -24,28 +24,12 @@
 #include <functional>
 #include <sys/stat.h>
 
+#include "autoware_e2e_common.h"
+
 namespace {
 
-constexpr const char* AUTOWARE_IMAGE =
-    "ghcr.io/autowarefoundation/autoware:universe-dependencies-cuda-humble-20260423-amd64";
 constexpr const char* AUTOWARE_CONTAINER = "autoware-test-nodekill";
-
-constexpr const char* LIFECYCLE_MGR_BIN =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework/output/x86_64/Debug/core/bin/lifecycle_mgr";
-constexpr const char* ADSW_MANAGER_BIN =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework/output/x86_64/Debug/extension/ros2/bin/adsw_manager";
-constexpr const char* LF_LIB_PATH =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework/output/x86_64/Debug/core/lib";
-constexpr const char* ADSW_LIB_PATH =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework/output/x86_64/Debug/extension/ros2/lib";
-constexpr const char* FASTDDS_LIB_PATH =
-    "/home/obigo/obigo-sdk/Fast-DDS/output/ros2_x86_64/lib";
-constexpr const char* LF_CONFIG_PATH =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework/service/core/lifecycle_mgr/config";
 constexpr const char* CONFIG_DIR = "/tmp/autoware_nodekill_e2e_test";
-constexpr const char* FASTDDS_PROFILE =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework"
-    "/docker/build_environment/fastdds-profile.xml";
 
 std::string ExecShell(const std::string& cmd) {
     std::string result;
@@ -113,12 +97,22 @@ public:
     static bool  node_recovered_;
 
     static void SetUpTestSuite() {
-        setenv("FASTDDS_DEFAULT_PROFILES_FILE", FASTDDS_PROFILE, 1);
         node_started_ok_     = false;
         process_died_logged_ = false;
         notify_published_    = false;
         notify_received_     = false;
         node_recovered_      = false;
+
+        // Fast-skip: check docker, mock image, and MMF binaries before any
+        // blocking I/O. This exits in <1s on machines without prerequisites.
+        std::string skip_reason;
+        if (!AutowareE2EPrereqs(skip_reason)) {
+            GTEST_SKIP() << skip_reason;
+            return;
+        }
+
+        std::string fastdds_profile = MmfFastDdsProfile();
+        setenv("FASTDDS_DEFAULT_PROFILES_FILE", fastdds_profile.c_str(), 1);
 
         ExecShell("pkill -9 adsw_manager 2>/dev/null");
         ExecShell("pkill -9 lifecycle_mgr 2>/dev/null");
@@ -131,7 +125,7 @@ public:
               << "specs:\n"
               << "  - containers:\n"
               << "      - name: " << AUTOWARE_CONTAINER << "\n"
-              << "        image: \"" << AUTOWARE_IMAGE << "\"\n"
+              << "        image: \"" << AutowareImage() << "\"\n"
               << "        container-type: \"docker\"\n"
               << "        services:\n"
               << "          - package: \"logging_demo\"\n"
@@ -157,13 +151,13 @@ public:
                << "</Interfaces></General></Domain></CycloneDDS>\n";
         }
 
-        ExecShell(std::string("docker rm -f ") + AUTOWARE_CONTAINER + " 2>/dev/null");
+        ExecShell(std::string("docker stop ") + AUTOWARE_CONTAINER + " 2>/dev/null; docker rm " + AUTOWARE_CONTAINER + " 2>/dev/null");
         std::this_thread::sleep_for(std::chrono::seconds(1));
         ExecShell(std::string("docker run -d --name ") + AUTOWARE_CONTAINER
                   + " --network host"
                   + " -v " + CYCLONE_XML + ":/tmp/cyclonedds_nodekill.xml"
                   + " -e CYCLONEDDS_URI=file:///tmp/cyclonedds_nodekill.xml"
-                  + " " + AUTOWARE_IMAGE + " sleep infinity");
+                  + " " + AutowareImage() + " sleep infinity");
 
         bool container_ok = WaitForCondition([]() {
             std::string out = ExecShell(
@@ -176,16 +170,15 @@ public:
             return;
         }
 
-        std::string ld_path = std::string(LF_LIB_PATH) + ":" + ADSW_LIB_PATH + ":" + FASTDDS_LIB_PATH;
-        const char* existing_ld = std::getenv("LD_LIBRARY_PATH");
-        if (existing_ld && strlen(existing_ld) > 0) ld_path += std::string(":") + existing_ld;
+        std::string ld_path = MmfBuildLdPath();
+        std::string lf_config = MmfLfConfig();
 
         lifecycle_pid_ = fork();
         if (lifecycle_pid_ == 0) {
-            setenv("MMF_CONFIG_PATH", LF_CONFIG_PATH, 1);
+            setenv("MMF_CONFIG_PATH", lf_config.c_str(), 1);
             setenv("LD_LIBRARY_PATH", ld_path.c_str(), 1);
-            setenv("FASTDDS_DEFAULT_PROFILES_FILE", FASTDDS_PROFILE, 1);
-            execl(LIFECYCLE_MGR_BIN, "lifecycle_mgr", nullptr);
+            setenv("FASTDDS_DEFAULT_PROFILES_FILE", fastdds_profile.c_str(), 1);
+            execl(MmfLfBin().c_str(), "lifecycle_mgr", nullptr);
             _exit(127);
         }
         std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -194,8 +187,8 @@ public:
         if (adsw_pid_ == 0) {
             setenv("SAVED_REGISTRY_BACKUP", CONFIG_DIR, 1);
             setenv("LD_LIBRARY_PATH", ld_path.c_str(), 1);
-            setenv("FASTDDS_DEFAULT_PROFILES_FILE", FASTDDS_PROFILE, 1);
-            execl(ADSW_MANAGER_BIN, "adsw_manager", nullptr);
+            setenv("FASTDDS_DEFAULT_PROFILES_FILE", fastdds_profile.c_str(), 1);
+            execl(MmfAdswBin().c_str(), "adsw_manager", nullptr);
             _exit(127);
         }
 
@@ -244,10 +237,7 @@ public:
         }, 5);
 
         // Phase 4: Full recovery chain — ALWAYS policy → StartServiceRequest →
-        // adsw_manager StartService for logging_demo (a SECOND time after the
-        // baseline).  We check the StartService log line count rather than
-        // `ros2 node list` because the ros2 daemon caches discovery info and
-        // returns the old node name even after it's been killed.
+        // adsw_manager StartService for logging_demo (a SECOND time after the baseline).
         node_recovered_ = WaitForCondition([adsw_baseline]() {
             return CountLinesContaining("adsw.log",
                 "StartService for :: logging_demo", adsw_baseline) >= 1;
@@ -257,7 +247,7 @@ public:
     static void TearDownTestSuite() {
         KillAndWait(adsw_pid_);
         KillAndWait(lifecycle_pid_);
-        ExecShell(std::string("docker rm -f ") + AUTOWARE_CONTAINER + " 2>/dev/null");
+        ExecShell(std::string("docker stop ") + AUTOWARE_CONTAINER + " 2>/dev/null; docker rm " + AUTOWARE_CONTAINER + " 2>/dev/null");
         ExecShell(std::string("rm -rf ") + CONFIG_DIR);
         ExecShell("rm -f /tmp/cyclonedds_nodekill_e2e.xml");
     }

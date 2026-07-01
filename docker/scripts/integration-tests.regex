@@ -12,7 +12,10 @@
 # ── whole integration suites ──────────────────────────────────────────────
 #  GrpcTransportTest            : opens a real gRPC channel to localhost:5443
 #  ConcreteEndpointIntegrationTest / LifecycleAdswIntegrationTest : real DDS pub→sub
-#  *AutowareE2ETest / L3AutowareE2ETest : real autoware docker container
+#  NOTE: *AutowareE2ETest / L3AutowareE2ETest are NO LONGER in the integration lane.
+#        They use the mock image (mmf-autoware-mock:humble, 760MB) and run in the
+#        unit lane with fast-skip when prerequisites are absent. See:
+#        docker/test/Dockerfile.autoware-mock and autoware_e2e_common.h.
 # ── specific runtime/flaky tests inside otherwise-unit suites ──────────────
 #  MessageTransmitterTest .*ROS : ROS-forwarding paths need a ROS graph
 #  DDSProtocolTest .*_with_(reader|writer) : 실 DDS DataReader/DataWriter 생성·해제
@@ -41,4 +44,4 @@
 #                                 Testable_OnDataAvailable_WithMockInfo /
 #                                 Testable_OnDataAvailable_MultipleCalls
 #                                 — require real FastDDS DataReader participant
-GrpcTransportTest\.|ConcreteEndpointIntegrationTest\.|LifecycleAdswIntegrationTest\.|Autoware.*E2ETest\.|L3AutowareE2ETest\.|MessageTransmitterTest\..*ROS|DDSProtocolTest\..*_with_(reader|writer)|DDSProtocolDeserializeTest\.Deserialize_Direct_TC016_sequence_string|DDSProtocolBranchCoverageTest\.register_type_object_TC003_comprehensive_sequence|GrpcProviderTest\.|VssSubscriptionManagerTest\.SubscriptionWithPathsFilter|OtamActorServiceTest\.F012_AllSignalsBeforeTimeout_NoTimeout|ADSWManagerTest\.(InitializeAndStartStop|InitializeMultipleTimes|StartAndStopMultipleTimes|Process_InStartedState|Process_UpdateServiceListRequestFails)|ContainerDockerComposeTest\.(StartComposeContainer_Success_IT010|GetContainerStatusStr_Running_IT011|StopComposeContainer_Success_IT012|RestartComposeContainer_IT013)|ROSDiscoveryInfoEndpointTest\.(OnDataAvailable_DirectCall_ReadFails|OnDataAvailable_MultipleCalls|InitializeAndFinalize|Testable_OnDataAvailable_ReadSucceeds_ManagerValid|Testable_OnDataAvailable_WithMockInfo|Testable_OnDataAvailable_MultipleCalls)
+GrpcTransportTest\.|ConcreteEndpointIntegrationTest\.|LifecycleAdswIntegrationTest\.|MessageTransmitterTest\..*ROS|DDSProtocolTest\..*_with_(reader|writer)|DDSProtocolDeserializeTest\.Deserialize_Direct_TC016_sequence_string|DDSProtocolBranchCoverageTest\.register_type_object_TC003_comprehensive_sequence|GrpcProviderTest\.|VssSubscriptionManagerTest\.SubscriptionWithPathsFilter|OtamActorServiceTest\.F012_AllSignalsBeforeTimeout_NoTimeout|ADSWManagerTest\.(InitializeAndStartStop|InitializeMultipleTimes|StartAndStopMultipleTimes|Process_InStartedState|Process_UpdateServiceListRequestFails)|ContainerDockerComposeTest\.(StartComposeContainer_Success_IT010|GetContainerStatusStr_Running_IT011|StopComposeContainer_Success_IT012|RestartComposeContainer_IT013)|ROSDiscoveryInfoEndpointTest\.(OnDataAvailable_DirectCall_ReadFails|OnDataAvailable_MultipleCalls|InitializeAndFinalize|Testable_OnDataAvailable_ReadSucceeds_ManagerValid|Testable_OnDataAvailable_WithMockInfo|Testable_OnDataAvailable_MultipleCalls)
