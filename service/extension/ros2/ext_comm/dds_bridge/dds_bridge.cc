@@ -8,10 +8,8 @@
 #include <fastdds/dds/xtypes/dynamic_types/DynamicDataFactory.hpp>
 #include <fastdds/dds/xtypes/dynamic_types/DynamicPubSubType.hpp>
 #include <fastdds/dds/xtypes/dynamic_types/DynamicTypeBuilderFactory.hpp>
-#include <fastdds/rtps/transport/UDPv4TransportDescriptor.hpp>
 
 #include <iostream>
-#include <memory>
 #include <utility>
 
 using namespace eprosima::fastdds::dds;
@@ -64,13 +62,6 @@ bool DdsBridge::Initialize(const std::string& idl_root) {
     // there is no same-participant loopback to suppress, and the
     // property has been observed to subtly affect cross-process
     // matching in some FastDDS versions.
-
-    // UDP-only transport (no SHM). The builtin SHM transport leaves stale
-    // /dev/shm/fastdds_* segments on container kill/restart that corrupt DDS
-    // discovery across restarts; same-host peers (core) use UDP loopback.
-    qos.transport().use_builtin_transports = false;
-    qos.transport().user_transports.push_back(
-        std::make_shared<eprosima::fastdds::rtps::UDPv4TransportDescriptor>());
 
     participant_ = factory->create_participant(0, qos);
     if (!participant_) {

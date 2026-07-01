@@ -16,7 +16,6 @@
 
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp>
 #include <fastdds/dds/domain/DomainParticipant.hpp>
-#include <fastdds/rtps/transport/UDPv4TransportDescriptor.hpp>
 #include <fastdds/dds/topic/TypeSupport.hpp>
 #include <fastdds/dds/publisher/Publisher.hpp>
 #include <fastdds/dds/publisher/DataWriter.hpp>
@@ -306,11 +305,6 @@ DDSTransport::~DDSTransport() {
 void DDSTransport::start() {
     DomainParticipantQos pqos;
     pqos.name("viss_dds_transport");
-    // UDP-only transport (no SHM) — avoids stale /dev/shm/fastdds_* segments
-    // that break DDS discovery across container restarts.
-    pqos.transport().use_builtin_transports = false;
-    pqos.transport().user_transports.push_back(
-        std::make_shared<eprosima::fastdds::rtps::UDPv4TransportDescriptor>());
 
     int domain_id = 0; // Default domain ID
     const char* domain_id_env = std::getenv("VISS_DDS_DOMAIN_ID");
