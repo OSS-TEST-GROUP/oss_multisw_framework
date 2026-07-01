@@ -195,15 +195,48 @@ pipeline {
         }
         stage('Run Unittest') {
             steps {
+                // Build the lightweight autoware mock image on the Jenkins agent host
+                // BEFORE launching the builder container. The mock is used by the 9
+                // autoware E2E tests (LifecycleAutoware*E2ETest) which now run in the
+                // unit lane via fast-skip when prerequisites are absent.
+                // ~760MB build; skipped if the image tag already exists.
+                sh '''
+                    if ! docker image inspect mmf-autoware-mock:humble >/dev/null 2>&1; then
+                        echo "[unittest] Building autoware mock image (760MB)..."
+                        docker build -f docker/test/Dockerfile.autoware-mock \
+                            -t mmf-autoware-mock:humble .
+                    else
+                        echo "[unittest] mmf-autoware-mock:humble already exists, skipping build."
+                    fi
+                '''
                 script {
                     def dockerArgs = [
                         '--network=host',
                         '-u 1000:1000',
                         '-w /home/ossuser/workspace',
                         '-e JAVA_OPTS=-Dorg.jenkinsci.plugins.durabletask.BourneShellScript.HEARTBEAT_CHECK_INTERVAL=86400',
+                        // ── Autoware E2E: docker-in-container wiring ──────────────────
+                        // Mount the host docker socket so the test runner container can
+                        // manage docker containers (start/stop the mock image) on behalf
+                        // of the autoware E2E tests.
+                        // TODO (CI infra): ensure the ossuser (uid 1000) is in the
+                        //   `docker` group on the Jenkins agent so it can use the socket.
+                        //   Add to agent setup: usermod -aG docker ossuser
+                        '-v /var/run/docker.sock:/var/run/docker.sock',
+                        // ── Autoware E2E: path / image env vars ──────────────────────
+                        // MMF_E2E_ROOT: top-level repo root as seen inside the runner.
+                        // MMF_E2E_OUTPUT: where the build artifacts (binaries/libs) are.
+                        // MMF_AUTOWARE_TEST_IMAGE: the mock image built above.
+                        // MMF_E2E_FASTDDS_LIB: path to FastDDS SDK libs inside runner.
+                        '-e MMF_E2E_ROOT=/home/ossuser/workspace',
+                        '-e MMF_E2E_OUTPUT=/home/ossuser/workspace/output/x86_64/Debug',
+                        '-e MMF_AUTOWARE_TEST_IMAGE=mmf-autoware-mock:humble',
+                        '-e MMF_E2E_FASTDDS_LIB=/opt/Fast-DDS/output/ros2_x86_64/lib',
                         "-v ${WORKSPACE}/.build:/home/ossuser/workspace/.build",
                         "-v ${WORKSPACE}/idl:/home/ossuser/workspace/idl",
                         "-v ${WORKSPACE}/output:/home/ossuser/workspace/output",
+                        "-v ${WORKSPACE}/service:/home/ossuser/workspace/service",
+                        "-v ${WORKSPACE}/docker:/home/ossuser/workspace/docker",
                         "-v ${WORKSPACE}/docker/scripts/run_unittest.sh:/home/ossuser/workspace/run_unittest.sh",
                         // run_unittest.sh reads docker/scripts/integration-tests.regex to
                         // exclude the runtime-dependent integration tests. The script is
