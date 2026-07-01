@@ -3,9 +3,11 @@
 
 #include "otam_dds.h"
 #include <iostream>
+#include <memory>
 #include <mutex>
 #include <fastdds/dds/domain/DomainParticipant.hpp>
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp>
+#include <fastdds/rtps/transport/UDPv4TransportDescriptor.hpp>
 #include <fastdds/dds/publisher/Publisher.hpp>
 #include <fastdds/dds/publisher/qos/DataWriterQos.hpp>
 #include <fastdds/dds/subscriber/Subscriber.hpp>
@@ -80,6 +82,14 @@ public:
         // the bridge's writes.
         participant_qos.properties().properties().emplace_back(
             "fastdds.type_propagation", "disabled");
+        // UDP-only transport (no SHM). PARTICIPANT_QOS_DEFAULT enables the
+        // builtin SHM transport, which leaves stale /dev/shm/fastdds_*
+        // segments behind on container kill/restart; those zombies corrupt
+        // cross-container DDS discovery (DiagReport/NotifyServiceState stop
+        // reaching lfc_monitor). Same-host peers use UDP loopback instead.
+        participant_qos.transport().use_builtin_transports = false;
+        participant_qos.transport().user_transports.push_back(
+            std::make_shared<eprosima::fastdds::rtps::UDPv4TransportDescriptor>());
         participant_ = factory->create_participant(0, participant_qos);
         if (!participant_) {
             throw std::runtime_error("OtamDdsParticipant: Failed to create shared DomainParticipant");

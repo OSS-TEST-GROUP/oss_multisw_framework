@@ -3,6 +3,7 @@
 
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp>
 #include <fastdds/dds/domain/DomainParticipantListener.hpp>
+#include <fastdds/rtps/transport/UDPv4TransportDescriptor.hpp>
 #include <fastdds/dds/builtin/topic/ParticipantBuiltinTopicData.hpp>
 #include <fastdds/dds/builtin/topic/PublicationBuiltinTopicData.hpp>
 #include <fastdds/dds/builtin/topic/SubscriptionBuiltinTopicData.hpp>
@@ -376,6 +377,11 @@ DDSProvider::DDSProvider()
     // Create Participant
     DomainParticipantQos pqos = PARTICIPANT_QOS_DEFAULT;
     pqos.name("VISS_Participant");
+    // UDP-only transport (no SHM) — avoids stale /dev/shm/fastdds_* segments
+    // that break DDS discovery across container restarts.
+    pqos.transport().use_builtin_transports = false;
+    pqos.transport().user_transports.push_back(
+        std::make_shared<eprosima::fastdds::rtps::UDPv4TransportDescriptor>());
     participant_ = DomainParticipantFactory::get_instance()->create_participant(domain_id, pqos, discovery_listener_.get(), StatusMask::none());
     if (participant_ == nullptr) {
         LOG_ERROR << "Failed to create DDS Participant on domain " << domain_id;

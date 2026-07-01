@@ -3,6 +3,9 @@
 #include "ota_mgr/OtamClientServiceMsg.hpp"
 
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp>
+#include <fastdds/rtps/transport/UDPv4TransportDescriptor.hpp>
+
+#include <memory>
 
 using namespace otamanager;
 using namespace eprosima::fastdds::dds;
@@ -17,6 +20,11 @@ namespace ota_client::agl
 
         DomainParticipantQos participant_qos = PARTICIPANT_QOS_DEFAULT;
         participant_qos.name("ota client participant");
+        // UDP-only transport (no SHM) — avoids stale /dev/shm/fastdds_*
+        // segments that break DDS discovery across container restarts.
+        participant_qos.transport().use_builtin_transports = false;
+        participant_qos.transport().user_transports.push_back(
+            std::make_shared<eprosima::fastdds::rtps::UDPv4TransportDescriptor>());
         participant_ = DomainParticipantFactory::get_instance()->create_participant(0, participant_qos);
 
         if (participant_ == nullptr)

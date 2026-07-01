@@ -9,6 +9,7 @@
 
 #include <fastdds/dds/domain/DomainParticipant.hpp>
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp>
+#include <fastdds/rtps/transport/UDPv4TransportDescriptor.hpp>
 
 #include <memory>
 #include <iostream>
@@ -56,6 +57,11 @@ int main(int argc, char* argv[]) {
 
     eprosima::fastdds::dds::DomainParticipantQos participant_qos;
     participant_qos.name("adsw_manager_participant");
+    // UDP-only transport (no SHM) — avoids stale /dev/shm/fastdds_* segments
+    // that break DDS discovery across container restarts.
+    participant_qos.transport().use_builtin_transports = false;
+    participant_qos.transport().user_transports.push_back(
+        std::make_shared<eprosima::fastdds::rtps::UDPv4TransportDescriptor>());
     eprosima::fastdds::dds::DomainParticipant* participant =
         eprosima::fastdds::dds::DomainParticipantFactory::get_instance()
             ->create_participant(0, participant_qos);

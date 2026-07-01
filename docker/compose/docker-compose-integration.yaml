@@ -39,6 +39,14 @@ services:
       HEARTBEAT_INTERVAL_SEC: ${HEARTBEAT_INTERVAL_SEC:-3}
     # /dev/shm is shared so FastDDS shared-memory transport (default for
     # same-host pubsub) works between mmf-core and mmf-ext-ros2.
+    #
+    # NOTE: making this a per-container private tmpfs (to avoid stale
+    # /dev/shm/fastdds_* zombies across restarts) was tried and REVERTED —
+    # the MMF C++ services rely on SHM for same-host core↔ext-ros2 delivery
+    # and do NOT fall back to UDP loopback cleanly, so DiagReport stopped
+    # reaching ext-ros2's bridge entirely. Zombie cleanup must be solved a
+    # different way (clean /dev/shm/fastdds_* on a full stop, or make the
+    # services honor the UDP-only fastdds-profile.xml).
     volumes:
       - /dev/shm:/dev/shm
     restart: unless-stopped
