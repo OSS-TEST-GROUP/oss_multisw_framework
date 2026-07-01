@@ -1,6 +1,7 @@
 #include "ADSWManager.hpp"
 #include "logger/Log.hpp"
 #include "endpoint/MessageTypes.hpp"
+#include <cstdio>
 
 namespace ros2 {
 namespace adsw_manager {
@@ -165,48 +166,53 @@ std::shared_ptr<ROSServiceDiscovery> ADSWManager::GetServiceDiscovery() {
 namespace {
 constexpr std::size_t kGuidPrefixBytes = 12;
 
-void copy_prefix(const eprosima::fastdds::dds::InstanceHandle_t& handle,
-                 std::array<uint8_t, kGuidPrefixBytes>& out) {
+std::array<uint8_t, kGuidPrefixBytes> extract_prefix(
+    const eprosima::fastdds::dds::InstanceHandle_t& handle) {
+    std::array<uint8_t, kGuidPrefixBytes> prefix{};
     const uint8_t* raw = reinterpret_cast<const uint8_t*>(&handle);
-    std::copy_n(raw, kGuidPrefixBytes, out.begin());
-}
-
-bool prefix_equal(const eprosima::fastdds::dds::InstanceHandle_t& handle,
-                  const std::array<uint8_t, kGuidPrefixBytes>& cached) {
-    const uint8_t* raw = reinterpret_cast<const uint8_t*>(&handle);
-    return std::equal(cached.begin(), cached.end(), raw);
+    std::copy_n(raw, kGuidPrefixBytes, prefix.begin());
+    return prefix;
 }
 } // namespace
 
 void ADSWManager::SetKnownLifecyclePublisher(
     const eprosima::fastdds::dds::InstanceHandle_t& handle) {
+    auto prefix = extract_prefix(handle);
     std::lock_guard<std::mutex> lk(lifecycle_prefix_mutex_);
-    if (lifecycle_prefix_set_) return;  // pin first observed and stay.
-    copy_prefix(handle, lifecycle_prefix_);
-    lifecycle_prefix_set_ = true;
-    LOG_DEBUG("ADSWManager: pinned lifecycle_mgr publisher prefix");
+    auto [it, inserted] = lifecycle_trusted_prefixes_.insert(prefix);
+    if (inserted) {
+        char hex[kGuidPrefixBytes * 3 + 1]{};
+        for (std::size_t i = 0; i < kGuidPrefixBytes; ++i) {
+            std::snprintf(hex + i * 3, 4, "%02x:", prefix[i]);
+        }
+        LOG_DEBUG("ADSWManager: trusted new lifecycle_mgr prefix: " << hex
+                  << "  (trusted set size=" << lifecycle_trusted_prefixes_.size() << ")");
+    }
 }
 
 bool ADSWManager::IsKnownLifecyclePublisher(
     const eprosima::fastdds::dds::InstanceHandle_t& handle) {
+    auto prefix = extract_prefix(handle);
     std::lock_guard<std::mutex> lk(lifecycle_prefix_mutex_);
     // Strict: refuse anything that arrives before lifecycle_mgr has been
-    // identified via UpdateServiceListResponse. The earlier permissive
-    // policy left a boot-time window during which phantom publishers got
-    // their first burst of raw StartServiceRequests through, which then
-    // spawned a real service even under MANUAL recovery — operators saw
-    // "MANUAL but auto-started" right after compose up. lifecycle_mgr's
-    // own PolicyManager never publishes a Start before the handshake
-    // completes (PolicyManual returns NONE, and ProcessServiceHandling
-    // only fires off the back of state updates that come from us anyway),
+    // identified via UpdateServiceListResponse. lifecycle_mgr's own
+    // PolicyManager never publishes a Start before the handshake completes,
     // so refusing pre-handshake doesn't drop any legitimate traffic.
-    if (!lifecycle_prefix_set_) return false;
-    return prefix_equal(handle, lifecycle_prefix_);
+    if (lifecycle_trusted_prefixes_.empty()) return false;
+    bool known = lifecycle_trusted_prefixes_.count(prefix) > 0;
+    if (!known) {
+        char hex[kGuidPrefixBytes * 3 + 1]{};
+        for (std::size_t i = 0; i < kGuidPrefixBytes; ++i) {
+            std::snprintf(hex + i * 3, 4, "%02x:", prefix[i]);
+        }
+        LOG_DEBUG("ADSWManager: dropping message from untrusted lifecycle prefix: " << hex);
+    }
+    return known;
 }
 
 bool ADSWManager::KnownLifecyclePublisherSet() {
     std::lock_guard<std::mutex> lk(lifecycle_prefix_mutex_);
-    return lifecycle_prefix_set_;
+    return !lifecycle_trusted_prefixes_.empty();
 }
 
 
