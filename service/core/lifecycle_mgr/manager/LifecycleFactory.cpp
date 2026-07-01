@@ -66,28 +66,34 @@ std::shared_ptr<ServiceRegistry> LifecycleFactory::GetRegistry(){
 namespace {
 constexpr std::size_t kGuidPrefixBytes = 12;
 
-void copy_prefix(const eprosima::fastdds::dds::InstanceHandle_t& handle,
-                 std::array<uint8_t, kGuidPrefixBytes>& out) {
+std::array<uint8_t, kGuidPrefixBytes> make_prefix(
+    const eprosima::fastdds::dds::InstanceHandle_t& handle) {
+    std::array<uint8_t, kGuidPrefixBytes> out{};
     const uint8_t* raw =
         reinterpret_cast<const uint8_t*>(&handle);
     std::copy_n(raw, kGuidPrefixBytes, out.begin());
-}
-
-bool prefix_equal(const eprosima::fastdds::dds::InstanceHandle_t& handle,
-                  const std::array<uint8_t, kGuidPrefixBytes>& cached) {
-    const uint8_t* raw =
-        reinterpret_cast<const uint8_t*>(&handle);
-    return std::equal(cached.begin(), cached.end(), raw);
+    return out;
 }
 } // namespace
 
 void LifecycleFactory::SetKnownAdswPublisher(
     const eprosima::fastdds::dds::InstanceHandle_t& handle) {
     std::lock_guard<std::mutex> lk(adsw_prefix_mutex_);
-    if (adsw_prefix_set_) return;  // first writer wins — see hpp commentary.
-    copy_prefix(handle, adsw_prefix_);
-    adsw_prefix_set_ = true;
-    LOG_DEBUG("LifecycleFactory: pinned adsw_manager publisher prefix");
+    // Trust EVERY participant that sends UpdateServiceListRequest, not just
+    // the first one. UpdateServiceListRequest is adsw_manager's deliberate
+    // registration handshake, so a phantom/zombie publisher never sends it —
+    // accumulating the set keeps the anti-phantom guarantee while fixing two
+    // things the old first-writer-wins pin broke:
+    //   (1) producer restart — a restarted adsw_manager comes back with a NEW
+    //       participant prefix; the old pin would reject all its
+    //       NotifyServiceState forever (service stuck NOT_RUNNING on the
+    //       monitor), recoverable only by restarting lifecycle_mgr.
+    //   (2) multiple adsw_managers (ros2 + agl) feeding one lifecycle_mgr —
+    //       the old pin trusted one and dropped the other's state.
+    if (known_adsw_prefixes_.insert(make_prefix(handle)).second) {
+        LOG_DEBUG("LifecycleFactory: trusting adsw_manager publisher prefix "
+                  "(known=" << known_adsw_prefixes_.size() << ")");
+    }
 }
 
 bool LifecycleFactory::IsKnownAdswPublisher(
@@ -100,13 +106,13 @@ bool LifecycleFactory::IsKnownAdswPublisher(
     // the monitor. adsw_manager publishes UpdateServiceListRequest very
     // early in its own boot (right after CreateEndPoints), so no
     // legitimate response can arrive before the trust anchor is in place.
-    if (!adsw_prefix_set_) return false;
-    return prefix_equal(handle, adsw_prefix_);
+    if (known_adsw_prefixes_.empty()) return false;
+    return known_adsw_prefixes_.count(make_prefix(handle)) > 0;
 }
 
 bool LifecycleFactory::KnownAdswPublisherSet() {
     std::lock_guard<std::mutex> lk(adsw_prefix_mutex_);
-    return adsw_prefix_set_;
+    return !known_adsw_prefixes_.empty();
 }
 
 
