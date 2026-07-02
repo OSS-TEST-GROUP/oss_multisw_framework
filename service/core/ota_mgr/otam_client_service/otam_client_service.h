@@ -152,10 +152,13 @@ class OtamDiagnosticService;
        * 
        * @param client_id Unique identifier assigned to the client
        * @param ret_code Registration result (SUCCESS or FAILURE)
-       * 
+       * @param client_name Name of the client this response is addressed to
+       *        (echoed back so each client can pick its own response off the
+       *        shared response topic)
+       *
        * @throws std::runtime_error if message publishing fails
        */
-      void PublishRegistrationResponse(long client_id, ReturnValue ret_code);
+      void PublishRegistrationResponse(long client_id, ReturnValue ret_code, const std::string& client_name);
 
       /**
        * @brief Notifies application update status

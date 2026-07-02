@@ -1202,33 +1202,31 @@ otamanager::GetAppListResponse OtamActorService::BuildGetAppListResponse(
         id_to_name[cid] = info.client_name;
     }
 
-    // Step 1: dedupe — for each app name, remember the lowest client_id
-    //         that registered it. std::map keeps insertion of first
-    //         (lowest) value naturally because we iterate clients in key
-    //         order.
-    std::map<std::string, int32_t> app_to_owner;
-    for (const auto& [cid, info] : clients) {
-        for (const auto& app : info.app_names) {
-            auto it = app_to_owner.find(app);
-            if (it == app_to_owner.end() || cid < it->second) {
-                app_to_owner[app] = cid;
-            }
-        }
-    }
-
-    // Step 2: emit parallel arrays in app-name lexicographic order
-    //         (std::map iteration order).
+    // Step 1: enumerate every (client, app) pair — do NOT dedupe by app
+    //         name. An app name is unique only within a single host, where
+    //         exactly one client registers it and apps are never shared
+    //         between clients. Across heterogeneous hosts (e.g. a ros2 board
+    //         and an agl board) the same app name can legitimately exist,
+    //         each registered by its own client; collapsing them to one
+    //         owner would hide one host's installation entirely. Each client
+    //         therefore contributes one entry per app it registered, even if
+    //         another client (on another host) registered the same name.
+    //
+    //         Emitted in ascending client_id order (std::map iteration) then
+    //         registration order within a client. The consumer groups by
+    //         owner_client_id, so ordering only matters for determinism.
     std::vector<std::string> names;
     std::vector<int32_t>     owners;
     std::vector<std::string> owner_names;
-    names.reserve(app_to_owner.size());
-    owners.reserve(app_to_owner.size());
-    owner_names.reserve(app_to_owner.size());
-    for (const auto& [app, owner] : app_to_owner) {
-        names.push_back(app);
-        owners.push_back(owner);
-        auto nit = id_to_name.find(owner);
-        owner_names.push_back(nit != id_to_name.end() ? nit->second : std::string{});
+    for (const auto& [cid, info] : clients) {
+        const auto nit = id_to_name.find(cid);
+        const std::string cname =
+            (nit != id_to_name.end()) ? nit->second : std::string{};
+        for (const auto& app : info.app_names) {
+            names.push_back(app);
+            owners.push_back(cid);
+            owner_names.push_back(cname);
+        }
     }
 
     otamanager::GetAppListResponse resp;

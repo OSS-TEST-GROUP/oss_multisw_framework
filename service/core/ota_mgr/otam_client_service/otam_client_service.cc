@@ -110,9 +110,11 @@
 
       // SetOtaClientRegistration
       set_ota_client_reg_ = std::make_shared<otamanager::SetOtaClientRegistrationPubSubType>();
+      // Fix②: 등록 리더도 TRANSIENT_LOCAL — 클라이언트(writer)가 디스커버리 전 retained
+      // 발행한 등록 샘플을, core 가 늦게 매칭돼도 수신한다(기동 레이스 등록 유실 방지).
       registration_dds_->Create(TOPIC_REGISTRATION,
                                std::static_pointer_cast<void>(set_ota_client_reg_),
-                               std::static_pointer_cast<void>(registration_listener_));
+                               std::static_pointer_cast<void>(registration_listener_), true);
 
       // SetOtaClientRegistrationResponse (TRANSIENT_LOCAL: late-joining clients can receive it)
       set_ota_client_reg_res_ = std::make_shared<otamanager::SetOtaClientRegistrationResponsePubSubType>();
@@ -244,7 +246,7 @@
                         << " to " << registration_data.client_name() << std::endl;
           }
 
-          PublishRegistrationResponse(client_id, ret_code);
+          PublishRegistrationResponse(client_id, ret_code, registration_data.client_name());
           std::cout << "[OtamClientService] Published registration response: client_id=" << client_id
                     << ", result=" << ((ret_code == ReturnValue::SUCCESS) ? "SUCCESS" : "FAIL") << std::endl;
 
@@ -261,9 +263,10 @@
           ReportErrorToDiagnosticService(static_cast<int32_t>(OtamError::FAILED),
               "OtaClient Registration Failed: " + registration_data.client_name());
 
-          // Send failure response
+          // Send failure response (addressed to the requesting client so it can
+          // match it off the shared response topic — Fix①)
           try {
-              PublishRegistrationResponse(0, ReturnValue::FAIL);
+              PublishRegistrationResponse(0, ReturnValue::FAIL, registration_data.client_name());
           }
           catch (...) {
               std::cerr << "[OtamClientService] Failed to send error response" << std::endl;
@@ -271,12 +274,13 @@
       }
   }
 
-  void OtamClientService::PublishRegistrationResponse(long client_id, ReturnValue ret_code) {
+  void OtamClientService::PublishRegistrationResponse(long client_id, ReturnValue ret_code, const std::string& client_name) {
       try {
           // Create SetOtaClientRegistrationResponse message
           auto response_message = std::make_shared<otamanager::SetOtaClientRegistrationResponse>();
           response_message->client_id(client_id);
           response_message->ret_code(ret_code);
+          response_message->client_name(client_name);
 
           // Publish the response using registration_response_dds_
           if (registration_response_dds_) {
