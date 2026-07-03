@@ -1,0 +1,23 @@
+# CI-runnable self-contained integration subset (Phase 1).
+#
+# ctest cases that pass reliably in ISOLATION on a dedicated DDS domain — they
+# stand up their own in-process DDS publisher+subscriber (or endpoint) and need
+# NO external gRPC server (:5443), ROS graph, live DDS peer, or docker daemon.
+# run_integration.sh runs exactly these in the CI integration lane on an
+# isolated domain so they never cross-talk with the compose stack (domain 0).
+#
+# STRICT, anchored (^(...)$) for stability. The broader integration-tests.regex
+# stays the UNIT-lane exclusion superset; tests that additionally need a service
+# or that are timing-flaky are DEFERRED to a later phase, namely:
+#   - GrpcTransport/GrpcProvider    : need a real gRPC server / timing-flaky
+#   - MessageTransmitter *ROS        : need a ROS graph
+#   - ConcreteEndpoint *_TC001       : need a live DDS peer
+#   - ADSWManager Initialize/Start   : create a real DDS participant
+#   - ContainerDockerCompose *_IT0   : need a docker daemon
+#   - LifecycleAdswIntegrationTest   : forks a simulator subprocess → flaky abort
+#   - DDSProtocol *_with_reader/writer : real reader/writer create-delete → flaky
+#   - VssSubscription / OtamActor F012 : timer/thread timing
+# Do NOT add a test here until it passes repeated isolated runs.
+#
+# Composition (29): ConcreteEndpoint 25 · ROSDiscovery 3 · MessageTransmitter 1
+^(ConcreteEndpointIntegrationTest\.AdswServiceStatusEndPoint_OnDataAvailable|ConcreteEndpointIntegrationTest\.GetServiceStateEndPoint_OnDataAvailable_ReadFail|ConcreteEndpointIntegrationTest\.GetServiceStateEndPoint_OnDataAvailable_TC002|ConcreteEndpointIntegrationTest\.GetServiceStateEndPoint_OnDataAvailable_TC02|ConcreteEndpointIntegrationTest\.GetServiceStateEndPoint_OnDataAvailable_TC03|ConcreteEndpointIntegrationTest\.LifecycleDiagReportEndPoint_OnDataAvailable_TC001|ConcreteEndpointIntegrationTest\.LifecycleDiagReportEndPoint_OnDataAvailable_TC002|ConcreteEndpointIntegrationTest\.NotifyServiceStateEndPoint_OnDataAvailable|ConcreteEndpointIntegrationTest\.NotifyServiceStateEndPoint_OnDataAvailable_ReadFail|ConcreteEndpointIntegrationTest\.NotifyServiceStateEndPoint_OnDataAvailable_TC002|ConcreteEndpointIntegrationTest\.ROSDiscoveryInfoEndpoint_OnDataAvailable|ConcreteEndpointIntegrationTest\.SetServiceModeEndPoint_OnDataAvailable_ReadFail|ConcreteEndpointIntegrationTest\.SetServiceModeEndPoint_OnDataAvailable_TC002|ConcreteEndpointIntegrationTest\.StartServiceEndPoint_OnDataAvailable|ConcreteEndpointIntegrationTest\.StartServiceEndPoint_OnDataAvailable_ReadFail|ConcreteEndpointIntegrationTest\.StartServiceEndPoint_OnDataAvailable_TC002|ConcreteEndpointIntegrationTest\.StartServiceEndPoint_OnDataAvailable_TC02|ConcreteEndpointIntegrationTest\.StartServiceEndPoint_OnDataAvailable_TC03|ConcreteEndpointIntegrationTest\.StopServiceEndPoint_OnDataAvailable_ReadFail|ConcreteEndpointIntegrationTest\.StopServiceEndPoint_OnDataAvailable_TC002|ConcreteEndpointIntegrationTest\.StopServiceEndPoint_OnDataAvailable_TC02|ConcreteEndpointIntegrationTest\.StopServiceEndPoint_OnDataAvailable_TC03|ConcreteEndpointIntegrationTest\.UpdateServiceListEndPoint_OnDataAvailable|ConcreteEndpointIntegrationTest\.UpdateServiceListEndPoint_OnDataAvailable_ReadFail|ConcreteEndpointIntegrationTest\.UpdateServiceListEndPoint_OnDataAvailable_TC002|MessageTransmitterTest\.ForwardDeliveredMessage_TC003_ROSMessagePrefix|ROSDiscoveryInfoEndpointTest\.InitializeAndFinalize|ROSDiscoveryInfoEndpointTest\.OnDataAvailable_DirectCall_ReadFails|ROSDiscoveryInfoEndpointTest\.OnDataAvailable_MultipleCalls)$
