@@ -6,12 +6,9 @@
 // OtamClientServiceMsg
 #include "generated/idl/ota_mgr/OtamClientServiceMsg.hpp"
 #include "generated/idl/ota_mgr/OtamClientServiceMsgPubSubTypes.hpp"
-// OtamDianosticServiceMsg
+// OtamDiagnosticServiceMsg (NotifyOtaMgrInfo + F007 NotifyOtaMgrHeartbeat)
 #include "generated/idl/ota_mgr/OtamDiagnosticServiceMsg.hpp"
 #include "generated/idl/ota_mgr/OtamDiagnosticServiceMsgPubSubTypes.hpp"
-// F007 — NotifyOtaMgrHeartbeat (separate IDL, periodic heartbeat publish)
-#include "generated/idl/ota_mgr/NotifyOtaMgrHeartbeat.hpp"
-#include "generated/idl/ota_mgr/NotifyOtaMgrHeartbeatPubSubTypes.hpp"
 // OtamVehicleServiceMsg
 #include "generated/idl/ota_mgr/OtamVehicleServiceMsg.hpp"
 #include "generated/idl/ota_mgr/OtamVehicleServiceMsgPubSubTypes.hpp"
