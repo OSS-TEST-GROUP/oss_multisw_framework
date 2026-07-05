@@ -167,6 +167,39 @@ pipeline {
                 '''
             }
         }
+
+        // ── ctest self-contained integration subset ──────────────────────────
+        // Runs the CI-runnable subset (docker/scripts/integration-tests-runnable.regex)
+        // via run_integration.sh INSIDE the builder image (has the built .build
+        // binaries + Fast DDS + ROS). Each run joins a UNIQUE non-zero DDS domain,
+        // so it never cross-talks with the compose stack still up on domain 0.
+        // No --network=host: the container's own net namespace is a second layer
+        // of isolation on top of the domain id. Results publish as JUnit; per-test
+        // failures do NOT hard-fail the build (run_integration.sh uses `|| true`).
+        stage('Integration ctest (self-contained)') {
+            steps {
+                script {
+                    def dockerArgs = [
+                        '-u 1000:1000',
+                        '-w /home/ossuser/workspace',
+                        "-v ${SDK_DIR}:/opt",
+                        "-v ${WORKSPACE}/.build:/home/ossuser/workspace/.build",
+                        "-v ${WORKSPACE}/idl:/home/ossuser/workspace/idl",
+                        "-v ${WORKSPACE}/output:/home/ossuser/workspace/output",
+                        "-v ${WORKSPACE}/docker/scripts/run_integration.sh:/home/ossuser/workspace/docker/scripts/run_integration.sh",
+                        "-v ${WORKSPACE}/docker/scripts/integration-tests-runnable.regex:/home/ossuser/workspace/docker/scripts/integration-tests-runnable.regex",
+                        "-v ${WORKSPACE}/docker/build_environment/fastdds-profile.xml:/home/ossuser/workspace/docker/build_environment/fastdds-profile.xml"
+                    ].join(' ')
+                    docker.image("${BUILDER_IMAGE}").inside(dockerArgs) {
+                        sh '''
+                            cd /home/ossuser/workspace
+                            MMF_INTEGRATION_DOMAIN=137 CTEST_TIMEOUT=60 \
+                                bash docker/scripts/run_integration.sh
+                        '''
+                    }
+                }
+            }
+        }
     }
 
     post {
