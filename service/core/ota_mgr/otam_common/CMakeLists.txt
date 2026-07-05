@@ -11,10 +11,9 @@ set(GENERATED_DDS_FILES ${GENERATED_OTA_MGR_DIR}/OtamClientServiceMsgPubSubTypes
                         ${GENERATED_OTA_MGR_DIR}/OtamVehicleServiceMsgTypeObjectSupport.cxx
                         ${GENERATED_OTA_MGR_DIR}/OtamActorServiceMsgPubSubTypes.cxx
                         ${GENERATED_OTA_MGR_DIR}/OtamActorServiceMsgTypeObjectSupport.cxx
-                        # F007 — heartbeat IDL added by oss-agent3 통합검증 프로젝트
-                        ${GENERATED_OTA_MGR_DIR}/NotifyOtaMgrHeartbeatPubSubTypes.cxx
-                        ${GENERATED_OTA_MGR_DIR}/NotifyOtaMgrHeartbeatTypeObjectSupport.cxx
-                        ${GENERATED_LIFECYCLE_MGR_DIR}/SetServiceModeRequestPubSubTypes.cxx  
+                        # F007 heartbeat (NotifyOtaMgrHeartbeat) merged into OtamDiagnosticServiceMsg.idl —
+                        # its generated types are now in OtamDiagnosticServiceMsg*.cxx above.
+                        ${GENERATED_LIFECYCLE_MGR_DIR}/SetServiceModeRequestPubSubTypes.cxx
                         ${GENERATED_LIFECYCLE_MGR_DIR}/SetServiceModeRequestTypeObjectSupport.cxx                        
                         ${GENERATED_LIFECYCLE_MGR_DIR}/LifecycleCommonPubSubTypes.cxx  
                         ${GENERATED_LIFECYCLE_MGR_DIR}/LifecycleCommonTypeObjectSupport.cxx                        

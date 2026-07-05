@@ -53,7 +53,7 @@ int main(int argc, char** argv) {
 
     const std::string actor_idl     = "ota_mgr/OtamActorServiceMsg.idl";
     const std::string client_idl    = "ota_mgr/OtamClientServiceMsg.idl";
-    const std::string heartbeat_idl = "ota_mgr/NotifyOtaMgrHeartbeat.idl";
+    const std::string heartbeat_idl = "ota_mgr/OtamDiagnosticServiceMsg.idl";
     bool ok = true;
 
     // ── otaactor_service: 6 request/response pairs (12 topics) ─────────────
