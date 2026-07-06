@@ -10,6 +10,7 @@
 #include "mock/MockROSServiceController.hpp"
 #include "mock/MockEndPointFactory.hpp"
 #include "mock/MockServiceMonitor.hpp"
+#include "mock/MockContainerHealthMonitor.hpp"
 
 #include "mock/MockLogger.hpp"
 

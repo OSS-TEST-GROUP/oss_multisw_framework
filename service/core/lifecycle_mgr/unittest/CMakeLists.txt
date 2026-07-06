@@ -37,6 +37,9 @@ set(GENERATED_DDS_FILES ${GENERATED_DIR}/lifecycle/LifecycleCommonPubSubTypes.cx
                         ${GENERATED_DIR}/lifecycle/StopContainerRequestTypeObjectSupport.cxx
                         ${GENERATED_DIR}/lifecycle/LifecycleCtrlRequestPubSubTypes.cxx
                         ${GENERATED_DIR}/lifecycle/LifecycleCtrlRequestTypeObjectSupport.cxx
+                        # F014 per-service recovery policy (Request+Response defined in one IDL)
+                        ${GENERATED_DIR}/lifecycle/SetRecoveryPolicyRequestPubSubTypes.cxx
+                        ${GENERATED_DIR}/lifecycle/SetRecoveryPolicyRequestTypeObjectSupport.cxx
 )
 
 ## Source
@@ -182,6 +185,28 @@ add_executable ( LifecycleAutowareOtaE2ETest
                 ../logger/Logger.cpp
                 ${GENERATED_DDS_FILES}
                 )
+
+# ── Autoware E2E: inject repo root as compile-time default for path resolution ─
+# Tests use autoware_e2e_common.h which reads MMF_E2E_ROOT_DEFAULT when the
+# MMF_E2E_ROOT env var is not set. CMAKE_SOURCE_DIR is the top-level project dir.
+# CI runners should additionally set MMF_E2E_ROOT / MMF_E2E_OUTPUT env vars so
+# the tests resolve to the actual build output inside the runner container.
+set(AUTOWARE_E2E_TARGETS
+    LifecycleAutowareE2ETest
+    LifecycleAutowareStopE2ETest
+    LifecycleAutowarePollingE2ETest
+    LifecycleAutowareCrashE2ETest
+    LifecycleAutowareRecoveryE2ETest
+    LifecycleAutowareNodeKillE2ETest
+    LifecycleAutowareLaunchKillE2ETest
+    LifecycleAutowareDirectBinaryE2ETest
+    LifecycleAutowareOtaE2ETest
+)
+foreach(target ${AUTOWARE_E2E_TARGETS})
+    target_compile_definitions(${target} PRIVATE
+        MMF_E2E_ROOT_DEFAULT="${CMAKE_SOURCE_DIR}"
+    )
+endforeach()
 
 gtest_discover_tests ( LifecycleManagerTest )
 gtest_discover_tests ( DDSTransmitterTest )

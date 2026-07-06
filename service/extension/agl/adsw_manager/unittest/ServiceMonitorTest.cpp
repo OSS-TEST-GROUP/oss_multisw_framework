@@ -45,6 +45,12 @@ protected:
         registry = std::make_shared<MockServiceRegistry>();
         transmitter = std::make_shared<MockMessageTransmitter>();
 
+        // PublishContainerState is called by StartMonitoring() and CheckAppState()
+        // (F009 C-1 periodic publish).  Allow any number of calls so individual
+        // test cases are not forced to add their own expectation for it.
+        EXPECT_CALL(*transmitter, PublishContainerState())
+            .Times(::testing::AnyNumber());
+
         DomainParticipantQos qos;
         participant = DomainParticipantFactory::get_instance()->create_participant(0, qos);
 
@@ -85,6 +91,11 @@ TEST_F(ServiceMonitorTest, Initialize_StoresDeps_AndReturnsTrue) {
 TEST_F(ServiceMonitorTest, StartMonitoring_CreatesReadersFromRegistryList) {
     std::vector<Service> list{ MakeService("appA"), MakeService("appB") };
     EXPECT_CALL(*registry, GetAppList()).WillOnce(Return(list));
+    // The background monitoring thread may call CheckAppState() before
+    // StopMonitoring() joins.  Allow GetAppInfo calls from the thread without
+    // requiring a specific number (the guard in CheckAppState handles nullopt).
+    EXPECT_CALL(*registry, GetAppInfo(::testing::_))
+        .WillRepeatedly(Return(std::optional<std::pair<Service, ServiceState>>{}));
 
     monitor.StartMonitoring();
 

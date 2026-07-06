@@ -257,13 +257,11 @@ TEST_F(DDSTransmitterTest, SendMessage_NullPtr_TC004) {
 // ============================================================================
 
 TEST_F(DDSTransmitterTest, AddMessageEndpoint_NullEndpoint_TC005) {
-    // AddMessageEndpoint with nullptr should return false or handle gracefully
-    // Currently returns true even for nullptr - this is a bug but we test current behavior
+    // AddMessageEndpoint with nullptr must reject and return false (matches
+    // AddNullEndpoint_TC001). The earlier null-check bug — returning true while
+    // silently dropping the endpoint — is fixed in DDSTransmitter.cpp.
     std::shared_ptr<MockDDSMessageEndpoint> null_endpoint = nullptr;
-    
-    // The current implementation checks "if (endpoint)" but still returns true
-    // This test documents the current behavior
-    EXPECT_TRUE(ins->AddMessageEndpoint(null_endpoint));
+    EXPECT_FALSE(ins->AddMessageEndpoint(null_endpoint));
 }
 
 TEST_F(DDSTransmitterTest, AddMessageEndpoint_DuplicateTopic_TC006) {
@@ -328,12 +326,14 @@ TEST_F(DDSTransmitterTest, Finalize_WithMultipleEndpoints_TC008) {
     ins->AddMessageEndpoint(endpoint3);
     
     ins->Initialize();
-    
-    // Finalize should call Finalize on all endpoints
-    EXPECT_CALL(*endpoint1, Finalize()).Times(testing::AtLeast(1));
-    EXPECT_CALL(*endpoint2, Finalize()).Times(testing::AtLeast(1));
-    EXPECT_CALL(*endpoint3, Finalize()).Times(testing::AtLeast(1));
-    
+
+    // DDSMessageEndpoint::Finalize() stub (in MockDDSMessageEndpoint.hpp) always
+    // routes through Mock_DDSMessageEndpoint, which is endpoint3 at this point.
+    // So all three endpoint Finalize() calls in DDSTransmitter::Finalize() reach
+    // endpoint3's mock — once per endpoint registered in endpoints_ map (3 total).
+    // endpoint1 and endpoint2 mock Finalize() are never called directly.
+    EXPECT_CALL(*endpoint3, Finalize()).Times(testing::AtLeast(3));
+
     ins->Finalize();
     MarkFinalized();
 }

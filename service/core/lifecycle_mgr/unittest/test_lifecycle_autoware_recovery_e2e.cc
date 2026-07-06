@@ -12,27 +12,9 @@
 #include <functional>
 #include <sys/stat.h>
 
+#include "autoware_e2e_common.h"
+
 namespace {
-
-// ── Constants ──────────────────────────────────────────────────────────────
-constexpr const char* AUTOWARE_IMAGE =
-    "ghcr.io/autowarefoundation/autoware:universe-dependencies-cuda-humble-20260423-amd64";
-
-constexpr const char* LIFECYCLE_MGR_BIN =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework/output/x86_64/Debug/core/bin/lifecycle_mgr";
-constexpr const char* ADSW_MANAGER_BIN =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework/output/x86_64/Debug/extension/ros2/bin/adsw_manager";
-constexpr const char* FASTDDS_LIB_PATH =
-    "/home/obigo/obigo-sdk/Fast-DDS/output/ros2_x86_64/lib";
-constexpr const char* LF_LIB_PATH =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework/output/x86_64/Debug/core/lib";
-constexpr const char* ADSW_LIB_PATH =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework/output/x86_64/Debug/extension/ros2/lib";
-constexpr const char* LF_CONFIG_PATH =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework/service/core/lifecycle_mgr/config";
-constexpr const char* FASTDDS_PROFILE =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework"
-    "/docker/build_environment/fastdds-profile.xml";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 std::string ExecShell(const std::string& cmd) {
@@ -68,14 +50,14 @@ void KillAndWait(pid_t pid) {
 
 // Build LD_LIBRARY_PATH for child processes
 std::string BuildLdPath() {
-    std::string ld = std::string(LF_LIB_PATH) + ":" + ADSW_LIB_PATH + ":" + FASTDDS_LIB_PATH;
-    const char* existing = std::getenv("LD_LIBRARY_PATH");
-    if (existing && strlen(existing) > 0) ld += std::string(":") + existing;
-    return ld;
+    return MmfBuildLdPath();
 }
 
-// Start autoware container for the test (network host for DDS multicast)
-bool StartContainer(const char* container_name) {
+// Start autoware container for the test (network host for DDS multicast).
+// domain: the per-run DDS domain ID — passed as ROS_DOMAIN_ID so that the
+// container's ros2 node list / ros2 run commands join the isolated domain
+// instead of domain 0 (used by the production oss-mmf stack).
+bool StartContainer(const char* container_name, int domain) {
     std::string iface = ExecShell("ip route show default 2>/dev/null | awk '{print $5; exit}'");
     while (!iface.empty() && (iface.back() == '\n' || iface.back() == '\r' || iface.back() == ' '))
         iface.pop_back();
@@ -90,13 +72,14 @@ bool StartContainer(const char* container_name) {
            << "</Interfaces></General></Domain></CycloneDDS>\n";
     }
 
-    ExecShell(std::string("docker rm -f ") + container_name + " 2>/dev/null");
+    ExecShell(std::string("docker stop ") + container_name + " 2>/dev/null; docker rm " + container_name + " 2>/dev/null");
     std::this_thread::sleep_for(std::chrono::seconds(1));
     ExecShell(std::string("docker run -d --name ") + container_name
               + " --network host"
               + " -v " + xml_path + ":/tmp/cyclonedds_e2e.xml"
               + " -e CYCLONEDDS_URI=file:///tmp/cyclonedds_e2e.xml"
-              + " " + AUTOWARE_IMAGE + " sleep infinity");
+              + " -e ROS_DOMAIN_ID=" + std::to_string(domain)
+              + " " + AutowareImage() + " sleep infinity");
 
     return WaitForCondition([&]() {
         std::string out = ExecShell(
@@ -118,7 +101,7 @@ bool WriteServiceListYaml(const char* config_dir,
       << "specs:\n"
       << "  - containers:\n"
       << "      - name: " << container_name << "\n"
-      << "        image: \"" << AUTOWARE_IMAGE << "\"\n"
+      << "        image: \"" << AutowareImage() << "\"\n"
       << "        container-type: \"docker\"\n"
       << "        services:\n"
       << "          - package: \"logging_demo\"\n"
@@ -150,10 +133,25 @@ public:
     static bool node_recovered_ok_;
 
     static void SetUpTestSuite() {
-        setenv("FASTDDS_DEFAULT_PROFILES_FILE", FASTDDS_PROFILE, 1);
         node_started_ok_ = false;
         crash_ok_        = false;
         node_recovered_ok_ = false;
+
+        // Fast-skip: check docker, mock image, and MMF binaries before any
+        // blocking I/O. This exits in <1s on machines without prerequisites.
+        std::string skip_reason;
+        if (!AutowareE2EPrereqs(skip_reason)) {
+            GTEST_SKIP() << skip_reason;
+            return;
+        }
+
+        // Per-run DDS domain isolation: pick a unique domain in [1,200] so this
+        // test binary does not cross-talk with the production oss-mmf stack (domain 0)
+        // or other concurrently running E2E test binaries.
+        int domain = E2EDomainId();
+        std::string fastdds_profile = E2EWriteFastDdsProfile(domain);
+        std::string domain_str = std::to_string(domain);
+        setenv("FASTDDS_DEFAULT_PROFILES_FILE", fastdds_profile.c_str(), 1);
 
         ExecShell("pkill -9 adsw_manager 2>/dev/null");
         ExecShell("pkill -9 lifecycle_mgr 2>/dev/null");
@@ -164,19 +162,24 @@ public:
             return;
         }
 
-        if (!StartContainer(ALWAYS_CONTAINER)) {
+        // Start container with ROS_DOMAIN_ID=domain so that:
+        //   - ros2 node list inside the container uses domain N (not 0)
+        //   - docker start (recovery path) inherits the env and also uses domain N
+        if (!StartContainer(ALWAYS_CONTAINER, domain)) {
             ADD_FAILURE() << "Container " << ALWAYS_CONTAINER << " did not start within 30s";
             return;
         }
 
         std::string ld_path = BuildLdPath();
+        std::string lf_config = MmfLfConfig();
 
         lifecycle_pid_ = fork();
         if (lifecycle_pid_ == 0) {
-            setenv("MMF_CONFIG_PATH", LF_CONFIG_PATH, 1);
+            setenv("MMF_CONFIG_PATH", lf_config.c_str(), 1);
             setenv("LD_LIBRARY_PATH", ld_path.c_str(), 1);
-            setenv("FASTDDS_DEFAULT_PROFILES_FILE", FASTDDS_PROFILE, 1);
-            execl(LIFECYCLE_MGR_BIN, "lifecycle_mgr", nullptr);
+            setenv("FASTDDS_DEFAULT_PROFILES_FILE", fastdds_profile.c_str(), 1);
+            setenv("ROS_DOMAIN_ID", domain_str.c_str(), 1);
+            execl(MmfLfBin().c_str(), "lifecycle_mgr", nullptr);
             _exit(127);
         }
         std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -185,12 +188,15 @@ public:
         if (adsw_pid_ == 0) {
             setenv("SAVED_REGISTRY_BACKUP", ALWAYS_CONFIG_DIR, 1);
             setenv("LD_LIBRARY_PATH", ld_path.c_str(), 1);
-            setenv("FASTDDS_DEFAULT_PROFILES_FILE", FASTDDS_PROFILE, 1);
-            execl(ADSW_MANAGER_BIN, "adsw_manager", nullptr);
+            setenv("FASTDDS_DEFAULT_PROFILES_FILE", fastdds_profile.c_str(), 1);
+            setenv("ROS_DOMAIN_ID", domain_str.c_str(), 1);
+            execl(MmfAdswBin().c_str(), "adsw_manager", nullptr);
             _exit(127);
         }
 
-        // Phase 1: Wait for F003 chain — logging_demo_main running
+        // Phase 1: Wait for F003 chain — logging_demo_main running.
+        // The docker exec inherits the container's ROS_DOMAIN_ID=N env, so
+        // ros2 node list queries domain N (our isolated domain).
         node_started_ok_ = WaitForCondition([&]() {
             std::string out = ExecShell(
                 std::string("docker exec ") + ALWAYS_CONTAINER + " bash -c "
@@ -221,7 +227,9 @@ public:
 
         // Phase 3: Wait for ALWAYS recovery — lifecycle_mgr sends StartServiceRequest →
         //          adsw_manager does docker start + ros2 run → node reappears.
-        // docker start takes ~3-5s, then ros2 run + node init takes ~20-30s.
+        // docker start preserves the container's ROS_DOMAIN_ID=N so the recovered
+        // ros2 node also joins domain N, and our ros2 node list query (also domain N)
+        // can see it.  docker start takes ~3-5s, then ros2 run + node init ~20-30s.
         node_recovered_ok_ = WaitForCondition([&]() {
             std::string out = ExecShell(
                 std::string("docker exec ") + ALWAYS_CONTAINER + " bash -c "
@@ -232,14 +240,15 @@ public:
 
         if (!node_recovered_ok_) {
             ADD_FAILURE() << "Phase 3 failed: /logger_usage_demo did not reappear within 90s after crash. "
-                          << "Expected ALWAYS recovery to send StartServiceRequest → docker start → ros2 run.";
+                          << "Expected ALWAYS recovery to send StartServiceRequest → docker start → ros2 run. "
+                          << "(DDS domain: " << domain << ", profile: " << fastdds_profile << ")";
         }
     }
 
     static void TearDownTestSuite() {
         KillAndWait(adsw_pid_);
         KillAndWait(lifecycle_pid_);
-        ExecShell(std::string("docker rm -f ") + ALWAYS_CONTAINER + " 2>/dev/null");
+        ExecShell(std::string("docker stop ") + ALWAYS_CONTAINER + " 2>/dev/null; docker rm " + ALWAYS_CONTAINER + " 2>/dev/null");
         ExecShell(std::string("rm -rf ") + ALWAYS_CONFIG_DIR);
         ExecShell(std::string("rm -f /tmp/cyclonedds_") + ALWAYS_CONTAINER + ".xml");
         lifecycle_pid_ = -1;
@@ -290,9 +299,22 @@ public:
     static bool node_absent_ok_;
 
     static void SetUpTestSuite() {
-        setenv("FASTDDS_DEFAULT_PROFILES_FILE", FASTDDS_PROFILE, 1);
         handshake_ok_   = false;
         node_absent_ok_ = false;
+
+        // Fast-skip: check docker, mock image, and MMF binaries before any
+        // blocking I/O. This exits in <1s on machines without prerequisites.
+        std::string skip_reason;
+        if (!AutowareE2EPrereqs(skip_reason)) {
+            GTEST_SKIP() << skip_reason;
+            return;
+        }
+
+        // Per-run DDS domain isolation (same process → same domain as the ALWAYS suite)
+        int domain = E2EDomainId();
+        std::string fastdds_profile = E2EWriteFastDdsProfile(domain);
+        std::string domain_str = std::to_string(domain);
+        setenv("FASTDDS_DEFAULT_PROFILES_FILE", fastdds_profile.c_str(), 1);
 
         ExecShell("pkill -9 adsw_manager 2>/dev/null");
         ExecShell("pkill -9 lifecycle_mgr 2>/dev/null");
@@ -303,19 +325,21 @@ public:
             return;
         }
 
-        if (!StartContainer(MANUAL_CONTAINER)) {
+        if (!StartContainer(MANUAL_CONTAINER, domain)) {
             ADD_FAILURE() << "Container " << MANUAL_CONTAINER << " did not start within 30s";
             return;
         }
 
         std::string ld_path = BuildLdPath();
+        std::string lf_config = MmfLfConfig();
 
         lifecycle_pid_ = fork();
         if (lifecycle_pid_ == 0) {
-            setenv("MMF_CONFIG_PATH", LF_CONFIG_PATH, 1);
+            setenv("MMF_CONFIG_PATH", lf_config.c_str(), 1);
             setenv("LD_LIBRARY_PATH", ld_path.c_str(), 1);
-            setenv("FASTDDS_DEFAULT_PROFILES_FILE", FASTDDS_PROFILE, 1);
-            execl(LIFECYCLE_MGR_BIN, "lifecycle_mgr", nullptr);
+            setenv("FASTDDS_DEFAULT_PROFILES_FILE", fastdds_profile.c_str(), 1);
+            setenv("ROS_DOMAIN_ID", domain_str.c_str(), 1);
+            execl(MmfLfBin().c_str(), "lifecycle_mgr", nullptr);
             _exit(127);
         }
         std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -324,15 +348,15 @@ public:
         if (adsw_pid_ == 0) {
             setenv("SAVED_REGISTRY_BACKUP", MANUAL_CONFIG_DIR, 1);
             setenv("LD_LIBRARY_PATH", ld_path.c_str(), 1);
-            setenv("FASTDDS_DEFAULT_PROFILES_FILE", FASTDDS_PROFILE, 1);
-            execl(ADSW_MANAGER_BIN, "adsw_manager", nullptr);
+            setenv("FASTDDS_DEFAULT_PROFILES_FILE", fastdds_profile.c_str(), 1);
+            setenv("ROS_DOMAIN_ID", domain_str.c_str(), 1);
+            execl(MmfAdswBin().c_str(), "adsw_manager", nullptr);
             _exit(127);
         }
 
         // Wait for DDS handshake (UpdateServiceListRequest/Response).
         // Since MANUAL policy prevents any auto-start, we just wait for adsw_manager
-        // to reach ADSW_RUNNING state (handshake succeeded). Verify via log.
-        // Fallback: wait fixed 5s (adsw_manager retries every 3s, at most 2 cycles).
+        // to reach ADSW_RUNNING state (handshake succeeded).
         std::this_thread::sleep_for(std::chrono::seconds(5));
         handshake_ok_ = (lifecycle_pid_ > 0) && (adsw_pid_ > 0)
                         && (kill(lifecycle_pid_, 0) == 0) && (kill(adsw_pid_, 0) == 0);
@@ -340,7 +364,7 @@ public:
         // Wait 15 more seconds (> 1 poll cycle of 10s) to confirm node never starts.
         std::this_thread::sleep_for(std::chrono::seconds(15));
 
-        // MANUAL policy: node must NOT appear in ros2 node list
+        // MANUAL policy: node must NOT appear in ros2 node list (domain N)
         std::string out = ExecShell(
             std::string("docker exec ") + MANUAL_CONTAINER + " bash -c "
             "'source /opt/ros/humble/setup.bash 2>/dev/null && ros2 node list 2>/dev/null'"
@@ -351,7 +375,7 @@ public:
     static void TearDownTestSuite() {
         KillAndWait(adsw_pid_);
         KillAndWait(lifecycle_pid_);
-        ExecShell(std::string("docker rm -f ") + MANUAL_CONTAINER + " 2>/dev/null");
+        ExecShell(std::string("docker stop ") + MANUAL_CONTAINER + " 2>/dev/null; docker rm " + MANUAL_CONTAINER + " 2>/dev/null");
         ExecShell(std::string("rm -rf ") + MANUAL_CONFIG_DIR);
         ExecShell(std::string("rm -f /tmp/cyclonedds_") + MANUAL_CONTAINER + ".xml");
         lifecycle_pid_ = -1;

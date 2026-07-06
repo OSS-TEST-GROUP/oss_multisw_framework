@@ -15,9 +15,14 @@
 #include <atomic>
 
 // DDS
+// Route stop through lifecycle_mgr ctrl channel (trusted path).
+// Sending StopServiceRequest directly to adsw_manager is blocked by its
+// phantom-publisher guard (only lifecycle_mgr is trusted). Instead we publish
+// CtrlStopServiceRequest to lifecycle_mgr's ctrl/StopService subscriber, which
+// then forwards a trusted StopServiceRequest to adsw_manager.
 #include "transmitter/DDSMessageEndPoint.hpp"
-#include "lifecycle/StopServiceRequestPubSubTypes.hpp"
-#include "lifecycle/StopServiceRequest.hpp"
+#include "lifecycle/LifecycleCtrlRequestPubSubTypes.hpp"
+#include "lifecycle/LifecycleCtrlRequest.hpp"
 
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp>
 #include <fastdds/rtps/transport/UDPv4TransportDescriptor.hpp>
@@ -26,30 +31,16 @@ using namespace eprosima::fastdds::dds;
 using namespace eprosima::fastdds::rtps;
 using namespace lifecycle_manager;
 
+#include "autoware_e2e_common.h"
+
 namespace {
 
 // ── Constants ──────────────────────────────────────────────────────────────
-constexpr const char* AUTOWARE_IMAGE =
-    "ghcr.io/autowarefoundation/autoware:universe-dependencies-cuda-humble-20260423-amd64";
-constexpr const char* AUTOWARE_CONTAINER = "autoware-test-stop";
-
-constexpr const char* ADSW_MANAGER_BIN =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework/output/x86_64/Debug/extension/ros2/bin/adsw_manager";
-constexpr const char* LIFECYCLE_MGR_BIN =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework/output/x86_64/Debug/core/bin/lifecycle_mgr";
-constexpr const char* FASTDDS_LIB_PATH =
-    "/home/obigo/obigo-sdk/Fast-DDS/output/ros2_x86_64/lib";
-constexpr const char* LF_LIB_PATH =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework/output/x86_64/Debug/core/lib";
-constexpr const char* ADSW_LIB_PATH =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework/output/x86_64/Debug/extension/ros2/lib";
-constexpr const char* LF_CONFIG_PATH =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework/service/core/lifecycle_mgr/config";
-constexpr const char* E2E_STOP_CONFIG_DIR = "/tmp/autoware_stop_e2e_test";
-constexpr const char* FASTDDS_PROFILE =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework"
-    "/docker/build_environment/fastdds-profile.xml";
-constexpr const char* STOP_DDS_TOPIC = "mmf/lifecyclemgr/StopServiceRequest";
+constexpr const char* AUTOWARE_CONTAINER   = "autoware-test-stop";
+constexpr const char* E2E_STOP_CONFIG_DIR  = "/tmp/autoware_stop_e2e_test";
+// ctrl/StopService is subscribed by lifecycle_mgr; it relays a trusted
+// StopServiceRequest to adsw_manager, bypassing the phantom-publisher guard.
+constexpr const char* STOP_DDS_TOPIC       = "mmf/lifecyclemgr/ctrl/StopService";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 std::string ExecShell(const std::string& cmd) {
@@ -84,7 +75,6 @@ void KillAndWait(pid_t pid) {
 }
 
 // ── DDS Helpers ─────────────────────────────────────────────────────────────
-// UDP-only transport avoids SHM futex deadlocks with stale segments from prior runs.
 static DomainParticipant* CreateUdpOnlyParticipant(int domain_id, const char* name) {
     DomainParticipantQos qos;
     qos.name(name);
@@ -94,30 +84,37 @@ static DomainParticipant* CreateUdpOnlyParticipant(int domain_id, const char* na
     return DomainParticipantFactory::get_instance()->create_participant(domain_id, qos);
 }
 
-// ── DDS Stop Request Publisher ───────────────────────────────────────────────
-// Publishes StopServiceRequest on mmf/lifecyclemgr/StopServiceRequest.
-// lifecycle_mgr is killed before this publisher is created (after Phase 1 completes),
-// so this publisher safely takes over the stop command role in Phase 2.
+// ── DDS Ctrl Stop Request Publisher ──────────────────────────────────────────
+// Publishes CtrlStopServiceRequest to lifecycle_mgr's ctrl/StopService topic.
+// lifecycle_mgr subscribes there, applies its own publishing-participant guard,
+// then forwards a trusted StopServiceRequest to adsw_manager. This avoids the
+// phantom-publisher guard that blocks direct StopServiceRequest from the test.
 //
-// Uses base-class protected members directly — do NOT add private participant_/publisher_
-// here; that would shadow the base members and cause ~DDSMessageEndPoint() to access
-// freed pointers (segfault).
+// domain_id is E2EDomainId() — the per-run isolated domain so the publisher
+// reaches the test's lifecycle_mgr (on domain N) rather than the production
+// stack (on domain 0).
 class StopRequestPublisher : public DDSMessageEndPoint {
 public:
-    StopRequestPublisher() : DDSMessageEndPoint(STOP_DDS_TOPIC) {
+    explicit StopRequestPublisher(int domain_id)
+        : DDSMessageEndPoint(STOP_DDS_TOPIC), domain_id_(domain_id) {
+        // Must match the PubSubType lifecycle_mgr registers on ctrl/StopService.
+        // "lifecyclemgr::CtrlStopServiceRequest" — type name must match exactly.
         SetTypeSupport(std::make_shared<TypeSupport>(
-            new lifecyclemgr::StopServiceRequestPubSubType()));
+            new lifecyclemgr::CtrlStopServiceRequestPubSubType()));
     }
 
     ~StopRequestPublisher() { Cleanup(); }
 
     bool Initialize() {
-        participant_ = CreateUdpOnlyParticipant(0, "StopTestPublisher");
+        participant_ = CreateUdpOnlyParticipant(domain_id_, "StopTestPublisher");
         if (!participant_) return false;
         publisher_ = participant_->create_publisher(PUBLISHER_QOS_DEFAULT);
         if (!publisher_) return false;
         return DDSMessageEndPoint::Initialize(participant_, publisher_, nullptr);
     }
+
+private:
+    int domain_id_;
 
     void Cleanup() {
         if (participant_) {
@@ -131,10 +128,8 @@ public:
     }
 
     bool Send(const std::string& service_name) {
-        lifecyclemgr::StopServiceRequest req;
+        lifecyclemgr::CtrlStopServiceRequest req;
         req.service_list().push_back(service_name);
-        req.os_type() = lifecyclemgr::OsType::ROS2;
-        req.is_group() = false;
         return Write(&req);
     }
 
@@ -151,18 +146,26 @@ public:
     static bool node_stopped_ok_;
 
     static void SetUpTestSuite() {
-        // Set FastDDS profile before any DDS usage in this process
-        setenv("FASTDDS_DEFAULT_PROFILES_FILE", FASTDDS_PROFILE, 1);
-
         node_started_ok_ = false;
         node_stopped_ok_ = false;
 
-        // Kill stale processes from prior runs to avoid DDS domain interference.
-        // Use basename only — execl(path, "argv0") sets cmdline to argv0, not the full path,
-        // so pkill -f with a full path would not match running processes.
+        // Fast-skip: check docker, mock image, and MMF binaries before any
+        // blocking I/O. This exits in <1s on machines without prerequisites.
+        std::string skip_reason;
+        if (!AutowareE2EPrereqs(skip_reason)) {
+            GTEST_SKIP() << skip_reason;
+            return;
+        }
+
+        // Per-run DDS domain isolation
+        int domain = E2EDomainId();
+        std::string fastdds_profile = E2EWriteFastDdsProfile(domain);
+        std::string domain_str = std::to_string(domain);
+        setenv("FASTDDS_DEFAULT_PROFILES_FILE", fastdds_profile.c_str(), 1);
+
         ExecShell("pkill -9 adsw_manager 2>/dev/null");
         ExecShell("pkill -9 lifecycle_mgr 2>/dev/null");
-        std::this_thread::sleep_for(std::chrono::seconds(2)); // allow stale DDS participants to deregister
+        std::this_thread::sleep_for(std::chrono::seconds(2));
 
         // 1. Write config: logging_demo_main in autoware-test-stop container
         mkdir(E2E_STOP_CONFIG_DIR, 0755);
@@ -176,7 +179,7 @@ public:
           << "specs:\n"
           << "  - containers:\n"
           << "      - name: " << AUTOWARE_CONTAINER << "\n"
-          << "        image: \"" << AUTOWARE_IMAGE << "\"\n"
+          << "        image: \"" << AutowareImage() << "\"\n"
           << "        container-type: \"docker\"\n"
           << "        services:\n"
           << "          - package: \"logging_demo\"\n"
@@ -210,13 +213,14 @@ public:
         }
 
         // 3. Start autoware container (--network host for DDS multicast)
-        ExecShell(std::string("docker rm -f ") + AUTOWARE_CONTAINER + " 2>/dev/null");
+        ExecShell(std::string("docker stop ") + AUTOWARE_CONTAINER + " 2>/dev/null; docker rm " + AUTOWARE_CONTAINER + " 2>/dev/null");
         std::this_thread::sleep_for(std::chrono::seconds(1));
         ExecShell(std::string("docker run -d --name ") + AUTOWARE_CONTAINER
                   + " --network host"
                   + " -v " + CYCLONE_XML_PATH + ":/tmp/cyclonedds_stop_e2e.xml"
                   + " -e CYCLONEDDS_URI=file:///tmp/cyclonedds_stop_e2e.xml"
-                  + " " + AUTOWARE_IMAGE + " sleep infinity");
+                  + " -e ROS_DOMAIN_ID=" + domain_str
+                  + " " + AutowareImage() + " sleep infinity");
 
         bool container_ok = WaitForCondition([&]() {
             std::string out = ExecShell(
@@ -231,20 +235,17 @@ public:
         }
 
         // 4. Build LD_LIBRARY_PATH for child processes
-        std::string ld_path = std::string(LF_LIB_PATH) + ":"
-                            + ADSW_LIB_PATH + ":"
-                            + FASTDDS_LIB_PATH;
-        const char* existing_ld = std::getenv("LD_LIBRARY_PATH");
-        if (existing_ld && strlen(existing_ld) > 0) ld_path += std::string(":") + existing_ld;
+        std::string ld_path = MmfBuildLdPath();
+        std::string lf_config = MmfLfConfig();
 
-        // 5. Fork lifecycle_mgr — it orchestrates UpdateServiceList handshake and issues
-        //    StartServiceRequest to adsw_manager, driving the full F003 chain.
+        // 5. Fork lifecycle_mgr
         lifecycle_pid_ = fork();
         if (lifecycle_pid_ == 0) {
-            setenv("MMF_CONFIG_PATH", LF_CONFIG_PATH, 1);
+            setenv("MMF_CONFIG_PATH", lf_config.c_str(), 1);
             setenv("LD_LIBRARY_PATH", ld_path.c_str(), 1);
-            setenv("FASTDDS_DEFAULT_PROFILES_FILE", FASTDDS_PROFILE, 1);
-            execl(LIFECYCLE_MGR_BIN, "lifecycle_mgr", nullptr);
+            setenv("FASTDDS_DEFAULT_PROFILES_FILE", fastdds_profile.c_str(), 1);
+            setenv("ROS_DOMAIN_ID", domain_str.c_str(), 1);
+            execl(MmfLfBin().c_str(), "lifecycle_mgr", nullptr);
             _exit(127);
         }
 
@@ -253,14 +254,13 @@ public:
         if (adsw_pid_ == 0) {
             setenv("SAVED_REGISTRY_BACKUP", E2E_STOP_CONFIG_DIR, 1);
             setenv("LD_LIBRARY_PATH", ld_path.c_str(), 1);
-            setenv("FASTDDS_DEFAULT_PROFILES_FILE", FASTDDS_PROFILE, 1);
-            execl(ADSW_MANAGER_BIN, "adsw_manager", nullptr);
+            setenv("FASTDDS_DEFAULT_PROFILES_FILE", fastdds_profile.c_str(), 1);
+            setenv("ROS_DOMAIN_ID", domain_str.c_str(), 1);
+            execl(MmfAdswBin().c_str(), "adsw_manager", nullptr);
             _exit(127);
         }
 
-        // 7. Phase 1: Wait for F003 chain to complete — adsw starts, UpdateServiceList
-        //    handshake, lifecycle_mgr sends StartServiceRequest, adsw docker execs ros2 run,
-        //    /logger_usage_demo appears in ros2 node list. Allow up to 60s.
+        // 7. Phase 1: Wait for F003 chain to complete
         node_started_ok_ = WaitForCondition([&]() {
             std::string out = ExecShell(
                 std::string("docker exec ") + AUTOWARE_CONTAINER + " bash -c "
@@ -274,19 +274,23 @@ public:
             return;
         }
 
-        // 8. Kill lifecycle_mgr to prevent it from re-issuing StartServiceRequest
-        //    due to ALWAYS recovery policy after Phase 2 stops the node.
-        KillAndWait(lifecycle_pid_);
-        lifecycle_pid_ = -1;
-
-        // 9. Phase 2: test binary acts as the stop initiator.
-        //    Create StopRequestPublisher and allow DDS discovery with adsw_manager.
-        auto stop_pub = std::make_shared<StopRequestPublisher>();
+        // 8. Phase 2: test binary sends CtrlStopServiceRequest to lifecycle_mgr's
+        //    ctrl/StopService topic. lifecycle_mgr relays it as a trusted
+        //    StopServiceRequest to adsw_manager (bypassing the phantom guard).
+        //    We intentionally keep lifecycle_mgr running so it can relay.
+        //    Note: ALWAYS recovery policy means lifecycle_mgr will issue a new
+        //    StartServiceRequest ~5s after the stop. TC001-TC004 are checking
+        //    that the stop was processed; we verify node disappearance within 5s,
+        //    which is before recovery fires.
+        //
+        //    The publisher uses the per-run domain so it reaches our isolated
+        //    lifecycle_mgr (on domain N) rather than the production stack.
+        auto stop_pub = std::make_shared<StopRequestPublisher>(domain);
         if (!stop_pub->Initialize()) {
-            ADD_FAILURE() << "Failed to initialize DDS publisher for StopServiceRequest";
+            ADD_FAILURE() << "Failed to initialize DDS publisher for CtrlStopServiceRequest";
             return;
         }
-        std::this_thread::sleep_for(std::chrono::seconds(2)); // DDS discovery
+        std::this_thread::sleep_for(std::chrono::seconds(3)); // DDS discovery
 
         stop_pub->Send("logging_demo_main");
         std::this_thread::sleep_for(std::chrono::seconds(1)); // Allow delivery and processing
@@ -306,7 +310,7 @@ public:
     static void TearDownTestSuite() {
         KillAndWait(adsw_pid_);
         KillAndWait(lifecycle_pid_);
-        ExecShell(std::string("docker rm -f ") + AUTOWARE_CONTAINER + " 2>/dev/null");
+        ExecShell(std::string("docker stop ") + AUTOWARE_CONTAINER + " 2>/dev/null; docker rm " + AUTOWARE_CONTAINER + " 2>/dev/null");
         ExecShell(std::string("rm -rf ") + E2E_STOP_CONFIG_DIR);
         ExecShell("rm -f /tmp/cyclonedds_stop_e2e.xml");
         adsw_pid_ = -1;
@@ -319,7 +323,7 @@ pid_t L3AutowareStopE2ETest::adsw_pid_ = -1;
 bool L3AutowareStopE2ETest::node_started_ok_ = false;
 bool L3AutowareStopE2ETest::node_stopped_ok_ = false;
 
-// AC1: node was running before stop request (lifecycle_mgr → StartServiceRequest chain)
+// AC1: node was running before stop request
 TEST_F(L3AutowareStopE2ETest, TC001_NodeWasRunningBeforeStop) {
     ASSERT_TRUE(node_started_ok_)
         << "Phase 1 failed: /logger_usage_demo was not running after lifecycle_mgr+adsw_manager "

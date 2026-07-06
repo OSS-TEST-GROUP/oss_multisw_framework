@@ -1,10 +1,24 @@
-/**
-[Topic] “/mmf/otamanager/diagnostic_service/NotifyOtaMgrInfo”
-**/
-
 module otamanager {
+
+    /**
+    [Topic] “/mmf/otamanager/diagnostic_service/NotifyOtaMgrInfo”
+    **/
     struct NotifyOtaMgrInfo {
         long err_code;
         string err_msg;
+    };
+
+    // F007 — periodic OTA Manager liveness signal.
+    //
+    // The diagnostic service publishes one of these every HEARTBEAT_INTERVAL_SEC
+    // (default 3) seconds. External health-checks (integration test runner, the
+    // Monitor's Client tab) treat "no message for N×interval" as Manager
+    // unreachable.
+    /**
+    [Topic] “/mmf/otamanager/diagnostic_service/NotifyOtaMgrHeartbeat”
+    **/
+    struct NotifyOtaMgrHeartbeat {
+        long      seq;            // monotonically increasing, starts at 1
+        long long timestamp_ms;   // epoch ms at publish (Manager wall clock)
     };
 };

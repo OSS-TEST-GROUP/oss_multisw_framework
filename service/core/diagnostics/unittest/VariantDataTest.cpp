@@ -394,9 +394,12 @@ TEST_F(VariantDataTest, VectorTypes_TC011) {
 }
 
 TEST_F(VariantDataTest, GetValueAsVariant_TC012) {
+    // 42 is a bare `int` (== int32_t) literal, and SetValue<T> preserves the
+    // stored type exactly (cf. TC013 below: int32_t in → int32_t out). So the
+    // round-tripped type is int32_t, not int64_t.
     ins->SetValue("test_key", 42);
     VariantValue vv = ins->GetValueAsVariant("test_key");
-    EXPECT_EQ(std::type_index(typeid(int64_t)), vv.type);
+    EXPECT_EQ(std::type_index(typeid(int32_t)), vv.type);
 }
 
 TEST_F(VariantDataTest, GetValueAsVariantFromList_ValidIndex_TC013) {

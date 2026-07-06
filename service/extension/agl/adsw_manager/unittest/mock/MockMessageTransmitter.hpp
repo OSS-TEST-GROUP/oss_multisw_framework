@@ -17,6 +17,10 @@ public:
 
     MOCK_METHOD(bool, Initialize, (eprosima::fastdds::dds::DomainParticipant*), (override));
     MOCK_METHOD(void, PublishAppState, (), (override));
+    // F009 (C-1): PublishContainerState was added to MessageTransmitter; mock it
+    // so ServiceMonitorTest does not fall through to the real implementation
+    // (which dereferences a null dds_manager_ and SEGFAULTs).
+    MOCK_METHOD(void, PublishContainerState, (), (override));
     MOCK_METHOD(void, PublishAppList, (), (override));
 };
 

@@ -80,6 +80,9 @@ namespace adsw_manager::agl {
             }
 
             auto info = service_registry_->GetAppInfo(app_name);
+            if (!info) {
+                continue;  // app was removed from registry between iterations
+            }
 
             const ServiceState current = info->second;
 

@@ -57,6 +57,12 @@ protected:
             .WillByDefault(Return(mock_service_controller_));
         ON_CALL(*mock_service_controller_, GetContainer())
             .WillByDefault(Return(mock_container_controller_));
+        // GetTopic() feeds a std::string ctor in the ready-path of
+        // ProcessUpdateServiceListRequest; without a default the mock returns a
+        // null const char* → std::string(nullptr) throws. Mirror the default
+        // used by the other adsw fixtures (GetServiceStateEndPointTest etc.).
+        ON_CALL(*mock_adsw_manager_, GetTopic(_))
+            .WillByDefault(Return("mock_topic"));
 
         // Don't allocate Mock_Service here - each test that needs it will create one
         // and set Mock_Service to the raw pointer for forwarding
@@ -418,37 +424,24 @@ TEST_F(ServiceRegistryTest, ProcessUpdateServiceListRequest_EmptyRegistry_TC027)
     ofs << "spec:\n"
         << "  containers: []\n";
     ofs.close();
-    
+
     registry->LoadServiceList(testFile);
-    
-    // Setup mocks for empty service list
-    auto mockEndpoint = std::make_shared<MockDDSMessageEndpoint>();
-    auto mockTransmitter = std::make_shared<MockDDSTransmitter>();
+
+    // With no services registered, HasRecoveryChanged() returns false (nothing
+    // has changed from the empty baseline), so ProcessUpdateServiceListRequest()
+    // returns true immediately without sending a DDS message.  No EXPECT_CALL
+    // on the transmitter/endpoint is needed.
     auto mockManager = std::make_shared<MockADSWManager>();
-    
-    EXPECT_CALL(*mockEndpoint, Write(_))
-        .WillOnce(Return(true));
-    EXPECT_CALL(*mockTransmitter, GetMessageEndpoint(_))
-        .WillOnce(Return(mockEndpoint));
-    EXPECT_CALL(*mockManager, GetTopic(MessageType::UPDATE_SERVICE_LIST_REQUEST))
-        .WillOnce(Return("update_service_list_topic"));
-    EXPECT_CALL(*mockManager, GetTransmitter())
-        .WillOnce(Return(mockTransmitter));
-    
     Mock_ADSWManager = mockManager.get();
-    Mock_DDSTransmitter = mockTransmitter.get();
-    Mock_DDSMessageEndpoint = mockEndpoint.get();
-    
+
     // Process update with empty registry (no services added)
     bool result = registry->ProcessUpdateServiceListRequest();
-    
-    // Should handle empty registry gracefully
+
+    // Should handle empty registry gracefully and return true
     EXPECT_TRUE(result);
-    
+
     std::remove(testFile.c_str());
     Mock_ADSWManager = nullptr;
-    Mock_DDSTransmitter = nullptr;
-    Mock_DDSMessageEndpoint = nullptr;
 }
 
 TEST_F(ServiceRegistryTest, ProcessUpdateServiceListRequest_MultipleServices_TC028) {
@@ -1197,30 +1190,30 @@ TEST_F(ServiceRegistryTest, ProcessGetServiceStateRequest_MultipleServices_TC064
     // Add multiple services
     auto service1 = MakeService("Service1");
     auto service2 = MakeService("Service2");
-    
-    // Set up GetName expectations so registry can find services by name
-    EXPECT_CALL(*dynamic_cast<MockService*>(service1.get()), GetName())
-        .WillRepeatedly(Return("Service1"));
-    EXPECT_CALL(*dynamic_cast<MockService*>(service2.get()), GetName())
-        .WillRepeatedly(Return("Service2"));
-    
-    EXPECT_CALL(*dynamic_cast<MockService*>(service1.get()), GetServiceState())
-        .WillOnce(Return(ServiceState::RUNNING));
-    EXPECT_CALL(*dynamic_cast<MockService*>(service2.get()), GetServiceState())
-        .WillOnce(Return(ServiceState::NOT_RUNNING));
-    
+    // After MakeService("Service2"), Mock_Service == service2.get().
+    // MockService.hpp's Service::GetServiceState() stub always dispatches
+    // through the single global Mock_Service pointer, so BOTH service1 and
+    // service2 instances will forward GetServiceState() to service2's mock.
+    // EXPECT_CALL on service1 would never fire; expect service2 called twice.
+
     registry->AddService(service1, "GroupA");
     registry->AddService(service2, "GroupB");
-    
+
+    // Both service instances forward GetServiceState() through Mock_Service ==
+    // service2, so service2's mock is invoked once per service in the request.
+    EXPECT_CALL(*dynamic_cast<MockService*>(service2.get()), GetServiceState())
+        .Times(2)
+        .WillRepeatedly(Return(ServiceState::NOT_RUNNING));
+
     // Setup mocks
     auto mockTransmitter = std::make_shared<MockDDSTransmitter>();
     auto mockManager = std::make_shared<MockADSWManager>();
-    
+
     EXPECT_CALL(*mockTransmitter, SendMessage(MessageType::GET_SERVICE_STATE_RESPONSE, _))
         .WillOnce(Return(true));
     EXPECT_CALL(*mockManager, GetTransmitter())
         .WillOnce(Return(mockTransmitter));
-    
+
     Mock_ADSWManager = mockManager.get();
     Mock_DDSTransmitter = mockTransmitter.get();
 
@@ -1230,12 +1223,12 @@ TEST_F(ServiceRegistryTest, ProcessGetServiceStateRequest_MultipleServices_TC064
     request.service_list().push_back("Service1");
     request.service_list().push_back("Service2");
     request.is_all_service(false);
-    
+
     // Execute
     bool result = registry->ProcessGetServiceStateRequest(&request);
-    
+
     EXPECT_TRUE(result);
-    
+
     Mock_ADSWManager = nullptr;
     Mock_DDSTransmitter = nullptr;
 }

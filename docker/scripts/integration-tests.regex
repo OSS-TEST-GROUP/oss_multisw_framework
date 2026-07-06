@@ -1,0 +1,47 @@
+# Integration / runtime-dependent test patterns (ctest -R/-E regex, matched
+# against "Suite.Test" names). These need a real runtime that the plain unit
+# CI does not provide — an external gRPC server, a ROS graph, multi-participant
+# DDS discovery timing, or a docker container — so they are split out of the
+# unit lane (run_unittest.sh excludes them) and run in a separate integration
+# lane (run_integration.sh runs only them), mirroring the HMI ci.yml split of
+# unit-test vs integration vs ros-e2e jobs.
+#
+# Keep this as ONE extended-regex on a single logical line (comments/blank
+# lines are stripped by the runners). Add new integration tests here.
+#
+# ── whole integration suites ──────────────────────────────────────────────
+#  GrpcTransportTest            : opens a real gRPC channel to localhost:5443
+#  ConcreteEndpointIntegrationTest / LifecycleAdswIntegrationTest : real DDS pub→sub
+#  NOTE: *AutowareE2ETest / L3AutowareE2ETest are NO LONGER in the integration lane.
+#        They use the mock image (mmf-autoware-mock:humble, 760MB) and run in the
+#        unit lane with fast-skip when prerequisites are absent. See:
+#        docker/test/Dockerfile.autoware-mock and autoware_e2e_common.h.
+# ── specific runtime/flaky tests inside otherwise-unit suites ──────────────
+#  MessageTransmitterTest .*ROS : ROS-forwarding paths need a ROS graph
+#  DDSProtocolTest .*_with_(reader|writer) : 실 DDS DataReader/DataWriter 생성·해제
+#                                 (UnsubscribeMessage_TC003_with_reader 등은 단위
+#                                  환경에서 90s timeout/hang), + 특정 xcdr 직렬화 케이스
+#  GrpcProviderTest (whole)     : background subscribe/set worker-thread timing
+#                                 (SetValueSuccess / SubscribeFailsWithErrorResponse
+#                                  flake across runs) — gRPC stub is mocked but the
+#                                  provider drives a worker thread.
+#  VssSubscriptionManagerTest.SubscriptionWithPathsFilter : period-timer timing
+#  OtamActorServiceTest.F012_.. : actor signal/timeout thread timing
+# ── adsw_manager ROS2 extension — runtime-dependent tests ─────────────────
+#  ADSWManagerTest (5 tests)    : InitializeAndStartStop / InitializeMultipleTimes /
+#                                 StartAndStopMultipleTimes / Process_InStartedState /
+#                                 Process_UpdateServiceListRequestFails
+#                                 — all require a real ROS2 DDS participant + graph
+#  ContainerDockerComposeTest (4 tests) : StartComposeContainer_Success_IT010 /
+#                                 GetContainerStatusStr_Running_IT011 /
+#                                 StopComposeContainer_Success_IT012 /
+#                                 RestartComposeContainer_IT013
+#                                 — invoke `docker compose` subprocess at runtime
+#  ROSDiscoveryInfoEndpointTest (6 tests) : OnDataAvailable_DirectCall_ReadFails /
+#                                 OnDataAvailable_MultipleCalls /
+#                                 InitializeAndFinalize /
+#                                 Testable_OnDataAvailable_ReadSucceeds_ManagerValid /
+#                                 Testable_OnDataAvailable_WithMockInfo /
+#                                 Testable_OnDataAvailable_MultipleCalls
+#                                 — require real FastDDS DataReader participant
+GrpcTransportTest\.|ConcreteEndpointIntegrationTest\.|LifecycleAdswIntegrationTest\.|MessageTransmitterTest\..*ROS|DDSProtocolTest\..*_with_(reader|writer)|DDSProtocolDeserializeTest\.Deserialize_Direct_TC016_sequence_string|DDSProtocolBranchCoverageTest\.register_type_object_TC003_comprehensive_sequence|GrpcProviderTest\.|VssSubscriptionManagerTest\.SubscriptionWithPathsFilter|OtamActorServiceTest\.F012_AllSignalsBeforeTimeout_NoTimeout|ADSWManagerTest\.(InitializeAndStartStop|InitializeMultipleTimes|StartAndStopMultipleTimes|Process_InStartedState|Process_UpdateServiceListRequestFails)|ContainerDockerComposeTest\.(StartComposeContainer_Success_IT010|GetContainerStatusStr_Running_IT011|StopComposeContainer_Success_IT012|RestartComposeContainer_IT013)|ROSDiscoveryInfoEndpointTest\.(OnDataAvailable_DirectCall_ReadFails|OnDataAvailable_MultipleCalls|InitializeAndFinalize|Testable_OnDataAvailable_ReadSucceeds_ManagerValid|Testable_OnDataAvailable_WithMockInfo|Testable_OnDataAvailable_MultipleCalls)

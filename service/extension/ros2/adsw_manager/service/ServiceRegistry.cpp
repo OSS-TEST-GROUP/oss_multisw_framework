@@ -24,7 +24,8 @@ std::optional<std::string> getEnv(const std::string &key) {
   return val ? std::optional<std::string>(val) : std::nullopt;
 }
 
-ServiceRegistry::ServiceRegistry() {}
+ServiceRegistry::ServiceRegistry()
+    : ready_service_list_(false) {}
 ServiceRegistry::~ServiceRegistry() {}
 
 // constexpr const char *SAVED_REGISTRY_BACKUP =
@@ -106,6 +107,7 @@ bool ServiceRegistry::LoadServiceList(const std::string &path) {
   }
 
   LOG_DEBUG("ServiceRegistry::LoadServiceList end ");
+  ready_service_list_ = true;
   return true;
 }
 
@@ -372,6 +374,10 @@ bool ServiceRegistry::ProcessUpdateServiceListRequest() {
 
   std::shared_ptr<DDSTransmitter> transmitter =
       ADSWManager::Get()->GetTransmitter();
+  if (transmitter == nullptr) {
+    LOG_ERROR("No transmitter available for UpdateServiceListRequest");
+    return false;
+  }
   const char *topic =
       ADSWManager::Get()->GetTopic(MessageType::UPDATE_SERVICE_LIST_REQUEST);
   std::shared_ptr<DDSMessageEndpoint> endpoint =

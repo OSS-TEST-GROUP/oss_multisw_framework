@@ -12,29 +12,13 @@
 #include <functional>
 #include <sys/stat.h>
 
+#include "autoware_e2e_common.h"
+
 namespace {
 
 // ── Constants ──────────────────────────────────────────────────────────────
-constexpr const char* AUTOWARE_IMAGE =
-    "ghcr.io/autowarefoundation/autoware:universe-dependencies-cuda-humble-20260423-amd64";
 constexpr const char* AUTOWARE_CONTAINER = "autoware-test-crash";
-
-constexpr const char* ADSW_MANAGER_BIN =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework/output/x86_64/Debug/extension/ros2/bin/adsw_manager";
-constexpr const char* LIFECYCLE_MGR_BIN =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework/output/x86_64/Debug/core/bin/lifecycle_mgr";
-constexpr const char* FASTDDS_LIB_PATH =
-    "/home/obigo/obigo-sdk/Fast-DDS/output/ros2_x86_64/lib";
-constexpr const char* LF_LIB_PATH =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework/output/x86_64/Debug/core/lib";
-constexpr const char* ADSW_LIB_PATH =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework/output/x86_64/Debug/extension/ros2/lib";
-constexpr const char* LF_CONFIG_PATH =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework/service/core/lifecycle_mgr/config";
 constexpr const char* E2E_CRASH_CONFIG_DIR = "/tmp/autoware_crash_e2e_test";
-constexpr const char* FASTDDS_PROFILE =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework"
-    "/docker/build_environment/fastdds-profile.xml";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 std::string ExecShell(const std::string& cmd) {
@@ -72,7 +56,7 @@ void KillAndWait(pid_t pid) {
 // F006 L3 E2E: Crash notification via NotifyServiceState
 //
 // Phase 1: F003 chain — start lifecycle_mgr + adsw_manager → logging_demo_main runs
-// Phase 2: pkill -9 logging_demo_main → ContainerHealthMonitor detects crash
+// Phase 2: docker stop container → ContainerHealthMonitor detects crash
 //          → ServiceMonitor::NotifyServiceState() → DDS publish
 // Phase 3: Verify adsw.log has "NotifyServiceState" and lifecycle_mgr.log has reception
 
@@ -86,13 +70,24 @@ public:
     static bool notify_received_ok_;
 
     static void SetUpTestSuite() {
-        // Set FastDDS profile before any DDS usage in this process
-        setenv("FASTDDS_DEFAULT_PROFILES_FILE", FASTDDS_PROFILE, 1);
-
         node_started_ok_ = false;
         node_crashed_ok_ = false;
         notify_published_ok_ = false;
         notify_received_ok_ = false;
+
+        // Fast-skip: check docker, mock image, and MMF binaries before any
+        // blocking I/O. This exits in <1s on machines without prerequisites.
+        std::string skip_reason;
+        if (!AutowareE2EPrereqs(skip_reason)) {
+            GTEST_SKIP() << skip_reason;
+            return;
+        }
+
+        // Per-run DDS domain isolation
+        int domain = E2EDomainId();
+        std::string fastdds_profile = E2EWriteFastDdsProfile(domain);
+        std::string domain_str = std::to_string(domain);
+        setenv("FASTDDS_DEFAULT_PROFILES_FILE", fastdds_profile.c_str(), 1);
 
         // Kill stale processes from prior runs to avoid DDS domain interference
         ExecShell("pkill -9 adsw_manager 2>/dev/null");
@@ -111,14 +106,14 @@ public:
           << "specs:\n"
           << "  - containers:\n"
           << "      - name: " << AUTOWARE_CONTAINER << "\n"
-          << "        image: \"" << AUTOWARE_IMAGE << "\"\n"
+          << "        image: \"" << AutowareImage() << "\"\n"
           << "        container-type: \"docker\"\n"
           << "        services:\n"
           << "          - package: \"logging_demo\"\n"
           << "            name: \"logging_demo_main\"\n"
           << "            launchfile: \"\"\n"
           << "            type: \"NORMAL\"\n"
-          << "            recovery: \"ALWAYS\"\n"  // ALWAYS recognized; lifecycle_mgr will re-issue StartServiceRequest after crash
+          << "            recovery: \"ALWAYS\"\n"
           << "            enabled: \"true\"\n"
           << "            max: \"0\"\n";
         f.close();
@@ -145,13 +140,14 @@ public:
         }
 
         // 3. Start autoware container (--network host for DDS multicast)
-        ExecShell(std::string("docker rm -f ") + AUTOWARE_CONTAINER + " 2>/dev/null");
+        ExecShell(std::string("docker stop ") + AUTOWARE_CONTAINER + " 2>/dev/null; docker rm " + AUTOWARE_CONTAINER + " 2>/dev/null");
         std::this_thread::sleep_for(std::chrono::seconds(1));
         ExecShell(std::string("docker run -d --name ") + AUTOWARE_CONTAINER
                   + " --network host"
                   + " -v " + CYCLONE_XML_PATH + ":/tmp/cyclonedds_crash_e2e.xml"
                   + " -e CYCLONEDDS_URI=file:///tmp/cyclonedds_crash_e2e.xml"
-                  + " " + AUTOWARE_IMAGE + " sleep infinity");
+                  + " -e ROS_DOMAIN_ID=" + domain_str
+                  + " " + AutowareImage() + " sleep infinity");
 
         bool container_ok = WaitForCondition([&]() {
             std::string out = ExecShell(
@@ -166,20 +162,17 @@ public:
         }
 
         // 4. Build LD_LIBRARY_PATH for child processes
-        std::string ld_path = std::string(LF_LIB_PATH) + ":"
-                            + ADSW_LIB_PATH + ":"
-                            + FASTDDS_LIB_PATH;
-        const char* existing_ld = std::getenv("LD_LIBRARY_PATH");
-        if (existing_ld && strlen(existing_ld) > 0) ld_path += std::string(":") + existing_ld;
+        std::string ld_path = MmfBuildLdPath();
+        std::string lf_config = MmfLfConfig();
 
-        // 5. Fork lifecycle_mgr — it orchestrates UpdateServiceList handshake and issues
-        //    StartServiceRequest to adsw_manager, driving the full F003 chain.
+        // 5. Fork lifecycle_mgr
         lifecycle_pid_ = fork();
         if (lifecycle_pid_ == 0) {
-            setenv("MMF_CONFIG_PATH", LF_CONFIG_PATH, 1);
+            setenv("MMF_CONFIG_PATH", lf_config.c_str(), 1);
             setenv("LD_LIBRARY_PATH", ld_path.c_str(), 1);
-            setenv("FASTDDS_DEFAULT_PROFILES_FILE", FASTDDS_PROFILE, 1);
-            execl(LIFECYCLE_MGR_BIN, "lifecycle_mgr", nullptr);
+            setenv("FASTDDS_DEFAULT_PROFILES_FILE", fastdds_profile.c_str(), 1);
+            setenv("ROS_DOMAIN_ID", domain_str.c_str(), 1);
+            execl(MmfLfBin().c_str(), "lifecycle_mgr", nullptr);
             _exit(127);
         }
 
@@ -188,8 +181,9 @@ public:
         if (adsw_pid_ == 0) {
             setenv("SAVED_REGISTRY_BACKUP", E2E_CRASH_CONFIG_DIR, 1);
             setenv("LD_LIBRARY_PATH", ld_path.c_str(), 1);
-            setenv("FASTDDS_DEFAULT_PROFILES_FILE", FASTDDS_PROFILE, 1);
-            execl(ADSW_MANAGER_BIN, "adsw_manager", nullptr);
+            setenv("FASTDDS_DEFAULT_PROFILES_FILE", fastdds_profile.c_str(), 1);
+            setenv("ROS_DOMAIN_ID", domain_str.c_str(), 1);
+            execl(MmfAdswBin().c_str(), "adsw_manager", nullptr);
             _exit(127);
         }
 
@@ -208,13 +202,10 @@ public:
 
         // 8. Phase 2: Stop the container to simulate a crash.
         //    ContainerHealthMonitor monitors container-level state via docker inspect.
-        //    Killing only a process inside the container leaves container "running" — undetected.
         //    Stopping the container triggers: docker inspect → "exited" → OnContainerStateChanged()
         //    → NotifyServiceState(STOPPED, CRASH).
         ExecShell(std::string("docker stop -t 2 ") + AUTOWARE_CONTAINER + " 2>/dev/null");
 
-        // When container stops, docker exec into it returns error → ros2 node list is empty.
-        // WaitForCondition sees node absent (empty output) → node_crashed_ok_ = true.
         node_crashed_ok_ = WaitForCondition([&]() {
             std::string out = ExecShell(
                 std::string("docker exec ") + AUTOWARE_CONTAINER + " bash -c "
@@ -232,15 +223,10 @@ public:
         std::this_thread::sleep_for(std::chrono::seconds(2));
 
         // 9. Phase 3: Parse logs to verify NotifyServiceState was published and received
-        //    adsw.log should have: "write message. mmf/lifecyclemgr/NotifyServiceState"
-        //    lifecycle_mgr.log should have: "on_data_available() [mmf/lifecyclemgr/NotifyServiceState]"
-
-        // Parse adsw.log (should be in test CWD or /tmp)
         std::string adsw_log_path = "adsw.log";
         std::ifstream adsw_log(adsw_log_path);
         if (!adsw_log.is_open()) {
-            // Try /tmp or build dir
-            adsw_log_path = "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework/adsw.log";
+            adsw_log_path = MmfRoot() + "/adsw.log";
             adsw_log.open(adsw_log_path);
         }
         if (adsw_log.is_open()) {
@@ -253,11 +239,10 @@ public:
             }
         }
 
-        // Parse lifecycle_mgr.log
         std::string lf_log_path = "lifecycle_mgr.log";
         std::ifstream lf_log(lf_log_path);
         if (!lf_log.is_open()) {
-            lf_log_path = "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework/lifecycle_mgr.log";
+            lf_log_path = MmfRoot() + "/lifecycle_mgr.log";
             lf_log.open(lf_log_path);
         }
         if (lf_log.is_open()) {
@@ -275,7 +260,7 @@ public:
     static void TearDownTestSuite() {
         KillAndWait(lifecycle_pid_);
         KillAndWait(adsw_pid_);
-        ExecShell(std::string("docker rm -f ") + AUTOWARE_CONTAINER + " 2>/dev/null");
+        ExecShell(std::string("docker stop ") + AUTOWARE_CONTAINER + " 2>/dev/null; docker rm " + AUTOWARE_CONTAINER + " 2>/dev/null");
         ExecShell(std::string("rm -rf ") + E2E_CRASH_CONFIG_DIR);
         ExecShell("rm -f /tmp/cyclonedds_crash_e2e.xml");
         lifecycle_pid_ = -1;
@@ -297,7 +282,7 @@ TEST_F(L3AutowareCrashE2ETest, TC001_NodeWasRunning) {
         << "F003 chain (UpdateServiceList handshake → StartServiceRequest → docker exec).";
 }
 
-// AC2+AC3: pkill -9 executed; node disappeared
+// AC2+AC3: container stopped; node disappeared
 TEST_F(L3AutowareCrashE2ETest, TC002_NodeCrashDetected) {
     ASSERT_TRUE(node_started_ok_) << "Phase 1 prerequisite failed";
     ASSERT_TRUE(node_crashed_ok_)

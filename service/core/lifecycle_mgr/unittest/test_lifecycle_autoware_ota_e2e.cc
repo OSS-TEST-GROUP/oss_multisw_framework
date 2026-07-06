@@ -24,30 +24,14 @@ using namespace eprosima::fastdds::dds;
 using namespace eprosima::fastdds::rtps;
 using namespace lifecycle_manager;
 
+#include "autoware_e2e_common.h"
+
 namespace {
 
 // ── Constants ──────────────────────────────────────────────────────────────
-constexpr const char* AUTOWARE_IMAGE =
-    "ghcr.io/autowarefoundation/autoware:universe-dependencies-cuda-humble-20260423-amd64";
-constexpr const char* AUTOWARE_CONTAINER = "autoware-test-ota";
-
-constexpr const char* LIFECYCLE_MGR_BIN =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework/output/x86_64/Debug/core/bin/lifecycle_mgr";
-constexpr const char* ADSW_MANAGER_BIN =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework/output/x86_64/Debug/extension/ros2/bin/adsw_manager";
-constexpr const char* LF_LIB_PATH =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework/output/x86_64/Debug/core/lib";
-constexpr const char* ADSW_LIB_PATH =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework/output/x86_64/Debug/extension/ros2/lib";
-constexpr const char* FASTDDS_LIB_PATH =
-    "/home/obigo/obigo-sdk/Fast-DDS/output/ros2_x86_64/lib";
-constexpr const char* LF_CONFIG_PATH =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework/service/core/lifecycle_mgr/config";
-constexpr const char* E2E_OTA_CONFIG_DIR = "/tmp/autoware_ota_e2e_test";
-constexpr const char* FASTDDS_PROFILE =
-    "/home/obigo/project/oss/oss_agent/mmf/oss_multisw_framework"
-    "/docker/build_environment/fastdds-profile.xml";
-constexpr const char* SET_MODE_TOPIC = "mmf/lifecyclemgr/SetServiceModeRequest";
+constexpr const char* AUTOWARE_CONTAINER  = "autoware-test-ota";
+constexpr const char* E2E_OTA_CONFIG_DIR  = "/tmp/autoware_ota_e2e_test";
+constexpr const char* SET_MODE_TOPIC      = "mmf/lifecyclemgr/SetServiceModeRequest";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 std::string ExecShell(const std::string& cmd) {
@@ -91,11 +75,12 @@ static DomainParticipant* CreateUdpOnlyParticipant(int domain_id, const char* na
 }
 
 // ── DDS SetServiceMode Request Publisher ─────────────────────────────────────
-// Publishes SetServiceModeRequest on mmf/lifecyclemgr/SetServiceModeRequest.
-// lifecycle_mgr subscribes; it updates service mode and sends SetServiceModeResponse.
+// domain_id is E2EDomainId() so the publisher reaches the test's isolated
+// lifecycle_mgr (domain N) instead of the production stack (domain 0).
 class SetModePublisher : public DDSMessageEndPoint {
 public:
-    SetModePublisher() : DDSMessageEndPoint(SET_MODE_TOPIC) {
+    explicit SetModePublisher(int domain_id)
+        : DDSMessageEndPoint(SET_MODE_TOPIC), domain_id_(domain_id) {
         SetTypeSupport(std::make_shared<TypeSupport>(
             new lifecyclemgr::SetServiceModeRequestPubSubType()));
     }
@@ -103,12 +88,15 @@ public:
     ~SetModePublisher() { Cleanup(); }
 
     bool Initialize() {
-        participant_ = CreateUdpOnlyParticipant(0, "OtaTestModePublisher");
+        participant_ = CreateUdpOnlyParticipant(domain_id_, "OtaTestModePublisher");
         if (!participant_) return false;
         publisher_ = participant_->create_publisher(PUBLISHER_QOS_DEFAULT);
         if (!publisher_) return false;
         return DDSMessageEndPoint::Initialize(participant_, publisher_, nullptr);
     }
+
+private:
+    int domain_id_;
 
     void Cleanup() {
         if (participant_) {
@@ -160,10 +148,23 @@ public:
     static bool normal_mode_ok_;   // node restarted after NORMAL mode restored
 
     static void SetUpTestSuite() {
-        setenv("FASTDDS_DEFAULT_PROFILES_FILE", FASTDDS_PROFILE, 1);
         node_started_ok_ = false;
         ota_mode_ok_     = false;
         normal_mode_ok_  = false;
+
+        // Fast-skip: check docker, mock image, and MMF binaries before any
+        // blocking I/O. This exits in <1s on machines without prerequisites.
+        std::string skip_reason;
+        if (!AutowareE2EPrereqs(skip_reason)) {
+            GTEST_SKIP() << skip_reason;
+            return;
+        }
+
+        // Per-run DDS domain isolation
+        int domain = E2EDomainId();
+        std::string fastdds_profile = E2EWriteFastDdsProfile(domain);
+        std::string domain_str = std::to_string(domain);
+        setenv("FASTDDS_DEFAULT_PROFILES_FILE", fastdds_profile.c_str(), 1);
 
         ExecShell("pkill -9 adsw_manager 2>/dev/null");
         ExecShell("pkill -9 lifecycle_mgr 2>/dev/null");
@@ -182,7 +183,7 @@ public:
               << "specs:\n"
               << "  - containers:\n"
               << "      - name: " << AUTOWARE_CONTAINER << "\n"
-              << "        image: \"" << AUTOWARE_IMAGE << "\"\n"
+              << "        image: \"" << AutowareImage() << "\"\n"
               << "        container-type: \"docker\"\n"
               << "        services:\n"
               << "          - package: \"logging_demo\"\n"
@@ -210,13 +211,14 @@ public:
         }
 
         // Start container
-        ExecShell(std::string("docker rm -f ") + AUTOWARE_CONTAINER + " 2>/dev/null");
+        ExecShell(std::string("docker stop ") + AUTOWARE_CONTAINER + " 2>/dev/null; docker rm " + AUTOWARE_CONTAINER + " 2>/dev/null");
         std::this_thread::sleep_for(std::chrono::seconds(1));
         ExecShell(std::string("docker run -d --name ") + AUTOWARE_CONTAINER
                   + " --network host"
                   + " -v " + CYCLONE_XML + ":/tmp/cyclonedds_ota_e2e.xml"
                   + " -e CYCLONEDDS_URI=file:///tmp/cyclonedds_ota_e2e.xml"
-                  + " " + AUTOWARE_IMAGE + " sleep infinity");
+                  + " -e ROS_DOMAIN_ID=" + domain_str
+                  + " " + AutowareImage() + " sleep infinity");
 
         bool container_ok = WaitForCondition([]() {
             std::string out = ExecShell(
@@ -231,17 +233,17 @@ public:
         }
 
         // Build LD_LIBRARY_PATH
-        std::string ld_path = std::string(LF_LIB_PATH) + ":" + ADSW_LIB_PATH + ":" + FASTDDS_LIB_PATH;
-        const char* existing_ld = std::getenv("LD_LIBRARY_PATH");
-        if (existing_ld && strlen(existing_ld) > 0) ld_path += std::string(":") + existing_ld;
+        std::string ld_path = MmfBuildLdPath();
+        std::string lf_config = MmfLfConfig();
 
         // Fork lifecycle_mgr
         lifecycle_pid_ = fork();
         if (lifecycle_pid_ == 0) {
-            setenv("MMF_CONFIG_PATH", LF_CONFIG_PATH, 1);
+            setenv("MMF_CONFIG_PATH", lf_config.c_str(), 1);
             setenv("LD_LIBRARY_PATH", ld_path.c_str(), 1);
-            setenv("FASTDDS_DEFAULT_PROFILES_FILE", FASTDDS_PROFILE, 1);
-            execl(LIFECYCLE_MGR_BIN, "lifecycle_mgr", nullptr);
+            setenv("FASTDDS_DEFAULT_PROFILES_FILE", fastdds_profile.c_str(), 1);
+            setenv("ROS_DOMAIN_ID", domain_str.c_str(), 1);
+            execl(MmfLfBin().c_str(), "lifecycle_mgr", nullptr);
             _exit(127);
         }
         std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -251,8 +253,9 @@ public:
         if (adsw_pid_ == 0) {
             setenv("SAVED_REGISTRY_BACKUP", E2E_OTA_CONFIG_DIR, 1);
             setenv("LD_LIBRARY_PATH", ld_path.c_str(), 1);
-            setenv("FASTDDS_DEFAULT_PROFILES_FILE", FASTDDS_PROFILE, 1);
-            execl(ADSW_MANAGER_BIN, "adsw_manager", nullptr);
+            setenv("FASTDDS_DEFAULT_PROFILES_FILE", fastdds_profile.c_str(), 1);
+            setenv("ROS_DOMAIN_ID", domain_str.c_str(), 1);
+            execl(MmfAdswBin().c_str(), "adsw_manager", nullptr);
             _exit(127);
         }
 
@@ -270,8 +273,8 @@ public:
         }
 
         // Phase 2: Switch to OTA_MODE, then crash container.
-        // SetModePublisher needs DDS discovery time with lifecycle_mgr (2s).
-        auto mode_pub = std::make_shared<SetModePublisher>();
+        // The publisher uses the per-run domain to reach our isolated lifecycle_mgr.
+        auto mode_pub = std::make_shared<SetModePublisher>(domain);
         if (!mode_pub->Initialize()) {
             ADD_FAILURE() << "Failed to initialize SetModePublisher";
             return;
@@ -298,7 +301,6 @@ public:
         ota_mode_ok_ = !node_absent;
 
         // Phase 3: Restore NORMAL mode → lifecycle_mgr PolicyAlways resumes.
-        // Next GetServiceStateRequest (10s interval) will see NOT_RUNNING → START → restart.
         mode_pub->SendNormalMode("logging_demo_main");
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
@@ -322,7 +324,7 @@ public:
     static void TearDownTestSuite() {
         KillAndWait(adsw_pid_);
         KillAndWait(lifecycle_pid_);
-        ExecShell(std::string("docker rm -f ") + AUTOWARE_CONTAINER + " 2>/dev/null");
+        ExecShell(std::string("docker stop ") + AUTOWARE_CONTAINER + " 2>/dev/null; docker rm " + AUTOWARE_CONTAINER + " 2>/dev/null");
         ExecShell(std::string("rm -rf ") + E2E_OTA_CONFIG_DIR);
         ExecShell("rm -f /tmp/cyclonedds_ota_e2e.xml");
         lifecycle_pid_ = -1;

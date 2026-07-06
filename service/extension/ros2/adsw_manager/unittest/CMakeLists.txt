@@ -190,6 +190,26 @@ add_executable( ADSWContainerHealthMonitorTest ContainerHealthMonitorTest.cpp
                 ../service/Container.cpp
                 ../service/Service.cpp
                 mock/MockADSWManager.cpp
+                # F013 ContainerHealthMonitor fans out through the real
+                # ServiceMonitor/ServiceRegistry/transmitter graph — link them
+                # (+ their DDS types) so the test binary resolves.
+                ../control/ContainerController.cpp
+                ../monitor/ServiceMonitor.cpp
+                ../monitor/UpdateServiceInfo.cpp
+                ../monitor/ROSServiceDiscovery.cpp
+                ../service/ServiceRegistry.cpp
+                ../transmitter/DDSTransmitter.cpp
+                ../transmitter/DDSMessageEndpoint.cpp
+                ../transmitter/MessageQueue.cpp
+                ${GENERATED_DIR}/lifecycle/NotifyServiceStatePubSubTypes.cxx
+                ${GENERATED_DIR}/lifecycle/NotifyServiceStateTypeObjectSupport.cxx
+                ${GENERATED_DIR}/lifecycle/NotifyContainerStatePubSubTypes.cxx
+                ${GENERATED_DIR}/lifecycle/NotifyContainerStateTypeObjectSupport.cxx
+                ${GENERATED_DIR}/lifecycle/LifecycleCommonPubSubTypes.cxx
+                ${GENERATED_DIR}/lifecycle/LifecycleCommonTypeObjectSupport.cxx
+                ${GENERATED_DIR}/ros2/AdswServiceStatusPubSubTypes.cxx
+                ${GENERATED_DIR}/ros2/AdswServiceStatusTypeObjectSupport.cxx
+                ${ROS2_GENERATED_IDL}
 )
 
 # Docker 통합 테스트 (실제 Docker 데몬 필요)
@@ -201,6 +221,23 @@ add_executable( ADSWContainerDockerIntegrationTest
                 ../service/Service.cpp
                 ../logger/Logger.cpp
                 mock/MockADSWManager.cpp
+                # F013 ContainerHealthMonitor fan-out graph (see CHM test above)
+                ../monitor/ServiceMonitor.cpp
+                ../monitor/UpdateServiceInfo.cpp
+                ../monitor/ROSServiceDiscovery.cpp
+                ../service/ServiceRegistry.cpp
+                ../transmitter/DDSTransmitter.cpp
+                ../transmitter/DDSMessageEndpoint.cpp
+                ../transmitter/MessageQueue.cpp
+                ${GENERATED_DIR}/lifecycle/NotifyServiceStatePubSubTypes.cxx
+                ${GENERATED_DIR}/lifecycle/NotifyServiceStateTypeObjectSupport.cxx
+                ${GENERATED_DIR}/lifecycle/NotifyContainerStatePubSubTypes.cxx
+                ${GENERATED_DIR}/lifecycle/NotifyContainerStateTypeObjectSupport.cxx
+                ${GENERATED_DIR}/lifecycle/LifecycleCommonPubSubTypes.cxx
+                ${GENERATED_DIR}/lifecycle/LifecycleCommonTypeObjectSupport.cxx
+                ${GENERATED_DIR}/ros2/AdswServiceStatusPubSubTypes.cxx
+                ${GENERATED_DIR}/ros2/AdswServiceStatusTypeObjectSupport.cxx
+                ${ROS2_GENERATED_IDL}
 )
 
 add_executable( ADSWROS2NodeControllerTest ROS2NodeControllerTest.cpp

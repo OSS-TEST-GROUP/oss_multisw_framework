@@ -8,6 +8,7 @@
 #include <iomanip>
 #include <sstream>
 #include <ctime>
+#include <charconv>
 #include <vector>
 
 std::string trim(const std::string& str) {
@@ -80,9 +81,20 @@ std::string any_to_string(const std::any& val) {
     if (type == typeid(uint64_t)) return std::to_string(std::any_cast<uint64_t>(val));
     if (type == typeid(int64_t)) return std::to_string(std::any_cast<int64_t>(val));
 
-    // Floating point types
-    if (type == typeid(float)) return std::to_string(std::any_cast<float>(val));
-    if (type == typeid(double)) return std::to_string(std::any_cast<double>(val));
+    // Floating point types — std::to_chars yields the shortest decimal string
+    // that round-trips back to the same value (e.g. 123.345f → "123.345"),
+    // unlike std::to_string which pads to a fixed 6 fractional digits and
+    // surfaces binary-representation noise ("123.345001").
+    if (type == typeid(float)) {
+        char buf[64];
+        auto [ptr, ec] = std::to_chars(buf, buf + sizeof(buf), std::any_cast<float>(val));
+        return std::string(buf, ptr);
+    }
+    if (type == typeid(double)) {
+        char buf[64];
+        auto [ptr, ec] = std::to_chars(buf, buf + sizeof(buf), std::any_cast<double>(val));
+        return std::string(buf, ptr);
+    }
 
     // For complex types (structs/arrays), serialize to JSON string
     if (type == typeid(std::map<std::string, std::any>) || type == typeid(std::vector<std::map<std::string, std::any>>)) {

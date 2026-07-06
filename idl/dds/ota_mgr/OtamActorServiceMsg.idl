@@ -105,11 +105,20 @@ module otamanager {
 /**
 [Topic] "/mmf/otamanager/otaactor_service/GetAppListResponse"
 
+One entry per (client, app) pair — NOT deduplicated by app name. Each
+client contributes one entry per app it registered, so a client that owns
+several apps appears in several entries (all sharing its owner_client_id).
+The same app name registered by different clients (e.g. a ros2 board and an
+agl board across heterogeneous hosts) is kept as separate entries — never
+collapsed to one owner — so no host's installation is hidden.
+
+Emitted in ascending owner_client_id order (then registration order within
+a client); not sorted by app name. The consumer groups by owner_client_id
+to reconstruct each client's app list.
+
 Parallel arrays:
-  app_names[i]          — application name (deduplicated, sorted)
+  app_names[i]          — application name (may repeat across clients)
   owner_client_ids[i]   — id of the client that registered app_names[i]
-                            (when the same app is registered by multiple
-                             clients, the lowest client_id wins)
   owner_client_names[i] — registered name of owner_client_ids[i], so the
                             ota_monitor tree can label clients without a
                             separate query

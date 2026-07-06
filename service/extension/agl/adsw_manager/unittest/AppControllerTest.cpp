@@ -83,7 +83,11 @@ namespace adsw_manager::agl {
 class AppControllerTest : public ::testing::Test {
 protected:
     static void SetUpTestSuite() {
+#ifdef ADSW_HELPERS_DIR
+        g_helpers_dir = ADSW_HELPERS_DIR;
+#else
         g_helpers_dir = DirnameOf(__FILE__) + "/helpers";
+#endif
         EnsureExecutable(g_helpers_dir + "/docker");
     }
 
