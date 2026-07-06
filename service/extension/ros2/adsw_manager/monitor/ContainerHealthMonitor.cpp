@@ -238,6 +238,24 @@ void ContainerHealthMonitor::PollServicesInContainer(const std::string& containe
         // through INITIALIZING → RUNNING the same way we do on cold-start.
         ServiceState st = svc->GetServiceState();
 
+        // Container-workload service: its liveness IS the container's running
+        // state, not an in-container process match. This loop is only reached
+        // when the container is running (guarded by the caller), so the
+        // workload is up — promote INITIALIZING → RUNNING and skip the
+        // pgrep/PID rehydration machinery (the script's process name won't
+        // match ResolveProcessMatchToken, which would strand it at
+        // INITIALIZING). Death is handled by the container-state path
+        // (OnContainerStateChanged → NOT_RUNNING).
+        if (svc->IsContainerWorkload()) {
+            if (st == ServiceState::INITIALIZING) {
+                svc->SetServiceState(ServiceState::RUNNING);
+                monitor->NotifyServiceState();
+                LOG_DEBUG("PollSvc " << svc->GetName()
+                          << " container-workload → RUNNING");
+            }
+            continue;
+        }
+
         // Pick the right cmdline token for this service's invocation mode:
         // launchfile / name / package / explicit override.
         const std::string token = svc->ResolveProcessMatchToken(is_native);

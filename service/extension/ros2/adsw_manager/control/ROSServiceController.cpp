@@ -134,6 +134,19 @@ bool ROSServiceController::StartService(std::shared_ptr<Service> service){
 
     LOG_DEBUG("ROSServiceController::StartService start " << service->GetName());
 
+    // Container-workload service: the container's own CMD (command_args) is the
+    // ROS2 stack, and ProcessServiceStartRequest already ran StartContainer
+    // (docker run w/ extra_args + command, or docker start) before reaching
+    // here. There is nothing to `docker exec` — doing so would double-launch.
+    // Reflect RUNNING and return; the health monitor promotes/demotes based on
+    // the container's running state.
+    if (service->IsContainerWorkload()) {
+        LOG_DEBUG("ROSServiceController::StartService container-workload, container already started: "
+                  << service->GetName());
+        service->SetServiceState(ServiceState::RUNNING);
+        return true;
+    }
+
     std::string command;
     std::string launchFile = service->GetLaunchFile();
 
@@ -307,6 +320,22 @@ bool ROSServiceController::StopService(std::shared_ptr<Service> service){
     if (service == nullptr) {
         LOG_ERROR("Received null service in StopService.");
         return false;
+    }
+
+    // Container-workload service: stopping the workload means stopping its
+    // container (docker stop && rm). Must precede the pid==0 guard below —
+    // these services carry no tracked PID (pid stays 0), so that guard would
+    // otherwise refuse to stop them.
+    if (service->IsContainerWorkload()) {
+        std::shared_ptr<ServiceRegistry> registry = ADSWManager::Get()->GetServiceRegistry();
+        std::string container_name = registry ? registry->GetGroupNameByService(service) : "";
+        LOG_DEBUG("ROSServiceController::StopService container-workload, stopping container: " << container_name);
+        bool ok = !container_name.empty() && GetContainer()->StopContainer(container_name);
+        if (ok) {
+            service->SetServiceState(ServiceState::NOT_RUNNING);
+            service->SetPID(0);
+        }
+        return ok;
     }
 
     uint64_t pid = service->GetPID();

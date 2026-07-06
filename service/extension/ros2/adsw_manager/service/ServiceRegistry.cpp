@@ -403,16 +403,73 @@ bool ServiceRegistry::Save() {
 
   config["version"] = "0.1";
 
-  YAML::Node
-      ndcontainers; // Use plural 'containers' to match convention and your YAML
+  // Persist as the same string tokens LoadServiceSaved parses
+  // ("NORMAL"/"ONESHOT", "ALWAYS"/"ON_FAILURE"/...).  Earlier code
+  // wrote integer enum values which then failed every if-equals
+  // branch in LoadServiceSaved and silently fell back to defaults
+  // — producing a runaway ON_FAILURE → restart loop after a single
+  // ctrl/SetRecoveryPolicy round-trip.
+  auto type_to_str = [](ServiceType t) -> std::string {
+      switch (t) {
+          case ServiceType::ONESHOT: return "ONESHOT";
+          case ServiceType::NORMAL:
+          default:                   return "NORMAL";
+      }
+  };
+  auto recovery_to_str = [](RecoveryPolicy p) -> std::string {
+      switch (p) {
+          case RecoveryPolicy::ALWAYS:            return "ALWAYS";
+          case RecoveryPolicy::ON_FAILURE:        return "ON_FAILURE";
+          case RecoveryPolicy::ON_SUCCESS:        return "ON_SUCCESS";
+          case RecoveryPolicy::ON_NOT_RESPONDING: return "ON_NOT_RESPONDING";
+          case RecoveryPolicy::MANUAL:            return "MANUAL";
+          case RecoveryPolicy::R_DEFAULT:
+          default:                                return "MANUAL";
+      }
+  };
+  auto ctype_to_str = [](ContainerType t) -> std::string {
+      switch (t) {
+          case ContainerType::K3S:            return "k3s";
+          case ContainerType::DOCKER_COMPOSE: return "docker-compose";
+          case ContainerType::DOCKER:
+          default:                            return "docker";
+      }
+  };
+
+  // Resolve the ContainerController so each group's container metadata
+  // (image / container-type / extra_args / command_args) round-trips.
+  // Without this, Save() rebuilt containers from group names only and
+  // dropped the docker-run config — a reload then lost image/network/
+  // volume/env/command for docker-run-as-service entries.
+  std::shared_ptr<ContainerController> cc;
+  if (ADSWManager::Get() && ADSWManager::Get()->GetServiceController()) {
+    cc = ADSWManager::Get()->GetServiceController()->GetContainer();
+  }
+
+  YAML::Node ndcontainers; // sequence of containers (under one spec)
 
   for (auto &group : group_) {
     YAML::Node ndcontainer;
+    ndcontainer["name"] = group.first;
 
-    // 'group' key is not typical under each container if you use container name
-    // as key, instead store container groups as map keys, but if you want
-    // inside each container, keep it.
-    ndcontainer["group"] = group.first;
+    // Container metadata so LoadServiceSaved reconstructs the docker-run
+    // config, not just the group/services.
+    std::shared_ptr<Container> c = cc ? cc->GetContainer(group.first) : nullptr;
+    if (c) {
+      if (!c->GetImage().empty()) ndcontainer["image"] = c->GetImage();
+      ndcontainer["container-type"] = ctype_to_str(c->GetContainerType());
+      if (!c->GetDeployFile().empty()) ndcontainer["deploy-filepath"] = c->GetDeployFile();
+      if (!c->GetExtraArgs().empty()) {
+        YAML::Node ea;
+        for (const auto &a : c->GetExtraArgs()) ea.push_back(a);
+        ndcontainer["extra_args"] = ea;
+      }
+      if (!c->GetCommandArgs().empty()) {
+        YAML::Node ca;
+        for (const auto &a : c->GetCommandArgs()) ca.push_back(a);
+        ndcontainer["command_args"] = ca;
+      }
+    }
 
     YAML::Node ndservices;
 
@@ -427,32 +484,10 @@ bool ServiceRegistry::Save() {
       }
       if (service->IsDirectExec()) {
         ndservice["exec_type"] = "binary";
+      } else if (service->IsContainerWorkload()) {
+        ndservice["exec_type"] = "container";
       }
 
-      // Persist as the same string tokens LoadServiceSaved parses
-      // ("NORMAL"/"ONESHOT", "ALWAYS"/"ON_FAILURE"/...).  Earlier code
-      // wrote integer enum values which then failed every if-equals
-      // branch in LoadServiceSaved and silently fell back to defaults
-      // — producing a runaway ON_FAILURE → restart loop after a single
-      // ctrl/SetRecoveryPolicy round-trip.
-      auto type_to_str = [](ServiceType t) -> std::string {
-          switch (t) {
-              case ServiceType::ONESHOT: return "ONESHOT";
-              case ServiceType::NORMAL:
-              default:                   return "NORMAL";
-          }
-      };
-      auto recovery_to_str = [](RecoveryPolicy p) -> std::string {
-          switch (p) {
-              case RecoveryPolicy::ALWAYS:            return "ALWAYS";
-              case RecoveryPolicy::ON_FAILURE:        return "ON_FAILURE";
-              case RecoveryPolicy::ON_SUCCESS:        return "ON_SUCCESS";
-              case RecoveryPolicy::ON_NOT_RESPONDING: return "ON_NOT_RESPONDING";
-              case RecoveryPolicy::MANUAL:            return "MANUAL";
-              case RecoveryPolicy::R_DEFAULT:
-              default:                                return "MANUAL";
-          }
-      };
       ndservice["type"]     = type_to_str(service->GetServiceType());
       ndservice["recovery"] = recovery_to_str(service->GetRecoveryPolicy());
 
@@ -474,9 +509,15 @@ bool ServiceRegistry::Save() {
     ndcontainers.push_back(ndcontainer);
   }
 
-  // Note: your original had a typo "container" (singular).
-  // Typically the correct key would be "containers".
-  config["spec"]["containers"] = ndcontainers;
+  // Emit the structure LoadServiceSaved expects: specs -> [ {containers: [...]} ].
+  // (The previous version wrote config["spec"]["containers"] — singular "spec"
+  // and no sequence wrapper — which LoadServiceSaved could not read back,
+  // silently falling through to the ros2-sample-speclist.yaml fallback.)
+  YAML::Node ndspec;
+  ndspec["containers"] = ndcontainers;
+  YAML::Node ndspecs;
+  ndspecs.push_back(ndspec);
+  config["specs"] = ndspecs;
 
   // Write YAML to file
   std::ofstream fout(yaml_path_.c_str());
@@ -545,14 +586,32 @@ bool ServiceRegistry::LoadServiceSaved(const std::string &path) {
           containerType = ContainerType::DOCKER;
         }
 
+        // Optional docker run extra_args (--network host, -e, -v ...) and the
+        // container command_args (its own CMD). Both are YAML sequences of
+        // strings; empty when omitted (classic adsw-test-app model).
+        std::vector<std::string> extraArgs;
+        if (containerData["extra_args"] && containerData["extra_args"].IsSequence()) {
+          for (const auto &a : containerData["extra_args"])
+            extraArgs.push_back(a.as<std::string>(""));
+        }
+        std::vector<std::string> commandArgs;
+        if (containerData["command_args"] && containerData["command_args"].IsSequence()) {
+          for (const auto &c : containerData["command_args"])
+            commandArgs.push_back(c.as<std::string>(""));
+        }
+
         if (!groupname.empty() && !image.empty()) {
           LOG_DEBUG("Container required fields valid");
           std::shared_ptr<Container> container = std::make_shared<Container>(
               groupname, image, deployFilePath, namespace_, containerType);
+          container->SetExtraArgs(extraArgs);
+          container->SetCommandArgs(commandArgs);
           LOG_DEBUG("Container created: " << groupname
                     << " image: " << image
                     << " type: " << containerTypeStr
-                    << " deploy-filepath: " << deployFilePath);
+                    << " deploy-filepath: " << deployFilePath
+                    << " extra_args: " << extraArgs.size()
+                    << " command_args: " << commandArgs.size());
 
           container_controller_->AddContainer(container);
         }
@@ -644,6 +703,11 @@ bool ServiceRegistry::LoadServiceSaved(const std::string &path) {
             }
             if (execTypeStr == "binary") {
               service->SetDirectExec(true);
+            } else if (execTypeStr == "container") {
+              // The container's own CMD (command_args) is the workload — no
+              // `docker exec ros2 launch`. Start/Stop/liveness delegate to the
+              // container. Used for e.g. Autoware role images.
+              service->SetContainerWorkload(true);
             }
             // F013: stamp the enclosing container name so lifecycle_mgr can
             // map service ↔ container without re-deriving from the group.
