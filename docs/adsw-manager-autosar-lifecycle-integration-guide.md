@@ -15,8 +15,8 @@
   기동·종료·감시하는 "액추에이터/에이전트"** 이고, `lifecycle_manager` 는 **모든 OS 도메인을
   가로질러 상태를 집계·정책결정하는 "단일 애그리게이터/오케스트레이터"** 다.
 - 둘은 **FastDDS bare-DDS 토픽**(`mmf/lifecyclemgr/*`)으로만 통신한다. 언어·플랫폼 독립.
-- **`OsType` enum 에 이미 `AUTOSAR` 가 정의**되어 있다 (`LifecycleCommon.idl`). AP adsw_manager 는
-  **기존 토픽을 그대로 재사용**하고, 발행 시 `os_type = AUTOSAR`, 수신 시 `os_type == AUTOSAR`
+- **`MwType` enum 에 이미 `AUTOSAR` 가 정의**되어 있다 (`LifecycleCommon.idl`). AP adsw_manager 는
+  **기존 토픽을 그대로 재사용**하고, 발행 시 `mw_type = AUTOSAR`, 수신 시 `mw_type == AUTOSAR`
   필터만 하면 프레임워크에 그대로 붙는다. **IDL 변경 불필요.**
 - 구현해야 할 것은 새 프로토콜이 아니라 **6개 토픽에 대한 pub/sub + AP 표준 컴포넌트(EM/SM/PHM)
   와의 브릿지** 다.
@@ -33,7 +33,7 @@
             │ 등록/상태(adsw→lfc)                                │ 제어(lfc→adsw)    │ 제어
    ┌────────┴─────────┐   ┌─┴──────────────┐          ┌─────────┴────────┐  ┌──────┴──────────┐
    │ adsw_manager     │   │ adsw_manager   │   ...    │ adsw_manager     │  │ (신규)          │
-   │  os_type = ROS2  │   │  os_type = AGL │          │  os_type = AGL   │  │ os_type=AUTOSAR │
+   │  mw_type = ROS2  │   │  mw_type = AGL │          │  mw_type = AGL   │  │ mw_type=AUTOSAR │
    └──────────────────┘   └────────────────┘          └──────────────────┘  └─────────────────┘
         실제 앱 기동·감시         실제 앱 기동·감시                                  ara::exec/sm/phm 로 AP 앱 관리
 ```
@@ -51,7 +51,7 @@
 모든 토픽은 **module `lifecyclemgr`** (헬스만 `adswmgr`), bare-DDS 이름 `mmf/…` 를 쓴다.
 Req/Res 쌍은 **요청 토픽 + 응답 토픽** 2개로 구성된다 (RPC 아님, 단방향 pub 2개로 흉내).
 
-| # | 토픽 (`mmf/…`) | 방향 | 종류 | IDL 타입 | os_type 필터 |
+| # | 토픽 (`mmf/…`) | 방향 | 종류 | IDL 타입 | mw_type 필터 |
 |---|---|---|---|---|:-:|
 | 1 | `lifecyclemgr/UpdateServiceListRequest` | **adsw → lfc** | 등록 req | `UpdateServiceListRequest` | 발행값=AUTOSAR |
 |   | `lifecyclemgr/UpdateServiceListResponse` | lfc → adsw | 등록 res | `UpdateServiceListResponse` | — |
@@ -67,7 +67,7 @@ Req/Res 쌍은 **요청 토픽 + 응답 토픽** 2개로 구성된다 (RPC 아�
 | H | `adswmgr/AdswServiceStatus` | **adsw → diagnostics** | 헬스 | `adswmgr::AdswServiceStatus` | — |
 
 > **핵심 라우팅**: 모든 adsw_manager 가 위 토픽을 **공유**한다. lifecycle_manager 는 제어 메시지에
-> 대상 `os_type` 를 스탬프하고, 각 adsw_manager 는 `req.os_type() == <자기 OsType>` 인 것만 처리한다.
+> 대상 `mw_type` 를 스탬프하고, 각 adsw_manager 는 `req.mw_type() == <자기 MwType>` 인 것만 처리한다.
 > (agl 구현 참조: `MessageTransmitter.cpp:48` 발행 스탬프, `:100/:122/:141` 수신 필터)
 
 ---
@@ -89,7 +89,7 @@ adsw(AUTOSAR)  ◀──────────UpdateServiceListResponse(ret_co
   | `service_type` | `NORMAL`(상주) / `ONESHOT`(1회) | 상주 AA=NORMAL, 초기화용 1회 실행=ONESHOT |
   | `recovery_policy` | 복구 정책 (§3.5) | PHM/EM 재시작 정책과 매핑 |
   | `is_enabled` | 부팅 시 자동 기동 여부 | Function Group 기본 State 포함 여부 |
-  | `os_type` | **`AUTOSAR`** 고정 | — |
+  | `mw_type` | **`AUTOSAR`** 고정 | — |
   | `container_name` | 소속 컨테이너("" = native) | AP 는 보통 native → `""` |
 
 - **필수**: 등록 성공(`ret_code == SUCCESS`) 확인 후 내부 상태를 RUNNING 으로 올린다(§4).
@@ -99,7 +99,7 @@ adsw(AUTOSAR)  ◀──────────UpdateServiceListResponse(ret_co
 ### 3.2 상태 통지 (NotifyServiceState) — adsw 가 실제 상태를 주기/이벤트로 보고
 
 ```
-adsw(AUTOSAR) ──NotifyServiceState(os_type=AUTOSAR, service_list[], service_state_list[])──▶ lifecycle_manager
+adsw(AUTOSAR) ──NotifyServiceState(mw_type=AUTOSAR, service_list[], service_state_list[])──▶ lifecycle_manager
 ```
 
 - `service_list[i]` 와 `service_state_list[i]` 는 **병렬 배열** (같은 인덱스가 한 서비스).
@@ -111,11 +111,11 @@ adsw(AUTOSAR) ──NotifyServiceState(os_type=AUTOSAR, service_list[], service_
 ### 3.3 제어 (Start / Stop) — lifecycle 이 정책 결정 후 adsw 에 위임
 
 ```
-lifecycle_manager ──StartServiceRequest(os_type=AUTOSAR, service_list[], is_group)──▶ adsw(AUTOSAR)
+lifecycle_manager ──StartServiceRequest(mw_type=AUTOSAR, service_list[], is_group)──▶ adsw(AUTOSAR)
 lifecycle_manager ◀──────────────StartServiceResponse(ret_code)────────────────────  adsw(AUTOSAR)
 ```
 
-- adsw 는 **`req.os_type() == AUTOSAR` 일 때만** 처리하고, 아니면 무시(다른 OS 대상).
+- adsw 는 **`req.mw_type() == AUTOSAR` 일 때만** 처리하고, 아니면 무시(다른 OS 대상).
 - `is_group == true` 면 `service_list` 를 그룹으로 취급 (묶음 기동/종료).
 - 처리: AP 에서 실제 앱 기동/종료 수행(§5) → 결과를 `*Response(ret_code)` 로 발행.
 - Stop 도 동일 형태 (`StopServiceRequest`/`Response`).
@@ -123,7 +123,7 @@ lifecycle_manager ◀──────────────StartServiceRespo
 ### 3.4 OTA 모드 전환 (SetServiceMode)
 
 ```
-lifecycle_manager ──SetServiceModeRequest(os_type=AUTOSAR, service_list[], is_group, service_mode)──▶ adsw
+lifecycle_manager ──SetServiceModeRequest(mw_type=AUTOSAR, service_list[], is_group, service_mode)──▶ adsw
 lifecycle_manager ◀───────────────────SetServiceModeResponse(ret_code)──────────────────────────────  adsw
 ```
 
@@ -231,10 +231,10 @@ using namespace eprosima::fastdds::dds;
 using namespace lifecyclemgr;
 
 // 이 adsw_manager 의 OS 도메인. 발행 스탬프 + 수신 필터의 기준.
-static constexpr OsType kMyOs = OsType::AUTOSAR;
+static constexpr MwType kMyOs = MwType::AUTOSAR;
 ```
 
-### 6.1 등록 — `os_type = AUTOSAR` 스탬프 후 발행
+### 6.1 등록 — `mw_type = AUTOSAR` 스탬프 후 발행
 
 ```cpp
 // 내부 앱 카탈로그 (ARXML/설정에서 로드한 Adaptive Application 목록)
@@ -254,7 +254,7 @@ void AutosarAdsw::PublishRegistration() {
         s.service_type(aa.oneshot ? ServiceType::ONESHOT : ServiceType::NORMAL);
         s.recovery_policy(aa.recovery);
         s.is_enabled(aa.autostart);
-        s.os_type(kMyOs);            // ← AUTOSAR 스탬프
+        s.mw_type(kMyOs);            // ← AUTOSAR 스탬프
         s.container_name("");        // native AP → 컨테이너 없음
         req.service_list().push_back(s);
     }
@@ -276,7 +276,7 @@ private:
 };
 ```
 
-### 6.2 제어 수신(Start) — `os_type` 필터 → `ara::exec` 기동 → 응답
+### 6.2 제어 수신(Start) — `mw_type` 필터 → `ara::exec` 기동 → 응답
 
 ```cpp
 class StartListener : public DataReaderListener {
@@ -286,7 +286,7 @@ public:
         StartServiceRequest req; SampleInfo info;
         if (r->take_next_sample(&req, &info) != RETCODE_OK || !info.valid_data) return;
 
-        if (req.os_type() != kMyOs) return;   // ← 다른 OS 대상 → 무시 (핵심 라우팅)
+        if (req.mw_type() != kMyOs) return;   // ← 다른 OS 대상 → 무시 (핵심 라우팅)
 
         ReturnCode rc = ReturnCode::SUCCESS;
         for (const auto& name : req.service_list()) {
@@ -343,7 +343,7 @@ ServiceState ToServiceState(AppRunState s) {   // AppRunState 는 벤더 EM 상�
 
 void AutosarAdsw::PublishServiceState() {
     NotifyServiceState msg;
-    msg.os_type(kMyOs);                         // ← AUTOSAR 스탬프
+    msg.mw_type(kMyOs);                         // ← AUTOSAR 스탬프
     for (const auto& aa : apps_) {
         msg.service_list().push_back(aa.name);
         msg.service_state_list().push_back(ToServiceState(QueryRunState(aa)));  // 병렬 배열
@@ -370,7 +370,7 @@ public:
     void on_data_available(DataReader* r) override {
         SetServiceModeRequest req; SampleInfo info;
         if (r->take_next_sample(&req, &info) != RETCODE_OK || !info.valid_data) return;
-        if (req.os_type() != kMyOs) return;     // ← OS 필터
+        if (req.mw_type() != kMyOs) return;     // ← OS 필터
 
         // OTA_MODE → 업데이트용 State, NORMAL → 평시 State 로 전이
         const char* target = (req.service_mode() == ServiceMode::OTA_MODE) ? "UpdateMode" : "On";
@@ -436,8 +436,8 @@ int main() {
 - [ ] 발행 토픽 3: `UpdateServiceListRequest`, `NotifyServiceState`, (`AdswServiceStatus`)
 - [ ] 구독 토픽 3(+2): `StartServiceRequest`, `StopServiceRequest`, `SetServiceModeRequest`
       (+ `*Response` 발행, + `GetServiceStateRequest`)
-- [ ] 발행 메시지 전부 `os_type = AUTOSAR` 스탬프
-- [ ] 수신 제어 메시지 `req.os_type() == AUTOSAR` **필터** (아니면 무시)
+- [ ] 발행 메시지 전부 `mw_type = AUTOSAR` 스탬프
+- [ ] 수신 제어 메시지 `req.mw_type() == AUTOSAR` **필터** (아니면 무시)
 - [ ] 상태머신: INIT → STARTED(등록 재시도) → RUNNING → TERMINATE
 - [ ] Start/Stop → `ara::exec` Function Group State 전이로 AA 기동/종료
 - [ ] AA 상태 → `ServiceState` 변환해 `NotifyServiceState` 주기+이벤트 발행
@@ -454,8 +454,8 @@ int main() {
    (경로: adsw → NotifyServiceState/UpdateServiceList → lifecycle_mgr → LifecycleDiagReport →
    dds_bridge → rosbridge → lfc_monitor)
 2. **제어 확인**: HMI 또는 lifecycle 에서 Start/Stop → 실제 AP 앱이 기동/종료되고 상태가 반영되는지.
-3. **os_type 격리 확인**: ROS2/AGL 대상 제어가 AUTOSAR adsw 에서 무시되는지 (agl 유닛테스트
-   `MessageTransmitterTest` 의 `os_type(ROS2)→무시` 케이스를 AUTOSAR 로 미러).
+3. **mw_type 격리 확인**: ROS2/AGL 대상 제어가 AUTOSAR adsw 에서 무시되는지 (agl 유닛테스트
+   `MessageTransmitterTest` 의 `mw_type(ROS2)→무시` 케이스를 AUTOSAR 로 미러).
 4. **헬스 확인**: `AdswServiceStatus(status_code=1)` → Diagnostic Manager 가 PASS 판정하는지.
 5. **복구 확인**: 대상 앱 강제 종료 → RecoveryPolicy(ALWAYS/ON_FAILURE) 대로 재시작 +
    `recovered_count` 증가가 DiagReport 에 노출되는지.
@@ -475,28 +475,28 @@ module lifecyclemgr {
   enum ReturnCode    { SUCCESS, FAILED };
   enum ServiceMode   { NORMAL, OTA_MODE };
   enum ServiceState  { NOT_RUNNING, INITIALIZING, RUNNING, RUNNING_NO_RESPONSE, TERMINATING };
-  enum OsType        { ROS2, AGL, AUTOSAR };   // ← AUTOSAR 이미 존재
+  enum MwType        { ROS2, AGL, AUTOSAR };   // ← AUTOSAR 이미 존재
 };
 
 // UpdateServiceListRequest.idl
 struct Service {
   string name; ServiceType service_type; RecoveryPolicy recovery_policy;
-  boolean is_enabled; OsType os_type; string container_name;
+  boolean is_enabled; MwType mw_type; string container_name;
 };
 struct UpdateServiceListRequest  { sequence<Service> service_list; sequence<Container> container_list; };
 struct UpdateServiceListResponse { ReturnCode ret_code; };
 
 // NotifyServiceState.idl
 struct NotifyServiceState {
-  OsType os_type; sequence<string> service_list; sequence<ServiceState> service_state_list;
+  MwType mw_type; sequence<string> service_list; sequence<ServiceState> service_state_list;
 };
 
 // StartServiceRequest.idl (Stop 동일 형태)
-struct StartServiceRequest  { OsType os_type; sequence<string> service_list; boolean is_group; };
+struct StartServiceRequest  { MwType mw_type; sequence<string> service_list; boolean is_group; };
 struct StartServiceResponse { ReturnCode ret_code; };
 
 // SetServiceModeRequest.idl
-struct SetServiceModeRequest  { OsType os_type; sequence<string> service_list; boolean is_group; ServiceMode service_mode; };
+struct SetServiceModeRequest  { MwType mw_type; sequence<string> service_list; boolean is_group; ServiceMode service_mode; };
 struct SetServiceModeResponse { ReturnCode ret_code; };
 
 // AdswServiceStatus.idl  (module adswmgr — 헬스)
@@ -510,10 +510,10 @@ module adswmgr { struct AdswServiceStatus { long status_code; string status_msg;
 - 계약 IDL: `idl/dds/lifecycle/*.idl`, `idl/dds/ros2/AdswServiceStatus.idl`
 - **가장 가까운 참조 구현(native)**: `service/extension/agl/adsw_manager/`
   - 상태머신: `ADSWManager.cpp`
-  - DDS pub/sub + **os_type 스탬프/필터**: `message_transmitter/MessageTransmitter.cpp`
+  - DDS pub/sub + **mw_type 스탬프/필터**: `message_transmitter/MessageTransmitter.cpp`
   - 등록: `message_transmitter/UpdateAppListHandler.cpp`
   - 제어 수신: `message_transmitter/{StartAppHandler,StopAppHandler}.cpp`
   - 상태 발행: `message_transmitter/NotifyAppStateWriter.cpp`
   - 감시/복구: `service_monitor/ServiceMonitor.cpp`, `service_controller/ServiceController.cpp`
-- lifecycle 측 라우팅(os_type 스탬프): `service/core/lifecycle_mgr/state/StateManager.cpp`
+- lifecycle 측 라우팅(mw_type 스탬프): `service/core/lifecycle_mgr/state/StateManager.cpp`
 - 집계·발행: `service/core/lifecycle_mgr/state/StateMonitor.cpp` → `LifecycleDiagReport`

@@ -33,7 +33,7 @@ def show_tree(svc_list: ServiceList) -> None:
         icon = _enabled_icon(svc.is_enabled)
         label = (
             f"{icon} [bold]{svc.name}[/bold]  "
-            f"[yellow]{svc.os_type.value}[/yellow]  "
+            f"[yellow]{svc.mw_type.value}[/yellow]  "
             f"docker=[cyan]{svc.image}[/cyan]  "
             f"recovery=[magenta]{svc.recovery_policy.value}[/magenta]"
         )
@@ -60,7 +60,7 @@ def show_table(svc_list: ServiceList) -> None:
             svc.name,
             svc.service_type.value,
             svc.recovery_policy.value,
-            svc.os_type.value,
+            svc.mw_type.value,
             svc.init_state.value,
             svc.image,
         )
@@ -88,7 +88,7 @@ def show_service_detail(svc: ServiceEntry, output_fmt: str = "table") -> None:
         ("enabled", icon),
         ("service_type", svc.service_type.value),
         ("recovery_policy", svc.recovery_policy.value),
-        ("os_type", svc.os_type.value),
+        ("mw_type", svc.mw_type.value),
         ("init_state", svc.init_state.value),
         ("image", svc.image),
         ("extra_args", "\n".join(svc.extra_args) if svc.extra_args else "[dim](none)[/dim]"),

@@ -219,7 +219,7 @@ TEST_F(DDSMessageEndPointReadTest, ReadNotifyServiceState_Success) {
     
     // Create and write message
     lifecyclemgr::NotifyServiceState send_msg;
-    send_msg.os_type(lifecyclemgr::OsType::ROS2);
+    send_msg.mw_type(lifecyclemgr::MwType::ROS2);
     send_msg.service_list().push_back("test_service");
     send_msg.service_state_list().push_back(lifecyclemgr::ServiceState::RUNNING);
     
@@ -261,7 +261,7 @@ TEST_F(DDSMessageEndPointReadTest, ReadStartServiceRequest_Success) {
     
     // Create and write message
     lifecyclemgr::StartServiceRequest send_msg;
-    send_msg.os_type(lifecyclemgr::OsType::ROS2);
+    send_msg.mw_type(lifecyclemgr::MwType::ROS2);
     send_msg.service_list().push_back("start_test_service");
     send_msg.is_group(false);
     
@@ -299,7 +299,7 @@ TEST_F(DDSMessageEndPointReadTest, ReadStopServiceRequest_Success) {
     WaitForDiscovery();
     
     lifecyclemgr::StopServiceRequest send_msg;
-    send_msg.os_type(lifecyclemgr::OsType::ROS2);
+    send_msg.mw_type(lifecyclemgr::MwType::ROS2);
     send_msg.service_list().push_back("stop_test_service");
     send_msg.is_group(false);
     
@@ -335,7 +335,7 @@ TEST_F(DDSMessageEndPointReadTest, ReadGetServiceStateRequest_Success) {
     WaitForDiscovery();
     
     lifecyclemgr::GetServiceStateRequest send_msg;
-    send_msg.os_type(lifecyclemgr::OsType::ROS2);
+    send_msg.mw_type(lifecyclemgr::MwType::ROS2);
     send_msg.service_list().push_back("query_test_service");
     send_msg.is_all_service(false);
     

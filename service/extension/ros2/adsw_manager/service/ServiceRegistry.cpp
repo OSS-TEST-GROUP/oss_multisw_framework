@@ -262,7 +262,7 @@ bool ServiceRegistry::ProcessGetServiceStateRequest(
     LOG_ERROR("GetServiceStateRequest is null");
     return false;
   }
-  if (TypeConvert::ToOsType(message->os_type()) == OsType::ROS2) {
+  if (TypeConvert::ToMwType(message->mw_type()) == MwType::ROS2) {
     std::shared_ptr<DDSTransmitter> transmitter =
         ADSWManager::Get()->GetTransmitter();
 
@@ -345,7 +345,7 @@ bool ServiceRegistry::ProcessUpdateServiceListRequest() {
       service_info.recovery_policy() =
           TypeConvert::ToRecoveryPolicy(service_ptr->GetRecoveryPolicy());
       service_info.is_enabled() = service_ptr->IsEnabled();
-      service_info.os_type() = TypeConvert::ToOsType(OsType::ROS2);
+      service_info.mw_type() = TypeConvert::ToMwType(MwType::ROS2);
       // F013: tell lifecycle_mgr which container hosts this service.
       service_info.container_name() = service_ptr->GetContainerName();
       message.service_list().push_back(service_info);

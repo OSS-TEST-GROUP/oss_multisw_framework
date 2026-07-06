@@ -76,7 +76,7 @@ KNOWN_ENUMS = {
     "ReturnValue", "CommonStatusType",
     "DiagnosticStatusType",
     "ServiceType", "RecoveryPolicy", "ReturnCode",
-    "ServiceMode", "ServiceState", "OsType",
+    "ServiceMode", "ServiceState", "MwType",
     # F013: container enums added to LifecycleCommon.idl
     "ContainerType", "ContainerState",
 }

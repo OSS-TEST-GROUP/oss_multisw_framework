@@ -129,7 +129,7 @@ TEST_F(StateMonitorTest, getServiceStateFillsEntry) {
     StateMonitor monitor(mgr);
 
     auto service = std::make_shared<MockService>("svc",
-        lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ALWAYS, true, lifecycle_manager::OsType::ROS2);
+        lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ALWAYS, true, lifecycle_manager::MwType::ROS2);
 
     // MockService methods are GMock mocks; wire up expected return values explicitly
     ON_CALL(*service, GetName()).WillByDefault(Return("svc"));
@@ -449,8 +449,8 @@ TEST_F(StateMonitorTest, NotifyLifecycleDiagnosticInfo_AllServices) {
         .WillRepeatedly(Return(true));
     EXPECT_CALL(*Mock_Service, GetRecoveredCount())
         .WillRepeatedly(Return(0));
-    EXPECT_CALL(*Mock_Service, GetOsType())
-        .WillRepeatedly(Return(lifecycle_manager::OsType::ROS2));
+    EXPECT_CALL(*Mock_Service, GetMwType())
+        .WillRepeatedly(Return(lifecycle_manager::MwType::ROS2));
     
     EXPECT_CALL(*Mock_DDSTransmitter, SendMessage(MessageType::LIFECYCLE_DIAG_REPORT, _))
         .WillOnce(Return(true));
@@ -491,8 +491,8 @@ TEST_F(StateMonitorTest, NotifyLifecycleDiagnosticInfo_UpdatedServicesOnly) {
         .WillRepeatedly(Return(false));
     EXPECT_CALL(*Mock_Service, GetRecoveredCount())
         .WillRepeatedly(Return(1));
-    EXPECT_CALL(*Mock_Service, GetOsType())
-        .WillRepeatedly(Return(lifecycle_manager::OsType::AGL));
+    EXPECT_CALL(*Mock_Service, GetMwType())
+        .WillRepeatedly(Return(lifecycle_manager::MwType::AGL));
     
     EXPECT_CALL(*Mock_DDSTransmitter, SendMessage(MessageType::LIFECYCLE_DIAG_REPORT, _))
         .WillOnce(Return(true));
@@ -553,8 +553,8 @@ TEST_F(StateMonitorTest, NotifyLifecycleDiagnosticInfo_CountRunningServices) {
         .WillRepeatedly(Return(true));
     EXPECT_CALL(*Mock_Service, GetRecoveredCount())
         .WillRepeatedly(Return(0));
-    EXPECT_CALL(*Mock_Service, GetOsType())
-        .WillRepeatedly(Return(lifecycle_manager::OsType::ROS2));
+    EXPECT_CALL(*Mock_Service, GetMwType())
+        .WillRepeatedly(Return(lifecycle_manager::MwType::ROS2));
     
     EXPECT_CALL(*Mock_DDSTransmitter, SendMessage(MessageType::LIFECYCLE_DIAG_REPORT, _))
         .WillOnce(Return(true));
@@ -614,8 +614,8 @@ TEST_F(StateMonitorTest, RequestGetState_ValidTransmitterAndRegistry) {
         .WillOnce(Return(services));
     EXPECT_CALL(*Mock_ServiceRegistry, GetService("svc1"))
         .WillOnce(Return(mockService));
-    EXPECT_CALL(*Mock_Service, GetOsType())
-        .WillOnce(Return(lifecycle_manager::OsType::ROS2));
+    EXPECT_CALL(*Mock_Service, GetMwType())
+        .WillOnce(Return(lifecycle_manager::MwType::ROS2));
     
     EXPECT_CALL(*Mock_DDSTransmitter, SendMessage(MessageType::GET_SERVICE_STATE_REQUEST, _))
         .WillOnce(Return(true));
@@ -710,8 +710,8 @@ TEST_F(StateMonitorTest, RequestGetState_MultipleGroups) {
         .WillOnce(Return(services2));
     EXPECT_CALL(*Mock_ServiceRegistry, GetService(_))
         .WillRepeatedly(Return(mockService));
-    EXPECT_CALL(*Mock_Service, GetOsType())
-        .WillRepeatedly(Return(lifecycle_manager::OsType::AGL));
+    EXPECT_CALL(*Mock_Service, GetMwType())
+        .WillRepeatedly(Return(lifecycle_manager::MwType::AGL));
     
     EXPECT_CALL(*Mock_DDSTransmitter, SendMessage(MessageType::GET_SERVICE_STATE_REQUEST, _))
         .Times(2)
@@ -803,8 +803,8 @@ TEST_F(StateMonitorTest, NotifyLifecycleDiagnosticInfo_DifferentStates) {
         .WillRepeatedly(Return(true));
     EXPECT_CALL(*Mock_Service, GetRecoveredCount())
         .WillRepeatedly(Return(0));
-    EXPECT_CALL(*Mock_Service, GetOsType())
-        .WillRepeatedly(Return(lifecycle_manager::OsType::ROS2));
+    EXPECT_CALL(*Mock_Service, GetMwType())
+        .WillRepeatedly(Return(lifecycle_manager::MwType::ROS2));
     
     EXPECT_CALL(*Mock_DDSTransmitter, SendMessage(MessageType::LIFECYCLE_DIAG_REPORT, _))
         .WillOnce(Return(true));

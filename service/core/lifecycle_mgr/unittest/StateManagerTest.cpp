@@ -84,7 +84,7 @@ protected:
         ON_CALL(*mock_transmitter, GetMessageEndPoint(_)).WillByDefault(Return(mock_endpoint));
         ON_CALL(*mock_transmitter, SendMessage(_, _)).WillByDefault(Return(true));
         ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("TestService"));
-        ON_CALL(*Mock_Service, GetOsType()).WillByDefault(Return(lifecycle_manager::OsType::ROS2));
+        ON_CALL(*Mock_Service, GetMwType()).WillByDefault(Return(lifecycle_manager::MwType::ROS2));
         ON_CALL(*mock_endpoint, Write(_)).WillByDefault(Return(true));
     }
 
@@ -107,7 +107,7 @@ TEST_F(StateManagerTest, StartService_SendsMessage) {
     void* fake_buffer = malloc(sizeof(StartServiceRequest));
 
     EXPECT_CALL(*mock_service, GetName()).WillOnce(Return("TestService"));
-    EXPECT_CALL(*mock_service, GetOsType()).WillOnce(Return(lifecycle_manager::OsType::ROS2));
+    EXPECT_CALL(*mock_service, GetMwType()).WillOnce(Return(lifecycle_manager::MwType::ROS2));
     EXPECT_CALL(*Mock_ManagerBase, GetTransmitter()).WillOnce(Return(mock_transmitter));
     EXPECT_CALL(*mock_transmitter, SendMessage(_,_)).WillOnce(Return(true));
  
@@ -122,7 +122,7 @@ TEST_F(StateManagerTest, StopService_SendsMessage) {
     void* fake_buffer = malloc(sizeof(StopServiceRequest));
 
     EXPECT_CALL(*mock_service, GetName()).WillOnce(Return("TestService"));
-    EXPECT_CALL(*mock_service, GetOsType()).WillOnce(Return(lifecycle_manager::OsType::ROS2));
+    EXPECT_CALL(*mock_service, GetMwType()).WillOnce(Return(lifecycle_manager::MwType::ROS2));
     EXPECT_CALL(*Mock_ManagerBase, GetTransmitter()).WillOnce(Return(mock_transmitter));
     EXPECT_CALL(*mock_transmitter, SendMessage(_,_)).WillOnce(Return(true));
  
@@ -141,7 +141,7 @@ TEST_F(StateManagerTest, SetServiceMode_SetsMode) {
     auto mock_service1 = std::make_shared<MockService>();
 
     ON_CALL(*mock_service1, GetName()).WillByDefault(Return("svc1"));
-    ON_CALL(*mock_service1, GetOsType()).WillByDefault(Return(lifecycle_manager::OsType::ROS2));
+    ON_CALL(*mock_service1, GetMwType()).WillByDefault(Return(lifecycle_manager::MwType::ROS2));
     ON_CALL(*Mock_ManagerBase, GetService(_)).WillByDefault(Return(mock_service1));
 
     EXPECT_CALL(*Mock_ManagerBase, GetTransmitter()).WillOnce(Return(mock_transmitter));
@@ -159,9 +159,9 @@ TEST_F(StateManagerTest, ProcessServiceHandling_StartAndStop) {
 
     // Set up mock behaviors for both services
     ON_CALL(*mock_service1, GetName()).WillByDefault(Return("TestService1"));
-    ON_CALL(*mock_service1, GetOsType()).WillByDefault(Return(lifecycle_manager::OsType::ROS2));
+    ON_CALL(*mock_service1, GetMwType()).WillByDefault(Return(lifecycle_manager::MwType::ROS2));
     ON_CALL(*mock_service2, GetName()).WillByDefault(Return("TestService2"));
-    ON_CALL(*mock_service2, GetOsType()).WillByDefault(Return(lifecycle_manager::OsType::ROS2));
+    ON_CALL(*mock_service2, GetMwType()).WillByDefault(Return(lifecycle_manager::MwType::ROS2));
 
     EXPECT_CALL(*Mock_ManagerBase, GetPolicy()).WillRepeatedly(Return(mock_policy));
     EXPECT_CALL(*Mock_ManagerBase, GetTransmitter()).WillRepeatedly(Return(mock_transmitter));
@@ -217,7 +217,7 @@ TEST_F(StateManagerTest, StartService_NullTransmitter) {
     auto mock_service = std::make_shared<MockService>();
     Mock_Service = mock_service.get();
     ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("TestService"));
-    ON_CALL(*Mock_Service, GetOsType()).WillByDefault(Return(lifecycle_manager::OsType::ROS2));
+    ON_CALL(*Mock_Service, GetMwType()).WillByDefault(Return(lifecycle_manager::MwType::ROS2));
     
     EXPECT_CALL(*Mock_ManagerBase, GetTransmitter()).WillOnce(Return(nullptr));
 
@@ -229,7 +229,7 @@ TEST_F(StateManagerTest, StopService_NullTransmitter) {
     auto mock_service = std::make_shared<MockService>();
     Mock_Service = mock_service.get();
     ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("TestService"));
-    ON_CALL(*Mock_Service, GetOsType()).WillByDefault(Return(lifecycle_manager::OsType::ROS2));
+    ON_CALL(*Mock_Service, GetMwType()).WillByDefault(Return(lifecycle_manager::MwType::ROS2));
     
     EXPECT_CALL(*Mock_ManagerBase, GetTransmitter()).WillOnce(Return(nullptr));
 
@@ -305,7 +305,7 @@ TEST_F(StateManagerTest, ProcessServiceHandling_NullTransmitter) {
     auto mock_service = std::make_shared<MockService>();
     Mock_Service = mock_service.get();
     ON_CALL(*Mock_Service, GetName()).WillByDefault(Return("TestService"));
-    ON_CALL(*Mock_Service, GetOsType()).WillByDefault(Return(lifecycle_manager::OsType::ROS2));
+    ON_CALL(*Mock_Service, GetMwType()).WillByDefault(Return(lifecycle_manager::MwType::ROS2));
 
     std::set<std::shared_ptr<lifecycle_manager::Service>> services = {mock_service};
 
@@ -360,23 +360,23 @@ TEST_F(StateManagerTest, RequestStopAll_NullRegistry) {
 
 // Additional tests for branch coverage
 
-// Test StartService with different OsTypes
-TEST_F(StateManagerTest, StartService_AGLOsType) {
-    ON_CALL(*mock_service, GetOsType()).WillByDefault(Return(lifecycle_manager::OsType::AGL));
+// Test StartService with different MwTypes
+TEST_F(StateManagerTest, StartService_AGLMwType) {
+    ON_CALL(*mock_service, GetMwType()).WillByDefault(Return(lifecycle_manager::MwType::AGL));
     
     EXPECT_CALL(*mock_service, GetName()).WillOnce(Return("AGLService"));
-    EXPECT_CALL(*mock_service, GetOsType()).WillOnce(Return(lifecycle_manager::OsType::AGL));
+    EXPECT_CALL(*mock_service, GetMwType()).WillOnce(Return(lifecycle_manager::MwType::AGL));
     EXPECT_CALL(*Mock_ManagerBase, GetTransmitter()).WillOnce(Return(mock_transmitter));
     EXPECT_CALL(*mock_transmitter, SendMessage(_, _)).WillOnce(Return(true));
     
     EXPECT_TRUE(ins->StartService(mock_service));
 }
 
-TEST_F(StateManagerTest, StartService_AUTOSAROsType) {
-    ON_CALL(*mock_service, GetOsType()).WillByDefault(Return(lifecycle_manager::OsType::AUTOSAR));
+TEST_F(StateManagerTest, StartService_AUTOSARMwType) {
+    ON_CALL(*mock_service, GetMwType()).WillByDefault(Return(lifecycle_manager::MwType::AUTOSAR));
     
     EXPECT_CALL(*mock_service, GetName()).WillOnce(Return("AUTOSARService"));
-    EXPECT_CALL(*mock_service, GetOsType()).WillOnce(Return(lifecycle_manager::OsType::AUTOSAR));
+    EXPECT_CALL(*mock_service, GetMwType()).WillOnce(Return(lifecycle_manager::MwType::AUTOSAR));
     EXPECT_CALL(*Mock_ManagerBase, GetTransmitter()).WillOnce(Return(mock_transmitter));
     EXPECT_CALL(*mock_transmitter, SendMessage(_, _)).WillOnce(Return(true));
     
@@ -386,19 +386,19 @@ TEST_F(StateManagerTest, StartService_AUTOSAROsType) {
 // Test StartService when SendMessage returns false
 TEST_F(StateManagerTest, StartService_SendMessageFails) {
     EXPECT_CALL(*mock_service, GetName()).WillOnce(Return("TestService"));
-    EXPECT_CALL(*mock_service, GetOsType()).WillOnce(Return(lifecycle_manager::OsType::ROS2));
+    EXPECT_CALL(*mock_service, GetMwType()).WillOnce(Return(lifecycle_manager::MwType::ROS2));
     EXPECT_CALL(*Mock_ManagerBase, GetTransmitter()).WillOnce(Return(mock_transmitter));
     EXPECT_CALL(*mock_transmitter, SendMessage(_, _)).WillOnce(Return(false));
     
     EXPECT_FALSE(ins->StartService(mock_service));
 }
 
-// Test StopService with different OsTypes
-TEST_F(StateManagerTest, StopService_AGLOsType) {
-    ON_CALL(*mock_service, GetOsType()).WillByDefault(Return(lifecycle_manager::OsType::AGL));
+// Test StopService with different MwTypes
+TEST_F(StateManagerTest, StopService_AGLMwType) {
+    ON_CALL(*mock_service, GetMwType()).WillByDefault(Return(lifecycle_manager::MwType::AGL));
     
     EXPECT_CALL(*mock_service, GetName()).WillOnce(Return("AGLService"));
-    EXPECT_CALL(*mock_service, GetOsType()).WillOnce(Return(lifecycle_manager::OsType::AGL));
+    EXPECT_CALL(*mock_service, GetMwType()).WillOnce(Return(lifecycle_manager::MwType::AGL));
     EXPECT_CALL(*Mock_ManagerBase, GetTransmitter()).WillOnce(Return(mock_transmitter));
     EXPECT_CALL(*mock_transmitter, SendMessage(_, _)).WillOnce(Return(true));
     
@@ -576,17 +576,17 @@ TEST_F(StateManagerTest, OnStop_FailedReturnCode) {
 
 // Test multiple sequential StartService calls
 TEST_F(StateManagerTest, StartService_MultipleCalls) {
-    // Service::GetName()/GetOsType() are non-virtual — both calls route through Mock_Service global
+    // Service::GetName()/GetMwType() are non-virtual — both calls route through Mock_Service global
     // First call
     EXPECT_CALL(*mock_service, GetName()).WillOnce(Return("FirstService"));
-    EXPECT_CALL(*mock_service, GetOsType()).WillOnce(Return(lifecycle_manager::OsType::ROS2));
+    EXPECT_CALL(*mock_service, GetMwType()).WillOnce(Return(lifecycle_manager::MwType::ROS2));
     EXPECT_CALL(*Mock_ManagerBase, GetTransmitter()).WillOnce(Return(mock_transmitter));
     EXPECT_CALL(*mock_transmitter, SendMessage(_, _)).WillOnce(Return(true));
     EXPECT_TRUE(ins->StartService(mock_service));
 
     // Second call - should clear and repopulate service_list
     EXPECT_CALL(*mock_service, GetName()).WillOnce(Return("SecondService"));
-    EXPECT_CALL(*mock_service, GetOsType()).WillOnce(Return(lifecycle_manager::OsType::ROS2));
+    EXPECT_CALL(*mock_service, GetMwType()).WillOnce(Return(lifecycle_manager::MwType::ROS2));
     EXPECT_CALL(*Mock_ManagerBase, GetTransmitter()).WillOnce(Return(mock_transmitter));
     EXPECT_CALL(*mock_transmitter, SendMessage(_, _)).WillOnce(Return(true));
     EXPECT_TRUE(ins->StartService(mock_service));
@@ -594,17 +594,17 @@ TEST_F(StateManagerTest, StartService_MultipleCalls) {
 
 // Test multiple sequential StopService calls
 TEST_F(StateManagerTest, StopService_MultipleCalls) {
-    // Service::GetName()/GetOsType() are non-virtual — both calls route through Mock_Service global
+    // Service::GetName()/GetMwType() are non-virtual — both calls route through Mock_Service global
     // First call
     EXPECT_CALL(*mock_service, GetName()).WillOnce(Return("FirstService"));
-    EXPECT_CALL(*mock_service, GetOsType()).WillOnce(Return(lifecycle_manager::OsType::ROS2));
+    EXPECT_CALL(*mock_service, GetMwType()).WillOnce(Return(lifecycle_manager::MwType::ROS2));
     EXPECT_CALL(*Mock_ManagerBase, GetTransmitter()).WillOnce(Return(mock_transmitter));
     EXPECT_CALL(*mock_transmitter, SendMessage(_, _)).WillOnce(Return(true));
     ins->StopService(mock_service);
 
     // Second call - should clear and repopulate service_list
     EXPECT_CALL(*mock_service, GetName()).WillOnce(Return("SecondService"));
-    EXPECT_CALL(*mock_service, GetOsType()).WillOnce(Return(lifecycle_manager::OsType::ROS2));
+    EXPECT_CALL(*mock_service, GetMwType()).WillOnce(Return(lifecycle_manager::MwType::ROS2));
     EXPECT_CALL(*Mock_ManagerBase, GetTransmitter()).WillOnce(Return(mock_transmitter));
     EXPECT_CALL(*mock_transmitter, SendMessage(_, _)).WillOnce(Return(true));
     ins->StopService(mock_service);

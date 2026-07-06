@@ -22,7 +22,7 @@ namespace adsw_manager::agl {
                 std::string st_str = entry["service_type"] ? entry["service_type"].as<std::string>() : "NORMAL";
                 std::string rp_str = entry["recovery_policy"] ? entry["recovery_policy"].as<std::string>() : "R_DEFAULT";
                 bool is_enabled    = entry["is_enabled"]      ? entry["is_enabled"].as<bool>()          : true;
-                std::string os_str = entry["os_type"]         ? entry["os_type"].as<std::string>()       : "AGL";
+                std::string os_str = entry["mw_type"]         ? entry["mw_type"].as<std::string>()       : "AGL";
                 std::string is_str = entry["init_state"]      ? entry["init_state"].as<std::string>()    : "NOT_RUNNING";
 
                 ServiceType service_type = ServiceType::NORMAL;
@@ -36,9 +36,9 @@ namespace adsw_manager::agl {
                 else if (rp_str == "ON_NOT_RESPONDING")recovery_policy = RecoveryPolicy::ON_NOT_RESPONDING;
                 else if (rp_str == "MANUAL")           recovery_policy = RecoveryPolicy::MANUAL;
 
-                OsType os_type = OsType::AGL;
-                if (os_str == "AGL")       os_type = OsType::AGL;
-                else if (os_str == "ROS2") os_type = OsType::ROS2;
+                MwType mw_type = MwType::AGL;
+                if (os_str == "AGL")       mw_type = MwType::AGL;
+                else if (os_str == "ROS2") mw_type = MwType::ROS2;
 
                 ServiceState init_state = ServiceState::NOT_RUNNING;
                 if (is_str == "RUNNING")   init_state = ServiceState::RUNNING;
@@ -64,7 +64,7 @@ namespace adsw_manager::agl {
                 svc.service_type(service_type);
                 svc.recovery_policy(recovery_policy);
                 svc.is_enabled(is_enabled);
-                svc.os_type(os_type);
+                svc.mw_type(mw_type);
                 // F009 (C-1): docker-backed apps carry container_name (== app name)
                 // so lifecycle_mgr's DiagReport links the service to its container
                 // card in lfc_monitor. Image-less apps leave it empty (service-only).
@@ -99,33 +99,33 @@ namespace adsw_manager::agl {
                           ServiceType type,
                           RecoveryPolicy policy,
                           bool enabled,
-                          OsType os,
+                          MwType os,
                           ServiceState init_state) {
             Service svc;
             svc.name(std::move(name));
             svc.service_type(type);
             svc.recovery_policy(policy);
             svc.is_enabled(enabled);
-            svc.os_type(os);
+            svc.mw_type(os);
 
             app_list_.try_emplace(std::move(svc), init_state);
         };
 
         add("adsw_monitor", ServiceType::NORMAL,
             RecoveryPolicy::R_DEFAULT, true,
-            OsType::AGL, ServiceState::NOT_RUNNING);
+            MwType::AGL, ServiceState::NOT_RUNNING);
 
         add("ota_monitor", ServiceType::NORMAL,
             RecoveryPolicy::R_DEFAULT, true,
-            OsType::AGL, ServiceState::NOT_RUNNING);
+            MwType::AGL, ServiceState::NOT_RUNNING);
 
         add("lfc_monitor", ServiceType::NORMAL,
             RecoveryPolicy::R_DEFAULT, true,
-            OsType::AGL, ServiceState::NOT_RUNNING);
+            MwType::AGL, ServiceState::NOT_RUNNING);
 
         add("hmi_launcher", ServiceType::NORMAL,
             RecoveryPolicy::ALWAYS, true,
-            OsType::AGL, ServiceState::NOT_RUNNING);
+            MwType::AGL, ServiceState::NOT_RUNNING);
         docker_info_["hmi_launcher"] = AppDockerInfo{
             "registry.obigo.com/oss/oss-hmi-launcher:latest",
             {

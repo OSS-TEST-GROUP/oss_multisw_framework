@@ -112,7 +112,7 @@ private:
     bool SendOtaMode(const std::string& service_name) {
         lifecyclemgr::SetServiceModeRequest req;
         req.service_list().push_back(service_name);
-        req.os_type() = lifecyclemgr::OsType::ROS2;
+        req.mw_type() = lifecyclemgr::MwType::ROS2;
         req.service_mode() = lifecyclemgr::ServiceMode::OTA_MODE;
         return Write(&req);
     }
@@ -120,7 +120,7 @@ private:
     bool SendNormalMode(const std::string& service_name) {
         lifecyclemgr::SetServiceModeRequest req;
         req.service_list().push_back(service_name);
-        req.os_type() = lifecyclemgr::OsType::ROS2;
+        req.mw_type() = lifecyclemgr::MwType::ROS2;
         req.service_mode() = lifecyclemgr::ServiceMode::NORMAL;
         return Write(&req);
     }

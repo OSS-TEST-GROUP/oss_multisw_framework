@@ -427,7 +427,7 @@ TEST_F(ConcreteEndpointIntegrationTest, NotifyServiceStateEndPoint_OnDataAvailab
         .Times(AtLeast(1));
     
     lifecyclemgr::NotifyServiceState message;
-    message.os_type(lifecyclemgr::OsType::ROS2);
+    message.mw_type(lifecyclemgr::MwType::ROS2);
     
     // Add a service state
     message.service_state_list().push_back(lifecyclemgr::ServiceState::RUNNING);
@@ -461,7 +461,7 @@ TEST_F(ConcreteEndpointIntegrationTest, NotifyServiceStateEndPoint_OnDataAvailab
         .WillByDefault(Return(nullptr));
     
     lifecyclemgr::NotifyServiceState message;
-    message.os_type(lifecyclemgr::OsType::ROS2);
+    message.mw_type(lifecyclemgr::MwType::ROS2);
     message.service_list().push_back("test_service");
     
     ASSERT_TRUE(writer_endpoint->Write(&message));
@@ -506,7 +506,7 @@ TEST_F(ConcreteEndpointIntegrationTest, UpdateServiceListEndPoint_OnDataAvailabl
     service.service_type(lifecyclemgr::ServiceType::NORMAL);
     service.recovery_policy(lifecyclemgr::RecoveryPolicy::ALWAYS);
     service.is_enabled(true);
-    service.os_type(lifecyclemgr::OsType::ROS2);
+    service.mw_type(lifecyclemgr::MwType::ROS2);
 
     message.service_list().push_back(service);
     
@@ -543,7 +543,7 @@ TEST_F(ConcreteEndpointIntegrationTest, UpdateServiceListEndPoint_OnDataAvailabl
     service.service_type(lifecyclemgr::ServiceType::NORMAL);
     service.recovery_policy(lifecyclemgr::RecoveryPolicy::ALWAYS);
     service.is_enabled(true);
-    service.os_type(lifecyclemgr::OsType::ROS2);
+    service.mw_type(lifecyclemgr::MwType::ROS2);
 
     message.service_list().push_back(service);
         
@@ -583,7 +583,7 @@ TEST_F(ConcreteEndpointIntegrationTest, SetServiceModeEndPoint_OnDataAvailable_T
         .WillRepeatedly(Return(true));
     
     lifecyclemgr::SetServiceModeRequest message;
-    message.os_type(lifecyclemgr::OsType::ROS2);
+    message.mw_type(lifecyclemgr::MwType::ROS2);
     message.is_group(true);
     message.service_list().push_back("test_service");
     message.service_mode() = lifecyclemgr::ServiceMode::NORMAL;
@@ -616,7 +616,7 @@ TEST_F(ConcreteEndpointIntegrationTest, SetServiceModeEndPoint_OnDataAvailable_T
         .WillByDefault(Return(nullptr));
     
     lifecyclemgr::SetServiceModeRequest message;
-    message.os_type(lifecyclemgr::OsType::ROS2);
+    message.mw_type(lifecyclemgr::MwType::ROS2);
     message.is_group(true);
     message.service_list().push_back("test_service");
     message.service_mode() = lifecyclemgr::ServiceMode::NORMAL;
@@ -735,7 +735,7 @@ TEST_F(ConcreteEndpointIntegrationTest, NotifyServiceState_MultipleMessages) {
     // Send multiple messages
     for (int i = 0; i < 3; ++i) {
         lifecyclemgr::NotifyServiceState message;
-        message.os_type(lifecyclemgr::OsType::ROS2);
+        message.mw_type(lifecyclemgr::MwType::ROS2);
         message.service_list().push_back("service_" + std::to_string(i));
         message.service_state_list().push_back(lifecyclemgr::ServiceState::RUNNING);
         

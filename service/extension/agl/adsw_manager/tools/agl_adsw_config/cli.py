@@ -10,7 +10,7 @@ from rich.console import Console
 from . import store, formatter, validator
 from .model import (
     ServiceEntry, ServiceList,
-    ServiceType, RecoveryPolicy, OsType, InitState,
+    ServiceType, RecoveryPolicy, MwType, InitState,
 )
 
 console = Console(stderr=True)
@@ -121,8 +121,8 @@ def get(ctx: click.Context, name: str) -> None:
 @click.option("--enabled", "is_enabled", default="true",
               type=click.Choice(["true", "false"], case_sensitive=False),
               show_default=True)
-@click.option("--os-type", "os_type", default="AGL",
-              type=click.Choice([e.value for e in OsType], case_sensitive=False),
+@click.option("--mw-type", "mw_type", default="AGL",
+              type=click.Choice([e.value for e in MwType], case_sensitive=False),
               show_default=True)
 @click.option("--init-state", "init_state", default="NOT_RUNNING",
               type=click.Choice([e.value for e in InitState], case_sensitive=False),
@@ -131,7 +131,7 @@ def get(ctx: click.Context, name: str) -> None:
               help="extra_args entries (repeatable)")
 @click.pass_context
 def add(ctx: click.Context, name: str, image: str, service_type: str,
-        recovery_policy: str, is_enabled: str, os_type: str,
+        recovery_policy: str, is_enabled: str, mw_type: str,
         init_state: str, extra_args: tuple) -> None:
     """Add a new service."""
     path, raw, svc_list = _load(ctx.obj)
@@ -143,7 +143,7 @@ def add(ctx: click.Context, name: str, image: str, service_type: str,
         service_type=ServiceType(service_type.upper()),
         recovery_policy=RecoveryPolicy(recovery_policy.upper()),
         is_enabled=(is_enabled.lower() == "true"),
-        os_type=OsType(os_type.upper()),
+        mw_type=MwType(mw_type.upper()),
         init_state=InitState(init_state.upper()),
         extra_args=list(extra_args),
     )
@@ -180,14 +180,14 @@ def remove(ctx: click.Context, name: str) -> None:
               type=click.Choice([e.value for e in RecoveryPolicy], case_sensitive=False))
 @click.option("--enabled", "is_enabled", default=None,
               type=click.Choice(["true", "false"], case_sensitive=False))
-@click.option("--os-type", "os_type", default=None,
-              type=click.Choice([e.value for e in OsType], case_sensitive=False))
+@click.option("--mw-type", "mw_type", default=None,
+              type=click.Choice([e.value for e in MwType], case_sensitive=False))
 @click.option("--init-state", "init_state", default=None,
               type=click.Choice([e.value for e in InitState], case_sensitive=False))
 @click.pass_context
 def set_cmd(ctx: click.Context, name: str, image: Optional[str],
             service_type: Optional[str], recovery_policy: Optional[str],
-            is_enabled: Optional[str], os_type: Optional[str],
+            is_enabled: Optional[str], mw_type: Optional[str],
             init_state: Optional[str]) -> None:
     """Update service attributes."""
     path, raw, svc_list = _load(ctx.obj)
@@ -202,8 +202,8 @@ def set_cmd(ctx: click.Context, name: str, image: Optional[str],
         updates["recovery_policy"] = recovery_policy.upper()
     if is_enabled is not None:
         updates["is_enabled"] = (is_enabled.lower() == "true")
-    if os_type is not None:
-        updates["os_type"] = os_type.upper()
+    if mw_type is not None:
+        updates["mw_type"] = mw_type.upper()
     if init_state is not None:
         updates["init_state"] = init_state.upper()
     if not updates:

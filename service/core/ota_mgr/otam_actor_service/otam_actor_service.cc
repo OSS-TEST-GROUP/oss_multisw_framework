@@ -389,7 +389,7 @@ void OtamActorService::WriteServiceModeRequestInternal(
   }
 
   auto request = std::make_shared<lifecyclemgr::SetServiceModeRequest>();
-  request->os_type(lifecyclemgr::OsType::ROS2);
+  request->mw_type(lifecyclemgr::MwType::ROS2);
   request->service_list(std::vector<std::string>{});
   request->is_group(false);
   request->service_mode(mode);

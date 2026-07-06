@@ -7,7 +7,7 @@ module lifecyclemgr {
         ServiceType service_type;
         RecoveryPolicy recovery_policy;
         boolean is_enabled;
-        OsType os_type;
+        MwType mw_type;
         // F013: which container this service belongs to (empty for native).
         // Empty string is preserved as "no-container" and is treated as a
         // distinct group key by the registry.

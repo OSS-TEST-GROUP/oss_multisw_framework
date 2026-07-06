@@ -86,18 +86,18 @@ class TypeConvert {
         return lifecyclemgr::RecoveryPolicy::R_DEFAULT;
     }    
 
-    static OsType ToOsType(lifecyclemgr::OsType os) {
+    static MwType ToMwType(lifecyclemgr::MwType os) {
         switch (os) {
-            case lifecyclemgr::OsType::ROS2 : return OsType::ROS2;
-            case lifecyclemgr::OsType::AGL : return OsType::AGL;
-            case lifecyclemgr::OsType::AUTOSAR : return OsType::AUTOSAR;
+            case lifecyclemgr::MwType::ROS2 : return MwType::ROS2;
+            case lifecyclemgr::MwType::AGL : return MwType::AGL;
+            case lifecyclemgr::MwType::AUTOSAR : return MwType::AUTOSAR;
         }
     }
-    static lifecyclemgr::OsType ToOsType(OsType os) {
+    static lifecyclemgr::MwType ToMwType(MwType os) {
         switch (os) {
-            case OsType::ROS2 : return lifecyclemgr::OsType::ROS2;
-            case OsType::AGL : return lifecyclemgr::OsType::AGL;
-            case OsType::AUTOSAR : return lifecyclemgr::OsType::AUTOSAR;
+            case MwType::ROS2 : return lifecyclemgr::MwType::ROS2;
+            case MwType::AGL : return lifecyclemgr::MwType::AGL;
+            case MwType::AUTOSAR : return lifecyclemgr::MwType::AUTOSAR;
         }
     }
 

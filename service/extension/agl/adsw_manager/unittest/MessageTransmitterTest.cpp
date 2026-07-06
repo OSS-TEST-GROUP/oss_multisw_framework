@@ -130,7 +130,7 @@ TEST_F(MessageTransmitterTest, HandleGetAppStateRequest_AGL_PublishesStates) {
     ASSERT_TRUE(tx->Initialize(nullptr));
 
     GetServiceStateRequest req;
-    req.os_type(OsType::AGL);
+    req.mw_type(MwType::AGL);
     req.service_list().push_back("ok_a");
     req.service_list().push_back("ok_b");
 
@@ -160,7 +160,7 @@ TEST_F(MessageTransmitterTest, HandleGetAppStateRequest_NonAGL_Ignores) {
     EXPECT_TRUE(tx->Initialize(nullptr));
 
     GetServiceStateRequest req;
-    req.os_type(OsType::ROS2); // AGL이 아님
+    req.mw_type(MwType::ROS2); // AGL이 아님
     req.service_list().push_back("x");
 
     ASSERT_TRUE(static_cast<bool>(on_get_cb));
@@ -193,7 +193,7 @@ TEST_F(MessageTransmitterTest, HandleStartAppRequest_AllSuccess_PublishesSuccess
     ASSERT_TRUE(tx->Initialize(nullptr));
 
     StartServiceRequest req;
-    req.os_type(OsType::AGL);
+    req.mw_type(MwType::AGL);
     req.service_list().push_back("a");
     req.service_list().push_back("b");
 
@@ -232,7 +232,7 @@ TEST_F(MessageTransmitterTest, HandleStartAppRequest_FirstFailure_BreaksAndPubli
     ASSERT_TRUE(tx->Initialize(nullptr));
 
     StartServiceRequest req;
-    req.os_type(OsType::AGL);
+    req.mw_type(MwType::AGL);
     req.service_list().push_back("a");
     req.service_list().push_back("b");
 
@@ -266,7 +266,7 @@ TEST_F(MessageTransmitterTest, HandleStopAppRequest_AllSuccess_PublishesSuccess)
     ASSERT_TRUE(tx->Initialize(nullptr));
 
     StopServiceRequest req;
-    req.os_type(OsType::AGL);
+    req.mw_type(MwType::AGL);
     req.service_list().push_back("x");
     req.service_list().push_back("y");
 
@@ -304,7 +304,7 @@ TEST_F(MessageTransmitterTest, HandleStopAppRequest_FirstFailure_BreaksAndPublis
     ASSERT_TRUE(tx->Initialize(nullptr));
 
     StopServiceRequest req;
-    req.os_type(OsType::AGL);
+    req.mw_type(MwType::AGL);
     req.service_list().push_back("x");
     req.service_list().push_back("y");
 
