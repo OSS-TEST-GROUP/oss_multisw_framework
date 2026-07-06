@@ -10,6 +10,7 @@
 #include "rapidjson/error/en.h"
 #include "rapidjson/prettywriter.h"
 #include "Logger.h"
+#include "ConfigManager.h"
 
 
 namespace viss {
@@ -136,12 +137,10 @@ std::shared_ptr<Node_t> VSSTree::parse_json_node(const rapidjson::Value& j, Node
     if (j.HasMember("datatype") && j["datatype"].IsString()) node->Datatype = j["datatype"].GetString();
     if (j.HasMember("unit") && j["unit"].IsString()) node->Unit = j["unit"].GetString();
     
-    // For attributes that can be non-string types, we need to handle them carefully.
-    // RapidJSON doesn't have a simple .dump() like nlohmann, so we might skip non-string for simplicity for now.
-    if (j.HasMember("min") && j["min"].IsString()) node->Min = j["min"].GetString();
-    if (j.HasMember("max") && j["max"].IsString()) node->Max = j["max"].GetString();
-    if (j.HasMember("default") && j["default"].IsString()) node->DefaultValue = j["default"].GetString();
-
+    // For attributes that can be non-string types, we use the utility function to convert them.
+    if (j.HasMember("min")) node->Min = json_value_to_string(node->Datatype, j["min"]);
+    if (j.HasMember("max")) node->Max = json_value_to_string(node->Datatype, j["max"]);
+    if (j.HasMember("default")) node->DefaultValue = json_value_to_string(node->Datatype, j["default"]);
 
     if (j.HasMember("allowed") && j["allowed"].IsArray()) {
         node->Allowed = 1;
@@ -243,6 +242,10 @@ VSSTree::VSSTree(const std::string& him_file_path) : him_path_(him_file_path), i
     }
 
     std::filesystem::path himDirectory = std::filesystem::path(him_path_).parent_path();
+    
+    // Store in ConfigManager for system-wide access
+    ConfigManager::getInstance().setHimPath(him_path_);
+    ConfigManager::getInstance().setHimDirectory(himDirectory.string());
     std::string line;
     HimTree* current_tree = nullptr;
     std::string current_root_name;
@@ -311,6 +314,7 @@ viss::Node_t* VSSTree::findNode(const std::string& path) {
     std::string root_name;
     Node_t* root = findRootNode(path, root_name);
     if (!root) {
+        LOG_ERROR << "Failed to find root node for path: " << path;
         return nullptr;
     }
 
@@ -328,6 +332,7 @@ viss::Node_t* VSSTree::findNode(const std::string& path) {
         if (it != current_node->Child.end()) {
             current_node = it->second.get();
         } else {
+            LOG_ERROR << "Node not found for segment '" << segment << "' in path: " << path;
             return nullptr; // Not found
         }
     }
@@ -345,7 +350,7 @@ viss::Node_t* VSSTree::findRootNode(const std::string& path, std::string& out_fo
         return it->second.Handle.get();
     }
 
-    LOG_ERROR << "Failed to find root node for key: " << root_key;
+    LOG_ERROR << "Failed to find root node for key '" << root_key << "' in path: " << path;
     return nullptr;
 }
 

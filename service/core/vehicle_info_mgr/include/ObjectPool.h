@@ -31,7 +31,7 @@ public:
     Ptr acquire() {
         std::lock_guard<std::mutex> lock(mutex_);
         if (pool_.empty()) {
-            LOG_INFO << "[ObjectPool<" << typeid(T).name() << ">] Pool is empty. Creating a new object.";
+            LOG_DEBUG << "[ObjectPool<" << typeid(T).name() << ">] Pool is empty. Creating a new object.";
             // 1. std::shared_ptr<T>를 생성합니다. 이 스마트 포인터는 'new T()'로 생성된 새로운 객체를 관리합니다.
             // 2. 두 번째 인자로 "커스텀 Deleter"라는 람다 함수를 전달합니다.
             //    - C++의 std::shared_ptr는 자신이 관리하는 객체의 참조 카운트가 0이 되면,
@@ -47,7 +47,7 @@ public:
                 self->release(ptr);
             });
         } else {
-            LOG_INFO << "[ObjectPool<" << typeid(T).name() << ">] Reusing an object from the pool. Pool size was: " << pool_.size();
+            LOG_DEBUG << "[ObjectPool<" << typeid(T).name() << ">] Reusing an object from the pool. Pool size was: " << pool_.size();
             // Reuse an object from the pool
             T* ptr = pool_.back();
             pool_.pop_back();
@@ -63,7 +63,7 @@ private:
         {
             std::lock_guard<std::mutex> lock(mutex_);
             pool_.push_back(ptr);
-            LOG_INFO << "[ObjectPool<" << typeid(T).name() << ">] Object released to the pool. Pool size is now: " << pool_.size();
+            LOG_DEBUG << "[ObjectPool<" << typeid(T).name() << ">] Object released to the pool. Pool size is now: " << pool_.size();
         }
     }
 

@@ -26,7 +26,7 @@ protected:
 TEST_F(VissServerAppTest, AppInitializesAndShutsDown) {
     auto config_path = getEnv("VEHICLE_CONFIG_PATH").value_or("../config");
     config_path.append("/viss.him");
-    VissServerApp app(config_path, "127.0.0.1:50052");
+    VissServerApp app(config_path);
 
     // 2. Run the app in a separate thread
     std::thread app_thread(&VissServerApp::run, &app);
@@ -51,7 +51,7 @@ TEST_F(VissServerAppTest, AppInitializesAndShutsDown) {
 TEST_F(VissServerAppTest, StopIsIdempotent) {
     auto config_path = getEnv("VEHICLE_CONFIG_PATH").value_or("../config");
     config_path.append("/viss.him");
-    VissServerApp app(config_path, "127.0.0.1:50052");
+    VissServerApp app(config_path);
 
     // 2. Run the app in a separate thread
     std::thread app_thread(&VissServerApp::run, &app);
@@ -76,7 +76,7 @@ TEST_F(VissServerAppTest, StopIsIdempotent) {
 TEST_F(VissServerAppTest, RunIsIdempotent) {
     auto config_path = getEnv("VEHICLE_CONFIG_PATH").value_or("../config");
     config_path.append("/viss.him");
-    VissServerApp app(config_path, "127.0.0.1:50052");
+    VissServerApp app(config_path);
 
     // 2. Run the app in a separate thread
     std::thread app_thread(&VissServerApp::run, &app);
@@ -97,6 +97,6 @@ TEST_F(VissServerAppTest, RunIsIdempotent) {
 
 TEST_F(VissServerAppTest, InvalidFile) {
     EXPECT_EXIT({
-        VissServerApp app("../InvalidFile.him", "127.0.0.1:50052");
+        VissServerApp app("../InvalidFile.him");
     }, testing::ExitedWithCode(1), ".*");
 }

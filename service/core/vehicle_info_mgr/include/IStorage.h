@@ -38,9 +38,9 @@ private:
     std::map<std::string, std::deque<viss::DataPoint>> m_history_store;
     
     mutable std::mutex mtx;
+    std::condition_variable m_cv;      // Standard CV using cv_mtx (safe on all platforms)
     std::thread m_archiver_thread;
     std::atomic<bool> m_active{false};
-    std::condition_variable m_cv;
     const size_t MAX_HISTORY_SIZE = 100;
 };
 

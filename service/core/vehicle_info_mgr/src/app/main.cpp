@@ -20,7 +20,7 @@
 static VissServerApp* g_app_ptr = nullptr;
 
 void signal_handler(int signum) {
-    LOG_INFO << "Interrupt signal (" << signum << ") received. Shutting down..." << g_app_ptr;
+    LOG_WARN << "Interrupt signal (" << signum << ") received. Shutting down..." << g_app_ptr;
     if (g_app_ptr) {
         g_app_ptr->stop();
     }
@@ -38,7 +38,7 @@ int main(int argc, char** argv) {
     std::string configPath = getEnv("VEHICLE_CONFIG_PATH").value_or("config");
     std::string himPath = configPath + "/viss.him"; 
     std::string schemaPath = configPath + "/vissv3.0-schema.json";
-    std::string grpcProviderAddr = getEnv("GRPC_PROVIDER_ADDR").value_or("127.0.0.1:50052");
+    //std::string grpcProviderAddr = getEnv("GRPC_PROVIDER_ADDR").value_or("127.0.0.1:50052");
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -46,8 +46,6 @@ int main(int argc, char** argv) {
             himPath = argv[++i];
         } else if (arg == "--schema" && i + 1 < argc) {
             schemaPath = argv[++i];
-        } else if (arg == "--grpc-provider-addr" && i + 1 < argc) {
-            grpcProviderAddr = argv[++i];
         } else {
             LOG_ERROR << "Error: Unknown or invalid argument: " << arg;
             exit(1);
@@ -57,7 +55,7 @@ int main(int argc, char** argv) {
     // Initialize the schema validator before creating the app instance
     JsonSchemaValidator::init(schemaPath);
 
-    VissServerApp app(himPath, grpcProviderAddr);
+    VissServerApp app(himPath);
     g_app_ptr = &app;
     std::signal(SIGINT, signal_handler);
     std::signal(SIGTERM, signal_handler);

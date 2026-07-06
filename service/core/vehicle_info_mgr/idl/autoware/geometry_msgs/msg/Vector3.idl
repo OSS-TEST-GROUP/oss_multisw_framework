@@ -1,0 +1,23 @@
+#ifndef _GEOMETRY_MSGS_MSG_VECTOR3_IDL_
+#define _GEOMETRY_MSGS_MSG_VECTOR3_IDL_
+
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from geometry_msgs/msg/Vector3.msg
+// generated code does not contain a copyright notice
+
+
+module geometry_msgs {
+  module msg {
+    
+    struct Vector3 {
+      
+      double x;
+
+      double y;
+
+      double z;
+    };
+  };
+};
+
+#endif // _GEOMETRY_MSGS_MSG_VECTOR3_IDL_

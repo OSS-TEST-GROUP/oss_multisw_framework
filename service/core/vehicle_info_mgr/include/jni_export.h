@@ -15,7 +15,7 @@ extern "C" {
  * Method:    startVissServer
  * Signature: (Ljava/lang/String;Ljava/lang/String;)V
  */
-JNIEXPORT void JNICALL Java_com_example_viss_VissService_startVissServer(
+JNIEXPORT jint JNICALL Java_com_obigo_viss_VissServer_startVissServer(
     JNIEnv* env,
     jobject /* this */,
     jstring himPath,
@@ -26,7 +26,7 @@ JNIEXPORT void JNICALL Java_com_example_viss_VissService_startVissServer(
  * Method:    stopVissServer
  * Signature: ()V
  */
-JNIEXPORT void JNICALL Java_com_example_viss_VissService_stopVissServer(
+JNIEXPORT jint JNICALL Java_com_obigo_viss_VissServer_stopVissServer(
     JNIEnv* env,
     jobject /* this */);
 

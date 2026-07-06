@@ -15,7 +15,7 @@ private:
     class Subscription;
 
 public:
-    GrpcProvider(const std::string& server_address);
+    GrpcProvider();
     // Constructor for testing with a mock stub and channel
     GrpcProvider(std::unique_ptr<grpcProtobufMessages::VISS::StubInterface> mock_stub, std::shared_ptr<grpc::ChannelInterface> mock_channel);
     virtual ~GrpcProvider();

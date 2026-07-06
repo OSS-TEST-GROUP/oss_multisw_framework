@@ -2,6 +2,7 @@
 #define UTILS_H
 
 #include <string>
+#include <vector>
 #include <any>
 #include <map>
 #include "rapidjson/document.h"
@@ -29,5 +30,11 @@ rapidjson::Value any_to_json_value(const std::any& any_val, rapidjson::Document:
 
 // Parses a "PdddDThhHmmMssS" format string into milliseconds
 long long parseTimePeriod(const std::string& timePeriod);
+
+// Converts a rapidjson::Value to a string based on VSS Datatype, supporting arrays
+std::string json_value_to_string(const std::string& datatype, const rapidjson::Value& value);
+
+// Parses a JSON array string into a vector of strings
+std::vector<std::string> parse_json_array_string(const std::string& json_array_str);
 
 #endif // UTILS_H

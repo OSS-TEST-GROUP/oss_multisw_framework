@@ -5,6 +5,7 @@
 #include "Logger.h"
 #include "Utils.h"
 #include "JsonSchemaValidator.h"
+#include "ConfigManager.h"
 
 // Helper function to populate an ErrorMessage from a JSON object
 void populateErrorResponse(const rapidjson::Value& error_val, grpcProtobufMessages::ErrorResponseMessage* error_resp) {
@@ -30,7 +31,17 @@ void populateErrorResponse(const rapidjson::Value& error_val, grpcProtobufMessag
     }
 }
 
-// Helper function to populate a DataPackage from a JSON object
+static std::string extractValueAsString(const rapidjson::Value& val) {
+    if (val.IsString()) {
+        return val.GetString();
+    }
+    // Object, Array, Number, Bool 등 → JSON 문자열로 직렬화
+    rapidjson::StringBuffer buf;
+    rapidjson::Writer<rapidjson::StringBuffer> w(buf);
+    val.Accept(w);
+    return buf.GetString();
+}
+
 void populateDataPackage(const rapidjson::Value& data_item, grpcProtobufMessages::DataPackages::DataPackage* data_package) {
     //if (!data_item.IsObject()) return;
 
@@ -45,8 +56,9 @@ void populateDataPackage(const rapidjson::Value& data_item, grpcProtobufMessages
                 if (dp_item.IsObject()) {
                     const auto& dp_obj = dp_item;
                     auto dp = data_package->add_dp();
-                    if (dp_obj.HasMember("value") && dp_obj["value"].IsString()) {
-                        dp->set_value(dp_obj["value"].GetString());
+                    if (dp_obj.HasMember("value")) {
+                        std::string value_str = extractValueAsString(dp_obj["value"]);
+                        dp->set_value(value_str);
                     }
                     if (dp_obj.HasMember("ts") && dp_obj["ts"].IsString()) {
                         dp->set_ts(dp_obj["ts"].GetString());
@@ -56,8 +68,9 @@ void populateDataPackage(const rapidjson::Value& data_item, grpcProtobufMessages
         } else {
             const auto& dp_obj = dp_val;
             auto dp = data_package->add_dp();
-            if (dp_obj.HasMember("value") && dp_obj["value"].IsString()) {
-                dp->set_value(dp_obj["value"].GetString());
+            if (dp_obj.HasMember("value")) {
+                std::string value_str = extractValueAsString(dp_obj["value"]);
+                dp->set_value(value_str);
             }
             if (dp_obj.HasMember("ts") && dp_obj["ts"].IsString()) {
                 dp->set_ts(dp_obj["ts"].GetString());
@@ -172,7 +185,9 @@ grpc::Status VISSServiceImpl::GetRequest(grpc::ServerContext* context, const grp
     if (request->has_authorization()) {
         temp_doc.AddMember("authorization", rapidjson::Value(request->authorization().c_str(), allocator), allocator);
     }
-    if (request->has_filter()) {
+    // protobuf 3.12 호환: has_filter()는 proto3 optional 미지원 시 항상 false.
+    // filterexp_size() > 0 으로 filter 존재 여부 판단.
+    if (request->filter().filterexp_size() > 0) {
         rapidjson::Value filter_val;
         populateFilterExpressions(request->filter(), filter_val, allocator);
         temp_doc.AddMember("filter", filter_val, allocator);
@@ -303,7 +318,9 @@ grpc::Status VISSServiceImpl::SubscribeRequest(grpc::ServerContext* context, con
     if (request->has_authorization()) {
         temp_doc.AddMember("authorization", rapidjson::Value(request->authorization().c_str(), allocator), allocator);
     }
-    if (request->has_filter()) {
+    // protobuf 3.12 호환: has_filter()는 proto3 optional 미지원 시 항상 false.
+    // filterexp_size() > 0 으로 filter 존재 여부 판단.
+    if (request->filter().filterexp_size() > 0) {
         rapidjson::Value filter_val;
         populateFilterExpressions(request->filter(), filter_val, allocator);
         temp_doc.AddMember("filter", filter_val, allocator);
@@ -344,8 +361,9 @@ grpc::Status VISSServiceImpl::SubscribeRequest(grpc::ServerContext* context, con
 
     if (initial_response_doc->HasMember("error")) {
         initial_response.set_status(grpcProtobufMessages::ResponseStatus::ERROR);
-        populateErrorResponse((*initial_response_doc)["error"], resp_msg->mutable_errorresponse());
-        
+        if (resp_msg) {
+            populateErrorResponse((*initial_response_doc)["error"], resp_msg->mutable_errorresponse());
+        }
         writer->Write(initial_response);
         return grpc::Status::OK;
     } else {
@@ -442,7 +460,11 @@ grpc::Status VISSServiceImpl::UnsubscribeRequest(grpc::ServerContext* context, c
 GrpcTransport::GrpcTransport(
     std::shared_ptr<ObjectPool<RequestData>> pool,
     std::shared_ptr<ThreadSafeQueue<std::shared_ptr<RequestData>>> queue) 
-    : server_address("0.0.0.0:5443"), m_stopped(false) {
+    : m_stopped(false) {
+    
+    int port = ConfigManager::getInstance().grpc.port;
+    server_address = "0.0.0.0:" + std::to_string(port);
+    
     service = std::make_unique<VISSServiceImpl>(pool, queue);
 }
 
@@ -452,11 +474,31 @@ GrpcTransport::~GrpcTransport() {
 
 void GrpcTransport::start() {
     grpc::ServerBuilder builder;
-    builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
+    int bound_port = 0;
+    builder.AddListeningPort(server_address, grpc::InsecureServerCredentials(), &bound_port);
     //cq = builder.AddCompletionQueue();
     builder.RegisterService(service.get());
+    // Each SubscribeRequest permanently holds a thread for its lifetime.
+    // carcare_daemon subscribes to ~50 paths simultaneously, so we need
+    // enough threads to handle all concurrent streaming subscriptions.
+    builder.SetSyncServerOption(grpc::ServerBuilder::SyncServerOption::NUM_CQS, 8);
+    builder.SetSyncServerOption(grpc::ServerBuilder::SyncServerOption::MIN_POLLERS, 8);
+    builder.SetSyncServerOption(grpc::ServerBuilder::SyncServerOption::MAX_POLLERS, 256);
+    // Allow client keepalive pings at 30s+ intervals (default 5min is too strict
+    // and causes ENHANCE_YOUR_CALM/GOAWAY when replay ends and data stops)
+    builder.AddChannelArgument(GRPC_ARG_HTTP2_MIN_RECV_PING_INTERVAL_WITHOUT_DATA_MS, 30000);
     server = builder.BuildAndStart();
-    LOG_INFO << "Sync gRPC server listening on " << server_address;
+    if (!server) {
+        LOG_ERROR << "Sync gRPC server FAILED to start on " << server_address << " (BuildAndStart returned null)";
+        return;
+    }
+    if (bound_port == 0) {
+        LOG_ERROR << "Sync gRPC server FAILED to bind port on " << server_address << " (bound_port=0)";
+        server->Shutdown();
+        server.reset();
+        return;
+    }
+    LOG_INFO << "Sync gRPC server listening on " << server_address << " (bound_port=" << bound_port << ")";
 
     server_thread_ = std::thread([this]() {
         this->server->Wait();
@@ -473,23 +515,12 @@ void GrpcTransport::stop() {
     if (server) {
         LOG_INFO << "Sync GrpcTransport::stop() called. Shutting down gRPC server.";
         server->Shutdown();
-        //cq->Shutdown(); // CompletionQueue에 더 이상 이벤트를 추가하지 않겠다고 선언
 
         if (server_thread_.joinable()) {
             LOG_INFO << "Waiting for gRPC server thread to join...";
             server_thread_.join();
             LOG_INFO << "gRPC server thread joined.";
         }
-
-        /*
-        void* tag;
-        bool ok;
-        while (cq->Next(&tag, &ok)) { // 남아있는 모든 이벤트들을 비워냄
-            // 남은 태그들을 처리 (예: CallData 객체 메모리 해제 등)
-            LOG_INFO << "Draining CQ event...====================================";
-        }
-        LOG_INFO << "CompletionQueue drained and shut down.";
-*/
 
         LOG_INFO << "Sync GrpcTransport::stop() completed.";
     }

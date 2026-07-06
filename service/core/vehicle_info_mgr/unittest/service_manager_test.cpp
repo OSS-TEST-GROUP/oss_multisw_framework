@@ -659,6 +659,10 @@ TEST_F(ServiceManagerTest, ProcessUnsubscribeRequestWithUnknownID) {
     EXPECT_TRUE(unsub_response.HasMember("action"));
     EXPECT_STREQ(unsub_response["action"].GetString(), "unsubscribe");
     EXPECT_TRUE(unsub_response.HasMember("error"));
+    const auto& error = unsub_response["error"];
+    EXPECT_STREQ(error["number"].GetString(), "404");
+    EXPECT_STREQ(error["reason"].GetString(), "unavailable_data");
+    EXPECT_STREQ(error["description"].GetString(), "Subscription ID not found.");
     EXPECT_TRUE(unsub_response.HasMember("requestId"));
     EXPECT_STREQ(unsub_response["requestId"].GetString(), "test-unsub-01");
 }

@@ -3,7 +3,7 @@
 // generated code does not contain a copyright notice
 
 #include "GnssInsOrientation.idl"
-#include "Header.idl"
+#include "std_msgs/msg/Header.idl"
 
 module autoware_sensing_msgs {
   module msg {

@@ -14,15 +14,23 @@
 class TimeBasedFilter : public viss::IFilter {
 private:
     std::chrono::milliseconds m_period;
-    mutable std::chrono::steady_clock::time_point m_last_triggered;
+	long long period_ns;
+    // Use atomic nanoseconds count to allow safe concurrent reads in shouldTrigger
+    mutable std::atomic<long long> m_last_triggered_ns;
 
 public:
-    TimeBasedFilter(int period_ms) : m_period(period_ms), m_last_triggered(std::chrono::steady_clock::now()) {}
+    TimeBasedFilter(int period_ms)
+        : m_period(period_ms),
+          m_last_triggered_ns(std::chrono::steady_clock::now().time_since_epoch().count()),
+		  period_ns(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::milliseconds(period_ms)).count()) {}
 
     bool shouldTrigger(const viss::DataPoint& current, const viss::DataPoint& previous) const override {
         auto now = std::chrono::steady_clock::now();
-        if ((now - m_last_triggered) >= m_period) {
-            m_last_triggered = now;
+        long long now_ns = now.time_since_epoch().count();
+        long long last_ns = m_last_triggered_ns.load(std::memory_order_relaxed);
+
+        if ((now_ns - last_ns) >= period_ns) {
+            m_last_triggered_ns.store(now_ns, std::memory_order_relaxed);
             return true;
         }
         return false;
@@ -34,12 +42,9 @@ public:
 // A simple change-based filter
 class ChangeFilter : public viss::IFilter {
 public:
-    // For simplicity, we assume 'ne' (not equal) logic for any change.
-    // A full implementation would parse logic-op and diff.
     bool shouldTrigger(const viss::DataPoint& current, const viss::DataPoint& previous) const override {
-        // This is a simplified check. A real implementation would need to handle types properly.
         if (!previous.value.has_value()) return true; // Always trigger on the first data point
-        return any_to_string(current.value) != any_to_string(previous.value);
+        return any_value_changed(current.value, previous.value); // Type-aware, no string conversion
     }
     viss::FilterVariant getType() const override { return viss::FilterVariant::CHANGE; }
 };
@@ -103,7 +108,10 @@ VssSubscriptionManager::Subscription::Subscription(
     if (req_doc.HasMember("filter")) {
         m_filters = parseFilters(req_doc["filter"]);
         if (m_filters.empty()) {
-            throw std::runtime_error("Failed to parse any valid filters from the request.");
+            // Only 'paths' filter was present (handled by getPaths above).
+            // Default to change-based triggering to avoid flooding the subscriber.
+            m_filters.push_back(std::make_shared<ChangeFilter>());
+            LOG_INFO << "No runtime filter specified (paths-only); defaulting to ChangeFilter.";
         }
     }
     LOG_INFO << "Created Subscription ID: " << m_subscriptionId << " for trigger path: " << m_triggerSignalPath;
@@ -130,23 +138,24 @@ void VssSubscriptionManager::Subscription::process() {
         return;
     }
 
-    auto latest_values = m_data_store->getValues(m_triggerSignalPath);
-    viss::DataPoint current_dp = latest_values.empty() ? viss::DataPoint{std::any(), 0} : latest_values[0];
+    // Fetch trigger path value once and reuse below to avoid a second store query
+    auto trigger_values = m_data_store->getValues(m_triggerSignalPath);
+    viss::DataPoint current_dp = trigger_values.empty() ? viss::DataPoint{std::any(), 0} : trigger_values[0];
     viss::DataPoint previous_dp = m_lastState.count(m_triggerSignalPath) ? m_lastState.at(m_triggerSignalPath) : viss::DataPoint{std::any(), 0};
 
-    bool all_filters_passed = false;
+    bool triggered = false;
     if (m_filters.empty()) {
-        all_filters_passed = true;
+        triggered = true;
     } else {
         for (const auto& filter : m_filters) {
             if (filter->shouldTrigger(current_dp, previous_dp)) {
-                all_filters_passed = true;
+                triggered = true;
                 break;
             }
         }
     }
 
-    if (all_filters_passed) {
+    if (triggered) {
         m_lastState[m_triggerSignalPath] = current_dp;
 
         auto notification = m_response_pool->acquire();
@@ -166,7 +175,13 @@ void VssSubscriptionManager::Subscription::process() {
 
         rapidjson::Value data_array(rapidjson::kArrayType);
         for (const auto& p : m_watchedPaths) {
-            auto points = m_data_store->getValues(p, timePeriod);
+            // Reuse already-fetched data for the trigger path (no timePeriod case) to avoid duplicate store query
+            std::vector<viss::DataPoint> points;
+            if (p == m_triggerSignalPath && timePeriod.empty()) {
+                points = trigger_values;
+            } else {
+                points = m_data_store->getValues(p, timePeriod);
+            }
             if (points.empty()) continue;
 
             rapidjson::Value dp_list(rapidjson::kArrayType);
@@ -185,7 +200,7 @@ void VssSubscriptionManager::Subscription::process() {
             } else {
                 data_obj.AddMember("dp", dp_list, allocator);
             }
-            
+
             data_array.PushBack(data_obj, allocator);
         }
 
@@ -194,7 +209,7 @@ void VssSubscriptionManager::Subscription::process() {
         } else {
             notification->AddMember("data", data_array, allocator);
         }
-        
+
         notification->AddMember("ts", rapidjson::Value(getCurrentTimestamp().c_str(), allocator), allocator);
 
         m_originalRequest->responseChan->push(notification);
@@ -251,6 +266,10 @@ std::vector<std::shared_ptr<viss::IFilter>> VssSubscriptionManager::Subscription
                 filters.push_back(std::make_shared<HistoryFilter>(timePeriod));
                 LOG_INFO << "  - Created HistoryFilter with time period: " << timePeriod;
             }
+        } else if (variant == "paths") {
+            // paths filter is handled by getPaths() during subscription creation,
+            // not as a runtime trigger filter. Skip silently.
+            LOG_INFO << "  - Skipping 'paths' filter (handled by getPaths)";
         } else {
             LOG_WARN << "Unsupported or malformed filter variant: " << variant;
         }
@@ -281,6 +300,15 @@ std::string VssSubscriptionManager::addSubscription(std::shared_ptr<RequestData>
     }
     
     m_subscriptions[subscriptionId] = sub;
+
+    /**
+     * According to the VISS specification, only the first path (trigger path) in a
+     * subscription request is used to evaluate filter conditions (event triggering).
+     * The other watched paths are merely included as payload data when a notification 
+     * is triggered, and do not trigger events on their own.
+     * Therefore, the subscription is registered in m_triggerMap using only the 
+     * first path as its key.
+     */
     m_triggerMap[sub->getTriggerPath()].push_back(sub);
 
     return subscriptionId;
@@ -314,24 +342,22 @@ bool VssSubscriptionManager::removeSubscription(const std::string& subscriptionI
     return false;
 }
 
-std::map<std::string, std::shared_ptr<VssSubscriptionManager::Subscription>> VssSubscriptionManager::getAllSubscriptions() {
-    std::lock_guard<std::mutex> lock(mtx);
-    return m_subscriptions;
-}
-
 void VssSubscriptionManager::run() {
     active_ = true;
     publisher_thread_ = std::thread([this]() {
         while (active_.load()) {
-            std::map<std::string, std::shared_ptr<Subscription>> subscriptions_copy;
+            std::vector<std::shared_ptr<Subscription>> subscriptions_to_process;
             {
                 std::lock_guard<std::mutex> lock(mtx);
-                subscriptions_copy = m_subscriptions;
+                subscriptions_to_process.reserve(m_subscriptions.size());
+                for (const auto& pair : m_subscriptions) {
+                    subscriptions_to_process.push_back(pair.second);
+                }
             }
 
-            for (const auto& pair : subscriptions_copy) {
-                if (pair.second) {
-                    pair.second->process();
+            for (const auto& sub : subscriptions_to_process) {
+                if (sub) {
+                    sub->process();
                 }
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -345,7 +371,7 @@ void VssSubscriptionManager::stop() {
     if (publisher_thread_.joinable()) {
         publisher_thread_.join();
     }
-    
+
     // Clear all subscriptions, which will trigger their destructors
     std::lock_guard<std::mutex> lock(mtx);
     m_subscriptions.clear();
