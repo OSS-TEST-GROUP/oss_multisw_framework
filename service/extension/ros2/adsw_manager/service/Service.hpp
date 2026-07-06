@@ -60,6 +60,16 @@ class Service {
     void SetDirectExec(bool direct);
     bool IsDirectExec() const;
 
+    // True when this service IS its container's workload: the container's own
+    // docker CMD (command_args) runs the ROS2 stack, so there is no separate
+    // `docker exec ros2 launch` to do. Start = start the container (no-op here,
+    // container already started by ProcessServiceStartRequest); Stop = stop the
+    // container; liveness = the container's running state. Set from YAML's
+    // `exec_type: "container"`. Used for e.g. Autoware role images whose
+    // entrypoint script launches everything. (default false)
+    void SetContainerWorkload(bool v);
+    bool IsContainerWorkload() const;
+
     // F013: which container hosts this service. Empty string = native /
     // non-containerised. Set during ServiceRegistry::LoadServiceSaved from
     // the enclosing container's `name` field and shipped to lifecycle_mgr
@@ -87,6 +97,7 @@ class Service {
     std::string launch_file_;
     std::string match_pattern_;
     bool is_direct_exec_;
+    bool is_container_workload_;
 
     int32_t max_nodes_;
     int32_t current_nodes_;

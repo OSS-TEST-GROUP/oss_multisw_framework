@@ -185,9 +185,10 @@
         for(const auto &it : ota_client_info_list_) {
             for(const auto &sub_it : it.second.app_names) {
                 if(sub_it.compare(app_name) == 0){
-                std::cout << "OtamClientService: Found app name=" << app_name << std::endl;
+                    std::cout << "OtamClientService: Found app name=" << app_name
+                              << " (client_id=" << it.first << ")" << std::endl;
+                    return it.first;
                 }
-                return it.first;
             }
         }
         return -1;

@@ -41,5 +41,18 @@ void Container::SetContainerType(ContainerType type) {
     container_type_ = type;
 }
 
+void Container::SetExtraArgs(const std::vector<std::string>& args) {
+    extra_args_ = args;
+}
+const std::vector<std::string>& Container::GetExtraArgs() const {
+    return extra_args_;
+}
+void Container::SetCommandArgs(const std::vector<std::string>& args) {
+    command_args_ = args;
+}
+const std::vector<std::string>& Container::GetCommandArgs() const {
+    return command_args_;
+}
+
 } // namespace adsw_manager
 } // namespace ros2

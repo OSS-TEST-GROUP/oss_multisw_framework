@@ -13,6 +13,7 @@ Service::Service(const std::string& name, ServiceType service_type, RecoveryPoli
       launch_file_(""),
       match_pattern_(""),
       is_direct_exec_(false),
+      is_container_workload_(false),
       max_nodes_(0),
       current_nodes_(0),
       pid_(0),
@@ -121,6 +122,14 @@ void Service::SetDirectExec(bool direct) {
 
 bool Service::IsDirectExec() const {
     return is_direct_exec_;
+}
+
+void Service::SetContainerWorkload(bool v) {
+    is_container_workload_ = v;
+}
+
+bool Service::IsContainerWorkload() const {
+    return is_container_workload_;
 }
 
 std::string Service::ResolveProcessMatchToken(bool is_native) const {

@@ -162,8 +162,19 @@ bool ContainerController::StartDockerContainer(std::shared_ptr<Container> contai
     // produces another zombie, and the operator sees an unending Stop/Start
     // loop. tini fixes the root cause: dead services stay reaped, alive
     // services stay matched.
-    std::string run_cmd = "docker run -d --init --name " + container->GetName()
-                        + " " + container->GetImage();
+    // docker run -d --init --name <n> <extra_args...> <image> <command_args...>
+    // extra_args (--network host, -e, -v ...) and command_args (the container's
+    // own CMD, e.g. an Autoware role start script) come from the YAML container
+    // spec — see Container::SetExtraArgs/SetCommandArgs. Empty for the classic
+    // adsw-test-app model, which keeps the original bare-run behaviour.
+    std::string run_cmd = "docker run -d --init --name " + container->GetName();
+    for (const auto& arg : container->GetExtraArgs()) {
+        run_cmd += " " + arg;
+    }
+    run_cmd += " " + container->GetImage();
+    for (const auto& carg : container->GetCommandArgs()) {
+        run_cmd += " " + carg;
+    }
     if (RunCommand(run_cmd) == 0) {
         LOG_DEBUG("ContainerController::StartDockerContainer new container " << container->GetName());
         return true;
