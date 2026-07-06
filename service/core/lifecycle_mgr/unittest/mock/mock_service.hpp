@@ -8,7 +8,7 @@ namespace lifecycle_manager {
 class MockService : public Service {
 public:
     MockService() : Service(), recovered_count_(0) {}
-    MockService(const std::string& name, const ServiceType type, const RecoveryPolicy policy, const bool enabled, const OsType os)
+    MockService(const std::string& name, const ServiceType type, const RecoveryPolicy policy, const bool enabled, const MwType os)
         : Service(name, type, policy, enabled, os), recovered_count_(0) {}
     ~MockService() = default;
 
@@ -23,7 +23,7 @@ public:
     MOCK_METHOD(void, SetServiceState, (ServiceState), ());
     MOCK_METHOD(ServiceState, GetLastServiceState, (), ());
     MOCK_METHOD(void, Print, (), ());
-    MOCK_METHOD(OsType, GetOsType, (), ());
+    MOCK_METHOD(MwType, GetMwType, (), ());
     MOCK_METHOD(int32_t, GetRecoveredCount, (), ());
     MOCK_METHOD(int32_t, GetExitCode, (), ());
     MOCK_METHOD(void, SetExitCode, (int32_t), ());
@@ -39,7 +39,7 @@ inline MockService* Mock_Service = nullptr;
 
 
 Service::Service() {}
-Service::Service(const std::string& name, const ServiceType type, const RecoveryPolicy policy, const bool enabled, const OsType os) {}
+Service::Service(const std::string& name, const ServiceType type, const RecoveryPolicy policy, const bool enabled, const MwType os) {}
 Service::~Service() {}
 
 bool Service::isEnabled() {
@@ -95,8 +95,8 @@ void Service::Print() {
     Mock_Service->Print();
 }
 
-OsType Service::GetOsType() {
-    return Mock_Service->GetOsType();
+MwType Service::GetMwType() {
+    return Mock_Service->GetMwType();
 }
 
 int32_t Service::GetExitCode() {

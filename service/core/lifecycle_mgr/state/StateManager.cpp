@@ -2,7 +2,7 @@
 #include <map>
 
 #include "StateManager.hpp"
-#include "include/OsType.hpp"
+#include "include/MwType.hpp"
 
 #include "manager/ManagerBase.hpp"
 #include "transmitter/DDSTransmitter.hpp"
@@ -38,7 +38,7 @@ bool StateManager::StartService(std::shared_ptr<Service> service) {
      
     if (transmitter != nullptr)
     {
-        start_request_.os_type() = TypeConvert::ToOsType(service->GetOsType());
+        start_request_.mw_type() = TypeConvert::ToMwType(service->GetMwType());
         start_request_.service_list().push_back(service->GetName());
         start_request_.is_group() = false;
         ++start_in_flight_;
@@ -55,7 +55,7 @@ void StateManager::StopService(std::shared_ptr<Service> service) {
 
     if (transmitter != nullptr)
     {
-        stop_request_.os_type() = TypeConvert::ToOsType(service->GetOsType());
+        stop_request_.mw_type() = TypeConvert::ToMwType(service->GetMwType());
         stop_request_.service_list().push_back(service->GetName());
         stop_request_.is_group() = false;
         ++stop_in_flight_;
@@ -91,9 +91,9 @@ void StateManager::ProcessServiceHandling(std::set<std::shared_ptr<Service>> ser
 
     std::shared_ptr<PolicyManager> policy_manager = GetPolicy();
 
-    // OsType별로 START/STOP 목록 분리
-    std::map<OsType, std::vector<std::string>> start_map;
-    std::map<OsType, std::vector<std::string>> stop_map;
+    // MwType별로 START/STOP 목록 분리
+    std::map<MwType, std::vector<std::string>> start_map;
+    std::map<MwType, std::vector<std::string>> stop_map;
 
     for( auto it_service = service_list.begin(); it_service != service_list.end(); ++it_service ){
 
@@ -103,11 +103,11 @@ void StateManager::ProcessServiceHandling(std::set<std::shared_ptr<Service>> ser
         switch (action)
         {
         case ServiceControlAction::START:
-            start_map[service->GetOsType()].push_back(service->GetName());
+            start_map[service->GetMwType()].push_back(service->GetName());
             break;
 
         case ServiceControlAction::STOP:
-            stop_map[service->GetOsType()].push_back(service->GetName());
+            stop_map[service->GetMwType()].push_back(service->GetName());
             break;
 
         default:
@@ -127,9 +127,9 @@ void StateManager::ProcessServiceHandling(std::set<std::shared_ptr<Service>> ser
 
     for (auto& entry : start_map){
         start_request_.service_list() = entry.second;
-        start_request_.os_type() = TypeConvert::ToOsType(entry.first);
+        start_request_.mw_type() = TypeConvert::ToMwType(entry.first);
         start_request_.is_group() = false;
-        LOG_DEBUG("StateManager: START " << entry.second.size() << " service(s) for OsType "
+        LOG_DEBUG("StateManager: START " << entry.second.size() << " service(s) for MwType "
                   << static_cast<int>(entry.first));
         ++start_in_flight_;
         transmitter->SendMessage(MessageType::START_SERVICE_REQUEST, reinterpret_cast<void*>(&start_request_));
@@ -137,9 +137,9 @@ void StateManager::ProcessServiceHandling(std::set<std::shared_ptr<Service>> ser
 
     for (auto& entry : stop_map){
         stop_request_.service_list() = entry.second;
-        stop_request_.os_type() = TypeConvert::ToOsType(entry.first);
+        stop_request_.mw_type() = TypeConvert::ToMwType(entry.first);
         stop_request_.is_group() = false;
-        LOG_DEBUG("StateManager: STOP " << entry.second.size() << " service(s) for OsType "
+        LOG_DEBUG("StateManager: STOP " << entry.second.size() << " service(s) for MwType "
                   << static_cast<int>(entry.first));
         ++stop_in_flight_;
         transmitter->SendMessage(MessageType::STOP_SERVICE_REQUEST, reinterpret_cast<void*>(&stop_request_));
@@ -279,8 +279,8 @@ void StateManager::HandleCtrlStartService(lifecyclemgr::CtrlStartServiceRequest*
         return;
     }
 
-    // Group services by OsType for the actuator topic shape.
-    std::map<OsType, std::vector<std::string>> by_os;
+    // Group services by MwType for the actuator topic shape.
+    std::map<MwType, std::vector<std::string>> by_os;
     for (const auto& name : names){
         std::shared_ptr<Service> service = GetService(name);
         if (service == nullptr){
@@ -295,7 +295,7 @@ void StateManager::HandleCtrlStartService(lifecyclemgr::CtrlStartServiceRequest*
                                 lifecyclemgr::ReturnCode::FAILED);
             return;
         }
-        by_os[service->GetOsType()].push_back(name);
+        by_os[service->GetMwType()].push_back(name);
     }
 
     std::shared_ptr<DDSTransmitter> transmitter = GetTransmitter();
@@ -307,7 +307,7 @@ void StateManager::HandleCtrlStartService(lifecyclemgr::CtrlStartServiceRequest*
 
     for (auto& entry : by_os){
         start_request_.service_list() = entry.second;
-        start_request_.os_type() = TypeConvert::ToOsType(entry.first);
+        start_request_.mw_type() = TypeConvert::ToMwType(entry.first);
         start_request_.is_group() = false;
         ++start_in_flight_;
         transmitter->SendMessage(MessageType::START_SERVICE_REQUEST,
@@ -327,7 +327,7 @@ void StateManager::HandleCtrlStopService(lifecyclemgr::CtrlStopServiceRequest* m
         return;
     }
 
-    std::map<OsType, std::vector<std::string>> by_os;
+    std::map<MwType, std::vector<std::string>> by_os;
     for (const auto& name : names){
         std::shared_ptr<Service> service = GetService(name);
         if (service == nullptr){
@@ -336,7 +336,7 @@ void StateManager::HandleCtrlStopService(lifecyclemgr::CtrlStopServiceRequest* m
                                 lifecyclemgr::ReturnCode::FAILED);
             return;
         }
-        by_os[service->GetOsType()].push_back(name);
+        by_os[service->GetMwType()].push_back(name);
     }
 
     std::shared_ptr<DDSTransmitter> transmitter = GetTransmitter();
@@ -348,7 +348,7 @@ void StateManager::HandleCtrlStopService(lifecyclemgr::CtrlStopServiceRequest* m
 
     for (auto& entry : by_os){
         stop_request_.service_list() = entry.second;
-        stop_request_.os_type() = TypeConvert::ToOsType(entry.first);
+        stop_request_.mw_type() = TypeConvert::ToMwType(entry.first);
         stop_request_.is_group() = false;
         ++stop_in_flight_;
         transmitter->SendMessage(MessageType::STOP_SERVICE_REQUEST,

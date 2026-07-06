@@ -186,7 +186,7 @@ TEST_F(ConcreteEndpointIntegrationTest, StartServiceEndPoint_OnDataAvailable) {
     
     // Create and send a message
     lifecyclemgr::StartServiceRequest message;
-    message.os_type(lifecyclemgr::OsType::ROS2);
+    message.mw_type(lifecyclemgr::MwType::ROS2);
     message.service_list().push_back("test_service");
     message.is_group(false);
     
@@ -221,7 +221,7 @@ TEST_F(ConcreteEndpointIntegrationTest, StartServiceEndPoint_OnDataAvailable_TC0
 
     // Create and send a message
     lifecyclemgr::StartServiceRequest message;
-    message.os_type(lifecyclemgr::OsType::ROS2);
+    message.mw_type(lifecyclemgr::MwType::ROS2);
     message.service_list().push_back("test_service");
     message.is_group(false);
     
@@ -259,7 +259,7 @@ TEST_F(ConcreteEndpointIntegrationTest, StartServiceEndPoint_OnDataAvailable_TC0
     
     // Create and send a message
     lifecyclemgr::StartServiceRequest message;
-    message.os_type(lifecyclemgr::OsType::ROS2);
+    message.mw_type(lifecyclemgr::MwType::ROS2);
     message.service_list().push_back("test_service");
     message.is_group(false);
     
@@ -294,7 +294,7 @@ TEST_F(ConcreteEndpointIntegrationTest, StopServiceEndPoint_OnDataAvailable) {
         .WillOnce(Return(true));
         
     lifecyclemgr::StopServiceRequest message;
-    message.os_type(lifecyclemgr::OsType::ROS2);
+    message.mw_type(lifecyclemgr::MwType::ROS2);
     message.service_list().push_back("test_service");
     message.is_group(false);
     
@@ -322,7 +322,7 @@ TEST_F(ConcreteEndpointIntegrationTest, StopServiceEndPoint_OnDataAvailable_TC02
         .WillByDefault(Return(nullptr));
     
     lifecyclemgr::StopServiceRequest message;
-    message.os_type(lifecyclemgr::OsType::ROS2);
+    message.mw_type(lifecyclemgr::MwType::ROS2);
     message.service_list().push_back("test_service");
     message.is_group(false);
     
@@ -351,7 +351,7 @@ TEST_F(ConcreteEndpointIntegrationTest, StopServiceEndPoint_OnDataAvailable_TC03
         .WillOnce(Return(false));
 
     lifecyclemgr::StopServiceRequest message;
-    message.os_type(lifecyclemgr::OsType::ROS2);
+    message.mw_type(lifecyclemgr::MwType::ROS2);
     message.service_list().push_back("test_service");
     message.is_group(false);
     
@@ -383,7 +383,7 @@ TEST_F(ConcreteEndpointIntegrationTest, GetServiceStateEndPoint_OnDataAvailable)
         .WillOnce(Return(true));
     
     lifecyclemgr::GetServiceStateRequest message;
-    message.os_type(lifecyclemgr::OsType::ROS2);
+    message.mw_type(lifecyclemgr::MwType::ROS2);
     message.service_list().push_back("test_service");
     message.is_all_service(false);
     
@@ -410,7 +410,7 @@ TEST_F(ConcreteEndpointIntegrationTest, GetServiceStateEndPoint_OnDataAvailable_
         .WillByDefault(Return(nullptr));
 
     lifecyclemgr::GetServiceStateRequest message;
-    message.os_type(lifecyclemgr::OsType::ROS2);
+    message.mw_type(lifecyclemgr::MwType::ROS2);
     message.service_list().push_back("test_service");
     message.is_all_service(false);
     
@@ -438,7 +438,7 @@ TEST_F(ConcreteEndpointIntegrationTest, GetServiceStateEndPoint_OnDataAvailable_
         .WillOnce(Return(false));
 
     lifecyclemgr::GetServiceStateRequest message;
-    message.os_type(lifecyclemgr::OsType::ROS2);
+    message.mw_type(lifecyclemgr::MwType::ROS2);
     message.service_list().push_back("test_service");
     message.is_all_service(false);
     
@@ -467,7 +467,7 @@ TEST_F(ConcreteEndpointIntegrationTest, NotifyServiceStateEndPoint_OnDataAvailab
     WaitForDiscovery();
     
     lifecyclemgr::NotifyServiceState message;
-    message.os_type(lifecyclemgr::OsType::ROS2);
+    message.mw_type(lifecyclemgr::MwType::ROS2);
     message.service_list().push_back("test_service");
     message.service_state_list().push_back(lifecyclemgr::ServiceState::RUNNING);
     

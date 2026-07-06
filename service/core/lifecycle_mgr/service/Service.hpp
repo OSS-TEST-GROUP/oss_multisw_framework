@@ -7,7 +7,7 @@
 #include "include/ServiceType.hpp"
 #include "include/ServiceMode.hpp"
 #include "include/RecoveryPolicy.hpp"
-#include "include/OsType.hpp"
+#include "include/MwType.hpp"
 
 namespace lifecycle_manager {
 
@@ -15,7 +15,7 @@ class Service {
 
   public:
     Service();
-    Service(const std::string& name, const ServiceType type, const RecoveryPolicy policy, const bool enabled, const OsType os);
+    Service(const std::string& name, const ServiceType type, const RecoveryPolicy policy, const bool enabled, const MwType os);
     virtual ~Service();
 
     std::string GetName();
@@ -44,7 +44,7 @@ class Service {
 
     void Print();
 
-    OsType GetOsType();
+    MwType GetMwType();
 
     // F013: which container hosts this service.  Empty string means
     // "native / non-containerised" (treated as a distinct registration
@@ -65,7 +65,7 @@ class Service {
     uint32_t recovered_count_;
     int32_t exit_code_;
 
-    OsType os_type_;
+    MwType mw_type_;
 
     std::string container_name_;  // F013
 

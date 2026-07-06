@@ -67,7 +67,7 @@ services:
     recovery_policy: ALWAYS      # R_DEFAULT | ALWAYS | ON_FAILURE | ON_SUCCESS
                                  # | ON_NOT_RESPONDING | MANUAL
     is_enabled: true             # true | false
-    os_type: AGL                 # AGL | ROS2 | AUTOSAR
+    mw_type: AGL                 # AGL | ROS2 | AUTOSAR
     init_state: NOT_RUNNING      # NOT_RUNNING | RUNNING
     image: adsw-test-app:latest
     extra_args:

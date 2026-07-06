@@ -232,8 +232,8 @@ void StateMonitor::RequestGetState(){
                     LOG_ERROR("service not found.");
                     return;
                 }
-                get_request_.os_type() = TypeConvert::ToOsType(svc->GetOsType()); 
-                // get_request_.os_type() = registry->GetService(list.front())->GetOsType();
+                get_request_.mw_type() = TypeConvert::ToMwType(svc->GetMwType()); 
+                // get_request_.mw_type() = registry->GetService(list.front())->GetMwType();
 
                 for( auto svc = list.begin(); svc != list.end(); ++svc ){
                     get_request_.service_list().push_back(*svc);

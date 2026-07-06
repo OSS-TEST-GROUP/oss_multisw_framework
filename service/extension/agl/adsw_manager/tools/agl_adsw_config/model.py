@@ -20,7 +20,7 @@ class RecoveryPolicy(str, Enum):
     MANUAL = "MANUAL"
 
 
-class OsType(str, Enum):
+class MwType(str, Enum):
     AGL = "AGL"
     ROS2 = "ROS2"
     AUTOSAR = "AUTOSAR"
@@ -36,7 +36,7 @@ class ServiceEntry(BaseModel):
     service_type: ServiceType = ServiceType.NORMAL
     recovery_policy: RecoveryPolicy = RecoveryPolicy.R_DEFAULT
     is_enabled: bool = True
-    os_type: OsType = OsType.AGL
+    mw_type: MwType = MwType.AGL
     init_state: InitState = InitState.NOT_RUNNING
     image: str
     extra_args: List[str] = Field(default_factory=list)

@@ -71,7 +71,7 @@ def service_to_commented(entry: ServiceEntry) -> CommentedMap:
     cm["service_type"] = entry.service_type.value
     cm["recovery_policy"] = entry.recovery_policy.value
     cm["is_enabled"] = entry.is_enabled
-    cm["os_type"] = entry.os_type.value
+    cm["mw_type"] = entry.mw_type.value
     cm["init_state"] = entry.init_state.value
     cm["image"] = entry.image
     args = CommentedSeq(entry.extra_args)

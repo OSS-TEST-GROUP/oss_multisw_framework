@@ -502,7 +502,7 @@ bool ROSServiceController::ProcessServiceStartRequest(lifecyclemgr::StartService
     }
 
     LOG_DEBUG("Processing service start request for " << message->service_list().size() << " services.");
-    if (TypeConvert::ToOsType(message->os_type()) == OsType::ROS2) {
+    if (TypeConvert::ToMwType(message->mw_type()) == MwType::ROS2) {
         std::vector<std::string> service_list = message->service_list();
         bool is_group = message->is_group();
         bool result = false;
@@ -683,7 +683,7 @@ bool ROSServiceController::ProcessServiceStopRequest(lifecyclemgr::StopServiceRe
     }
 
     LOG_DEBUG("Processing service stop request for " << message->service_list().size() << " services.");
-    if (TypeConvert::ToOsType(message->os_type()) == OsType::ROS2) {
+    if (TypeConvert::ToMwType(message->mw_type()) == MwType::ROS2) {
         std::vector<std::string> service_list = message->service_list();
         bool is_group = message->is_group();
         bool result = false;

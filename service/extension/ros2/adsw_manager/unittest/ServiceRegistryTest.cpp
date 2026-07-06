@@ -1142,7 +1142,7 @@ TEST_F(ServiceRegistryTest, ProcessGetServiceStateRequest_ValidRequest_TC062) {
   
     // Create request message
     lifecyclemgr::GetServiceStateRequest request;
-    request.os_type(lifecyclemgr::OsType::ROS2);
+    request.mw_type(lifecyclemgr::MwType::ROS2);
     request.service_list().push_back("TestService");
     request.is_all_service(false);
     
@@ -1172,7 +1172,7 @@ TEST_F(ServiceRegistryTest, ProcessGetServiceStateRequest_ServiceNotFound_TC063)
   
     // Create request for non-existent service
     lifecyclemgr::GetServiceStateRequest request;
-    request.os_type(lifecyclemgr::OsType::ROS2);
+    request.mw_type(lifecyclemgr::MwType::ROS2);
     request.service_list().push_back("NonExistentService");
     request.is_all_service(false);
     
@@ -1219,7 +1219,7 @@ TEST_F(ServiceRegistryTest, ProcessGetServiceStateRequest_MultipleServices_TC064
 
     // Create request for multiple services
     lifecyclemgr::GetServiceStateRequest request;
-    request.os_type(lifecyclemgr::OsType::ROS2);
+    request.mw_type(lifecyclemgr::MwType::ROS2);
     request.service_list().push_back("Service1");
     request.service_list().push_back("Service2");
     request.is_all_service(false);
@@ -1233,10 +1233,10 @@ TEST_F(ServiceRegistryTest, ProcessGetServiceStateRequest_MultipleServices_TC064
     Mock_DDSTransmitter = nullptr;
 }
 
-TEST_F(ServiceRegistryTest, ProcessGetServiceStateRequest_NonROS2OsType_TC065) {
+TEST_F(ServiceRegistryTest, ProcessGetServiceStateRequest_NonROS2MwType_TC065) {
     // Test with non-ROS2 OS type
     lifecyclemgr::GetServiceStateRequest request;
-    request.os_type(lifecyclemgr::OsType::AGL);  // Not ROS2
+    request.mw_type(lifecyclemgr::MwType::AGL);  // Not ROS2
     request.service_list().push_back("TestService");
     
     // Execute - should return true without processing

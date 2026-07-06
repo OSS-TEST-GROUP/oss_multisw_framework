@@ -245,20 +245,20 @@ TEST_F(HelperTest, TypeConvert_ToRecoveryPolicy_Manual) {
     EXPECT_EQ(result, lifecycle_manager::RecoveryPolicy::MANUAL);
 }
 
-// Test ToOsType
-TEST_F(HelperTest, TypeConvert_ToOsType_ROS2) {
-    auto result = TypeConvert::ToOsType(lifecyclemgr::OsType::ROS2);
-    EXPECT_EQ(result, lifecycle_manager::OsType::ROS2);
+// Test ToMwType
+TEST_F(HelperTest, TypeConvert_ToMwType_ROS2) {
+    auto result = TypeConvert::ToMwType(lifecyclemgr::MwType::ROS2);
+    EXPECT_EQ(result, lifecycle_manager::MwType::ROS2);
 }
 
-TEST_F(HelperTest, TypeConvert_ToOsType_AGL) {
-    auto result = TypeConvert::ToOsType(lifecyclemgr::OsType::AGL);
-    EXPECT_EQ(result, lifecycle_manager::OsType::AGL);
+TEST_F(HelperTest, TypeConvert_ToMwType_AGL) {
+    auto result = TypeConvert::ToMwType(lifecyclemgr::MwType::AGL);
+    EXPECT_EQ(result, lifecycle_manager::MwType::AGL);
 }
 
-TEST_F(HelperTest, TypeConvert_ToOsType_AUTOSAR) {
-    auto result = TypeConvert::ToOsType(lifecyclemgr::OsType::AUTOSAR);
-    EXPECT_EQ(result, lifecycle_manager::OsType::AUTOSAR);
+TEST_F(HelperTest, TypeConvert_ToMwType_AUTOSAR) {
+    auto result = TypeConvert::ToMwType(lifecyclemgr::MwType::AUTOSAR);
+    EXPECT_EQ(result, lifecycle_manager::MwType::AUTOSAR);
 }
 
 int main(int argc, char** argv) {

@@ -45,7 +45,7 @@ namespace adsw_manager::agl {
         msg.service_list().reserve(pairs.size());
         msg.service_state_list().reserve(pairs.size());
 
-        msg.os_type(OsType::AGL);
+        msg.mw_type(MwType::AGL);
 
         for (auto& [n, s] : pairs) {
             msg.service_list().push_back(std::move(n));
@@ -97,7 +97,7 @@ namespace adsw_manager::agl {
 
     void MessageTransmitter::HandleGetAppStateRequest(const GetServiceStateRequest& req) {
 
-        if (req.os_type() == OsType::AGL) {
+        if (req.mw_type() == MwType::AGL) {
 
             std::vector<std::string> app_list;
             std::vector<ServiceState> app_state_list;
@@ -119,7 +119,7 @@ namespace adsw_manager::agl {
 
     void MessageTransmitter::HandleStartAppRequest(const StartServiceRequest& req) {
 
-        if (req.os_type() == OsType::AGL) {
+        if (req.mw_type() == MwType::AGL) {
 
             StartServiceResponse res;
             res.ret_code(ReturnCode::SUCCESS);
@@ -138,7 +138,7 @@ namespace adsw_manager::agl {
 
     void MessageTransmitter::HandleStopAppRequest(const StopServiceRequest& req) {
 
-        if (req.os_type() == OsType::AGL) {
+        if (req.mw_type() == MwType::AGL) {
 
             StopServiceResponse res;
             res.ret_code(ReturnCode::SUCCESS);

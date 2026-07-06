@@ -174,31 +174,31 @@ TEST_F(TypeConvertTest, ToRecoveryPolicy_ToLifecyclemgr_InvalidDefault) {
 }
 
 // ============================================================================
-// OsType conversion tests
+// MwType conversion tests
 // ============================================================================
 
-TEST_F(TypeConvertTest, ToOsType_FromLifecyclemgr_ROS2) {
-    EXPECT_EQ(TypeConvert::ToOsType(lifecyclemgr::OsType::ROS2), OsType::ROS2);
+TEST_F(TypeConvertTest, ToMwType_FromLifecyclemgr_ROS2) {
+    EXPECT_EQ(TypeConvert::ToMwType(lifecyclemgr::MwType::ROS2), MwType::ROS2);
 }
 
-TEST_F(TypeConvertTest, ToOsType_FromLifecyclemgr_AGL) {
-    EXPECT_EQ(TypeConvert::ToOsType(lifecyclemgr::OsType::AGL), OsType::AGL);
+TEST_F(TypeConvertTest, ToMwType_FromLifecyclemgr_AGL) {
+    EXPECT_EQ(TypeConvert::ToMwType(lifecyclemgr::MwType::AGL), MwType::AGL);
 }
 
-TEST_F(TypeConvertTest, ToOsType_FromLifecyclemgr_AUTOSAR) {
-    EXPECT_EQ(TypeConvert::ToOsType(lifecyclemgr::OsType::AUTOSAR), OsType::AUTOSAR);
+TEST_F(TypeConvertTest, ToMwType_FromLifecyclemgr_AUTOSAR) {
+    EXPECT_EQ(TypeConvert::ToMwType(lifecyclemgr::MwType::AUTOSAR), MwType::AUTOSAR);
 }
 
-TEST_F(TypeConvertTest, ToOsType_ToLifecyclemgr_ROS2) {
-    EXPECT_EQ(TypeConvert::ToOsType(OsType::ROS2), lifecyclemgr::OsType::ROS2);
+TEST_F(TypeConvertTest, ToMwType_ToLifecyclemgr_ROS2) {
+    EXPECT_EQ(TypeConvert::ToMwType(MwType::ROS2), lifecyclemgr::MwType::ROS2);
 }
 
-TEST_F(TypeConvertTest, ToOsType_ToLifecyclemgr_AGL) {
-    EXPECT_EQ(TypeConvert::ToOsType(OsType::AGL), lifecyclemgr::OsType::AGL);
+TEST_F(TypeConvertTest, ToMwType_ToLifecyclemgr_AGL) {
+    EXPECT_EQ(TypeConvert::ToMwType(MwType::AGL), lifecyclemgr::MwType::AGL);
 }
 
-TEST_F(TypeConvertTest, ToOsType_ToLifecyclemgr_AUTOSAR) {
-    EXPECT_EQ(TypeConvert::ToOsType(OsType::AUTOSAR), lifecyclemgr::OsType::AUTOSAR);
+TEST_F(TypeConvertTest, ToMwType_ToLifecyclemgr_AUTOSAR) {
+    EXPECT_EQ(TypeConvert::ToMwType(MwType::AUTOSAR), lifecyclemgr::MwType::AUTOSAR);
 }
 
 // ============================================================================
@@ -229,11 +229,11 @@ TEST_F(TypeConvertTest, RecoveryPolicy_Roundtrip) {
               lifecyclemgr::RecoveryPolicy::MANUAL);
 }
 
-TEST_F(TypeConvertTest, OsType_Roundtrip) {
-    EXPECT_EQ(TypeConvert::ToOsType(TypeConvert::ToOsType(lifecyclemgr::OsType::ROS2)), 
-              lifecyclemgr::OsType::ROS2);
-    EXPECT_EQ(TypeConvert::ToOsType(TypeConvert::ToOsType(lifecyclemgr::OsType::AGL)), 
-              lifecyclemgr::OsType::AGL);
+TEST_F(TypeConvertTest, MwType_Roundtrip) {
+    EXPECT_EQ(TypeConvert::ToMwType(TypeConvert::ToMwType(lifecyclemgr::MwType::ROS2)), 
+              lifecyclemgr::MwType::ROS2);
+    EXPECT_EQ(TypeConvert::ToMwType(TypeConvert::ToMwType(lifecyclemgr::MwType::AGL)), 
+              lifecyclemgr::MwType::AGL);
 }
 
 

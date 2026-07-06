@@ -20,7 +20,7 @@ services:
     recovery_policy: ALWAYS      # R_DEFAULT | ALWAYS | ON_FAILURE | ON_SUCCESS
                                  # | ON_NOT_RESPONDING | MANUAL
     is_enabled: true             # true | false
-    os_type: AGL                 # AGL | ROS2 | AUTOSAR
+    mw_type: AGL                 # AGL | ROS2 | AUTOSAR
     init_state: NOT_RUNNING      # NOT_RUNNING | RUNNING
     image: adsw-test-app:latest
     extra_args:
@@ -44,7 +44,7 @@ specs                        services
     └── services[]               ├── service_type
         ├── package              ├── recovery_policy
         ├── launchfile           ├── is_enabled
-        ├── type                 ├── os_type      ← agl만
+        ├── type                 ├── mw_type      ← agl만
         ├── recovery             └── init_state   ← agl만
         ├── enabled
         └── max
@@ -122,7 +122,7 @@ agl-adsw-config <command> [args] [options]
 |------|------|
 | service_type | `NORMAL \| ONESHOT` 만 허용 |
 | recovery_policy | `R_DEFAULT \| ALWAYS \| ON_FAILURE \| ON_SUCCESS \| ON_NOT_RESPONDING \| MANUAL` |
-| os_type | `AGL \| ROS2 \| AUTOSAR` 만 허용 |
+| mw_type | `AGL \| ROS2 \| AUTOSAR` 만 허용 |
 | init_state | `NOT_RUNNING \| RUNNING` 만 허용 |
 | name 중복 금지 | services 내 name 중복 불가 |
 

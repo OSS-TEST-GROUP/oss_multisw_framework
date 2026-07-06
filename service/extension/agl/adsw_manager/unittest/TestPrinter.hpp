@@ -20,8 +20,8 @@ inline void PrintTo(const ServiceMode& v, std::ostream* os) {
 // inline void PrintTo(const ServiceState& v, std::ostream* os) {
 //   *os << "ServiceState(" << static_cast<int>(v) << ")";
 // }
-inline void PrintTo(const OsType& v, std::ostream* os) {
-  *os << "OsType(" << static_cast<int>(v) << ")";
+inline void PrintTo(const MwType& v, std::ostream* os) {
+  *os << "MwType(" << static_cast<int>(v) << ")";
 }
 
 inline void PrintTo(const ServiceState& state, std::ostream* os) {

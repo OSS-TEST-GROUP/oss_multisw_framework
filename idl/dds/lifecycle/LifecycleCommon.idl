@@ -35,7 +35,7 @@ module lifecyclemgr {
     struct DummyTypeT {
     };                 
 
-    enum OsType {
+    enum MwType {
         ROS2,
         AGL,
         AUTOSAR

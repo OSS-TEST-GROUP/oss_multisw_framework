@@ -8,13 +8,13 @@ namespace lifecycle_manager {
 
 Service::Service() : name_(""), service_type_(ServiceType::ONESHOT), recovery_policy_(RecoveryPolicy::R_DEFAULT), is_enabled_(false),
     service_mode_(ServiceMode::NORMAL), service_state_(ServiceState::NOT_RUNNING),
-    service_state_last_(ServiceState::NOT_RUNNING), recovered_count_(0), exit_code_(-1), os_type_(OsType::ROS2)
+    service_state_last_(ServiceState::NOT_RUNNING), recovered_count_(0), exit_code_(-1), mw_type_(MwType::ROS2)
 {}
 
-Service::Service(const std::string& name, const ServiceType type, const RecoveryPolicy policy, const bool enabled, const OsType os)
+Service::Service(const std::string& name, const ServiceType type, const RecoveryPolicy policy, const bool enabled, const MwType os)
     : name_(name), service_type_(type), recovery_policy_(policy), is_enabled_(enabled),
     service_mode_(ServiceMode::NORMAL), service_state_(ServiceState::NOT_RUNNING),
-    service_state_last_(ServiceState::NOT_RUNNING), recovered_count_(0), exit_code_(-1), os_type_(os)
+    service_state_last_(ServiceState::NOT_RUNNING), recovered_count_(0), exit_code_(-1), mw_type_(os)
 {
 
 }
@@ -104,8 +104,8 @@ void Service::Print(){
 
 }
 
-OsType Service::GetOsType(){
-    return os_type_;
+MwType Service::GetMwType(){
+    return mw_type_;
 }
 
 } // namespace lifecycle_manager

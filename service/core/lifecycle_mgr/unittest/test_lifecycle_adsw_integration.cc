@@ -243,7 +243,7 @@ private:
         service.service_type(lifecyclemgr::ServiceType::NORMAL);
         service.recovery_policy(lifecyclemgr::RecoveryPolicy::ALWAYS);
         service.is_enabled(true);
-        service.os_type(lifecyclemgr::OsType::ROS2);
+        service.mw_type(lifecyclemgr::MwType::ROS2);
 
         request.service_list().push_back(service);
 
@@ -705,7 +705,7 @@ TEST_F(LifecycleAdswIntegrationTest, StartService_HandshakeSuccess) {
     StartServiceRequest req;
     req.service_list().push_back("autoware");
     req.is_group(false);
-    req.os_type(OsType::ROS2);
+    req.mw_type(MwType::ROS2);
     EXPECT_TRUE(lcm_request_ep->Write(&req));
 
     // Wait for simulator to receive request and send response
@@ -741,7 +741,7 @@ TEST_F(LifecycleAdswIntegrationTest, StartService_ServiceNameCorrect) {
     StartServiceRequest req;
     req.service_list().push_back("autoware");
     req.is_group(false);
-    req.os_type(OsType::ROS2);
+    req.mw_type(MwType::ROS2);
     EXPECT_TRUE(lcm_request_ep->Write(&req));
 
     ASSERT_TRUE(start_service_sim_->WaitForRequestReceived(3000))
@@ -767,7 +767,7 @@ TEST_F(LifecycleAdswIntegrationTest, StartService_IsGroupFlag) {
     StartServiceRequest req;
     req.service_list().push_back("autoware");
     req.is_group(false);
-    req.os_type(OsType::ROS2);
+    req.mw_type(MwType::ROS2);
     EXPECT_TRUE(lcm_request_ep->Write(&req));
 
     ASSERT_TRUE(start_service_sim_->WaitForRequestReceived(3000));
@@ -809,7 +809,7 @@ TEST_F(LifecycleAdswIntegrationTest, StartService_ResponseCodeSuccess) {
     StartServiceRequest req;
     req.service_list().push_back("autoware");
     req.is_group(false);
-    req.os_type(OsType::ROS2);
+    req.mw_type(MwType::ROS2);
     EXPECT_TRUE(lcm_request_ep->Write(&req));
 
     std::unique_lock<std::mutex> lk(resp_mutex);
@@ -858,7 +858,7 @@ TEST_F(LifecycleAdswIntegrationTest, StartService_TimeoutWithoutSimulator) {
     StartServiceRequest req;
     req.service_list().push_back("autoware");
     req.is_group(false);
-    req.os_type(OsType::ROS2);
+    req.mw_type(MwType::ROS2);
     EXPECT_TRUE(lcm_request_ep->Write(&req));
 
     std::unique_lock<std::mutex> lk(resp_mutex);

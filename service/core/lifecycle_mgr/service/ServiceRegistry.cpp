@@ -80,7 +80,7 @@ bool ServiceRegistry::UpdateServiceList(UpdateServiceListRequest* update){
                                                 TypeConvert::ToServiceType(svc->service_type()),
                                                 TypeConvert::ToRecoveryPolicy(svc->recovery_policy()),
                                                 svc->is_enabled(),
-                                                TypeConvert::ToOsType(svc->os_type()));
+                                                TypeConvert::ToMwType(svc->mw_type()));
             // F013: stamp container linkage from the wire.
             service->SetContainerName(svc->container_name());
             // New Service Add to Registry

@@ -289,7 +289,7 @@ TEST_F(LifecycleManagerTest, GetService_ReturnsCorrectService) {
     Mock_ServiceRegistry = registry.get();  // Set global pointer for forwarding
     
     // Use MockService instead of Service since Service::GetName() forwards to Mock_Service
-    auto expected_service = std::make_shared<MockService>("test_svc", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ALWAYS, true, lifecycle_manager::OsType::ROS2);
+    auto expected_service = std::make_shared<MockService>("test_svc", lifecycle_manager::ServiceType::NORMAL, lifecycle_manager::RecoveryPolicy::ALWAYS, true, lifecycle_manager::MwType::ROS2);
     Mock_Service = expected_service.get();  // Set global pointer for forwarding
     
     ON_CALL(*expected_service, GetName()).WillByDefault(Return("test_svc"));

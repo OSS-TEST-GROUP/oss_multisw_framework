@@ -31,7 +31,7 @@ pip install -e .
 |------|-------------------|-----------------|
 | 구조 | `specs > containers[] > services[]` | `services[]` (flat) |
 | Docker 정보 위치 | 컨테이너 레벨 | **서비스 레벨** |
-| 추가 필드 | 없음 | `os_type`, `init_state`, `extra_args` |
+| 추가 필드 | 없음 | `mw_type`, `init_state`, `extra_args` |
 | CLI | `adsw-config` | `agl-adsw-config` |
 
 ---
@@ -45,7 +45,7 @@ services:
     recovery_policy: ALWAYS         # R_DEFAULT | ALWAYS | ON_FAILURE
                                     # | ON_SUCCESS | ON_NOT_RESPONDING | MANUAL
     is_enabled: true                # true | false
-    os_type: AGL                    # AGL | ROS2 | AUTOSAR
+    mw_type: AGL                    # AGL | ROS2 | AUTOSAR
     init_state: NOT_RUNNING         # NOT_RUNNING | RUNNING
     image: adsw-test-app:latest     # Docker 이미지
     extra_args:                     # docker run 추가 인자 (선택)
@@ -132,7 +132,7 @@ agl-adsw-config get adsw_monitor
   enabled           ●
   service_type      NORMAL
   recovery_policy   ALWAYS
-  os_type           AGL
+  mw_type           AGL
   init_state        NOT_RUNNING
   image             adsw-test-app:latest
   extra_args        --net=host
@@ -276,7 +276,7 @@ agl-adsw-config validate
 검사 항목:
 - `service_type` 허용 enum 범위 (`NORMAL | ONESHOT`)
 - `recovery_policy` 허용 enum 범위
-- `os_type` 허용 enum 범위 (`AGL | ROS2 | AUTOSAR`)
+- `mw_type` 허용 enum 범위 (`AGL | ROS2 | AUTOSAR`)
 - `init_state` 허용 enum 범위 (`NOT_RUNNING | RUNNING`)
 - `name` 중복 여부
 
@@ -312,7 +312,7 @@ agl-adsw-config diff
 -  recovery_policy: R_DEFAULT
 +  recovery_policy: ALWAYS
    is_enabled: true
-   os_type: AGL
+   mw_type: AGL
 ```
 
 ---
@@ -374,11 +374,11 @@ agl-adsw-config enable radio
 
 ---
 
-### os_type별 서비스 현황 확인
+### mw_type별 서비스 현황 확인
 
 ```bash
 # JSON으로 출력 후 jq로 필터링
-agl-adsw-config -o json list | jq '.[] | select(.os_type == "AGL")'
+agl-adsw-config -o json list | jq '.[] | select(.mw_type == "AGL")'
 ```
 
 ---
@@ -389,7 +389,7 @@ agl-adsw-config -o json list | jq '.[] | select(.os_type == "AGL")'
 |------|--------|
 | `service_type` | `NORMAL` \| `ONESHOT` |
 | `recovery_policy` | `R_DEFAULT` \| `ALWAYS` \| `ON_FAILURE` \| `ON_SUCCESS` \| `ON_NOT_RESPONDING` \| `MANUAL` |
-| `os_type` | `AGL` \| `ROS2` \| `AUTOSAR` |
+| `mw_type` | `AGL` \| `ROS2` \| `AUTOSAR` |
 | `init_state` | `NOT_RUNNING` \| `RUNNING` |
 | `is_enabled` | `true` \| `false` |
 

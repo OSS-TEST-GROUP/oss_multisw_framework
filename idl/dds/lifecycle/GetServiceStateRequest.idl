@@ -10,7 +10,7 @@ module lifecyclemgr {
 
     /* TopicName - mmf/lifecyclemgr/GetServiceStateRequest */
     struct GetServiceStateRequest {
-        OsType os_type;
+        MwType mw_type;
         sequence<string> service_list;
         boolean is_all_service;
     };

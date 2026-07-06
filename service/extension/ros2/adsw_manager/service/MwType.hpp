@@ -4,7 +4,7 @@
 namespace ros2 {
 namespace adsw_manager {
     
-    enum class OsType {
+    enum class MwType {
         ROS2,
         AGL,
         AUTOSAR

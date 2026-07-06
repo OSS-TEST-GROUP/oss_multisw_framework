@@ -253,13 +253,13 @@ class MockLifecycleService {
   /**
    * @brief Convert OS type enum to string
    */
-  std::string OsTypeToString(lifecyclemgr::OsType os_type) {
-    switch (os_type) {
-      case lifecyclemgr::OsType::ROS2:
+  std::string MwTypeToString(lifecyclemgr::MwType mw_type) {
+    switch (mw_type) {
+      case lifecyclemgr::MwType::ROS2:
         return "ROS2";
-      case lifecyclemgr::OsType::AGL:
+      case lifecyclemgr::MwType::AGL:
         return "AGL";
-      case lifecyclemgr::OsType::AUTOSAR:
+      case lifecyclemgr::MwType::AUTOSAR:
         return "AUTOSAR";
       default:
         return "UNKNOWN";
@@ -282,7 +282,7 @@ class MockLifecycleService {
    */
   void HandleSetServiceModeRequest(const lifecyclemgr::SetServiceModeRequest& request) {
     std::cout << "\n[MockLifecycleService] SetServiceModeRequest received!" << std::endl;
-    std::cout << "  OS Type: " << OsTypeToString(request.os_type()) << std::endl;
+    std::cout << "  OS Type: " << MwTypeToString(request.mw_type()) << std::endl;
     std::cout << "  Service Mode: " << ServiceModeToString(request.service_mode()) << std::endl;
     std::cout << "  Is Group: " << (request.is_group() ? "true" : "false") << std::endl;
 
