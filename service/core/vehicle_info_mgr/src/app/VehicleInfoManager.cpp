@@ -196,7 +196,7 @@ private:
         std::lock_guard<std::mutex> lock(m_dataMutex);
         m_currentData.timestamp = ts;
         m_currentData.signals[path] = value;
-        LOG_INFO << "[VehicleInfoManager] Received " << path << ": " << value << " at " << ts;
+        LOG_INFO << "[VehicleInfoManager] Received " << path << ": " << value.substr(0,10) << " at " << ts;
 
         m_buffer.push_back(m_currentData);
     }

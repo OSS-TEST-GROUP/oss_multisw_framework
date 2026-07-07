@@ -630,6 +630,12 @@ install(DIRECTORY
     DESTINATION bin/config/forest
 )
 
+# Install the forest directory
+install(DIRECTORY
+    config/security/
+    DESTINATION bin/config/security
+)
+
 # --- Unit Testing Setup ---
 if (BUILD_UNITTEST)
 	enable_testing()
