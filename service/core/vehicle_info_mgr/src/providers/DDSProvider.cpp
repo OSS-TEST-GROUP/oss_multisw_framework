@@ -705,6 +705,8 @@ void DDSProvider::pushToDataChannel(const std::string& path, const std::any& val
 {
     if (!data_channel_) return;
 
+    LOG_DEBUG << "DDSProvider: Pushing to channel -> Path: " << path << ", Value: " << any_to_string(value).substr(0,10);
+
     VehicleData data;
     data.path = path;
     data.value = value;
@@ -824,8 +826,6 @@ void DDSProvider::handleDiagGraphStruct(DataReader* reader)
             }
             diag_graph_struct_doc.AddMember("links", links_array, allocator);
 
-
-
             auto diag_graph_struct_ptr = std::make_shared<rapidjson::Document>(std::move(diag_graph_struct_doc));
             pushToDataChannel("Vehicle.ADS.Diagnostics.GraphStruct", diag_graph_struct_ptr, ms_since_epoch);
         }
@@ -858,7 +858,6 @@ void DDSProvider::handleDiagGraphStatus(DataReader* reader)
             {
                 rapidjson::Document node_doc;
                 node_doc.SetObject();
-
 
                 auto level = node.level();
                 std::string level_str;
@@ -1103,8 +1102,6 @@ void DDSProvider::handleDetectedObjects(DataReader* reader)
                 }
                 detected_object_doc.AddMember("classification", classification_array, allocator);
 
-
-
                 autoware_perception_msgs::msg::DetectedObjectKinematics kinematics = detected_object.kinematics();
                 rapidjson::Value kinematics_value = serializeDetectedObjectKinematics(kinematics, allocator);
                 detected_object_doc.AddMember("kinematics", kinematics_value, allocator);
@@ -1112,7 +1109,6 @@ void DDSProvider::handleDetectedObjects(DataReader* reader)
                 autoware_perception_msgs::msg::Shape shape = detected_object.shape_();
                 rapidjson::Value shape_value = serializeShape(shape, allocator);
                 detected_object_doc.AddMember("shape", shape_value, allocator);
-
 
                 detected_objects_doc.PushBack(detected_object_doc, allocator);
             }
@@ -1138,8 +1134,6 @@ void DDSProvider::handleSteeringFactorArray(DataReader* reader)
             std::vector<autoware_adapi_v1_msgs::msg::SteeringFactor> steering_factors = sample.factors();
             uint32_t count = steering_factors.size();
             pushToDataChannel("Vehicle.ADS.Planning.SteeringFactor.Count", count, ms_since_epoch);
-            LOG_DEBUG << "Vehicle.ADS.Planning.SteeringFactor.Count:" << count;
-
 
             for (const auto& factor : steering_factors)
             {
@@ -1215,7 +1209,6 @@ void DDSProvider::handleVelocityFactorArray(DataReader* reader)
             std::vector<autoware_adapi_v1_msgs::msg::VelocityFactor> velocity_factors = sample.factors();
             uint32_t count = velocity_factors.size();
             pushToDataChannel("Vehicle.ADS.Planning.VelocityFactor.Count", count, ms_since_epoch);
-            LOG_DEBUG << "Vehicle.ADS.Planning.VelocityFactor.Count:" << count;
 
             for (const auto& factor : velocity_factors)
             {
@@ -1274,12 +1267,6 @@ void DDSProvider::handleGnssOrientation(DataReader* reader)
             gnss_doc.AddMember("rmse_rotation_z", rapidjson::Value(std::to_string(sample.orientation().rmse_rotation_z()).c_str(), allocator), allocator);
 
             auto doc_ptr = std::make_shared<rapidjson::Document>(std::move(gnss_doc));
-            
-            rapidjson::StringBuffer buffer;
-            rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-            doc_ptr->Accept(writer);
-            LOG_INFO << "DDSProvider: Pushing to channel -> Path: Vehicle.ADS.GnssInsOrientation, Value: " << buffer.GetString();
-
             pushToDataChannel("Vehicle.ADS.GnssInsOrientation", doc_ptr);
         }
     }
@@ -1301,7 +1288,6 @@ void DDSProvider::handleTrajectory(DataReader* reader)
                 const std::vector<autoware_planning_msgs::msg::TrajectoryPoint> trajectory_points = sample.points();
                 size_t count = trajectory_points.size();
                 pushToDataChannel("Vehicle.ADS.Planning.Trajectory.PointCount", std::any(count), ms_since_epoch);
-                LOG_INFO << "DDSProvider: Pushing to channel -> Path: Vehicle.ADS.Planning.Trajectory.PointCount, Value: " << count;
 
                 for (const auto& p : trajectory_points) {
                     rapidjson::Document point_doc;
@@ -1340,12 +1326,6 @@ void DDSProvider::handleTrajectory(DataReader* reader)
                 }
 
                 auto doc_ptr = std::make_shared<rapidjson::Document>(std::move(trajectory_doc));
-
-                rapidjson::StringBuffer buffer;
-                rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-                doc_ptr->Accept(writer);
-                LOG_INFO << "DDSProvider: Pushing to channel -> Path: Vehicle.ADS.Planning.Trajectory.Points, Value: " << buffer.GetString();
-
                 pushToDataChannel("Vehicle.ADS.Planning.Trajectory.Points", doc_ptr, ms_since_epoch);
             } catch (const std::exception& e) {
                 LOG_ERROR << "Exception in trajectory parsing: " << e.what();
@@ -1376,14 +1356,8 @@ void DDSProvider::handleVehicleKinematics(DataReader* reader)
                 long long ms_since_epoch = getTimestampMs(sample.geographic_pose().header());
 
                 pushToDataChannel("Vehicle.CurrentLocation.Latitude", std::to_string(latitude), ms_since_epoch);
-                LOG_DEBUG << "Vehicle.CurrentLocation.Latitude:" << latitude;
-
                 pushToDataChannel("Vehicle.CurrentLocation.Longitude", std::to_string(longitude), ms_since_epoch);
-                LOG_DEBUG << "Vehicle.CurrentLocation.Longitude:" << longitude;
-
                 pushToDataChannel("Vehicle.CurrentLocation.Altitude", std::to_string(altitude), ms_since_epoch);
-                LOG_DEBUG << "Vehicle.CurrentLocation.Altitude:" << altitude;
-
 
                 // geographic_pose (개별 저장 + doc 포함)
                 rapidjson::Value geographic_pose_val = serializeGeoPoint(sample.geographic_pose().position(), allocator);
@@ -1408,7 +1382,6 @@ void DDSProvider::handleVehicleKinematics(DataReader* reader)
                 }
 
                 pushToDataChannel("Vehicle.CurrentLocation.Heading", std::to_string(heading_deg), pose_ms_since_epoch);
-                LOG_DEBUG << "Vehicle.CurrentLocation.Heading:" << heading_deg;
 
                 rapidjson::Value pose_val = serializePoseWithCovariance(sample.pose().pose_(), allocator);
                 pushToDataChannel("Vehicle.ADS.VehicleKinematics.Pose", toDocumentPtr(pose_val, allocator), pose_ms_since_epoch);
@@ -1429,7 +1402,6 @@ void DDSProvider::handleVehicleKinematics(DataReader* reader)
                 // Speed (m/s to km/h)
                 double speed_kmh = sample.twist().twist_().twist_().linear().x() * 3.6;
                 pushToDataChannel("Vehicle.Speed", std::to_string(speed_kmh), twist_ms);
-                LOG_DEBUG << "Vehicle.Speed:" << speed_kmh;
 
                 // Angular Velocity (rad/s to deg/s)
                 const double RAD_TO_DEG = 180.0 / 3.14159265358979323846;
@@ -1444,11 +1416,6 @@ void DDSProvider::handleVehicleKinematics(DataReader* reader)
 
                 // Entire kinematics document
                 auto doc_ptr = std::make_shared<rapidjson::Document>(std::move(doc));
-                rapidjson::StringBuffer buffer;
-                rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-                doc_ptr->Accept(writer);
-                LOG_INFO << "DDSProvider: Pushing to channel -> Path: Vehicle.ADS.VehicleKinematics, Value: " << buffer.GetString();
-
                 pushToDataChannel("Vehicle.ADS.VehicleKinematics", doc_ptr, ms_since_epoch);
             } catch (const std::exception& e) {
                 LOG_ERROR << "Exception in VehicleKinematics parsing: " << e.what();
@@ -1487,7 +1454,6 @@ void DDSProvider::handleVehicleStatus(DataReader* reader)
                         gear_val = "0"; 
 
                     pushToDataChannel("Vehicle.Powertrain.Transmission.SelectedGear", gear_val, ms_since_epoch);
-                    LOG_DEBUG << "Vehicle.Powertrain.Transmission.SelectedGear:" << gear_val;
                 }
 
                 if (turn != autoware_adapi_v1_msgs::msg::TurnIndicators_Constants::UNKNOWN) {
@@ -1501,7 +1467,6 @@ void DDSProvider::handleVehicleStatus(DataReader* reader)
                     }
                     pushToDataChannel("Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling", left_val, ms_since_epoch);
                     pushToDataChannel("Vehicle.Body.Lights.DirectionIndicator.Right.IsSignaling", right_val, ms_since_epoch);
-                    LOG_DEBUG << "DirectionIndicator: Left=" << left_val << ", Right=" << right_val;
                 }
 
                 if (hazard != autoware_adapi_v1_msgs::msg::HazardLights_Constants::UNKNOWN) {
@@ -1510,7 +1475,6 @@ void DDSProvider::handleVehicleStatus(DataReader* reader)
                         hazard_val = "true";
                     }
                     pushToDataChannel("Vehicle.Body.Lights.Hazard.IsSignaling", hazard_val, ms_since_epoch);
-                    LOG_DEBUG << "Vehicle.Body.Lights.Hazard.IsSignaling:" << hazard_val;
                 }
 
             } catch (const std::exception& e) {
@@ -1546,8 +1510,6 @@ void DDSProvider::handleRouteState(DataReader* reader)
                     state_val = "UNKNOWN"; 
 
                 pushToDataChannel("Vehicle.ADS.Route.RouteState", state_val, ms_since_epoch);
-                LOG_DEBUG << "Vehicle.ADS.Route.RouteState:" << state_val;
-
             } catch (const std::exception& e) {
                 LOG_ERROR << "Exception in RouteState parsing: " << e.what();
             }
@@ -1596,9 +1558,6 @@ void DDSProvider::handleRoute(DataReader* reader)
 
                 auto seg_ptr = std::make_shared<rapidjson::Document>(std::move(seg_doc));
                 pushToDataChannel("Vehicle.ADS.Route.Segments", seg_ptr, ms_since_epoch);
-
-                LOG_DEBUG << "Route updated. Start and Goal poses saved.";
-
             } catch (const std::exception& e) {
                 LOG_ERROR << "Exception in Route parsing: " << e.what();
             }
@@ -1647,8 +1606,6 @@ void DDSProvider::handleMrmState(DataReader* reader)
                     behavior_val = "UNKNOWN"; 
 
                 pushToDataChannel("Vehicle.ADS.Safety.MRM.Behavior", behavior_val, ms_since_epoch);
-                LOG_DEBUG << "MRM Status: " << state_val << ", Behavior: " << behavior_val;
-
             } catch (const std::exception& e) {
                 LOG_ERROR << "Exception in MrmState parsing: " << e.what();
             }
@@ -1670,8 +1627,6 @@ void DDSProvider::handleEmergency(DataReader* reader)
                 bool emergency = sample.emergency();
 
                 pushToDataChannel("Vehicle.ADS.IsEmergency", emergency ? "true" : "false", ms_since_epoch);
-                LOG_DEBUG << "Vehicle.ADS.IsEmergency:" << emergency;
-
             } catch (const std::exception& e) {
                 LOG_ERROR << "Exception in Emergency parsing: " << e.what();
             }
@@ -1708,16 +1663,10 @@ void DDSProvider::handleHazardStatus(DataReader* reader)
 
                 pushToDataChannel("Vehicle.ADS.Safety.HazardStatus.Level", level_str, ms_since_epoch);
                 pushToDataChannel("Vehicle.ADS.Safety.HazardStatus.IsEmergency", emergency ? "true" : "false", ms_since_epoch);
-                LOG_DEBUG << "Hazard Level: " << level_str << ", Emergency: " << emergency;
 
-                // 공통 헬퍼를 사용하여 각 fault 유형의 diagnostics를 직렬화 및 푸시
                 auto pushDiagFault = [&](const std::vector<diagnostic_msgs::msg::DiagnosticStatus>& diag_list,
                                         const std::string& channel_path) {
                     auto doc_ptr = serializeDiagnostics(diag_list);
-                    rapidjson::StringBuffer buf;
-                    rapidjson::Writer<rapidjson::StringBuffer> w(buf);
-                    doc_ptr->Accept(w);
-                    LOG_INFO << "DDSProvider: Pushing to channel -> Path: " << channel_path << ", Value: " << buf.GetString();
                     pushToDataChannel(channel_path, doc_ptr, ms_since_epoch);
                 };
 
@@ -1725,8 +1674,6 @@ void DDSProvider::handleHazardStatus(DataReader* reader)
                 pushDiagFault(hs.diag_safe_fault(),         "Vehicle.ADS.Safety.HazardStatus.SafeFault");
                 pushDiagFault(hs.diag_latent_fault(),       "Vehicle.ADS.Safety.HazardStatus.LatentFault");
                 pushDiagFault(hs.diag_single_point_fault(), "Vehicle.ADS.Safety.HazardStatus.SinglePointFault");
-                
-
             } catch (const std::exception& e) {
                 LOG_ERROR << "Exception in HazardStatus parsing: " << e.what();
             }
@@ -1826,11 +1773,7 @@ void DDSProvider::handleDynamicObjectArray(
             size_t object_count = objects.size();
 
             pushToDataChannel("Vehicle.ADS.Perception.DynamicObject.ObjectCount", std::any(object_count), ms_since_epoch);
-            LOG_INFO << "DDSProvider: DynamicObjectArray object count: " << object_count;
             
-
-
-
             rapidjson::Document dynamicObjects;
             dynamicObjects.SetArray();
 
@@ -1900,12 +1843,6 @@ void DDSProvider::handleDynamicObjectArray(
 
 
             auto dynamicObjects_ptr = std::make_shared<rapidjson::Document>(std::move(dynamicObjects));
-
-            rapidjson::StringBuffer buffer_dynamicObjects;
-            rapidjson::Writer<rapidjson::StringBuffer> writer_dynamicObjects(buffer_dynamicObjects);
-            dynamicObjects_ptr->Accept(writer_dynamicObjects);
-            LOG_INFO << "DDSProvider: Pushing to channel -> Path: Vehicle.ADS.Perception.DynamicObject.Objects, Value: " << buffer_dynamicObjects.GetString();
-
             pushToDataChannel("Vehicle.ADS.Perception.DynamicObject.Objects", dynamicObjects_ptr, ms_since_epoch);
         }
     }
