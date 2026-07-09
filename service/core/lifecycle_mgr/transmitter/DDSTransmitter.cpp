@@ -1,10 +1,23 @@
 #include "DDSTransmitter.hpp"
 
+#include <cstdlib>
+
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp>
 
 #include "logger/Log.hpp"
 
 namespace lifecycle_manager {
+
+namespace {
+// Per-board DDS domain isolation. Raw Fast-DDS ignores ROS_DOMAIN_ID (that is a
+// ROS2/rmw convention), so MMF reads its own env MMF_DDS_DOMAIN_ID (default 0).
+// Every MMF participant on a board (lifecycle_mgr / adsw_manager / ota /
+// diagnostics / dds_bridge) must use the SAME value, else core↔adsw DDS breaks.
+static int MmfDdsDomainId() {
+    if (const char* e = std::getenv("MMF_DDS_DOMAIN_ID")) return std::atoi(e);
+    return 0;
+}
+} // namespace
 
 DDSTransmitter::DDSTransmitter()
     : participant_(nullptr)
@@ -23,8 +36,8 @@ bool DDSTransmitter::Initialize(){
     // Set Shapes metadata
     pqos.properties().properties().emplace_back("fastdds.application.id", "SHAPES_DEMO", true);
     pqos.properties().properties().emplace_back("fastdds.application.metadata", "", true);
-    participant_ = DomainParticipantFactory::get_instance()->create_participant_with_default_profile(
-         nullptr, StatusMask::none());
+    participant_ = DomainParticipantFactory::get_instance()->create_participant(
+         MmfDdsDomainId(), PARTICIPANT_QOS_DEFAULT, nullptr, StatusMask::none());
     if (participant_ == nullptr)
     {
         LOG_ERROR("Participant initialization failed");

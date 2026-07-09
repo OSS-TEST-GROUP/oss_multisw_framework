@@ -80,7 +80,11 @@ bool DDSProtocol::Initialize() {
     StatusMask participant_mask = StatusMask::data_available();
     participant_mask << eprosima::fastdds::dds::StatusMask::subscription_matched();
 
-    participant_ = factory->create_participant_with_default_profile(this, participant_mask);
+    // Per-board DDS domain isolation (MMF_DDS_DOMAIN_ID, default 0). Raw Fast-DDS
+    // ignores ROS_DOMAIN_ID; must match the other MMF participants on the board.
+    int mmf_domain = 0;
+    if (const char* e = std::getenv("MMF_DDS_DOMAIN_ID")) mmf_domain = std::atoi(e);
+    participant_ = factory->create_participant(mmf_domain, PARTICIPANT_QOS_DEFAULT, this, participant_mask);
 
     std::optional<std::string> diag_idl_path = getEnvPath("DIAG_IDL_PATH");
 
