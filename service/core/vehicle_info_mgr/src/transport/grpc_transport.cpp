@@ -373,13 +373,15 @@ grpc::Status VISSServiceImpl::SubscribeRequest(grpc::ServerContext* context, con
 
     writer->Write(initial_response);
 
+    bool server_terminated = false;
     while (!context->IsCancelled()) {
         std::shared_ptr<PooledResponseMap> notification_doc;
         LOG_INFO << "Waiting subscription....id:" << subscriptionId;
-        responseChan->wait_and_pop(notification_doc); 
+        responseChan->wait_and_pop(notification_doc);
 
         if (!notification_doc || (notification_doc->HasMember("status") && (*notification_doc)["status"] == "terminated")) {
             LOG_INFO << "Exit loop on termination signal or null. " << subscriptionId;
+            server_terminated = true;
             break;
         }
 
@@ -410,7 +412,33 @@ grpc::Status VISSServiceImpl::SubscribeRequest(grpc::ServerContext* context, con
         }
         writer->Write(event_msg);
     }
-    
+
+    // Client-driven teardown: the stream ended by cancellation/disconnect, not
+    // by an explicit Unsubscribe. Previously nothing removed the Subscription
+    // in that case — the 50ms publisher loop kept process()ing it forever and
+    // pushed ~1/sec notifications into this responseChan that no one consumes,
+    // growing the queue (and pinning pooled documents) unbounded. Route an
+    // internal unsubscribe through the request queue so
+    // VssSubscriptionManager::removeSubscription() tears down the subscription
+    // and releases its queue. server_terminated means the server side already
+    // removed it (explicit unsubscribe path) — nothing left to clean.
+    if (!server_terminated && !subscriptionId.empty()) {
+        auto teardownChan = std::make_shared<ThreadSafeQueue<std::shared_ptr<PooledResponseMap>>>();
+        auto teardownRequest = pool_->acquire();
+        teardownRequest->requestId = request->requestid();
+        teardownRequest->responseChan = teardownChan;
+        teardownRequest->request_doc->SetObject();
+        rapidjson::Document::AllocatorType& td_alloc = teardownRequest->request_doc->GetAllocator();
+        teardownRequest->request_doc->AddMember("action", rapidjson::Value("unsubscribe", td_alloc), td_alloc);
+        teardownRequest->request_doc->AddMember("subscriptionId", rapidjson::Value(subscriptionId.c_str(), td_alloc), td_alloc);
+        teardownRequest->request_doc->AddMember("requestId", rapidjson::Value(request->requestid().c_str(), td_alloc), td_alloc);
+        requestQueue->push(teardownRequest);
+
+        std::shared_ptr<PooledResponseMap> teardown_resp;
+        teardownChan->wait_and_pop(teardown_resp);
+        LOG_INFO << "gRPC Subscription " << subscriptionId << " auto-unsubscribed on stream teardown.";
+    }
+
     LOG_INFO << "gRPC Subscription " << subscriptionId << " terminated.";
     return grpc::Status::OK;
 }

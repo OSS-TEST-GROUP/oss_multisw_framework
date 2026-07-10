@@ -21,6 +21,14 @@ struct PooledResponseMap : public rapidjson::Document {
     void reset() {
         // Reset the document to a null object, ready for reuse.
         this->SetObject();
+        // rapidjson's MemoryPoolAllocator is a bump allocator: Free() is a
+        // no-op and memory is reclaimed only by Clear(). SetObject() alone
+        // resets the DOM value but leaves every previously allocated chunk in
+        // place, so a pooled Document's allocator grows monotonically with
+        // each reuse — on the ~1s/subscription notification hot path this was
+        // an unbounded leak. Clear() releases the chunks; the empty object
+        // holds no allocator memory, so clearing here is safe.
+        this->GetAllocator().Clear();
     }
 };
 
@@ -55,6 +63,10 @@ struct RequestData {
         requestId.clear();
         if (request_doc) {
             request_doc->SetNull();
+            // Same MemoryPoolAllocator semantics as PooledResponseMap::reset():
+            // SetNull() drops the value but not the allocator chunks, so pooled
+            // RequestData accumulated every parsed request DOM across reuses.
+            request_doc->GetAllocator().Clear();
         }
         responseChan.reset();
     }
