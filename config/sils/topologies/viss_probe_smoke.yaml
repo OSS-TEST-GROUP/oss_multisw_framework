@@ -1,0 +1,24 @@
+# Phase 2 Topology Compiler smoke fixture -- valid.
+#
+# One vECU instance, no replicas: exercises the same viss_probe descriptor and
+# viss-request contract that service/sils/run_coordinator/run_phase1.sh already
+# drives directly. Topology Compiler should resolve this to exactly one
+# container with no validation errors (architecture v3 Final §9.4/§9.5, §11).
+
+topology: viss_probe_smoke
+
+run:
+  domain_strategy: inject     # inject | allocate -- Phase 2 supports inject only (§19-5 open)
+  domain_id: "0"              # must equal the SUT viss-server's VISS_DDS_DOMAIN_ID (§3.4/§18-B)
+  input_mode: live
+  allow_degraded: false
+
+deployment:
+  backend: docker
+
+vecus:
+  - name: viss-probe
+    descriptor: service/sils/vecu/descriptors/viss_probe.yaml
+
+clock:
+  mode: wall
