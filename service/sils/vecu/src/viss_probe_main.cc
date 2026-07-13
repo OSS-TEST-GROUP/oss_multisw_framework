@@ -41,6 +41,14 @@ const std::string kTopic("/VIN/Vehicle");
 std::atomic<bool> g_stop{false};
 std::atomic<int> g_matched_count{0};
 
+// vECU identity (Descriptor's instance_id, e.g. viss_probe.yaml's "viss-probe-1")
+// -- distinct from run_id (which identifies one Coordinator run, not one vECU).
+// Only used for the participant name and sidecar trace metadata, never the DDS
+// payload itself: the wire contract is whatever the real VISS server parses,
+// and inventing extra payload fields would break that (architecture v3 Final
+// §7.3 -- identity goes in sidecar trace, not payload).
+std::string g_instance_id = "unknown";
+
 void OnSignal(int /*signum*/) {
     g_stop.store(true);
 }
@@ -73,9 +81,9 @@ int GetEnvIntOr(const char* name, int fallback) {
 // is WallClock only (no TickGrant/TickComplete).
 void TraceEvent(const std::string& run_id, const std::string& event, int seq,
                 const std::string& extra_json_fields = "") {
-    std::cout << "{\"run_id\":\"" << run_id << "\",\"event\":\"" << event
-              << "\",\"seq\":" << seq << ",\"wall_time_ms\":" << WallTimeMs()
-              << ",\"topic\":\"" << kTopic << "\""
+    std::cout << "{\"run_id\":\"" << run_id << "\",\"instance_id\":\"" << g_instance_id
+              << "\",\"event\":\"" << event << "\",\"seq\":" << seq
+              << ",\"wall_time_ms\":" << WallTimeMs() << ",\"topic\":\"" << kTopic << "\""
               << (extra_json_fields.empty() ? "" : ("," + extra_json_fields)) << "}"
               << std::endl;
 }
@@ -133,6 +141,7 @@ int main() {
     std::signal(SIGTERM, OnSignal);
 
     const std::string run_id = GetEnvOr("SILS_RUN_ID", "local");
+    g_instance_id = GetEnvOr("SILS_VECU_INSTANCE_ID", "viss-probe-1");
     const int period_ms = GetEnvIntOr("SILS_VISS_PROBE_PERIOD_MS", 500);
     const std::string response_topic_prefix =
         GetEnvOr("SILS_VISS_PROBE_RESPONSE_TOPIC_PREFIX", "sils/viss_probe/response");
@@ -155,7 +164,11 @@ int main() {
     TraceEvent(run_id, "run_start", 0, "\"domain_id\":" + std::to_string(domain_id));
 
     DomainParticipantQos pqos;
-    pqos.name("sils_vecu_viss_probe");
+    // Suffixed with instance_id so multiple vECU instances (e.g. a future
+    // wheelspeed_ecu ×4 fleet, architecture v3 Final §11) show up as distinct,
+    // greppable participants instead of colliding under one fixed name
+    // (§9.5's "동일 domain 내 participant/instance 이름 중복 금지" check).
+    pqos.name("sils_vecu_viss_probe:" + g_instance_id);
     DomainParticipant* participant =
         DomainParticipantFactory::get_instance()->create_participant(
             domain_id, pqos, nullptr, StatusMask::none());

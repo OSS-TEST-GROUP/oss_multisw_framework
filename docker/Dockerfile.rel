@@ -136,6 +136,63 @@ ENTRYPOINT ["/oss/entrypoint.sh"]
 FROM runtime-mmf-core-${TARGETARCH} AS runtime-mmf-core
 
 ###################################################################################
+# SiLS vECU (Phase 1 vertical-slice PoC) - x86_64
+#
+# BUILD_SILS builds under the same output tree as core (service/CMakeLists.txt
+# adds sils/ unconditionally, outside the BUILD_EXTENSION switch -- see
+# docs/sils-virtual-ecu-architecture-v3.md §18-C), so this stage mirrors
+# runtime-mmf-core-${TARGETARCH} but ships only the two sils_vecu_* binaries
+# and a single-process entrypoint instead of the full core service fan-out.
+###################################################################################
+FROM runtime AS runtime-mmf-sils-vecu-x86_64
+
+ARG BUILD_TYPE=Release
+
+COPY --chown=ossuser:ossuser output/x86_64/${BUILD_TYPE}/core/bin/sils_vecu_viss_probe /oss/bin/sils_vecu_viss_probe
+COPY --chown=ossuser:ossuser output/x86_64/${BUILD_TYPE}/core/bin/sils_vecu_viss_verify /oss/bin/sils_vecu_viss_verify
+COPY --chown=ossuser:ossuser output/x86_64/lib /oss/lib
+COPY --chown=ossuser:ossuser output/x86_64/${BUILD_TYPE}/core/lib /tmp/lib
+COPY --chown=ossuser:ossuser docker/entrypoint/sils_vecu_entrypoint.sh /oss/entrypoint.sh
+
+WORKDIR /oss
+USER ossuser
+
+RUN cp -rpa /tmp/lib/*.so* /oss/lib/ \
+    && rm -rf /tmp/lib
+
+ENV LD_LIBRARY_PATH=/oss/lib
+
+ENTRYPOINT ["/oss/entrypoint.sh"]
+
+###################################################################################
+# SiLS vECU (Phase 1 vertical-slice PoC) - aarch64
+###################################################################################
+FROM runtime AS runtime-mmf-sils-vecu-aarch64
+
+ARG BUILD_TYPE=Release
+
+COPY --chown=ossuser:ossuser output/aarch64/${BUILD_TYPE}/core/bin/sils_vecu_viss_probe /oss/bin/sils_vecu_viss_probe
+COPY --chown=ossuser:ossuser output/aarch64/${BUILD_TYPE}/core/bin/sils_vecu_viss_verify /oss/bin/sils_vecu_viss_verify
+COPY --chown=ossuser:ossuser output/aarch64/lib /oss/lib
+COPY --chown=ossuser:ossuser output/aarch64/${BUILD_TYPE}/core/lib /tmp/lib
+COPY --chown=ossuser:ossuser docker/entrypoint/sils_vecu_entrypoint.sh /oss/entrypoint.sh
+
+WORKDIR /oss
+USER ossuser
+
+RUN cp -rpa /tmp/lib/*.so* /oss/lib/ \
+    && rm -rf /tmp/lib
+
+ENV LD_LIBRARY_PATH=/oss/lib
+
+ENTRYPOINT ["/oss/entrypoint.sh"]
+
+###################################################################################
+# SiLS vECU - Multi-arch selector
+###################################################################################
+FROM runtime-mmf-sils-vecu-${TARGETARCH} AS runtime-mmf-sils-vecu
+
+###################################################################################
 # ROS-mmf base (formerly Dockerfile.ros)
 #
 # Shared base for the ext-ros2 runtime stages. Installs ROS 2 Humble +

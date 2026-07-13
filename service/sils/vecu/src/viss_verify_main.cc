@@ -34,6 +34,15 @@ namespace {
 // contract id: viss-request (config/sils/contracts/mmf-endpoints.yaml)
 const std::string kTopic("/VIN/Vehicle");
 
+// Informational only: which vECU instance_id this verify invocation was scoped
+// to (if any). Not used to filter samples -- the real VISS envelope payload
+// carries no instance identity to filter on (architecture v3 Final §7.3: identity
+// lives in sidecar trace/participant name, never the wire payload) -- this
+// verifier still counts any valid-envelope sample on the topic, matching
+// Phase 1's single-vECU scope. Kept for symmetry with viss_probe_main.cc so
+// trace lines from both sides are greppable by the same field.
+std::string g_expected_instance_id = "";
+
 std::string GetEnvOr(const char* name, const std::string& fallback) {
     const char* v = std::getenv(name);
     return v ? std::string(v) : fallback;
@@ -57,7 +66,8 @@ long long WallTimeMs() {
 
 void TraceEvent(const std::string& run_id, const std::string& event,
                 const std::string& extra_json_fields = "") {
-    std::cout << "{\"run_id\":\"" << run_id << "\",\"event\":\"" << event
+    std::cout << "{\"run_id\":\"" << run_id << "\",\"expected_instance_id\":\""
+              << g_expected_instance_id << "\",\"event\":\"" << event
               << "\",\"wall_time_ms\":" << WallTimeMs() << ",\"topic\":\"" << kTopic << "\""
               << (extra_json_fields.empty() ? "" : ("," + extra_json_fields)) << "}"
               << std::endl;
@@ -136,6 +146,7 @@ private:
 
 int main() {
     const std::string run_id = GetEnvOr("SILS_RUN_ID", "local");
+    g_expected_instance_id = GetEnvOr("SILS_VECU_INSTANCE_ID", "");
     const int timeout_sec = GetEnvIntOr("SILS_VISS_VERIFY_TIMEOUT_SEC", 10);
     const int min_samples = GetEnvIntOr("SILS_VISS_VERIFY_MIN_SAMPLES", 1);
 
@@ -155,7 +166,10 @@ int main() {
     TraceEvent(run_id, "verify_start", "\"domain_id\":" + std::to_string(domain_id));
 
     DomainParticipantQos pqos;
-    pqos.name("sils_vecu_viss_verify");
+    // Suffixed with run_id (not instance_id -- one verifier checks a whole run,
+    // not one vECU instance) so concurrent runs on the same domain don't collide
+    // on participant name (§9.5).
+    pqos.name("sils_vecu_viss_verify:" + run_id);
     DomainParticipant* participant =
         DomainParticipantFactory::get_instance()->create_participant(
             domain_id, pqos, nullptr, StatusMask::none());

@@ -1,0 +1,43 @@
+# Example adsw_manager registration entry for the SiLS vECU viss_probe
+# container (runtime-mmf-sils-vecu image, docker/Dockerfile.rel).
+#
+# This is a REFERENCE snippet, not wired into the real
+# service/extension/ros2/adsw_manager/config/saved-service-list.yaml --
+# merge the `containers:` entry below into that file's `specs[].containers`
+# list (or a SiLS-specific speclist) to actually register it.
+#
+# Unlike the Autoware example in that file (ROS_DOMAIN_ID=42, isolated FROM
+# MMF on purpose), this vECU MUST share the SUT's domain (architecture v3
+# Final §3.4/§18-B, P5) -- VISS_DDS_DOMAIN_ID here is deliberately the SAME
+# value the real viss-server container is configured with, not a different
+# isolated one.
+#
+# recovery: MANUAL, same reasoning as the Autoware example -- a SiLS run's
+# Run Coordinator (service/sils/run_coordinator/run_phase1.sh, or its future
+# docker-backend variant) controls start/stop explicitly; ALWAYS would fight
+# it on stop.
+
+containers:
+  - name: sils-vecu-viss-probe
+    image: "registry.obigo.com/oss/oss-mmf-sils-vecu:latest"
+    container-type: "docker"
+    extra_args:
+      - "--network"
+      - "host"
+      - "-e"
+      - "VISS_DDS_DOMAIN_ID=0"          # must match the SUT's viss-server domain
+      - "-e"
+      - "SILS_RUN_ID=sils-example-run"     # identifies this run, not the vECU itself
+      - "-e"
+      - "SILS_VECU_INSTANCE_ID=viss-probe-1"  # the vECU's own identity (participant name + trace)
+      - "-e"
+      - "SILS_VISS_PROBE_PERIOD_MS=500"
+    services:
+      - package: ""
+        name: "sils-vecu-viss-probe"
+        launchfile: ""
+        type: "NORMAL"
+        recovery: "MANUAL"
+        enabled: "true"
+        max: "0"
+        exec_type: "container"
