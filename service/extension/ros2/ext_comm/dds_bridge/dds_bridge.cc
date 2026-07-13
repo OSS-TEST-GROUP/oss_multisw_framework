@@ -1,5 +1,6 @@
 #include "dds_bridge.h"
 
+#include <cstdlib>
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp>
 #include <fastdds/dds/subscriber/SampleInfo.hpp>
 #include <fastdds/dds/topic/Topic.hpp>
@@ -82,7 +83,12 @@ bool DdsBridge::Initialize(const std::string& idl_root) {
     // property has been observed to subtly affect cross-process
     // matching in some FastDDS versions.
 
-    participant_ = factory->create_participant(0, qos);
+    // Per-board DDS domain isolation (MMF_DDS_DOMAIN_ID, default 0). The bridge
+    // must sit on the SAME domain as the MMF raw services it forwards; keep the
+    // board's rosbridge/ros2 (ROS_DOMAIN_ID) at the same value too.
+    int mmf_domain = 0;
+    if (const char* e = std::getenv("MMF_DDS_DOMAIN_ID")) mmf_domain = std::atoi(e);
+    participant_ = factory->create_participant(mmf_domain, qos);
     if (!participant_) {
         std::cerr << "[bridge] create_participant failed\n";
         return false;

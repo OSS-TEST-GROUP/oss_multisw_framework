@@ -56,9 +56,13 @@ int main(int argc, char* argv[]) {
 
     eprosima::fastdds::dds::DomainParticipantQos participant_qos;
     participant_qos.name("adsw_manager_participant");
+    // Per-board DDS domain isolation (MMF_DDS_DOMAIN_ID, default 0). Must match
+    // lifecycle_mgr's value on the board.
+    int mmf_domain = 0;
+    if (const char* e = std::getenv("MMF_DDS_DOMAIN_ID")) mmf_domain = std::atoi(e);
     eprosima::fastdds::dds::DomainParticipant* participant =
         eprosima::fastdds::dds::DomainParticipantFactory::get_instance()
-            ->create_participant(0, participant_qos);
+            ->create_participant(mmf_domain, participant_qos);
 
     std::shared_ptr<ServiceRegistry>    registry           = std::make_shared<ServiceRegistry>();
     std::shared_ptr<AppController>      app_controller     = std::make_shared<AppController>();

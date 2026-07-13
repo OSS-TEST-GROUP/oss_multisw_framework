@@ -2,6 +2,7 @@
 #define OTAM_DDS_IMPL_H_
 
 #include "otam_dds.h"
+#include <cstdlib>
 #include <iostream>
 #include <mutex>
 #include <fastdds/dds/domain/DomainParticipant.hpp>
@@ -80,7 +81,10 @@ public:
         // the bridge's writes.
         participant_qos.properties().properties().emplace_back(
             "fastdds.type_propagation", "disabled");
-        participant_ = factory->create_participant(0, participant_qos);
+        // Per-board DDS domain isolation (MMF_DDS_DOMAIN_ID, default 0).
+        int mmf_domain = 0;
+        if (const char* e = std::getenv("MMF_DDS_DOMAIN_ID")) mmf_domain = std::atoi(e);
+        participant_ = factory->create_participant(mmf_domain, participant_qos);
         if (!participant_) {
             throw std::runtime_error("OtamDdsParticipant: Failed to create shared DomainParticipant");
         }
