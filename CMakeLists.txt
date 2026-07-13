@@ -25,6 +25,7 @@ set ( OUTPUT_DIR ${PROJECT_TOP_DIR}/output/${CMAKE_SYSTEM_PROCESSOR}/${CMAKE_BUI
 set ( EXTENSION_PLATFORM "ROS2" CACHE STRING "Target platform for extension framework" )
 set ( BUILD_EXTENSION FALSE CACHE STRING "Build the extension framework for target platform" )
 set ( BUILD_UNITTEST FALSE CACHE STRING "Build the unittest" )
+set ( BUILD_SILS FALSE CACHE STRING "Build the SiLS vECU Phase 1 vertical-slice PoC" )
 
 ## Output directory Options
 if (NOT BUILD_EXTENSION)

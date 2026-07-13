@@ -1,0 +1,37 @@
+# Phase 1 Vertical PoC vECU — VISS /VIN/Vehicle probe
+#
+# 아키텍처 §9.2 Descriptor + Phase 1 Scope Gate(§17) 준수:
+#   - Docker backend 하나, WallClock 하나, Contract Catalog entry 하나, endpoint 하나.
+#   - lockstep/replay/fault/plant/relay 없음 (Phase 1 명시적 제외 범위).
+#
+# 동작: WallClock 주기마다 viss-request 계약으로 VissRequestTopic 샘플 1개 publish.
+#       목적은 "endpoint match + sample 필드 일치 + start/stop/cleanup" 증명.
+
+ecu: viss_probe
+instance_id: viss-probe-1
+fidelity: L0                       # Interface Stub — endpoint matching 증명
+
+clock: { mode: wall }              # Phase 1 은 WallClock 고정
+
+buses:
+  - name: mmf-viss
+    type: dds
+    endpoints:
+      - contract_id: viss-request  # config/sils/contracts/mmf-endpoints.yaml
+        direction: publish
+
+behavior:
+  type: stub                       # 고정/템플릿 payload 발행
+  spec:
+    period_ms: 500
+    # VissRequestTopic.payload 는 VISS 서버의 RequestListener::on_data_available
+    # (service/core/vehicle_info_mgr/src/transport/dds_transport.cpp) 가 기대하는
+    # 실제 envelope 형태를 따른다: {"topic": <response topic>, "request": <inner JSON 문자열>}.
+    # 내부 request 는 별도 escape 된 JSON 문자열이어야 한다 — bare inner JSON 만 보내면
+    # "payload is not a valid JSON or has missing fields" 로 SUT 에서 거부된다.
+    response_topic_prefix: "sils/viss_probe/response"
+    request_action: get
+    request_path: "Vehicle.Speed"
+
+plant: { type: none }
+scenario: {}                       # Phase 1 결함주입 없음
