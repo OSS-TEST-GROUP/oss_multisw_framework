@@ -29,6 +29,8 @@
 # Usage:
 #   run_phase1.sh start --backend local  --bin-dir <dir> [--domain <id>] [--run-id <id>] [--instance-id <id>]
 #   run_phase1.sh start --backend docker --image <image> --verify-bin <path> [--domain <id>] [--run-id <id>] [--instance-id <id>]
+#   run_phase1.sh start --from-resolved <resolved-run.yaml> [--container-index N] --bin-dir <dir> ...
+#   run_phase1.sh start ... --dry-run       # print the resolved plan and exit, launch nothing
 #   run_phase1.sh cleanup --run-id <id>
 #
 # --run-id identifies one Coordinator run (Start->verify->Stop lifecycle); it is
@@ -36,6 +38,11 @@
 # descriptors/viss_probe.yaml) is the vECU's identity -- distinct so a future
 # multi-instance fleet (§11) can tell "which run" apart from "which vECU"
 # in trace/participant names.
+#
+# --from-resolved reads backend/domain/instance-id from a Topology Compiler
+# resolved-run.yaml (tools/sils/topology_compiler/compile.py), so the deployment
+# plan isn't re-typed on the CLI. Explicit flags override the resolved values;
+# --bin-dir/--image (where built artifacts live) stay CLI-only.
 
 set -u
 
@@ -183,8 +190,8 @@ start_docker() {
 # --- start: common flow (dispatches to a backend, then readiness+verify) ----
 
 cmd_start() {
-    local backend="local" bin_dir="" image="" verify_bin_arg="" domain="90" run_id=""
-    local instance_id="viss-probe-1"
+    local backend="" bin_dir="" image="" verify_bin_arg="" domain="" run_id=""
+    local instance_id="" from_resolved="" container_index=0 dry_run=false
     local ready_timeout_sec=5
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -195,11 +202,46 @@ cmd_start() {
             --domain) domain="$2"; shift 2 ;;
             --run-id) run_id="$2"; shift 2 ;;
             --instance-id) instance_id="$2"; shift 2 ;;
+            --from-resolved) from_resolved="$2"; shift 2 ;;
+            --container-index) container_index="$2"; shift 2 ;;
+            --dry-run) dry_run=true; shift ;;
             *) echo "start: unknown arg $1" >&2; exit 2 ;;
         esac
     done
+
+    # Topology Compiler integration: a resolved-run.yaml (tools/sils/topology_compiler)
+    # is the source of truth for WHAT to run (backend, domain, which vECU instance).
+    # Explicit CLI flags still WIN over it, so an operator can override a single field
+    # without editing the artifact. Paths that aren't in the plan -- where the built
+    # binaries (--bin-dir) or image (--image) actually live -- stay CLI-only.
+    if [[ -n "${from_resolved}" ]]; then
+        local helper shell_vars
+        helper="$(dirname "$0")/../../../tools/sils/topology_compiler/resolved_to_shell.py"
+        if ! shell_vars="$(python3 "${helper}" "${from_resolved}" --index "${container_index}")"; then
+            echo "start: failed to read resolved-run '${from_resolved}' (index ${container_index})" >&2
+            echo "${shell_vars}" >&2
+            exit 2
+        fi
+        eval "${shell_vars}"
+        [[ -z "${backend}"     ]] && backend="${RESOLVED_BACKEND}"
+        [[ -z "${domain}"      ]] && domain="${RESOLVED_DOMAIN}"
+        [[ -z "${instance_id}" ]] && instance_id="${RESOLVED_INSTANCE_ID}"
+    fi
+
+    # Defaults for anything still unset after (optional) resolved-run + CLI.
+    [[ -z "${backend}"     ]] && backend="local"
+    [[ -z "${domain}"      ]] && domain="90"
+    [[ -z "${instance_id}" ]] && instance_id="viss-probe-1"
     if [[ -z "${run_id}" ]]; then
         run_id="sils-$(date +%s)-$$"
+    fi
+
+    if [[ "${dry_run}" == true ]]; then
+        # Print the resolved plan and exit WITHOUT launching anything -- lets an
+        # operator (or CI, or this sandbox with no binaries/daemon) confirm what a
+        # run would do. Not a trace file event: nothing was started.
+        echo "{\"event\":\"dry_run\",\"run_id\":\"${run_id}\",\"backend\":\"${backend}\",\"domain_id\":\"${domain}\",\"instance_id\":\"${instance_id}\",\"from_resolved\":\"${from_resolved}\",\"container_index\":${container_index}}"
+        exit 0
     fi
 
     local tfile

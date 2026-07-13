@@ -12,6 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import compile as tc  # noqa: E402  (path insert must come first)
+import resolved_to_shell as rts  # noqa: E402
 
 ROOT = tc.repo_root()
 TESTDATA = Path(__file__).resolve().parent / "testdata"
@@ -99,6 +100,46 @@ def test_expand_replicas_single_no_params_keeps_descriptor_instance_id():
     assert len(instances) == 1
     assert instances[0]["container_name"] == "viss-probe"
     assert instances[0]["instance_id"] == "viss-probe-1"
+
+
+def test_resolved_to_shell_roundtrip(tmp_out=Path("/tmp/sils-test-compile-out")):
+    # Compile the real smoke topology to disk, then confirm resolved_to_shell
+    # extracts exactly what the Run Coordinator needs to feed --from-resolved.
+    topology_path = ROOT / "config/sils/topologies/viss_probe_smoke.yaml"
+    resolved_run, _ssl, errors, _w = tc.compile_topology(
+        topology_path, ROOT,
+        "config/sils/contracts/mmf-endpoints.yaml",
+        "config/sils/qos/qos-profiles.yaml",
+        "registry.obigo.com/oss/oss-mmf-sils-vecu:latest",
+    )
+    assert errors == []
+    tmp_out.mkdir(parents=True, exist_ok=True)
+    import yaml
+    resolved_path = tmp_out / "resolved-run.yaml"
+    resolved_path.write_text(yaml.safe_dump(resolved_run, sort_keys=False))
+
+    lines, err = rts.emit(resolved_path, 0)
+    assert err is None, f"unexpected error: {err}"
+    joined = "\n".join(lines)
+    assert "RESOLVED_BACKEND='docker'" in joined
+    assert "RESOLVED_DOMAIN='0'" in joined
+    assert "RESOLVED_INSTANCE_ID='viss-probe-1'" in joined
+    assert "RESOLVED_CONTAINER_COUNT='1'" in joined
+
+
+def test_resolved_to_shell_out_of_range():
+    resolved_path = Path("/tmp/sils-test-compile-out/resolved-run.yaml")
+    # Depends on the roundtrip test having written the file; call it if missing.
+    if not resolved_path.exists():
+        test_resolved_to_shell_roundtrip()
+    lines, err = rts.emit(resolved_path, 5)
+    assert err is not None and "out of range" in err
+    # Run-level vars must still be emitted so the caller can report the count.
+    assert any(l.startswith("RESOLVED_CONTAINER_COUNT=") for l in lines)
+
+
+def test_resolved_to_shell_sh_quote_escapes_single_quote():
+    assert rts.sh_quote("a'b") == "'a'\\''b'"
 
 
 def main() -> int:
