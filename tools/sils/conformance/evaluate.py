@@ -103,6 +103,64 @@ def first_index(events: list[dict], name: str) -> int | None:
     return None
 
 
+def analyze_lockstep(events: list[dict]) -> tuple[dict, list[str]]:
+    """Classify the run's clock mode and, for lockstep runs, check tick determinism
+    (§7/§8.2). Returns (clock_info, violations).
+
+    A run is lockstep iff it carries `tick_grant` events (emitted by the ClockMaster).
+    Determinism requires: tick sequences strictly +1 from 1 (no gaps/dupes), sim_time
+    advancing by a constant dt each grant, every granted tick closed by a barrier /
+    tick_complete, and no tick_timeout. A `wall` run (no tick_grant) is reported as
+    non-deterministic by construction and gets no lockstep violations.
+    """
+    grants = [e for e in events if e.get("event") == "tick_grant"]
+    if not grants:
+        return {"mode": "wall", "ticks": 0, "deterministic": False}, []
+
+    violations: list[str] = []
+    seqs = [e.get("tick_seq") for e in grants]
+
+    # strictly increasing by 1 from 1
+    expected = list(range(1, len(grants) + 1))
+    if seqs != expected:
+        violations.append(
+            f"lockstep tick sequence not 1..N by 1 (§8.2): got {seqs}"
+        )
+
+    # sim_time advances by a constant dt
+    sims = [e.get("sim_time_ns") for e in grants]
+    dt_decl = grants[0].get("dt_ns")
+    if all(isinstance(s, (int, float)) for s in sims) and len(sims) >= 2:
+        deltas = {sims[i + 1] - sims[i] for i in range(len(sims) - 1)}
+        if len(deltas) != 1:
+            violations.append(
+                f"lockstep sim_time not advancing by a constant dt (§8.1): deltas={sorted(deltas)}"
+            )
+        elif dt_decl is not None and next(iter(deltas)) != dt_decl:
+            violations.append(
+                f"lockstep sim_time step {next(iter(deltas))} != declared dt_ns {dt_decl}"
+            )
+
+    # every granted tick is closed (a barrier for it, or >=1 tick_complete)
+    barrier_seqs = {e.get("tick_seq") for e in events if e.get("event") == "tick_barrier"}
+    complete_seqs = {e.get("tick_seq") for e in events if e.get("event") == "tick_complete"}
+    for s in seqs:
+        if s not in barrier_seqs and s not in complete_seqs:
+            violations.append(f"lockstep tick {s} granted but never completed (open barrier, §8.2)")
+    # a timeout is a hard determinism break
+    if any(e.get("event") == "tick_timeout" for e in events):
+        to = sorted({e.get("tick_seq") for e in events if e.get("event") == "tick_timeout"})
+        violations.append(f"lockstep tick_timeout at {to} -- barrier did not close (§8.2)")
+
+    clock = {
+        "mode": "lockstep",
+        "ticks": len(grants),
+        "dt_ns": dt_decl,
+        "deterministic": not violations,
+    }
+    return clock, violations
+
+
 def evaluate_run(events: list[dict], path: str) -> dict:
     """Reduce one run's merged event stream to a verdict + violations."""
     run_id = dominant_run_id(events)
@@ -168,6 +226,10 @@ def evaluate_run(events: list[dict], path: str) -> dict:
             "(§12.1: one run == one domain)"
         )
 
+    # --- clock mode & lockstep determinism (§7/§8) --------------------------
+    clock, lockstep_violations = analyze_lockstep(events)
+    violations.extend(lockstep_violations)
+
     # --- identity (probe carries the vECU instance_id) ----------------------
     instance_ids = sorted({e["instance_id"] for e in events if e.get("instance_id")})
 
@@ -190,6 +252,7 @@ def evaluate_run(events: list[dict], path: str) -> dict:
         "verdict": verdict,
         "conformant": conformant,
         "duration_sec": duration_sec,
+        "clock": clock,
         "fidelity_evidenced": fidelity,
         "evidence": {
             "endpoints_matched": endpoints_matched,

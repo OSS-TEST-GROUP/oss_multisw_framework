@@ -179,6 +179,85 @@ def test_fleet_completeness_missing_instance():
     assert any("missing instance" in v and "wheelspeed-FR" in v for v in fleet["fleet_violations"]), fleet
 
 
+def lockstep_events(seqs=(1, 2, 3), dt=1_000_000, sims=None, complete=None,
+                    barrier=None, timeout=None, run_id="lk", instance_id="viss-probe-1"):
+    """A PASSED lockstep run: N TickGrants (sim advancing by dt) each closed by a
+    tick_complete + tick_barrier, plus the usual L0 evidence and run_pass."""
+    if sims is None:
+        sims = [s * dt for s in seqs]
+    complete = list(seqs) if complete is None else complete
+    barrier = list(seqs) if barrier is None else barrier
+    evs = [
+        {"run_id": run_id, "event": "run_start", "wall_time_ms": 1000, "domain_id": 90,
+         "backend": "local", "instance_id": instance_id},
+        {"run_id": run_id, "instance_id": instance_id, "event": "ready", "wall_time_ms": 1002},
+        {"run_id": run_id, "event": "clock_start", "wall_time_ms": 1003, "mode": "lockstep"},
+    ]
+    wt = 1010
+    for i, s in enumerate(seqs):
+        evs.append({"run_id": run_id, "event": "tick_grant", "wall_time_ms": wt,
+                    "tick_seq": s, "sim_time_ns": sims[i], "dt_ns": dt}); wt += 1
+        evs.append({"run_id": run_id, "instance_id": instance_id, "event": "publish_intent",
+                    "wall_time_ms": wt, "tick_seq": s, "sim_time_ns": sims[i]}); wt += 1
+        if s in complete:
+            evs.append({"run_id": run_id, "instance_id": instance_id, "event": "tick_complete",
+                        "wall_time_ms": wt, "tick_seq": s}); wt += 1
+        if s in barrier:
+            evs.append({"run_id": run_id, "event": "tick_barrier", "wall_time_ms": wt, "tick_seq": s}); wt += 1
+    if timeout is not None:
+        evs.append({"run_id": run_id, "event": "tick_timeout", "wall_time_ms": wt, "tick_seq": timeout}); wt += 1
+    evs += [
+        {"run_id": run_id, "instance_id": instance_id, "event": "endpoint_matched", "wall_time_ms": wt},
+        {"run_id": run_id, "expected_instance_id": instance_id, "event": "sample_received", "wall_time_ms": wt + 1},
+        {"run_id": run_id, "expected_instance_id": instance_id, "event": "verify_pass", "wall_time_ms": wt + 2},
+        {"run_id": run_id, "event": "run_pass", "wall_time_ms": wt + 3},
+    ]
+    return evs
+
+
+def test_wall_run_reports_wall_clock():
+    r = ev.evaluate_run(ev.parse_trace(write_trace(passing_events()))[0], "x")
+    assert r["clock"]["mode"] == "wall"
+    assert r["clock"]["deterministic"] is False
+    assert r["conformant"] is True  # wall is fine, just not deterministic
+
+
+def test_lockstep_deterministic_is_conformant():
+    r = ev.evaluate_run(ev.parse_trace(write_trace(lockstep_events()))[0], "x")
+    assert r["verdict"] == "PASSED", r
+    assert r["clock"]["mode"] == "lockstep"
+    assert r["clock"]["ticks"] == 3
+    assert r["clock"]["deterministic"] is True, r["violations"]
+    assert r["conformant"] is True
+
+
+def test_lockstep_sequence_gap_flagged():
+    r = ev.evaluate_run(ev.parse_trace(write_trace(lockstep_events(seqs=(1, 2, 4))))[0], "x")
+    assert r["clock"]["deterministic"] is False
+    assert any("tick sequence not 1..N" in v for v in r["violations"]), r["violations"]
+    assert r["conformant"] is False
+
+
+def test_lockstep_nonconstant_dt_flagged():
+    # sim_time jumps that aren't a constant step
+    r = ev.evaluate_run(ev.parse_trace(write_trace(
+        lockstep_events(seqs=(1, 2, 3), sims=[1_000_000, 2_000_000, 5_000_000])))[0], "x")
+    assert any("constant dt" in v for v in r["violations"]), r["violations"]
+
+
+def test_lockstep_open_barrier_flagged():
+    # tick 3 granted but never completed/barriered
+    r = ev.evaluate_run(ev.parse_trace(write_trace(
+        lockstep_events(seqs=(1, 2, 3), complete=[1, 2], barrier=[1, 2])))[0], "x")
+    assert any("tick 3 granted but never completed" in v for v in r["violations"]), r["violations"]
+    assert r["clock"]["deterministic"] is False
+
+
+def test_lockstep_timeout_flagged():
+    r = ev.evaluate_run(ev.parse_trace(write_trace(lockstep_events(timeout=2)))[0], "x")
+    assert any("tick_timeout" in v for v in r["violations"]), r["violations"]
+
+
 def test_fleet_completeness_unexpected_instance():
     results = [ev.evaluate_run(ev.parse_trace(write_trace(passing_events(instance_id="rogue")))[0], "x")]
     fleet = ev.evaluate_fleet(results, expected_instance_ids=["wheelspeed-FL"])
