@@ -32,6 +32,7 @@
 #include <fastdds/dds/topic/TypeSupport.hpp>
 
 #include "VissRequestPubSubTypes.hpp"
+#include "clock_source.hpp"
 
 namespace {
 
@@ -198,31 +199,49 @@ int main() {
 
     TraceEvent(run_id, "ready", 0);
 
-    int seq = 0;
-    while (!g_stop.load()) {
-        ++seq;
-        VissRequestTopic sample;
-        sample.payload(BuildRequestPayload(seq, request_action, request_path, response_topic_prefix));
+    // Clock port (§8): WallClock (default) or LockstepClock, selected by
+    // SILS_CLOCK_MODE. The tick loop below is identical for both -- the mode
+    // lives entirely behind IClockSource (WallClock preserves the Phase 1
+    // free-running cadence; Lockstep blocks on a ClockMaster TickGrant and
+    // replies TickComplete via clock->TickDone).
+    const std::string clock_mode = GetEnvOr("SILS_CLOCK_MODE", "wall");
+    std::unique_ptr<sils::IClockSource> clock = sils::MakeClockSource(
+        clock_mode, period_ms, &g_stop, participant, run_id, g_instance_id);
+    TraceEvent(run_id, "clock_start", 0, "\"mode\":\"" + std::string(clock->mode()) + "\"");
 
-        TraceEvent(run_id, "publish_intent", seq,
+    // Publish one VISS request sample for a tick (identical wire behavior in both
+    // clock modes -- only WHEN it fires differs).
+    auto publish_one = [&](uint64_t seq) {
+        VissRequestTopic sample;
+        sample.payload(BuildRequestPayload(static_cast<int>(seq), request_action,
+                                           request_path, response_topic_prefix));
+        TraceEvent(run_id, "publish_intent", static_cast<int>(seq),
                    "\"matched_count\":" + std::to_string(g_matched_count.load()));
         writer->write(&sample);
-        TraceEvent(run_id, "publish_result", seq);
+        TraceEvent(run_id, "publish_result", static_cast<int>(seq));
+    };
 
-        for (int waited_ms = 0; waited_ms < period_ms && !g_stop.load(); waited_ms += 50) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(std::min(50, period_ms - waited_ms)));
-        }
+    sils::TickInfo tick;
+    uint64_t last_seq = 0;
+    while (clock->WaitForNextTick(tick)) {
+        publish_one(tick.seq);
+        clock->TickDone(tick);  // lockstep: sends TickComplete; wall: no-op
+        last_seq = tick.seq;
     }
 
-    TraceEvent(run_id, "run_stopping", seq);
+    TraceEvent(run_id, "run_stopping", static_cast<int>(last_seq));
 
-    // Cleanup order mirrors DDSTransport::~DDSTransport() (dds_transport.cpp):
-    // datawriter -> publisher -> topic -> participant.
-    publisher->delete_datawriter(writer);
-    participant->delete_publisher(publisher);
-    participant->delete_topic(topic);
+    // In lockstep the clock source created its own tick-control reader/writer on
+    // this participant, so tear ALL contained entities down in one shot (the
+    // probe's own writer/publisher/topic + the clock's endpoints) before deleting
+    // the participant -- delete_participant fails with a precondition error if any
+    // contained entity survives. delete_contained_entities first also stops the
+    // grant reader's listener before we free the clock object.
+    (void)writer; (void)publisher; (void)topic;  // owned by participant; freed below
+    participant->delete_contained_entities();
+    clock.reset();
     DomainParticipantFactory::get_instance()->delete_participant(participant);
 
-    TraceEvent(run_id, "run_stopped", seq);
+    TraceEvent(run_id, "run_stopped", static_cast<int>(last_seq));
     return 0;
 }
