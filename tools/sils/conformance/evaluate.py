@@ -177,7 +177,6 @@ def analyze_staging(events: list[dict]) -> tuple[dict, list[str]]:
     if not frozen:
         return {"input_mode": "none"}, []
 
-    violations: list[str] = []
     received = [e["recv_seq"] for e in events
                 if e.get("event") == "input_received" and "recv_seq" in e]
     dropped = {e["recv_seq"] for e in events
@@ -189,38 +188,43 @@ def analyze_staging(events: list[dict]) -> tuple[dict, list[str]]:
         if isinstance(rs, list):
             all_frozen.extend(rs)
 
-    # no input consumed twice
+    # §7.2 defines local-staged determinism as "consumption ORDER fixed" -- these
+    # three checks are the reproducibility invariant and set `deterministic`.
+    order_violations: list[str] = []
     seen = set()
     dups = {s for s in all_frozen if s in seen or seen.add(s)}
     if dups:
-        violations.append(f"staging consumed input(s) {sorted(dups)} in more than one tick (§7.3)")
-
-    # consumed in reception order (the local-staged determinism invariant)
+        order_violations.append(f"staging consumed input(s) {sorted(dups)} in more than one tick (§7.3)")
     if all_frozen != sorted(all_frozen):
-        violations.append("staging not in reception order: frozen recv_seqs across ticks "
-                          "are not non-decreasing (§7.3)")
-
-    # can't freeze what wasn't received
+        order_violations.append("staging not in reception order: frozen recv_seqs across ticks "
+                                "are not non-decreasing (§7.2)")
     recv_set = set(received)
     phantom = sorted(set(all_frozen) - recv_set)
     if phantom:
-        violations.append(f"staging froze never-received input(s) {phantom} (§7.3)")
+        order_violations.append(f"staging froze never-received input(s) {phantom} (§7.3)")
 
-    # every received input must be consumed or explicitly dropped
+    # Input loss (received but never consumed) is a SEPARATE, completeness/policy
+    # concern (§7.3 late-sample policy), not an order-determinism break -- it still
+    # fails conformance, but doesn't flip `deterministic`.
+    completeness_violations: list[str] = []
     lost = sorted(recv_set - set(all_frozen) - dropped)
     if lost:
-        violations.append(f"received input(s) {lost} never staged into a tick nor dropped "
-                          "(declare a late-sample policy, §7.3)")
+        head = lost if len(lost) <= 10 else lost[:10] + ["..."]
+        completeness_violations.append(
+            f"{len(lost)} received input(s) never staged into a tick nor dropped "
+            f"{head} -- declare a late-sample policy or pace the clock so input lands "
+            "in ticks (§7.2/§7.3)")
 
     staging = {
         "input_mode": "local-staged",
         "inputs_received": len(received),
         "inputs_staged": len(all_frozen),
         "inputs_dropped": len(dropped),
+        "inputs_unstaged": len(lost),
         "ticks_with_input": len(frozen),
-        "deterministic": not violations,
+        "deterministic": not order_violations,
     }
-    return staging, violations
+    return staging, order_violations + completeness_violations
 
 
 def evaluate_run(events: list[dict], path: str) -> dict:

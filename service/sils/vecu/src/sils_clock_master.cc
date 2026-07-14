@@ -116,6 +116,12 @@ int main(int argc, char** argv) {
     const int participants = ArgInt(argc, argv, "--participants", 1);
     const int ticks = ArgInt(argc, argv, "--ticks", 10);
     const int dt_ms = ArgInt(argc, argv, "--dt-ms", 10);
+    // Minimum WALL time between grants. 0 = free-running (grant as fast as the
+    // barrier closes) -- fine for pure vECU lockstep. Set it when a wall-clock
+    // input source must land across ticks: a free-running clock races through all
+    // ticks in ms, so wall-clock input arrives after the run and never stages
+    // (§7.2). Wall-paced lockstep makes the run span the input arrival window.
+    const int tick_interval_ms = ArgInt(argc, argv, "--tick-interval-ms", 0);
     const int tick_timeout_ms = ArgInt(argc, argv, "--tick-timeout-ms", 5000);
     const int startup_timeout_ms = ArgInt(argc, argv, "--startup-timeout-ms", 10000);
     const long long dt_ns = static_cast<long long>(dt_ms) * 1000000LL;
@@ -181,7 +187,13 @@ int main(int argc, char** argv) {
     }
 
     int rc = 0;
+    auto next_grant_at = std::chrono::steady_clock::now();
     for (int i = 1; i <= ticks; ++i) {
+        // Wall-pacing: don't grant the next tick before its scheduled wall time.
+        if (tick_interval_ms > 0) {
+            std::this_thread::sleep_until(next_grant_at);
+            next_grant_at += std::chrono::milliseconds(tick_interval_ms);
+        }
         const uint64_t seq = static_cast<uint64_t>(i);
         const long long sim = static_cast<long long>(i) * dt_ns;
 

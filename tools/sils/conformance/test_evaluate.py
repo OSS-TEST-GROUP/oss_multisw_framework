@@ -279,9 +279,14 @@ def test_staging_phantom_input_flagged():
 
 
 def test_staging_lost_input_flagged():
-    # received 6, never frozen, not dropped
+    # received 6, never frozen, not dropped. Loss is a completeness/policy issue
+    # (§7.3), NOT an order-determinism break: order stays deterministic, but the
+    # run is still non-conformant and reports inputs_unstaged.
     r = _stg(staging_events(received=(1, 2, 3, 4, 5, 6)))
     assert any("never staged into a tick nor dropped" in v for v in r["violations"]), r["violations"]
+    assert r["staging"]["inputs_unstaged"] == 1
+    assert r["staging"]["deterministic"] is True, "order preserved -> still deterministic"
+    assert r["conformant"] is False, "but loss still fails conformance"
 
 
 def test_staging_dropped_input_ok():
