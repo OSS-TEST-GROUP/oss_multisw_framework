@@ -38,12 +38,20 @@ if(NOT SILS_VISS_GENERATED_SRCS)
         "top-level idl/dds generation step.")
 endif()
 
+# fastddsgen can emit duplicate register_*_type_identifier symbols across its
+# TypeObjectSupport files when IDLs share a typedef; the SUT hits this and works
+# around it the same way (service/core/vehicle_info_mgr/CMakeLists.txt). A single
+# IDL (VissRequest) links clean today, so this is preventive parity for when more
+# IDLs join the sils build -- harmless on the GNU ld / Linux target.
+set(SILS_ALLOW_MULTIDEF -Wl,--allow-multiple-definition)
+
 add_executable(sils_vecu_viss_probe
     src/viss_probe_main.cc
     ${SILS_VISS_GENERATED_SRCS}
 )
 target_include_directories(sils_vecu_viss_probe PRIVATE ${SILS_VISS_GEN_DIR})
 target_link_libraries(sils_vecu_viss_probe PRIVATE fastdds fastcdr)
+target_link_options(sils_vecu_viss_probe PRIVATE ${SILS_ALLOW_MULTIDEF})
 
 add_executable(sils_vecu_viss_verify
     src/viss_verify_main.cc
@@ -51,5 +59,6 @@ add_executable(sils_vecu_viss_verify
 )
 target_include_directories(sils_vecu_viss_verify PRIVATE ${SILS_VISS_GEN_DIR})
 target_link_libraries(sils_vecu_viss_verify PRIVATE fastdds fastcdr)
+target_link_options(sils_vecu_viss_verify PRIVATE ${SILS_ALLOW_MULTIDEF})
 
 install(TARGETS sils_vecu_viss_probe sils_vecu_viss_verify RUNTIME DESTINATION bin)

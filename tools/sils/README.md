@@ -2,7 +2,7 @@
 
 MMF(oss_multisw_framework) 위에서 **SiLS(Software-in-the-Loop) 가상 ECU** 를 컴파일·실행·판정·회귀검사하는 도구 모음이다. 아키텍처 확정본은 **v3 Final** 문서(`docs/sils-virtual-ecu-architecture-v3.md`)이며, 아래 코드의 `§n` 주석은 모두 그 문서의 절 번호를 가리킨다.
 
-> **검증 상태 (중요).** 이 디렉터리의 Python/shell 도구 계층은 **샌드박스에서 실제 실행·테스트까지 완료**되어 있다(아래 "테스트" 참조). 반면 `service/sils/` 의 C++ vECU 본체(probe/verify)와 Docker 이미지는 FastDDS/fastddsgen 툴체인과 docker 데몬이 있는 환경에서만 빌드·기동 검증이 가능하며, **아직 그 환경에서의 빌드 검증은 하지 않았다.** 도구 계층은 이 사실을 전제로, 바이너리 없이도 dry-run·사전 캡처 trace 로 전 구간을 검증할 수 있게 설계되었다.
+> **검증 상태 (중요).** 이 디렉터리의 Python/shell 도구 계층은 **샌드박스에서 실제 실행·테스트까지 완료**되어 있다(아래 "테스트" 참조). `service/sils/` 의 C++ vECU 본체(probe/verify)는 FastDDS/fastddsgen 툴체인이 있는 Linux 환경에서 **컴파일 빌드가 성공함을 확인**했다(x86_64). 다만 실제 DDS 샘플 왕복(vECU ↔ VISS SUT)과 Docker 이미지 기동은 **아직 미확인**이다. 도구 계층은 바이너리 없이도 dry-run·사전 캡처 trace 로 전 구간을 검증할 수 있게 설계되었다.
 
 ---
 
@@ -101,7 +101,9 @@ python3 tools/sils/conformance/capture_golden.py \
     --input-mode replay --meta catalog_version=0.1.0
 
 # (실제 DDS 왕복: FastDDS 툴체인 필요)
-./build.sh --build-sils
+# --build-sils 는 "SiLS 를 빌드 대상에 포함"만 정하고, 아키텍처는 --aarch64 가 정한다(직교).
+./build.sh --build-sils              # x86_64 (amd64, 기본)
+./build.sh --aarch64 --build-sils    # arm64 (aarch64 크로스 빌드)
 bash service/sils/run_coordinator/run_phase1.sh start --backend local --bin-dir <bindir>
 ```
 
@@ -134,4 +136,4 @@ bash tools/sils/ci/test_sils_ci.sh
 
 Phase 1 은 vECU 한 개가 `/VIN/Vehicle` 로 VISS 요청을 publish 하고 독립 검증기가 왕복을 확인하는 최소 수직 슬라이스다(§17 Scope Gate). 도구 계층은 이미 다중 인스턴스(replicas)·domain pool·회귀 루프를 지원한다.
 
-**남은 실검증**: FastDDS/fastddsgen 툴체인 환경에서 `./build.sh --build-sils` 로 C++ probe/verify 를 빌드하고, `run_phase1.sh start --backend local` 로 실제 DDS 샘플 왕복을 확인하는 것. 여기까지 오면 도구 계층이 만들어 온 trace/verdict/golden 파이프라인이 실제 런타임과 맞물린다.
+**남은 실검증**: C++ probe/verify 컴파일 빌드는 확인됐다(x86_64). 남은 것은 `run_phase1.sh start --backend local` 로 **실제 DDS 샘플 왕복**(vECU 가 `/VIN/Vehicle` 로 publish → verify 가 수신)을 확인하고, Docker 백엔드로 컨테이너 기동을 확인하는 것. 여기까지 오면 도구 계층이 만들어 온 trace/verdict/golden 파이프라인이 실제 런타임과 맞물린다.
