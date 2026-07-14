@@ -32,6 +32,7 @@
 #   run_phase1.sh start --from-resolved <resolved-run.yaml> [--container-index N] --bin-dir <dir> ...
 #   run_phase1.sh start ... --dry-run       # print the resolved plan and exit, launch nothing
 #   run_phase1.sh cleanup --run-id <id>
+#   run_phase1.sh reap [--max-age-sec SEC] [--lease-dir DIR]   # recover orphaned runs (§14.4)
 #
 # --run-id identifies one Coordinator run (Start->verify->Stop lifecycle); it is
 # NOT the vECU's own name. --instance-id (default "viss-probe-1", matching
@@ -145,6 +146,69 @@ cmd_cleanup() {
     fi
     do_teardown "${run_id}"
     exit 0
+}
+
+# --- reap: recover orphaned runs (§14.4) ------------------------------------
+
+# An external supervisor / CI finalizer runs this to recover runs whose
+# coordinator died mid-run (SIGKILL, runner eviction, ...) without tearing down:
+# a run is orphaned when its coordinator process (COORD_PID) is gone, or the run
+# is older than --max-age-sec (pid-reuse fallback). For each orphan it re-runs
+# the same idempotent do_teardown (stop container/process, release domain lease,
+# remove state) and also reaps expired domain leases whose state file is already
+# gone. Safe to run repeatedly and concurrently with live runs (a live run's
+# COORD_PID is alive, so it's skipped).
+cmd_reap() {
+    local max_age_sec=7200 lease_dir=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --max-age-sec) max_age_sec="$2"; shift 2 ;;
+            --lease-dir) lease_dir="$2"; shift 2 ;;
+            *) echo "reap: unknown arg $1" >&2; exit 2 ;;
+        esac
+    done
+
+    local now reaped=0
+    now="$(date +%s)"
+
+    shopt -s nullglob
+    local state
+    for state in "${STATE_DIR}"/*.state; do
+        local run_id coord_pid created
+        run_id="$(basename "${state}" .state)"
+        # Read fields in a subshell so per-file vars don't leak between iterations.
+        coord_pid="$(source "${state}" 2>/dev/null; echo "${COORD_PID:-}")"
+        created="$(source "${state}" 2>/dev/null; echo "${CREATED:-0}")"
+
+        local orphan=false reason=""
+        if [[ -n "${coord_pid}" ]] && ! kill -0 "${coord_pid}" 2>/dev/null; then
+            orphan=true; reason="coordinator pid ${coord_pid} gone"
+        elif (( now - created > max_age_sec )); then
+            orphan=true; reason="age $((now - created))s > max ${max_age_sec}s"
+        fi
+
+        if [[ "${orphan}" == true ]]; then
+            trace "${run_id}" "orphan_detected" "\"reason\":\"${reason}\"" \
+                | tee -a "$(trace_file "${run_id}")"
+            do_teardown "${run_id}"
+            trace "${run_id}" "aborted_orphaned" "\"reason\":\"${reason}\"" \
+                | tee -a "$(trace_file "${run_id}")"
+            reaped=$((reaped + 1))
+        fi
+    done
+    shopt -u nullglob
+
+    # Also drop expired domain leases whose state file is already gone (e.g. state
+    # removed but a stale lease lingered) -- domain_lease reap is TTL-based and
+    # idempotent.
+    if [[ -n "${lease_dir}" ]]; then
+        python3 "$(lease_helper)" --lease-dir "${lease_dir}" reap >/dev/null 2>&1 || true
+    else
+        python3 "$(lease_helper)" reap >/dev/null 2>&1 || true
+    fi
+
+    echo "# reaped ${reaped} orphaned run(s)" >&2
+    echo "${reaped}"
 }
 
 # The backend start_* functions run in the CURRENT shell (NOT `$(...)` command
@@ -322,7 +386,12 @@ cmd_start() {
     # State file is created HERE (truncate once), before allocation/dispatch, so
     # the lease line is present from the moment a domain is leased -- any later
     # teardown (even a start failure) can then release it. Backends append.
-    : > "$(state_file "${run_id}")"
+    # COORD_PID/CREATED let `reap` (§14.4) detect this run as orphaned if this
+    # coordinator process dies mid-run without tearing down.
+    {
+        echo "COORD_PID=$$"
+        echo "CREATED=$(date +%s)"
+    } > "$(state_file "${run_id}")"
 
     if [[ -n "${domain_pool}" ]]; then
         local alloc_args=(allocate --pool "${domain_pool}" --ttl "${lease_ttl}" --run-id "${run_id}")
@@ -427,8 +496,9 @@ main() {
     case "${sub}" in
         start) cmd_start "$@" ;;
         cleanup) cmd_cleanup "$@" ;;
+        reap) cmd_reap "$@" ;;
         *)
-            echo "usage: $0 {start|cleanup} [args...]" >&2
+            echo "usage: $0 {start|cleanup|reap} [args...]" >&2
             exit 2
             ;;
     esac
