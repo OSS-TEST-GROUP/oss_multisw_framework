@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SiLS–MORAI Simulator 연동 아키텍처 검토</title>
+<style>
+:root{--bg:#0e1420;--panel:#151e2e;--panel2:#1a2639;--ink:#e9eef7;--mut:#9ca9be;--line:#2b3850;--blue:#69a7ff;--green:#78dfbd;--yellow:#ffd276;--red:#ff8585;--table:#202d43}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Apple SD Gothic Neo","Noto Sans KR",Roboto,sans-serif;line-height:1.67;font-size:15.5px}.wrap{display:grid;grid-template-columns:285px minmax(0,1fr);max-width:1450px;margin:auto}.toc{position:sticky;top:0;height:100vh;overflow:auto;padding:27px 17px;border-right:1px solid var(--line);background:var(--panel)}.toc h2{font-size:12px;letter-spacing:.1em;color:var(--mut);margin:0 0 13px}.toc a{display:block;text-decoration:none;color:var(--mut);padding:6px 10px;border-radius:7px;font-size:13px}.toc a:hover{color:var(--ink);background:var(--panel2)}main{min-width:0;padding:40px 54px 110px}h1{font-size:31px;line-height:1.25;margin:0 0 17px}h2{font-size:21px;margin:48px 0 15px;padding-top:14px;border-top:1px solid var(--line);scroll-margin-top:14px}h3{font-size:17px;margin:27px 0 10px;color:#d3ddf0}h4{font-size:15px;color:var(--green)}p{margin:11px 0}a{color:var(--blue)}strong{color:#f5f7fc}code{font-family:"SF Mono",ui-monospace,Menlo,monospace;background:var(--panel2);color:#a9d8ff;padding:2px 6px;border-radius:5px;font-size:12.8px}blockquote{margin:16px 0;padding:12px 18px;background:var(--panel);border-left:3px solid var(--blue);border-radius:0 8px 8px 0;color:var(--mut)}pre{overflow:auto;background:#0a101a;border:1px solid var(--line);border-radius:11px;padding:16px 18px;color:#bfe8d9;font-family:"SF Mono",ui-monospace,Menlo,monospace;font-size:12.5px;line-height:1.52}pre code{background:none;color:inherit;padding:0}.table{overflow:auto;margin:17px 0}table{width:100%;border-collapse:collapse;font-size:13.6px}th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top}th{background:var(--table);color:#dce6f8}tr:nth-child(even) td{background:var(--panel)}ul,ol{padding-left:24px}li{margin:5px 0}.meta{color:var(--mut);font-size:13px;margin-bottom:20px}.badge{display:inline-block;padding:4px 10px;margin:0 5px 6px 0;border:1px solid var(--line);border-radius:999px;background:var(--panel2)}.decision{border:1px solid #355d55;background:#142a29;border-radius:11px;padding:16px 18px}.critical{color:var(--red)}.high{color:var(--yellow)}footer{margin-top:55px;padding-top:18px;border-top:1px solid var(--line);color:var(--mut);font-size:13px}@media(max-width:900px){.wrap{grid-template-columns:1fr}.toc{display:none}main{padding:26px 18px 80px}}::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:#2d3b55;border-radius:8px}
+</style>
+</head>
+<body><div class="wrap">
+<nav class="toc">
+<h2>목차 · MORAI Integration</h2>
+<a href="#s1">1. 검토 결론</a><a href="#s2">2. 선결 의사결정</a>
+<a href="#s3">3. Control/Data Plane</a><a href="#s4">4. 현재 MMF 접점</a>
+<a href="#s5">5. 시간 동기화</a><a href="#s6">6. 좌표·단위 계약</a>
+<a href="#s7">7. 네트워크·성능</a><a href="#s8">8. 안전·진단</a>
+<a href="#s9">9. 재현성</a><a href="#s10">10. 개발 단계</a>
+<a href="#s11">11. 공급사 질문</a><a href="#s12">12. 리스크와 Gate</a>
+<a href="#s13">13. 참고 자료</a>
+</nav>
+<main>
+<div class="meta"><span class="badge">Architecture Review</span><span class="badge">SiLS × MORAI</span><span class="badge">2026-07-14</span></div>
+<h1>SiLS–MORAI Simulator 연동 아키텍처 검토</h1>
+<blockquote>대상: <code>oss_multisw_framework</code> SiLS와 MORAI 차량 시뮬레이터 연동<br>범위: 차량 제어/상태, 센서, 시간 동기화, 시나리오 자동화, 네트워크, 시험·운영</blockquote>
+
+<h2 id="s1">1. 검토 결론</h2>
+<div class="decision"><strong>MORAI를 외부 Plant/Sensor Simulator로 두고 검증 중인 한양대 UDP–ROS2 Bridge를 재사용한다.</strong> SiLS는 Bridge를 외부 runtime component로 관리하며, K-Autoware 표준 타입이 누락된 endpoint에만 선택적 Contract Adapter를 둔다. 최초 구현은 <code>WallClock + live</code> 폐루프로 제한한다.</div>
+<p>단순 ROS/UDP 브리지로 정의하면 차량 동역학의 중복 계산, 시간축 불일치, 좌표 변환 오류와 대용량 센서 병목이 뒤늦게 드러날 수 있다. 가장 먼저 확정할 것은 통신 프로토콜이 아니라 <strong>차량 상태의 단일 권위자</strong>와 <strong>시간 진행 방식</strong>이다.</p>
+<pre>                              Run Coordinator
+                    ┌──────────────┴──────────────┐
+                    │ 실행/준비/시나리오/종료 제어 │
+                    │ MSC · gRPC · ROS service    │
+                    └──────────────┬──────────────┘
+                                   ▼
+┌────────────────┐ ROS2/DDS  ┌────────────────────┐ ROS2/DDS ┌──────────────────┐
+│ K-Autoware/MMF │ ◀────────▶│ Contract Adapter / │◀────────▶│ 한양대 UDP–ROS2  │
+│ SUT/vECU       │           │ Bridge Supervisor  │          │ Bridge           │
+└────────────────┘           └────────────────────┘          └────────┬─────────┘
+                                                                    │ UDP
+                                                                    ▼
+                                                             ┌──────────────┐
+                                                             │ MORAI SIM    │
+                                                             └──────────────┘</pre>
+
+<h2 id="s2">2. 연동 전에 결정할 사항</h2>
+<h3>2.1 차량 동역학 소유권</h3>
+<div class="table"><table><thead><tr><th>구성</th><th>동역학 소유자</th><th>MORAI 역할</th><th>판단</th></tr></thead><tbody>
+<tr><td>A. MORAI Plant</td><td>MORAI</td><td>차량 물리, 환경, 센서</td><td><strong>초기 권장</strong></td></tr>
+<tr><td>B. External Plant</td><td>MMF FMU/IPlant</td><td>시각화, 환경, 센서 렌더링</td><td>동역학 FMU 검증 목적</td></tr>
+</tbody></table></div>
+<p>A안에서는 ADSW가 조향·가속·제동·기어를 보내고 MORAI가 pose·velocity·acceleration·gear를 반환한다. B안에서는 MMF가 계산한 pose를 Ego Ghost Mode 등으로 MORAI에 주입한다. 어느 경우든 MORAI와 MMF가 동시에 차량 위치와 속도를 계산해서는 안 된다.</p>
+<pre><code>simulator:
+  kind: morai
+  vehicle_state_authority: morai   # morai | external-plant
+  time_mode: wall                  # wall | synchronous</code></pre>
+<h3>2.2 연동 성공 기준</h3>
+<ul><li>Coordinator가 MORAI readiness와 scenario 상태를 판정한다.</li><li>고정 scenario를 load/reset하고 Ego 초기 상태를 재현한다.</li><li>제어 publisher는 run당 하나만 존재한다.</li><li>command timeout 시 합의된 safe command로 전환한다.</li><li>상태에 source/receive timestamp와 sequence가 존재한다.</li><li>좌표, yaw, 속도, 조향 golden sample을 통과한다.</li><li>MORAI 종료와 network 단절을 run failure로 처리하고 정리한다.</li></ul>
+
+<h2 id="s3">3. Control Plane과 Data Plane 분리</h2>
+<h3>3.1 Control Plane</h3>
+<p>MSC, gRPC 또는 ROS service로 simulator 실행 확인, map/scenario load, Ego/센서 설정, reset/start/pause/stop과 종료를 관리한다. 제품 문서의 기능이 설치 버전과 라이선스에서 실제 제공되는지는 capability spike로 확인한다.</p>
+<h3>3.2 Data Plane</h3>
+<div class="table"><table><thead><tr><th>방향</th><th>데이터</th><th>단계</th></tr></thead><tbody>
+<tr><td>MMF → MORAI</td><td>steering, accelerator/throttle, brake, gear</td><td>P0</td></tr>
+<tr><td>MORAI → MMF</td><td>pose, velocity, acceleration, yaw, gear</td><td>P0</td></tr>
+<tr><td>MORAI → MMF</td><td>GPS, IMU, object, traffic light</td><td>P1</td></tr>
+<tr><td>MORAI → MMF</td><td>Camera, LiDAR, Radar</td><td>P2</td></tr>
+</tbody></table></div>
+<h3>3.3 프로토콜 판단</h3>
+<ul><li><strong>ROS/ROS bridge:</strong> 메시지 기반 상태·센서. ROS1/ROS2와 custom <code>morai_msgs</code> 호환성 확인.</li><li><strong>UDP:</strong> 제어·상태·고빈도 센서. schema, sequence, loss, fragmentation, endian, port 관리 필요.</li><li><strong>MSC/gRPC/API:</strong> 시나리오와 lifecycle용. 고빈도 센서 경로로 사용하지 않는다.</li><li><strong>CAN:</strong> ECU fidelity가 필요할 때 장비, DBC와 라이선스 확인 후 도입한다.</li></ul>
+<h3>3.4 2024-12-09 협의 내용의 현재 해석</h3>
+<p>당시 MORAI 회신은 일반/Semantic/Instance Camera는 <code>CompressedImage</code>, Depth는 <code>Image</code>, RADAR는 <code>morai_msgs/RadarDetections</code>, LiDAR는 <code>PointCloud2</code>, GPS는 <code>morai_msgs/GPSMessage</code>, IMU는 <code>Imu</code>이며 ROS2/DDS는 공식 미지원이라는 내용이었다.</p>
+<p>이는 당시 납품 버전 기준선으로 보존하되 현재 기능으로 단정하면 안 된다. 2026-07 확인 시 MORAI 공식 GitHub에는 ROS2 메시지와 example 저장소가 공개되어 있고 <code>CtrlCmd</code>, <code>EgoVehicleStatus</code>, <code>GPSMessage</code>, <code>RadarDetections</code> 등이 존재한다.</p>
+<blockquote>공개 ROS2 저장소 존재가 납품 제품의 공식 지원이나 K-Autoware 직접 호환을 의미하지 않는다. 대상 build의 ROS2 지원·유지보수·QoS를 공급사에 다시 확인한다.</blockquote>
+<p>ROS2/DDS 직접 통신에는 동일 schema/version, type name/hash와 CDR, topic/namespace, QoS, <code>ROS_DOMAIN_ID</code>, discovery/RMW 호환성, timestamp/frame이 모두 맞아야 한다. 한양대 Bridge가 변환을 이미 검증했다면 별도 Adapter를 중복 구현하지 않고 Supervisor/Contract Validator만 둔다.</p>
+
+<h3>3.5 Sensor 데이터 포맷 Gap</h3>
+<div class="table"><table><thead><tr><th>Sensor</th><th>K-Autoware 요구</th><th>MORAI 제공</th><th>판정 및 Adapter 요구</th></tr></thead><tbody>
+<tr><td>Camera</td><td><code>sensor_msgs/Image</code></td><td>일반/Semantic/Instance: <code>CompressedImage</code><br>Depth: <code>Image</code></td><td class="high"><strong>부분 불일치.</strong> 압축 해제 후 Image republish, encoding/step/endian/timestamp 보존</td></tr>
+<tr><td>RADAR</td><td><code>radar_msgs/RadarTracks</code></td><td><code>morai_msgs/RadarDetections</code></td><td class="critical"><strong>의미·구조 불일치.</strong> tracker 또는 MORAI tracked output 필요</td></tr>
+<tr><td>LiDAR</td><td><code>sensor_msgs/PointCloud2</code></td><td><code>sensor_msgs/PointCloud2</code></td><td>타입 일치. fields/frame/time/intensity/ring/endian 검증</td></tr>
+<tr><td>GNSS</td><td><code>sensor_msgs/NavSatFix</code></td><td><code>morai_msgs/GPSMessage</code></td><td class="high"><strong>타입 불일치.</strong> status/covariance/altitude datum 변환</td></tr>
+<tr><td>IMU</td><td><code>sensor_msgs/Imu</code></td><td><code>sensor_msgs/Imu</code></td><td>타입 일치. frame/unit/gravity/covariance 검증</td></tr>
+</tbody></table></div>
+<h4>Camera</h4><p>Depth의 <code>Image</code>는 일반 RGB 요구를 대체하지 않는다. RGB/Semantic/Instance에는 decode가 필요하며 <code>rgb8/bgr8/mono8/16UC1/32FC1</code> 등 encoding, optical frame, source timestamp, semantic palette를 계약한다. perception이 calibration을 쓰면 요구 목록에 없는 <code>CameraInfo</code>도 endpoint로 추가한다.</p>
+<h4>RADAR</h4><p><code>RadarDetections[]</code>를 이름만 바꿔 <code>RadarTracks[]</code>로 만들면 안 된다. RadarTrack은 stable UUID, position, velocity, acceleration, size, classification과 covariance를 요구한다. MORAI가 이를 제공하지 않으면 tracked output 요청, 별도 tracker, 또는 K-Autoware 입력 변경 중 하나를 선택한다. unknown covariance를 0으로 채우면 오차 없음으로 오해될 수 있다.</p>
+<h4>LiDAR</h4><p><code>header.frame_id</code>, TF, point/row step, x/y/z/intensity/ring/return/time fields, datatype, byte order, 좌표축, NaN과 <code>is_dense</code>를 golden capture로 비교한다.</p>
+<h4>GNSS</h4><p>MORAI <code>GPSMessage</code>의 latitude/longitude/altitude를 변환하고 east/north offset은 별도 local pose 계산에 사용한다. MORAI 공개 설명은 sea-level altitude이고 <code>NavSatFix</code>는 WGS84 ellipsoid altitude를 기대하므로 geoid separation 정책이 없으면 수직 오차가 발생할 수 있다. <code>NavSatStatus</code>, covariance type과 source timestamp도 계약한다.</p>
+<h4>IMU</h4><p>angular velocity rad/s, acceleration m/s², 중력 포함 여부, quaternion 축/정규화, covariance unknown 표현과 <code>imu_link</code> TF를 검증한다.</p>
+
+<h3>3.6 Controller와 Vehicle Status Gap</h3>
+<blockquote>전달 내용에는 controller 스크린샷 파일명만 있고 이미지 자체는 현재 저장소에서 확인되지 않았다. 아래 mapping은 전달된 메시지 목록과 공개 정의 기준이며, 이미지에만 있는 topic·port·제어 mode는 파일 확보 후 보완한다.</blockquote>
+<h4>K-Autoware → MORAI</h4>
+<div class="table"><table><thead><tr><th>K-Autoware 요구</th><th>MORAI 후보</th><th>변환/정책</th></tr></thead><tbody>
+<tr><td><code>autoware_control_msgs/Control</code></td><td><code>morai_msgs/CtrlCmd</code></td><td>tire angle→front steer, longitudinal mode 하나 선택</td></tr>
+<tr><td><code>ControlModeCommand</code></td><td>control/event service</td><td>실제 ownership 전환 성공 후 service 응답</td></tr>
+<tr><td><code>VehicleEmergencyStamped</code></td><td>safety policy + CtrlCmd</td><td>기존 command 차단, brake/stop safe command</td></tr>
+<tr><td><code>GearCommand</code></td><td>gear/event control</td><td>enum mapping 및 실제 state ack</td></tr>
+<tr><td><code>HazardLightsCommand</code></td><td>lamp/event control</td><td>지원 여부 및 실제 report 확인</td></tr>
+<tr><td><code>TurnIndicatorsCommand</code></td><td>lamp/event control</td><td>left/right/disable mapping</td></tr>
+</tbody></table></div>
+<p>공개 <code>CtrlCmd</code>는 throttle/velocity/acceleration 모드를 구분하고 accel/brake는 0~1, front/rear steer는 rad, velocity는 km/h, acceleration은 m/s²다. Autoware velocity m/s를 velocity mode로 전달할 경우 km/h 변환이 필요하며 longitudinal mode는 endpoint contract에 고정한다.</p>
+<h4>MORAI → K-Autoware</h4>
+<div class="table"><table><thead><tr><th>K-Autoware 요구</th><th>MORAI source 후보</th><th>변환/정책</th></tr></thead><tbody>
+<tr><td><code>ActuationStatusStamped</code></td><td>Ego accel/brake</td><td>pedal ratio와 timestamp, 실제 상태인지 확인</td></tr>
+<tr><td><code>ControlModeReport</code></td><td>control status</td><td>요청 echo가 아닌 수락된 실제 mode</td></tr>
+<tr><td><code>DoorStatus</code></td><td>별도 event status</td><td>미지원이면 unsupported. CLOSED 고정 금지</td></tr>
+<tr><td><code>GearReport</code></td><td>gear/event status</td><td>실제 gear enum mapping</td></tr>
+<tr><td><code>HazardLightsReport</code></td><td>lamp status</td><td>실제 적용 상태</td></tr>
+<tr><td><code>SteeringReport</code></td><td>Ego front_steer</td><td>deg→rad 및 tire/wheel 의미 확인</td></tr>
+<tr><td><code>TurnIndicatorsReport</code></td><td>lamp status</td><td>실제 적용 상태</td></tr>
+<tr><td><code>VelocityReport</code></td><td>Ego velocity/angular_velocity</td><td>vehicle frame 투영, deg/s→rad/s</td></tr>
+</tbody></table></div>
+<blockquote><strong>Critical unit gap:</strong> 공개 MORAI 메시지에서 <code>CtrlCmd.front_steer</code> 입력은 rad이지만 <code>EgoVehicleStatus.front_steer</code> 출력은 deg다. Ego angular velocity는 deg/s, Autoware heading rate는 rad/s다. 누락 시 약 57.3배 오차가 발생한다.</blockquote>
+<p>제공된 <code>VehicleEmergencyStamped</code> 링크는 잘못된 <code>ControlModeCommand.srv</code>를 가리킨다. 실제 TIER IV 메시지는 timestamp와 boolean emergency로 구성되므로 링크를 교정한다.</p>
+<h3>3.7 권장 Bridge 배치</h3>
+<pre>[ROS1 build] MORAI ROS1 → ROS1 ingress → Contract Adapter → ROS2 K-Autoware
+[ROS2 build] MORAI ROS2 ──────────────→ Contract Adapter → ROS2 K-Autoware
+[UDP build]  MORAI UDP  → 검증된 UDP–ROS2 Bridge → [선택 Adapter] → K-Autoware</pre>
+<p>schema·단위·좌표 변환, freshness, watchdog과 diagnostics의 최종 소유자를 계약으로 명시한다. 외부 Bridge가 검증한 기능은 중복 구현하지 않되 SiLS가 종단 결과를 독립 검증한다.</p>
+<h3>3.8 한양대 UDP–ROS2 Bridge 적용 결론과 SiLS 역할</h3>
+<p>제공된 MORAI Network Settings 화면에서 Ego-0는 Connected, Cmd Control은 UDP, Target Frame은 50Hz이며 개발 환경 Host/Destination은 <code>127.0.0.1</code>이다. 데이터별 port 구조를 사용하고 화면에 보이는 Collision Data 예시는 host 9091, destination 9092다.</p>
+<pre>MORAI Simulator ── UDP ──▶ 한양대 UDP–ROS2 Bridge ── ROS2/DDS ──▶ K-Autoware
+                 ◀─────── controller command ◀──────────────────</pre>
+<p>localhost와 port는 캡처 환경의 예시이며 운영 계약값이 아니다. 분리 host/container 배치에서는 topology가 실제 IP, port block, firewall과 host networking을 생성한다.</p>
+<div class="table"><table><thead><tr><th>구성요소</th><th>소유 책임</th></tr></thead><tbody>
+<tr><td>MORAI</td><td>Ego 동역학, 환경/collision/sensor 생성, UDP endpoint</td></tr>
+<tr><td>한양대 Bridge</td><td>UDP packet codec, ROS2 pub/sub, 연결/재연결, 지원 메시지 변환</td></tr>
+<tr><td>K-Autoware</td><td>perception/planning/control 및 vehicle interface</td></tr>
+<tr><td>SiLS Run Coordinator</td><td>start/readiness/run/stop/cleanup과 pass/fail 판정</td></tr>
+<tr><td>Topology Compiler</td><td>host IP, UDP port, ROS_DOMAIN_ID, deployment/contract 검증</td></tr>
+<tr><td>Contract Catalog</td><td>topic/type/QoS/rate/frame/unit/timestamp/ownership</td></tr>
+<tr><td>Bridge Supervisor</td><td>외부 Bridge health, endpoint match, freshness, watchdog</td></tr>
+<tr><td>선택적 Contract Adapter</td><td>Bridge가 제공하지 않는 K-Autoware semantic 변환만 보완</td></tr>
+<tr><td>Recorder/Diagnostics</td><td>rate/drop/latency/stale와 rosbag/log/config/result</td></tr>
+</tbody></table></div>
+<h4>Bridge 재사용 Gate</h4>
+<div class="table"><table><thead><tr><th>Bridge 제공 범위</th><th>우리 구현 범위</th></tr></thead><tbody>
+<tr><td>K-Autoware Sensor/Controller/Status 전체</td><td>Supervisor + Contract Validator</td></tr>
+<tr><td><code>morai_msgs</code>까지만 제공</td><td>Supervisor + MoraiContractAdapter</td></tr>
+<tr><td>Sensor 표준 변환, Controller 미지원</td><td>별도 Vehicle Interface Adapter</td></tr>
+<tr><td>일부 endpoint만 지원</td><td>누락 endpoint만 선택 보완</td></tr>
+</tbody></table></div>
+<p>인수 자료에는 MORAI build/ROS2/RMW, UDP schema와 port map, ROS2 topic/type/direction/QoS/rate, TF/단위/timestamp, endpoint 매트릭스, reconnect/drop/timeout/safe-stop, 실행·종료 방법이 포함되어야 한다.</p>
+<blockquote><strong>SiLS 역할:</strong> MORAI UDP codec을 새로 만들지 않는다. 검증된 Bridge를 외부 컴포넌트로 편입하고 구성 생성, 계약 일치, readiness, 장애 감시, 시나리오 실행, 결과 판정과 재현 가능한 artifact를 책임진다.</blockquote>
+<pre>Topology/IP/port/domain 검증
+ → Bridge 기동 또는 external attach/readiness
+ → MORAI UDP connected
+ → ROS2 endpoint match/freshness
+ → K-Autoware control/status 폐루프
+ → scenario와 pass/fail
+ → artifact flush
+ → stop/orphan cleanup</pre>
+
+<h2 id="s4">4. 현재 MMF와의 접점</h2>
+<h3>4.1 <code>/VIN/Vehicle</code>은 센서 입력 경로가 아님</h3>
+<p><code>config/sils/contracts/mmf-endpoints.yaml</code>의 <code>/VIN/Vehicle</code>은 VISS 클라이언트가 서버에 보내는 <code>VissRequestTopic</code>이다. MORAI vehicle status나 sensor sample을 여기에 publish해서는 안 된다.</p>
+<pre>MORAI UDP
+      ▼
+한양대 UDP–ROS2 Bridge
+      ▼ morai_msgs 또는 canonical K-Autoware ROS2
+[선택적 MoraiContractAdapter]
+      ▼ canonical Autoware DDS/ROS message
+Vehicle Info Manager DDSProvider
+      ▼
+VSS/VISS data</pre>
+<h3>4.2 기존 DDSProvider 재사용</h3>
+<p>현재 <code>DDSProvider.cpp</code>는 <code>rt/api/vehicle/kinematics</code>, <code>rt/api/vehicle/status</code>, perception objects, traffic signals와 orientation 등 Autoware 타입을 구독한다. Bridge가 canonical 타입을 제공하면 기존 경로를 재사용하고, <code>morai_msgs</code>까지만 제공하는 endpoint만 선택적 Adapter에서 변환한다.</p>
+<p>Camera/LiDAR/IMU 원본은 VISS 변환이 필요한 semantic data와 ADSW가 직접 소비할 raw sensor data로 분리한다.</p>
+<h3>4.3 권장 구조와 설정</h3>
+<pre>service/sils/morai_integration/
+  ├─ BridgeSupervisor
+  ├─ ContractValidator
+  ├─ MoraiContractAdapter     # 선택
+  ├─ CoordinateTransformer    # 선택
+  ├─ TimeAndFreshnessMonitor
+  └─ MoraiHealthReporter
+
+config/sils/contracts/morai-endpoints.yaml
+config/sils/topologies/morai-ego-smoke.yaml
+config/sils/qos/morai-qos-profiles.yaml</pre>
+
+<h2 id="s5">5. 시간 동기화와 결정성</h2>
+<h3>5.1 초기 단계</h3>
+<pre><code>run:
+  input_mode: live
+clock:
+  mode: wall
+simulator:
+  determinism: best-effort</code></pre>
+<p>실제 sensor rate, command-to-state latency, source/receive timestamp 차이, sequence gap, real-time factor와 stale 횟수를 측정한다.</p>
+<h3>5.2 lockstep 도입 조건</h3>
+<ol><li>simulator를 확실히 pause할 수 있다.</li><li>정확히 한 step 또는 지정한 <code>dt</code>만 진행한다.</li><li>해당 step의 차량 상태와 필수 센서 완료를 알 수 있다.</li><li>외부 계산이 끝날 때까지 다음 step이 진행되지 않는다.</li><li>모든 출력이 같은 simulation time을 사용한다.</li><li>timeout 이후 reset/abort가 가능하다.</li></ol>
+<p class="high">pause/resume API만으로 lockstep을 보장할 수 없다. 센서 완료 barrier가 없다면 vehicle state와 Camera/LiDAR가 다른 step에 속할 수 있다.</p>
+<h3>5.3 replay 제한</h3><p>입력을 replay해도 live ADSW의 출력까지 통제되는 것은 아니다. 입력 어댑터 회귀, open-loop 검증, 장애 재현 또는 SUT 출력까지 함께 기록한 완전 재생으로 범위를 한정한다.</p>
+
+<h2 id="s6">6. 좌표계·단위·계약</h2>
+<p>지도 CRS/EPSG, UTM zone 또는 ENU origin, map/odom/base_link/sensor frame, 축 방향, yaw convention, quaternion ordering과 변환 책임자를 확정한다. raw Velodyne LiDAR와 ROS driver 변환 후 좌표를 동일하다고 가정하면 안 된다.</p>
+<div class="table"><table><thead><tr><th>항목</th><th>확정 내용</th></tr></thead><tbody>
+<tr><td>속도</td><td>km/h 또는 m/s</td></tr><tr><td>각도</td><td>degree 또는 radian</td></tr>
+<tr><td>조향</td><td>steering wheel/road wheel angle, 좌우 부호</td></tr><tr><td>가감속</td><td>throttle/brake 비율 또는 acceleration target</td></tr>
+<tr><td>pose</td><td>rear axle, CoG, base_link 중 기준점</td></tr><tr><td>gear</td><td>P/R/N/D와 manual gear mapping</td></tr><tr><td>시간</td><td>Unix, ROS, simulation-relative time</td></tr>
+</tbody></table></div>
+<pre><code>endpoints:
+  - id: morai-ego-status
+    direction: morai-to-mmf
+    source_schema: MoraiEgoVehicleStatus
+    target_schema: autoware_adapi_v1_msgs/VehicleKinematics
+    frame_id: base_link
+    timestamp: simulation-time
+    ownership: single
+    late_policy: drop</code></pre>
+
+<h2 id="s7">7. 네트워크·성능·병렬 실행</h2>
+<ul><li>simulator host/destination IP, NIC, routing, firewall, VM bridge/NAT를 topology로 관리한다.</li><li>run별 UDP port block을 할당하고 종료 시 회수한다.</li><li>ROS master/bridge 또는 ROS2 discovery 범위를 run 격리 정책과 맞춘다.</li><li>Camera/LiDAR/Radar는 VISS JSON이나 범용 string payload로 운반하지 않는다.</li><li>평균 rate 외에 p95/p99 latency, drop, out-of-order, CPU/GPU/NIC 사용량을 측정한다.</li></ul>
+<p>headless 지원, license당 동시 instance, CI/VM 활성화, GPU 사양, 자동화 API edition과 map asset 배포 권한은 공급사 확인이 필요하다.</p>
+
+<h2 id="s8">8. 안전·장애 처리·진단</h2>
+<h3>8.1 제어 안전</h3>
+<ul><li>명령 publisher를 run당 하나로 제한한다.</li><li>수동 입력, MORAI 내부 제어, ADSW의 우선순위를 명시한다.</li><li>timeout 시 throttle 해제와 brake 적용 등 합의된 safe command를 보낸다.</li><li>reset 중 command를 차단하고 stale vehicle state를 정상 전달하지 않는다.</li></ul>
+<h3>8.2 Adapter 진단</h3>
+<pre>연결       simulator/API/ROS/UDP connected
+시나리오   loaded/running/paused/failed
+제어       owner, last command, timeout
+freshness  endpoint별 source/receive timestamp
+전송       gap, drop, out-of-order, decode failure
+변환       unit/frame/schema error
+시간       skew, regression, duplicate timestamp
+성능       actual rate, latency, queue backlog</pre>
+<p>Diagnostics Manager에는 raw 센서를 보내지 않고 위 health 요약과 원인을 표준 Component Health 계약으로 보고한다.</p>
+<h3>8.3 Coordinator 장애</h3><p>run lease/heartbeat, coordinator-loss watchdog, idempotent stop, 재시작 후 orphan 탐색, process와 port 회수가 필요하다.</p>
+
+<h2 id="s9">9. 시나리오 재현성과 형상관리</h2>
+<p>run manifest에 MORAI version/build/edition, map·scenario·vehicle·sensor config hash, initial pose, traffic/weather/friction, seed, adapter/contract version, MMF image digest, clock mode/dt/real-time factor, endpoint IP/port/topic을 기록한다. 비결정적 live run은 허용 오차 기반으로 판정한다.</p>
+
+<h2 id="s10">10. 단계별 개발 권고</h2>
+<h3>Phase 0A — Capability Spike</h3>
+<ul><li>제품/버전/edition과 ROS1/ROS2/UDP/MSC/gRPC 실사용 여부</li><li>scenario load/reset/status 자동화</li><li>timestamp와 sequence, synchronous step 및 sensor barrier</li><li>headless/병렬 실행/license 조건과 Ego Ghost Mode 범위</li><li>한양대 Bridge packet/port map과 ROS2 topic/type/QoS/rate inventory</li><li>canonical 변환 범위, reconnect/stale/watchdog/safe-stop 검증</li></ul>
+<h3>Phase 1 — Ego Control/Status Vertical Slice</h3>
+<p>차량·맵·시나리오 각 하나, MORAI 동역학, 한양대 Bridge 한 개를 external 또는 managed component로 등록하고 Bridge readiness/필수 ROS2 match를 확인한다. steering/accelerator/brake/gear와 pose/velocity/gear, WallClock/live로 제한하며 직진·정지·좌우 조향 golden scenario, timeout과 disconnect 시험까지 완료 조건으로 둔다.</p>
+<h3>Phase 2 — 자동화와 Semantic Data</h3><p>scenario load/reset, GPS/IMU, object/traffic light, recorder, artifact manifest, adapter diagnostics, port allocator와 orphan cleanup을 추가한다.</p>
+<h3>Phase 3 — Raw Sensor와 결정성</h3><p>Camera/LiDAR/Radar, 대역폭 최적화, 다중 Ego, fault injection을 추가한다. synchronous/lockstep은 step API와 sensor barrier가 검증된 경우에만 적용한다.</p>
+
+<h2 id="s11">11. 공급사에 확인할 질문</h2>
+<ol><li>정확한 제품명, version/build, edition은 무엇인가?</li><li>ROS2 native인가, ROS1/rosbridge가 필요한가?</li><li>차량 제어·상태·센서의 권장 transport와 schema는 무엇인가?</li><li>MSC/gRPC/API 권한과 범위는 무엇인가?</li><li>UI 없이 load/reset/run/stop이 가능한가?</li><li>외부 clock으로 정확히 한 step 진행이 가능한가?</li><li>한 step의 모든 센서 완료 event가 있는가?</li><li>Ghost Mode의 collision, wheel, sensor pose 계산 방식은 무엇인가?</li><li>map CRS/origin/EPSG/yaw convention을 얻을 수 있는가?</li><li>crash 및 network 재연결 절차는 무엇인가?</li><li>license당 동시 instance 수는 몇 개인가?</li><li>CI/headless/VM/GPU 공식 지원 범위는 무엇인가?</li></ol>
+
+<h2 id="s12">12. 주요 리스크와 Gate</h2>
+<div class="table"><table><thead><tr><th>등급</th><th>리스크</th><th>대응/Gate</th></tr></thead><tbody>
+<tr><td class="critical">Critical</td><td>양쪽이 차량 동역학 소유</td><td>authority 확정 및 topology validation</td></tr>
+<tr><td class="critical">Critical</td><td>추정에 기반한 lockstep</td><td>single-step + sensor barrier 실증 전 금지</td></tr>
+<tr><td class="high">High</td><td>ROS/custom message 비호환</td><td>설치 버전 packet/topic capture와 mapping PoC</td></tr>
+<tr><td class="high">High</td><td>좌표/yaw/조향 오류</td><td>golden pose 및 주행 scenario 자동 검증</td></tr>
+<tr><td class="high">High</td><td>raw sensor 병목</td><td>data plane 분리와 bandwidth budget</td></tr>
+<tr><td class="high">High</td><td>단절 후 제어 유지</td><td>watchdog, safe command, abort/cleanup</td></tr>
+<tr><td>Medium</td><td>port/license 병렬도 제한</td><td>allocator와 concurrency 상한</td></tr>
+<tr><td>Medium</td><td>vendor schema 변경 전파</td><td>versioned mapper로 격리</td></tr>
+</tbody></table></div>
+<blockquote><strong>전체 센서 연동 확장 Gate:</strong> ① 동역학 authority 확정 ② WallClock 폐루프 증명 ③ 좌표·단위 golden test 통과 ④ scenario reset 및 장애 cleanup 자동화</blockquote>
+<h3>12.1 SiLS v3 아키텍처 반영 필요사항</h3>
+<p>기존 v3의 Topology Compiler, Run Coordinator, Contract Catalog, WallClock/live, readiness와 artifact 원칙은 그대로 유효하다. 핵심 재설계는 필요 없지만 다음을 보강한다.</p>
+<div class="table"><table><thead><tr><th>v3 영역</th><th>보강 내용</th></tr></thead><tbody>
+<tr><td>전체 구조</td><td>External Simulator/Bridge를 run의 1급 구성요소로 추가</td></tr>
+<tr><td>Topology</td><td>managed/external, host IP, UDP port profile, ROS domain, version</td></tr>
+<tr><td>Plant</td><td>MORAI를 vECU IPlant가 아닌 external plant로 표시하고 authority 명시</td></tr>
+<tr><td>Contract</td><td>UDP packet↔Bridge ROS2↔K-Autoware type과 변환 소유자</td></tr>
+<tr><td>Readiness</td><td>UDP connected, ROS2 match, 최초 fresh sample</td></tr>
+<tr><td>격리</td><td>DDS domain 외에 UDP port block과 external host 동시성</td></tr>
+<tr><td>Coordinator</td><td>managed는 start/stop, external은 attach/health/abort notification</td></tr>
+<tr><td>Clock</td><td>WallClock/live/50Hz target, lockstep participant에서 제외</td></tr>
+<tr><td>관측/Artifact</td><td>drop/sequence/rate/latency와 MORAI/Bridge/config hash</td></tr>
+<tr><td>단계</td><td>기존 Phase 1 VISS slice 유지, 후속 External Simulator slice 추가</td></tr>
+</tbody></table></div>
+<p>TickInbox/Relay 구분, replay 경계, lease/orphan cleanup, generated artifact와 기존 Phase 1 scope gate는 수정할 필요가 없다. 한양대 Bridge는 DDS interposition용 Relay Gateway가 아니라 MORAI UDP를 ROS2 endpoint로 변환하는 <strong>외부 protocol bridge</strong>다.</p>
+
+<h2 id="s13">13. 참고 자료</h2>
+<ul><li><a href="https://help-morai-sim-en.scrollhelp.site/morai-sim-standard-en/">MORAI SIM Standard Manual</a></li><li><a href="https://help-morai-sim-en.scrollhelp.site/morai-sim-standard-en/morai-simulator-control-api">MORAI Simulator Control API</a></li><li><a href="https://help-morai-sim-en.scrollhelp.site/morai-sim-standard-en/ros-network-settings">MORAI ROS Network Settings</a></li><li><a href="https://help-morai-sim-en.scrollhelp.site/morai-sim-standard-en/morai-sim-udp-example-code-tutorial">MORAI UDP Example Tutorial</a></li><li><a href="https://help-morai-sim-en.scrollhelp.site/morai-sim-standard-en/sensors">MORAI Sensors</a></li><li><a href="https://help-morai-sim-en.scrollhelp.site/morai-sim-standard-en/sensor-coordinate-system">MORAI Sensor Coordinate System</a></li><li><a href="https://help-morai-sim-en.scrollhelp.site/morai-sim-standard-en/ego-ghost-mode">MORAI Ego Ghost Mode</a></li><li><a href="https://github.com/MORAI-Autonomous/MORAI-ROS2_morai_msgs">MORAI ROS2 message repository</a></li><li><a href="https://github.com/MORAI-Autonomous/MORAI-Example-ROS2">MORAI ROS2 examples</a></li><li><a href="https://github.com/autowarefoundation/autoware_msgs/blob/main/autoware_control_msgs/msg/Control.msg">Autoware Control message</a></li><li><a href="https://github.com/ros-perception/radar_msgs/blob/ros2/msg/RadarTracks.msg">ROS 2 RadarTracks message</a></li><li><a href="https://github.com/tier4/tier4_autoware_msgs/blob/tier4/universe/tier4_vehicle_msgs/msg/VehicleEmergencyStamped.msg">TIER IV VehicleEmergencyStamped</a></li></ul>
+<blockquote>외부 인터페이스 지원은 MORAI 제품 버전과 라이선스에 따라 달라질 수 있으므로 설치 대상 환경에서 다시 검증해야 한다.</blockquote>
+<footer>SiLS–MORAI Simulator Integration Architecture Review · 2026-07-14</footer>
+</main></div></body></html>
