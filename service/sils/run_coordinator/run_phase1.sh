@@ -43,6 +43,12 @@
 # resolved-run.yaml (tools/sils/topology_compiler/compile.py), so the deployment
 # plan isn't re-typed on the CLI. Explicit flags override the resolved values;
 # --bin-dir/--image (where built artifacts live) stay CLI-only.
+#
+# --domain-pool LO-HI [--lease-ttl SEC] [--lease-dir DIR] leases a free DDS domain
+# from the pool (tools/sils/run_coordinator/domain_lease.py) instead of using a
+# fixed --domain, and releases it on cleanup (§12). Takes precedence over
+# --domain/resolved. Exit code 3 = pool exhausted (queue & retry), distinct from
+# a generic failure so a CI scheduler can act on it.
 
 set -u
 
@@ -52,7 +58,14 @@ mkdir -p "${STATE_DIR}"
 trace() {
     local run_id="$1" event="$2" extra="${3:-}"
     local ts
-    ts=$(date +%s%3N 2>/dev/null || date +%s000)
+    # GNU date supports %3N (ms); BSD/macOS date does not and emits a literal "N",
+    # so detect that and fall back to whole-second precision (x1000). The target
+    # runtime is Linux (ms precision), but keep the coordinator runnable on a dev
+    # mac without corrupting the JSON.
+    ts=$(date +%s%3N 2>/dev/null)
+    if [[ -z "${ts}" || "${ts}" == *N* ]]; then
+        ts="$(date +%s)000"
+    fi
     if [[ -n "${extra}" ]]; then
         echo "{\"run_id\":\"${run_id}\",\"event\":\"${event}\",\"wall_time_ms\":${ts},${extra}}"
     else
@@ -63,26 +76,23 @@ trace() {
 state_file() { echo "${STATE_DIR}/${1}.state"; }
 trace_file() { echo "${STATE_DIR}/${1}.trace.jsonl"; }
 
-# --- cleanup (idempotent, backend-aware) ------------------------------------
+# tools/sils/run_coordinator/domain_lease.py, relative to this script.
+lease_helper() { echo "$(dirname "$0")/../../../tools/sils/run_coordinator/domain_lease.py"; }
 
-cmd_cleanup() {
-    local run_id="" state
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            --run-id) run_id="$2"; shift 2 ;;
-            *) echo "cleanup: unknown arg $1" >&2; exit 2 ;;
-        esac
-    done
-    if [[ -z "${run_id}" ]]; then
-        echo "cleanup: --run-id is required" >&2
-        exit 2
-    fi
+# --- teardown (idempotent, backend-aware) -----------------------------------
 
+# do_teardown does the actual cleanup and RETURNS (no exit), so it's safe to call
+# from mid-run failure paths (start_*/ready_timeout) without terminating the
+# script. cmd_cleanup is the standalone subcommand wrapper that adds arg parsing
+# and exits. Keeping them separate avoids the trap where an internal cleanup call
+# would `exit 0` out from under the caller's intended exit code.
+do_teardown() {
+    local run_id="$1" state
     state="$(state_file "${run_id}")"
     if [[ ! -f "${state}" ]]; then
         # Idempotent: already cleaned (or never existed) is success, not an error.
         trace "${run_id}" "cleanup_noop" | tee -a "$(trace_file "${run_id}")"
-        exit 0
+        return 0
     fi
 
     # shellcheck disable=SC1090
@@ -103,9 +113,48 @@ cmd_cleanup() {
             kill -0 "${PROBE_PID}" 2>/dev/null && kill -KILL "${PROBE_PID}" 2>/dev/null
         fi
     fi
+
+    # Release the DDS domain lease (if this run held one) so the domain returns
+    # to the pool immediately rather than waiting out its TTL (§12.2). release is
+    # keyed by run_id and idempotent, so a double teardown is harmless. The lease
+    # info is written to the state file at allocation time (before backend start),
+    # so even a start-failure teardown releases it.
+    if [[ "${DOMAIN_LEASED:-0}" == "1" ]]; then
+        local ld_args=()
+        [[ -n "${LEASE_DIR:-}" ]] && ld_args=(--lease-dir "${LEASE_DIR}")
+        python3 "$(lease_helper)" "${ld_args[@]}" release --run-id "${run_id}" >/dev/null 2>&1 || true
+        trace "${run_id}" "domain_released" | tee -a "$(trace_file "${run_id}")"
+    fi
+
     rm -f "${state}"
     trace "${run_id}" "cleanup_done" | tee -a "$(trace_file "${run_id}")"
+    return 0
 }
+
+cmd_cleanup() {
+    local run_id=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --run-id) run_id="$2"; shift 2 ;;
+            *) echo "cleanup: unknown arg $1" >&2; exit 2 ;;
+        esac
+    done
+    if [[ -z "${run_id}" ]]; then
+        echo "cleanup: --run-id is required" >&2
+        exit 2
+    fi
+    do_teardown "${run_id}"
+    exit 0
+}
+
+# The backend start_* functions run in the CURRENT shell (NOT `$(...)` command
+# substitution) and hand their result back via this global. An earlier version
+# captured them with `verify_bin="$(start_local ...)"`, which was doubly broken:
+# their `exit` only killed the subshell (so a failed start fell through to the
+# ready-wait instead of aborting), and their trace stdout got mixed into the
+# captured "return value". Running in-shell makes `exit` abort cmd_start as
+# intended and keeps trace output on the terminal/trace file.
+g_verify_bin=""
 
 # --- start: local backend ----------------------------------------------------
 
@@ -117,26 +166,30 @@ start_local() {
     if [[ ! -x "${probe_bin}" || ! -x "${verify_bin}" ]]; then
         echo "start: expected executables not found under ${bin_dir}" >&2
         echo "  (build first: ./build.sh --build-sils)" >&2
+        do_teardown "${run_id}"
         exit 2
     fi
 
     SILS_RUN_ID="${run_id}" VISS_DDS_DOMAIN_ID="${domain}" SILS_VECU_INSTANCE_ID="${instance_id}" \
         "${probe_bin}" >> "${tfile}" 2>&1 &
     local probe_pid=$!
+    # Append (state file was created at allocation time in cmd_start so lease info
+    # is already there); do NOT truncate or the DOMAIN_LEASED line is lost.
     {
         echo "BACKEND=local"
         echo "PROBE_PID=${probe_pid}"
         echo "DOMAIN=${domain}"
         echo "INSTANCE_ID=${instance_id}"
-    } > "$(state_file "${run_id}")"
+    } >> "$(state_file "${run_id}")"
 
     sleep 0.2
     if ! kill -0 "${probe_pid}" 2>/dev/null; then
         trace "${run_id}" "start_failed" "\"reason\":\"probe process exited immediately\"" | tee -a "${tfile}"
+        do_teardown "${run_id}"
         exit 1
     fi
     trace "${run_id}" "process_running" "\"pid\":${probe_pid}" | tee -a "${tfile}"
-    echo "${verify_bin}"
+    g_verify_bin="${verify_bin}"
 }
 
 # --- start: docker backend ---------------------------------------------------
@@ -146,18 +199,28 @@ start_docker() {
 
     if ! command -v docker >/dev/null 2>&1; then
         echo "start: docker CLI not found" >&2
+        do_teardown "${run_id}"
         exit 2
     fi
     if [[ -z "${image}" ]]; then
         echo "start: --image is required for --backend docker" >&2
+        do_teardown "${run_id}"
         exit 2
     fi
     if [[ -z "${verify_bin}" || ! -x "${verify_bin}" ]]; then
         echo "start: --verify-bin (host-side sils_vecu_viss_verify) is required and must be executable for --backend docker" >&2
+        do_teardown "${run_id}"
         exit 2
     fi
 
     local container_name="sils-vecu-${run_id}"
+    # CONTAINER_NAME must land in the state file BEFORE `docker run` so a teardown
+    # can find and remove the container even if we die between run and the append.
+    echo "BACKEND=docker" >> "$(state_file "${run_id}")"
+    echo "CONTAINER_NAME=${container_name}" >> "$(state_file "${run_id}")"
+    echo "DOMAIN=${domain}" >> "$(state_file "${run_id}")"
+    echo "INSTANCE_ID=${instance_id}" >> "$(state_file "${run_id}")"
+
     if ! docker run -d --name "${container_name}" \
         --network host \
         -e "VISS_DDS_DOMAIN_ID=${domain}" \
@@ -165,14 +228,9 @@ start_docker() {
         -e "SILS_VECU_INSTANCE_ID=${instance_id}" \
         "${image}" >/dev/null 2>>"${tfile}"; then
         trace "${run_id}" "start_failed" "\"reason\":\"docker run failed\"" | tee -a "${tfile}"
+        do_teardown "${run_id}"
         exit 1
     fi
-    {
-        echo "BACKEND=docker"
-        echo "CONTAINER_NAME=${container_name}"
-        echo "DOMAIN=${domain}"
-        echo "INSTANCE_ID=${instance_id}"
-    } > "$(state_file "${run_id}")"
 
     sleep 0.5
     local running
@@ -180,11 +238,11 @@ start_docker() {
     if [[ "${running}" != "true" ]]; then
         docker logs "${container_name}" >> "${tfile}" 2>&1
         trace "${run_id}" "start_failed" "\"reason\":\"container not running\"" | tee -a "${tfile}"
-        docker rm -f "${container_name}" >/dev/null 2>&1
+        do_teardown "${run_id}"
         exit 1
     fi
     trace "${run_id}" "process_running" "\"container\":\"${container_name}\"" | tee -a "${tfile}"
-    echo "${verify_bin}"
+    g_verify_bin="${verify_bin}"
 }
 
 # --- start: common flow (dispatches to a backend, then readiness+verify) ----
@@ -192,6 +250,7 @@ start_docker() {
 cmd_start() {
     local backend="" bin_dir="" image="" verify_bin_arg="" domain="" run_id=""
     local instance_id="" from_resolved="" container_index=0 dry_run=false
+    local domain_pool="" lease_ttl=3600 lease_dir=""
     local ready_timeout_sec=5
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -204,6 +263,9 @@ cmd_start() {
             --instance-id) instance_id="$2"; shift 2 ;;
             --from-resolved) from_resolved="$2"; shift 2 ;;
             --container-index) container_index="$2"; shift 2 ;;
+            --domain-pool) domain_pool="$2"; shift 2 ;;
+            --lease-ttl) lease_ttl="$2"; shift 2 ;;
+            --lease-dir) lease_dir="$2"; shift 2 ;;
             --dry-run) dry_run=true; shift ;;
             *) echo "start: unknown arg $1" >&2; exit 2 ;;
         esac
@@ -239,32 +301,73 @@ cmd_start() {
     if [[ "${dry_run}" == true ]]; then
         # Print the resolved plan and exit WITHOUT launching anything -- lets an
         # operator (or CI, or this sandbox with no binaries/daemon) confirm what a
-        # run would do. Not a trace file event: nothing was started.
-        echo "{\"event\":\"dry_run\",\"run_id\":\"${run_id}\",\"backend\":\"${backend}\",\"domain_id\":\"${domain}\",\"instance_id\":\"${instance_id}\",\"from_resolved\":\"${from_resolved}\",\"container_index\":${container_index}}"
+        # run would do. Deliberately does NOT allocate a domain lease (that would
+        # leak a lease for a run that never happens); shows the pool it *would*
+        # allocate from instead. Not a trace file event: nothing was started.
+        local dry_domain="${domain}"
+        [[ -n "${domain_pool}" ]] && dry_domain="auto(pool ${domain_pool})"
+        echo "{\"event\":\"dry_run\",\"run_id\":\"${run_id}\",\"backend\":\"${backend}\",\"domain_id\":\"${dry_domain}\",\"instance_id\":\"${instance_id}\",\"from_resolved\":\"${from_resolved}\",\"container_index\":${container_index}}"
         exit 0
     fi
 
     local tfile
     tfile="$(trace_file "${run_id}")"
     : > "${tfile}"
+
+    # DDS domain lease (§12): if a pool is given, allocate a domain from it and
+    # bind the run to it. Takes precedence over --domain/resolved domain -- the
+    # whole point of a pool is that the Coordinator, not the operator, picks the
+    # free id. A specific-error exit (3) means "pool exhausted, queue & retry",
+    # distinct from a generic failure so a CI scheduler can act on it.
+    # State file is created HERE (truncate once), before allocation/dispatch, so
+    # the lease line is present from the moment a domain is leased -- any later
+    # teardown (even a start failure) can then release it. Backends append.
+    : > "$(state_file "${run_id}")"
+
+    if [[ -n "${domain_pool}" ]]; then
+        local alloc_args=(allocate --pool "${domain_pool}" --ttl "${lease_ttl}" --run-id "${run_id}")
+        [[ -n "${lease_dir}" ]] && alloc_args=(--lease-dir "${lease_dir}" "${alloc_args[@]}")
+        local allocated rc
+        allocated="$(python3 "$(lease_helper)" "${alloc_args[@]}")"
+        rc=$?
+        if [[ ${rc} -eq 3 ]]; then
+            trace "${run_id}" "domain_pool_exhausted" "\"pool\":\"${domain_pool}\"" | tee -a "${tfile}"
+            rm -f "$(state_file "${run_id}")"
+            exit 3
+        elif [[ ${rc} -ne 0 ]]; then
+            trace "${run_id}" "domain_alloc_failed" "\"pool\":\"${domain_pool}\"" | tee -a "${tfile}"
+            rm -f "$(state_file "${run_id}")"
+            exit 2
+        fi
+        domain="${allocated}"
+        # Record the lease immediately so do_teardown releases it on any exit path.
+        echo "DOMAIN_LEASED=1" >> "$(state_file "${run_id}")"
+        [[ -n "${lease_dir}" ]] && echo "LEASE_DIR=${lease_dir}" >> "$(state_file "${run_id}")"
+        trace "${run_id}" "domain_leased" "\"domain_id\":${domain},\"pool\":\"${domain_pool}\"" | tee -a "${tfile}"
+    fi
+
     trace "${run_id}" "run_start" \
         "\"domain_id\":${domain},\"backend\":\"${backend}\",\"instance_id\":\"${instance_id}\"" \
         | tee -a "${tfile}"
 
-    local verify_bin
+    # NOTE: start_* run in the CURRENT shell (not $(...)) and set g_verify_bin;
+    # their `exit` therefore aborts this function on failure (see g_verify_bin decl).
+    g_verify_bin=""
     case "${backend}" in
         local)
             if [[ -z "${bin_dir}" ]]; then
                 echo "start: --bin-dir is required for --backend local" >&2
+                do_teardown "${run_id}"
                 exit 2
             fi
-            verify_bin="$(start_local "${run_id}" "${domain}" "${bin_dir}" "${tfile}" "${instance_id}")"
+            start_local "${run_id}" "${domain}" "${bin_dir}" "${tfile}" "${instance_id}"
             ;;
         docker)
-            verify_bin="$(start_docker "${run_id}" "${domain}" "${image}" "${verify_bin_arg}" "${tfile}" "${instance_id}")"
+            start_docker "${run_id}" "${domain}" "${image}" "${verify_bin_arg}" "${tfile}" "${instance_id}"
             ;;
         *)
             echo "start: unknown --backend ${backend} (expected local|docker)" >&2
+            do_teardown "${run_id}"
             exit 2
             ;;
     esac
@@ -293,7 +396,7 @@ cmd_start() {
     fi
     if [[ "${ready}" != true ]]; then
         trace "${run_id}" "ready_timeout" | tee -a "${tfile}"
-        cmd_cleanup --run-id "${run_id}" >> "${tfile}"
+        do_teardown "${run_id}" >> "${tfile}"
         exit 1
     fi
     trace "${run_id}" "vecu_ready" | tee -a "${tfile}"
@@ -301,11 +404,13 @@ cmd_start() {
     # --- sample verification: independent one-shot subscriber ---
     trace "${run_id}" "verify_invoke" | tee -a "${tfile}"
     SILS_RUN_ID="${run_id}" VISS_DDS_DOMAIN_ID="${domain}" SILS_VECU_INSTANCE_ID="${instance_id}" \
-        "${verify_bin}" >> "${tfile}" 2>&1
+        "${g_verify_bin}" >> "${tfile}" 2>&1
     local verify_rc=$?
 
     # --- Stop + idempotent Cleanup ---
-    cmd_cleanup --run-id "${run_id}" >> "${tfile}"
+    # do_teardown, NOT cmd_cleanup: cmd_cleanup exits 0, which would swallow the
+    # run_pass/run_fail trace and the verify-based exit code below.
+    do_teardown "${run_id}" >> "${tfile}"
 
     if [[ ${verify_rc} -eq 0 ]]; then
         trace "${run_id}" "run_pass" | tee -a "${tfile}"
