@@ -33,8 +33,11 @@
 #   run_phase1.sh start --backend docker --image <image> --verify-bin <path> [--domain <id>] [--run-id <id>] [--instance-id <id>]
 #   run_phase1.sh start --from-resolved <resolved-run.yaml> [--container-index N] --bin-dir <dir> ...
 #   run_phase1.sh start ... --dry-run       # print the resolved plan and exit, launch nothing
+#   run_phase1.sh fleet --replicas N --backend local  --bin-dir <dir> [--domain <id>|--domain-pool LO-HI]
+#   run_phase1.sh fleet --from-resolved <resolved-run.yaml> --backend docker --image <img> --verify-bin <path>
+#     # N vECU instances, ONE shared domain, started concurrently (§11/§13); see cmd_fleet
 #   run_phase1.sh cleanup --run-id <id>
-#   run_phase1.sh reap [--max-age-sec SEC] [--lease-dir DIR]   # recover orphaned runs (§14.4)
+#   run_phase1.sh reap [--max-age-sec SEC] [--lease-dir DIR]   # recover orphaned runs + fleets (§14.4)
 #
 # --run-id identifies one Coordinator run (Start->verify->Stop lifecycle); it is
 # NOT the vECU's own name. --instance-id (default "viss-probe-1", matching
@@ -181,6 +184,7 @@ cmd_reap() {
         # Read fields in a subshell so per-file vars don't leak between iterations.
         coord_pid="$(source "${state}" 2>/dev/null; echo "${COORD_PID:-}")"
         created="$(source "${state}" 2>/dev/null; echo "${CREATED:-0}")"
+        local is_fleet; is_fleet="$(source "${state}" 2>/dev/null; echo "${FLEET:-0}")"
 
         local orphan=false reason=""
         if [[ -n "${coord_pid}" ]] && ! kill -0 "${coord_pid}" 2>/dev/null; then
@@ -192,7 +196,11 @@ cmd_reap() {
         if [[ "${orphan}" == true ]]; then
             trace "${run_id}" "orphan_detected" "\"reason\":\"${reason}\"" \
                 | tee -a "$(trace_file "${run_id}")"
-            do_teardown "${run_id}"
+            if [[ "${is_fleet}" == "1" ]]; then
+                fleet_teardown "${run_id}"
+            else
+                do_teardown "${run_id}"
+            fi
             trace "${run_id}" "aborted_orphaned" "\"reason\":\"${reason}\"" \
                 | tee -a "$(trace_file "${run_id}")"
             reaped=$((reaped + 1))
@@ -502,15 +510,244 @@ cmd_start() {
     exit "${verify_rc}"
 }
 
+# =============================================================================
+# fleet: multiple vECU instances, ONE shared domain (architecture v3 Final §11/§13)
+#
+# Distinct from running N independent `start` runs (which each lease their OWN
+# domain for isolation, §12). A fleet is one topology == one run == ONE domain
+# shared by N vECU instances that must interoperate (with each other / the SUT).
+# Each member gets a distinct instance_id -> distinct participant name (§9.5), so
+# they coexist on the same domain without name collision.
+#
+# Concurrent lifecycle (not the sequential start->verify->teardown of `start`):
+#   lease one domain -> start ALL members (leave running) -> wait ALL ready
+#   -> run verify once against the shared topic -> aggregate -> teardown ALL
+#   -> release the one lease.
+#
+# Members come from either --replicas N (identical probe instances, a runtime
+# smoke of the mechanism) or --from-resolved (a Topology Compiler resolved-run.yaml
+# with N containers, the real multi-owner/multi-topic path). NOTE: today's real
+# Contract Catalog has a single-owner contract, so the compiler rejects replicas>1
+# on it; --replicas here is a direct runtime smoke that bypasses that check to
+# exercise coexistence, not a §9.5-valid topology.
+#
+# The combined fleet trace is a normal trace stream (N run_start/ready blocks with
+# distinct instance_ids + one verify block + a terminal run_pass/run_fail), so
+# evaluate.py judges it as a single conformant run listing all N instance_ids --
+# reusing the existing verdict/fleet-completeness tooling unchanged.
+# =============================================================================
+
+# Start one local member (probe), leave it running, RETURN 0/1 (never exit -- a
+# member failure must not abort the fleet before its siblings are torn down).
+fleet_start_member_local() {
+    local run_id="$1" member_run_id="$2" domain="$3" bin_dir="$4" tfile="$5" instance_id="$6"
+    local probe_bin="${bin_dir}/sils_vecu_viss_probe"
+    [[ -x "${probe_bin}" ]] || { echo "fleet: ${probe_bin} not executable" >&2; return 1; }
+    SILS_RUN_ID="${member_run_id}" VISS_DDS_DOMAIN_ID="${domain}" SILS_VECU_INSTANCE_ID="${instance_id}" \
+        "${probe_bin}" >> "${tfile}" 2>&1 &
+    local pid=$!
+    echo "local ${pid} ${instance_id}" >> "$(members_file "${run_id}")"
+    sleep 0.2
+    kill -0 "${pid}" 2>/dev/null || { echo "fleet: member ${instance_id} exited immediately" >&2; return 1; }
+    return 0
+}
+
+# Start one docker member. --ipc=host is required for the SHM data path across the
+# container boundary (see start_docker's note); --network host for discovery.
+fleet_start_member_docker() {
+    local run_id="$1" member_run_id="$2" domain="$3" image="$4" instance_id="$5" idx="$6"
+    local cname="sils-vecu-${run_id}-m${idx}"
+    echo "docker ${cname} ${instance_id}" >> "$(members_file "${run_id}")"
+    docker run -d --name "${cname}" --network host --ipc=host \
+        -e "VISS_DDS_DOMAIN_ID=${domain}" \
+        -e "SILS_RUN_ID=${member_run_id}" \
+        -e "SILS_VECU_INSTANCE_ID=${instance_id}" \
+        "${image}" >/dev/null 2>&1 || { echo "fleet: docker run failed for ${instance_id}" >&2; return 1; }
+    sleep 0.3
+    [[ "$(docker inspect -f '{{.State.Running}}' "${cname}" 2>/dev/null)" == "true" ]] \
+        || { echo "fleet: member container ${cname} not running" >&2; return 1; }
+    return 0
+}
+
+members_file() { echo "${STATE_DIR}/${1}.members"; }
+
+# Idempotent teardown of ALL fleet members + shared lease. Safe to re-run (reap).
+fleet_teardown() {
+    local run_id="$1" mfile
+    mfile="$(members_file "${run_id}")"
+    if [[ -f "${mfile}" ]]; then
+        local kind id inst
+        while read -r kind id inst; do
+            [[ -z "${kind}" ]] && continue
+            if [[ "${kind}" == "docker" ]]; then
+                docker inspect "${id}" >/dev/null 2>&1 && { docker stop -t 3 "${id}" >/dev/null 2>&1; docker rm -f "${id}" >/dev/null 2>&1; }
+            else
+                kill -0 "${id}" 2>/dev/null && { kill -TERM "${id}" 2>/dev/null; sleep 0.3; kill -0 "${id}" 2>/dev/null && kill -KILL "${id}" 2>/dev/null; }
+            fi
+        done < "${mfile}"
+        rm -f "${mfile}"
+    fi
+    local state; state="$(state_file "${run_id}")"
+    if [[ -f "${state}" ]]; then
+        # shellcheck disable=SC1090
+        source "${state}"
+        if [[ "${DOMAIN_LEASED:-0}" == "1" ]]; then
+            local ld_args=()
+            [[ -n "${LEASE_DIR:-}" ]] && ld_args=(--lease-dir "${LEASE_DIR}")
+            python3 "$(lease_helper)" ${ld_args[@]+"${ld_args[@]}"} release --run-id "${run_id}" >/dev/null 2>&1 || true
+        fi
+        rm -f "${state}"
+    fi
+    return 0
+}
+
+cmd_fleet() {
+    local backend="local" bin_dir="" image="" verify_bin="" domain="" run_id=""
+    local replicas=2 instance_prefix="viss-probe" from_resolved="" dry_run=false
+    local domain_pool="" lease_ttl=3600 lease_dir="" ready_timeout_sec=10
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --backend) backend="$2"; shift 2 ;;
+            --bin-dir) bin_dir="$2"; shift 2 ;;
+            --image) image="$2"; shift 2 ;;
+            --verify-bin) verify_bin="$2"; shift 2 ;;
+            --domain) domain="$2"; shift 2 ;;
+            --domain-pool) domain_pool="$2"; shift 2 ;;
+            --lease-ttl) lease_ttl="$2"; shift 2 ;;
+            --lease-dir) lease_dir="$2"; shift 2 ;;
+            --replicas) replicas="$2"; shift 2 ;;
+            --instance-prefix) instance_prefix="$2"; shift 2 ;;
+            --from-resolved) from_resolved="$2"; shift 2 ;;
+            --run-id) run_id="$2"; shift 2 ;;
+            --dry-run) dry_run=true; shift ;;
+            *) echo "fleet: unknown arg $1" >&2; exit 2 ;;
+        esac
+    done
+
+    # Resolve the member instance_ids.
+    local instances=()
+    if [[ -n "${from_resolved}" ]]; then
+        local helper count i vars
+        helper="$(dirname "$0")/../../../tools/sils/topology_compiler/resolved_to_shell.py"
+        vars="$(python3 "${helper}" "${from_resolved}" --index 0 2>/dev/null | grep '^RESOLVED_CONTAINER_COUNT=')"
+        eval "${vars}"
+        count="${RESOLVED_CONTAINER_COUNT:-0}"
+        [[ "${count}" -ge 1 ]] || { echo "fleet: resolved-run has no containers" >&2; exit 2; }
+        for (( i=0; i<count; i++ )); do
+            local line; line="$(python3 "${helper}" "${from_resolved}" --index "${i}" 2>/dev/null | grep '^RESOLVED_INSTANCE_ID=')"
+            eval "${line}"
+            instances+=("${RESOLVED_INSTANCE_ID}")
+        done
+    else
+        local i
+        for (( i=1; i<=replicas; i++ )); do instances+=("${instance_prefix}-${i}"); done
+    fi
+    local n="${#instances[@]}"
+
+    [[ -z "${domain}" ]] && domain="90"
+    [[ -z "${run_id}" ]] && run_id="fleet-$(date +%s)-$$"
+
+    if [[ "${dry_run}" == true ]]; then
+        local dry_domain="${domain}"
+        [[ -n "${domain_pool}" ]] && dry_domain="auto(pool ${domain_pool})"
+        echo "{\"event\":\"fleet_dry_run\",\"run_id\":\"${run_id}\",\"backend\":\"${backend}\",\"domain_id\":\"${dry_domain}\",\"members\":${n},\"instances\":[$(printf '"%s",' "${instances[@]}" | sed 's/,$//')]}"
+        exit 0
+    fi
+
+    if [[ "${backend}" == "local" && -z "${bin_dir}" ]]; then echo "fleet: --bin-dir required for --backend local" >&2; exit 2; fi
+    if [[ "${backend}" == "docker" ]]; then
+        [[ -n "${image}" ]] || { echo "fleet: --image required for --backend docker" >&2; exit 2; }
+        [[ -n "${verify_bin}" && -x "${verify_bin}" ]] || { echo "fleet: --verify-bin (host-side) required and executable for --backend docker" >&2; exit 2; }
+    fi
+    if [[ "${backend}" == "local" ]]; then verify_bin="${bin_dir}/sils_vecu_viss_verify"; fi
+    [[ -x "${verify_bin}" ]] || { echo "fleet: verify binary not found: ${verify_bin}" >&2; exit 2; }
+
+    local tfile; tfile="$(trace_file "${run_id}")"; : > "${tfile}"
+    { echo "COORD_PID=$$"; echo "CREATED=$(date +%s)"; echo "FLEET=1"; echo "BACKEND=${backend}"; } > "$(state_file "${run_id}")"
+    : > "$(members_file "${run_id}")"
+
+    # Lease ONE domain for the whole fleet (§12: run-level, not per-member).
+    if [[ -n "${domain_pool}" ]]; then
+        local alloc_args=(allocate --pool "${domain_pool}" --ttl "${lease_ttl}" --run-id "${run_id}") allocated rc
+        [[ -n "${lease_dir}" ]] && alloc_args=(--lease-dir "${lease_dir}" "${alloc_args[@]}")
+        allocated="$(python3 "$(lease_helper)" "${alloc_args[@]}")"; rc=$?
+        if [[ ${rc} -eq 3 ]]; then trace "${run_id}" "domain_pool_exhausted" "\"pool\":\"${domain_pool}\"" | tee -a "${tfile}"; rm -f "$(state_file "${run_id}")" "$(members_file "${run_id}")"; exit 3; fi
+        [[ ${rc} -ne 0 ]] && { trace "${run_id}" "domain_alloc_failed" | tee -a "${tfile}"; rm -f "$(state_file "${run_id}")" "$(members_file "${run_id}")"; exit 2; }
+        domain="${allocated}"
+        echo "DOMAIN=${domain}" >> "$(state_file "${run_id}")"
+        echo "DOMAIN_LEASED=1" >> "$(state_file "${run_id}")"
+        [[ -n "${lease_dir}" ]] && echo "LEASE_DIR=${lease_dir}" >> "$(state_file "${run_id}")"
+    else
+        echo "DOMAIN=${domain}" >> "$(state_file "${run_id}")"
+    fi
+
+    trace "${run_id}" "fleet_start" "\"domain_id\":${domain},\"backend\":\"${backend}\",\"members\":${n}" | tee -a "${tfile}"
+
+    # Start ALL members (leave running). Collect failures; don't abort mid-start.
+    local start_ok=true i
+    for (( i=0; i<n; i++ )); do
+        local inst="${instances[$i]}" member_run_id="${run_id}-m${i}"
+        trace "${run_id}" "member_start" "\"instance_id\":\"${inst}\",\"index\":${i}" | tee -a "${tfile}"
+        if [[ "${backend}" == "docker" ]]; then
+            fleet_start_member_docker "${run_id}" "${member_run_id}" "${domain}" "${image}" "${inst}" "${i}" || start_ok=false
+        else
+            fleet_start_member_local "${run_id}" "${member_run_id}" "${domain}" "${bin_dir}" "${tfile}" "${inst}" || start_ok=false
+        fi
+    done
+
+    if [[ "${start_ok}" != true ]]; then
+        trace "${run_id}" "fleet_start_failed" | tee -a "${tfile}"
+        fleet_teardown "${run_id}"
+        trace "${run_id}" "run_fail" "\"verify_exit_code\":1" | tee -a "${tfile}"
+        echo "trace: ${tfile}" >&2; exit 1
+    fi
+
+    # Wait for ALL members ready (distinct instance_ids with a "ready" event).
+    local waited=0 ready_n=0
+    while (( waited < ready_timeout_sec * 10 )); do
+        if [[ "${backend}" == "docker" ]]; then
+            local kind id inst
+            while read -r kind id inst; do [[ "${kind}" == "docker" ]] && docker logs "${id}" >> "${tfile}" 2>&1; done < "$(members_file "${run_id}")"
+        fi
+        ready_n="$(grep '"event":"ready"' "${tfile}" 2>/dev/null | grep -o '"instance_id":"[^"]*"' | sort -u | wc -l | tr -d ' ')"
+        [[ "${ready_n}" -ge "${n}" ]] && break
+        sleep 0.1; waited=$((waited + 1))
+    done
+    if [[ "${ready_n}" -lt "${n}" ]]; then
+        trace "${run_id}" "ready_timeout" "\"ready\":${ready_n},\"expected\":${n}" | tee -a "${tfile}"
+        fleet_teardown "${run_id}"
+        trace "${run_id}" "run_fail" "\"verify_exit_code\":1" | tee -a "${tfile}"
+        echo "trace: ${tfile}" >&2; exit 1
+    fi
+    trace "${run_id}" "fleet_ready" "\"members\":${n}" | tee -a "${tfile}"
+
+    # One verify against the shared topic (Phase 1 verify is topic-level; with N
+    # publishers it receives from the group -- a "fleet is alive" check).
+    trace "${run_id}" "verify_invoke" | tee -a "${tfile}"
+    SILS_RUN_ID="${run_id}" VISS_DDS_DOMAIN_ID="${domain}" SILS_VECU_INSTANCE_ID="${instance_prefix}" \
+        "${verify_bin}" >> "${tfile}" 2>&1
+    local verify_rc=$?
+
+    fleet_teardown "${run_id}"
+    if [[ ${verify_rc} -eq 0 ]]; then
+        trace "${run_id}" "run_pass" "\"members\":${n}" | tee -a "${tfile}"
+    else
+        trace "${run_id}" "run_fail" "\"verify_exit_code\":${verify_rc},\"members\":${n}" | tee -a "${tfile}"
+    fi
+    echo "trace: ${tfile}" >&2
+    exit "${verify_rc}"
+}
+
 main() {
     local sub="${1:-}"
     shift || true
     case "${sub}" in
         start) cmd_start "$@" ;;
+        fleet) cmd_fleet "$@" ;;
         cleanup) cmd_cleanup "$@" ;;
         reap) cmd_reap "$@" ;;
         *)
-            echo "usage: $0 {start|cleanup|reap} [args...]" >&2
+            echo "usage: $0 {start|fleet|cleanup|reap} [args...]" >&2
             exit 2
             ;;
     esac
