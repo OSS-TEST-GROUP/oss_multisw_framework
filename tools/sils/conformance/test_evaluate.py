@@ -216,14 +216,18 @@ def lockstep_events(seqs=(1, 2, 3), dt=1_000_000, sims=None, complete=None,
 
 
 def staging_events(received=(1, 2, 3, 4, 5), freezes=((1, [1, 2]), (2, [3, 4]), (3, [5])),
-                   dropped=(), run_id="stg", instance_id="viss-probe-1"):
+                   dropped=(), replay=False, run_id="stg", instance_id="viss-probe-1"):
     """A PASSED run with TickInbox staging events: inputs received in order, then
-    frozen per tick. `freezes` = list of (tick_seq, [recv_seqs])."""
+    frozen per tick. `freezes` = list of (tick_seq, [recv_seqs]). replay=True marks
+    it as tick-indexed replay (§7.4)."""
     evs = [
         {"run_id": run_id, "event": "run_start", "wall_time_ms": 1000, "domain_id": 90,
          "backend": "local", "instance_id": instance_id},
         {"run_id": run_id, "instance_id": instance_id, "event": "ready", "wall_time_ms": 1001},
     ]
+    if replay:
+        evs.append({"run_id": run_id, "instance_id": instance_id, "event": "replay_start",
+                    "wall_time_ms": 1001, "file": "replay.txt"})
     wt = 1002
     for rs in received:
         evs.append({"run_id": run_id, "instance_id": instance_id, "event": "input_received",
@@ -295,6 +299,13 @@ def test_staging_dropped_input_ok():
     assert r["staging"]["inputs_dropped"] == 1
     assert not any("never staged" in v for v in r["violations"]), r["violations"]
     assert r["staging"]["deterministic"] is True
+
+
+def test_replay_mode_detected():
+    r = _stg(staging_events(replay=True))
+    assert r["staging"]["input_mode"] == "replay"
+    assert r["staging"]["deterministic"] is True
+    assert r["conformant"] is True
 
 
 def test_behavior_none_when_absent():

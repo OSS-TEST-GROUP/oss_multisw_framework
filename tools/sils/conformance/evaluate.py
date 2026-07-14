@@ -177,6 +177,15 @@ def analyze_staging(events: list[dict]) -> tuple[dict, list[str]]:
     if not frozen:
         return {"input_mode": "none"}, []
 
+    # replay (§7.4): input is pre-recorded and delivered tick-indexed, so which
+    # input lands in which tick is deterministic BY CONSTRUCTION (no wall-clock
+    # arrival race). Detected via replay_start or a source:"replay" freeze marker.
+    # Cross-run reproducibility is verified by compare_golden (§7.4 golden target),
+    # not here; the order/dup/phantom invariants below still run as a sanity check.
+    is_replay = any(e.get("event") == "replay_start" for e in events) or \
+        any(e.get("source") == "replay" for e in frozen)
+    mode = "replay" if is_replay else "local-staged"
+
     received = [e["recv_seq"] for e in events
                 if e.get("event") == "input_received" and "recv_seq" in e]
     dropped = {e["recv_seq"] for e in events
@@ -216,7 +225,7 @@ def analyze_staging(events: list[dict]) -> tuple[dict, list[str]]:
             "in ticks (§7.2/§7.3)")
 
     staging = {
-        "input_mode": "local-staged",
+        "input_mode": mode,
         "inputs_received": len(received),
         "inputs_staged": len(all_frozen),
         "inputs_dropped": len(dropped),
