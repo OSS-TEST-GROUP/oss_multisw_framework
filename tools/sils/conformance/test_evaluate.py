@@ -63,6 +63,8 @@ def test_passing_run_is_conformant():
     assert r["evidence"]["samples_received"] == 1
     assert r["violations"] == []
     assert r["instance_ids"] == ["viss-probe-1"]
+    # duration is the wall_time_ms span (1000..1014ms) in seconds.
+    assert r["duration_sec"] == 0.014, r["duration_sec"]
 
 
 def test_pass_without_sample_is_flagged():

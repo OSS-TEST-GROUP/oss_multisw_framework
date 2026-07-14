@@ -171,6 +171,15 @@ def evaluate_run(events: list[dict], path: str) -> dict:
     # --- identity (probe carries the vECU instance_id) ----------------------
     instance_ids = sorted({e["instance_id"] for e in events if e.get("instance_id")})
 
+    # --- duration (best-effort, from the wall_time_ms span) -----------------
+    # Coordinator events are single-writer wall_time_ms; probe/verify share the
+    # host clock, so max-min over all events approximates the run's wall duration.
+    # Reported for CI dashboards (e.g. JUnit testcase time); 0.0 if <2 timestamps.
+    wall_times = [e["wall_time_ms"] for e in events
+                  if isinstance(e.get("wall_time_ms"), (int, float))]
+    duration_sec = round((max(wall_times) - min(wall_times)) / 1000.0, 3) \
+        if len(wall_times) >= 2 else 0.0
+
     # A run is CONFORMANT iff it reached PASSED with zero violations. Anything
     # else (FAILED/ABORTED/INCOMPLETE, or PASSED-with-violations) is not.
     conformant = verdict == "PASSED" and not violations
@@ -180,6 +189,7 @@ def evaluate_run(events: list[dict], path: str) -> dict:
         "trace": path,
         "verdict": verdict,
         "conformant": conformant,
+        "duration_sec": duration_sec,
         "fidelity_evidenced": fidelity,
         "evidence": {
             "endpoints_matched": endpoints_matched,
@@ -228,6 +238,7 @@ def evaluate_fleet(run_results: list[dict], expected_instance_ids: list[str] | N
     passed = all_conformant and not fleet_violations
     return {
         "fleet_verdict": "PASS" if passed else "FAIL",
+        "checked_completeness": expected_instance_ids is not None,
         "runs_total": len(run_results),
         "runs_conformant": sum(1 for r in run_results if r["conformant"]),
         "fleet_violations": fleet_violations,
