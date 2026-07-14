@@ -32,3 +32,10 @@ __pycache__/
 
 # temp unittest run dirs (build.sh --build-unittest)
 output.unittest-run.*
+
+# SiLS Run Coordinator run artifacts (trace/state), incl. fleet runs.
+# These are reproducible run outputs (run_phase1.sh / sils-ci.sh), never committed.
+*.trace.jsonl
+sils-runs/
+sils-*.state
+sils-*.members
