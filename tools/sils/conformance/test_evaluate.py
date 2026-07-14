@@ -215,6 +215,83 @@ def lockstep_events(seqs=(1, 2, 3), dt=1_000_000, sims=None, complete=None,
     return evs
 
 
+def staging_events(received=(1, 2, 3, 4, 5), freezes=((1, [1, 2]), (2, [3, 4]), (3, [5])),
+                   dropped=(), run_id="stg", instance_id="viss-probe-1"):
+    """A PASSED run with TickInbox staging events: inputs received in order, then
+    frozen per tick. `freezes` = list of (tick_seq, [recv_seqs])."""
+    evs = [
+        {"run_id": run_id, "event": "run_start", "wall_time_ms": 1000, "domain_id": 90,
+         "backend": "local", "instance_id": instance_id},
+        {"run_id": run_id, "instance_id": instance_id, "event": "ready", "wall_time_ms": 1001},
+    ]
+    wt = 1002
+    for rs in received:
+        evs.append({"run_id": run_id, "instance_id": instance_id, "event": "input_received",
+                    "wall_time_ms": wt, "recv_seq": rs}); wt += 1
+    for d in dropped:
+        evs.append({"run_id": run_id, "instance_id": instance_id, "event": "input_dropped",
+                    "wall_time_ms": wt, "recv_seq": d}); wt += 1
+    for tick_seq, rs_list in freezes:
+        evs.append({"run_id": run_id, "instance_id": instance_id, "event": "tick_input_frozen",
+                    "wall_time_ms": wt, "tick_seq": tick_seq, "recv_seqs": rs_list,
+                    "count": len(rs_list)}); wt += 1
+    evs += [
+        {"run_id": run_id, "instance_id": instance_id, "event": "endpoint_matched", "wall_time_ms": wt},
+        {"run_id": run_id, "expected_instance_id": instance_id, "event": "sample_received", "wall_time_ms": wt + 1},
+        {"run_id": run_id, "expected_instance_id": instance_id, "event": "verify_pass", "wall_time_ms": wt + 2},
+        {"run_id": run_id, "event": "run_pass", "wall_time_ms": wt + 3},
+    ]
+    return evs
+
+
+def _stg(events):
+    return ev.evaluate_run(ev.parse_trace(write_trace(events))[0], "x")
+
+
+def test_no_staging_when_absent():
+    r = ev.evaluate_run(ev.parse_trace(write_trace(passing_events()))[0], "x")
+    assert r["staging"]["input_mode"] == "none"
+
+
+def test_staging_deterministic_is_conformant():
+    r = _stg(staging_events())
+    assert r["staging"]["input_mode"] == "local-staged"
+    assert r["staging"]["inputs_received"] == 5
+    assert r["staging"]["inputs_staged"] == 5
+    assert r["staging"]["deterministic"] is True, r["violations"]
+    assert r["conformant"] is True
+
+
+def test_staging_duplicate_consumption_flagged():
+    r = _stg(staging_events(freezes=((1, [1, 2]), (2, [3, 4]), (3, [4, 5]))))  # 4 twice
+    assert any("more than one tick" in v for v in r["violations"]), r["violations"]
+    assert r["staging"]["deterministic"] is False
+
+
+def test_staging_out_of_reception_order_flagged():
+    r = _stg(staging_events(freezes=((1, [3, 4]), (2, [1, 2]), (3, [5]))))
+    assert any("reception order" in v for v in r["violations"]), r["violations"]
+
+
+def test_staging_phantom_input_flagged():
+    r = _stg(staging_events(freezes=((1, [1, 2]), (2, [3, 4]), (3, [5, 9]))))  # 9 never received
+    assert any("never-received" in v for v in r["violations"]), r["violations"]
+
+
+def test_staging_lost_input_flagged():
+    # received 6, never frozen, not dropped
+    r = _stg(staging_events(received=(1, 2, 3, 4, 5, 6)))
+    assert any("never staged into a tick nor dropped" in v for v in r["violations"]), r["violations"]
+
+
+def test_staging_dropped_input_ok():
+    # 6 received but explicitly dropped -> no "lost" violation
+    r = _stg(staging_events(received=(1, 2, 3, 4, 5, 6), dropped=(6,)))
+    assert r["staging"]["inputs_dropped"] == 1
+    assert not any("never staged" in v for v in r["violations"]), r["violations"]
+    assert r["staging"]["deterministic"] is True
+
+
 def test_wall_run_reports_wall_clock():
     r = ev.evaluate_run(ev.parse_trace(write_trace(passing_events()))[0], "x")
     assert r["clock"]["mode"] == "wall"

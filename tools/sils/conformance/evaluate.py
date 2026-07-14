@@ -161,6 +161,68 @@ def analyze_lockstep(events: list[dict]) -> tuple[dict, list[str]]:
     return clock, violations
 
 
+def analyze_staging(events: list[dict]) -> tuple[dict, list[str]]:
+    """Check TickInbox input-staging determinism (§7.3). Returns (staging_info, violations).
+
+    A run stages input iff it carries `tick_input_frozen` events (the vECU froze a
+    set of already-received inputs at a tick boundary). The §7.3 attribution rules:
+      - inputs are consumed in RECEPTION order -> concatenating each tick's frozen
+        recv_seqs in tick order must be non-decreasing,
+      - no input consumed in more than one tick (no duplicate across freeze sets),
+      - a frozen recv_seq must actually have been received,
+      - every received input is eventually staged, unless dropped under a declared
+        late-sample policy (`input_dropped`).
+    """
+    frozen = [e for e in events if e.get("event") == "tick_input_frozen"]
+    if not frozen:
+        return {"input_mode": "none"}, []
+
+    violations: list[str] = []
+    received = [e["recv_seq"] for e in events
+                if e.get("event") == "input_received" and "recv_seq" in e]
+    dropped = {e["recv_seq"] for e in events
+               if e.get("event") == "input_dropped" and "recv_seq" in e}
+
+    all_frozen: list = []
+    for e in frozen:
+        rs = e.get("recv_seqs")
+        if isinstance(rs, list):
+            all_frozen.extend(rs)
+
+    # no input consumed twice
+    seen = set()
+    dups = {s for s in all_frozen if s in seen or seen.add(s)}
+    if dups:
+        violations.append(f"staging consumed input(s) {sorted(dups)} in more than one tick (§7.3)")
+
+    # consumed in reception order (the local-staged determinism invariant)
+    if all_frozen != sorted(all_frozen):
+        violations.append("staging not in reception order: frozen recv_seqs across ticks "
+                          "are not non-decreasing (§7.3)")
+
+    # can't freeze what wasn't received
+    recv_set = set(received)
+    phantom = sorted(set(all_frozen) - recv_set)
+    if phantom:
+        violations.append(f"staging froze never-received input(s) {phantom} (§7.3)")
+
+    # every received input must be consumed or explicitly dropped
+    lost = sorted(recv_set - set(all_frozen) - dropped)
+    if lost:
+        violations.append(f"received input(s) {lost} never staged into a tick nor dropped "
+                          "(declare a late-sample policy, §7.3)")
+
+    staging = {
+        "input_mode": "local-staged",
+        "inputs_received": len(received),
+        "inputs_staged": len(all_frozen),
+        "inputs_dropped": len(dropped),
+        "ticks_with_input": len(frozen),
+        "deterministic": not violations,
+    }
+    return staging, violations
+
+
 def evaluate_run(events: list[dict], path: str) -> dict:
     """Reduce one run's merged event stream to a verdict + violations."""
     run_id = dominant_run_id(events)
@@ -230,6 +292,10 @@ def evaluate_run(events: list[dict], path: str) -> dict:
     clock, lockstep_violations = analyze_lockstep(events)
     violations.extend(lockstep_violations)
 
+    # --- input staging determinism (TickInbox, §7.3) ------------------------
+    staging, staging_violations = analyze_staging(events)
+    violations.extend(staging_violations)
+
     # --- identity (probe carries the vECU instance_id) ----------------------
     instance_ids = sorted({e["instance_id"] for e in events if e.get("instance_id")})
 
@@ -253,6 +319,7 @@ def evaluate_run(events: list[dict], path: str) -> dict:
         "conformant": conformant,
         "duration_sec": duration_sec,
         "clock": clock,
+        "staging": staging,
         "fidelity_evidenced": fidelity,
         "evidence": {
             "endpoints_matched": endpoints_matched,
