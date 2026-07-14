@@ -14,8 +14,10 @@
 #
 # Both backends still use the SAME independent verify step (the host-side
 # sils_vecu_viss_verify binary) -- for the docker backend this relies on
-# `--network host` putting the container on the same network namespace as
-# the host, so a locally-run verify binary reaches the same DDS domain.
+# `--network host` (shared net namespace, so a host-run verify reaches the same
+# DDS domain and endpoints match) AND `--ipc=host` (shared /dev/shm, so Fast DDS's
+# shared-memory transport actually delivers samples across the container boundary
+# -- without it endpoints match but no data arrives; see start_docker).
 # adsw_manager/lifecycle_mgr registration (StartContainerRequest instead of a
 # direct `docker run`) is Topology Compiler / Fleet Runtime territory (§11) --
 # not this script; see service/sils/vecu/examples/saved-service-list.viss_probe.yaml
@@ -285,8 +287,18 @@ start_docker() {
     echo "DOMAIN=${domain}" >> "$(state_file "${run_id}")"
     echo "INSTANCE_ID=${instance_id}" >> "$(state_file "${run_id}")"
 
+    # --network host: shares the host net namespace so UDP discovery reaches the
+    #   host-side verify (endpoints match) and both sit on the same DDS domain.
+    # --ipc=host: REQUIRED for data, not just discovery. Fast DDS negotiates its
+    #   shared-memory transport for peers it sees as same-host (which --network host
+    #   makes them). Without a shared IPC namespace the container has its own
+    #   /dev/shm, so the writer's SHM segment is invisible to the host reader:
+    #   endpoints match but ZERO samples arrive (verified 2026-07 -- the classic
+    #   "matched but no data" symptom). Sharing the host IPC namespace opens the SHM
+    #   data path. (Alternative would be disabling the SHM transport to force UDP.)
     if ! docker run -d --name "${container_name}" \
         --network host \
+        --ipc=host \
         -e "VISS_DDS_DOMAIN_ID=${domain}" \
         -e "SILS_RUN_ID=${run_id}" \
         -e "SILS_VECU_INSTANCE_ID=${instance_id}" \
