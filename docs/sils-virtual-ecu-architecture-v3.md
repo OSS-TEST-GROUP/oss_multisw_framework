@@ -478,6 +478,69 @@ state-latest:
 
 ### 9.4 Topology
 
+Topology는 **한 번의 SiLS test run에 어떤 컴포넌트가 참여하고, 서로 어떤 통신 경로로 연결되는지를 정의한 실행 구성도**다. 네트워크 이론보다는 테스트를 실행하기 위한 **배선도와 참여자 명세**로 이해하는 것이 적절하다.
+
+Topology에는 최소한 다음 항목이 들어간다.
+
+- 참여자: SUT, vECU, Simulator, Bridge, Recorder 등
+- 연결 관계: 누가 어떤 endpoint를 publish/subscribe하는지
+- 인터페이스와 통신 자원: topic, protocol, DDS domain ID, IP, UDP port
+- 실행 위치와 소유 방식: 동일 host, container, 외부 장비 및 `managed`/`external`
+- 시간 참여 여부: wall-clock 또는 lockstep participant
+- 필수 여부: 장애 시 run을 중단해야 하는 component인지
+
+Brake vECU만 시험하는 가장 단순한 Topology는 다음과 같다.
+
+```text
+[Test/SUT]
+  brake-command publish
+          │ DDS
+          ▼
+    [Brake vECU]
+  command 처리·상태 계산
+          │ DDS
+          ▼
+  brake-status publish
+          │
+          ▼
+    [Test/SUT 검증]
+```
+
+MORAI 폐루프 시험은 Simulator와 protocol bridge가 추가된 별도 Topology다.
+
+```text
+[MORAI Simulator]
+  sensor·vehicle status
+          │ UDP
+          ▼
+[UDP–ROS2 Bridge]
+  protocol/message 변환
+          │ ROS2/DDS
+          ▼
+    [K-Autoware]
+  perception·planning·control
+          │ ROS2/DDS
+          ▼
+[UDP–ROS2 Bridge]
+          │ UDP
+          ▼
+[MORAI Simulator]
+  vehicle motion 반영
+```
+
+이 예에서 Bridge는 MORAI UDP와 ROS2/DDS를 연결하는 protocol bridge이며, DDS sample을 투명하게 가로채는 Relay Gateway가 아니다. 현재 MORAI 연동은 wall-clock 기반이므로 MORAI와 Bridge를 lockstep participant로 선언하지 않는다.
+
+각 구성 개념의 경계는 다음과 같다.
+
+| 구성 요소 | 답하는 질문 | 예 |
+|---|---|---|
+| Contract Catalog | 어떤 데이터를 어떤 형식과 QoS로 주고받는가? | `brake-command`, `sensor_msgs/msg/PointCloud2` |
+| Topology | 그 contract를 실제로 누가 누구와 어떤 경로로 주고받는가? | `MORAI → UDP Bridge → K-Autoware` |
+| Topology Compiler | 선언이 실행 가능한지 검증하고 무엇을 생성하는가? | IP/port/domain 충돌 검사, deployment artifact 생성 |
+| Run Coordinator | 구성요소를 어떤 순서로 시작·감시·종료하는가? | start → readiness → run → verdict → teardown |
+
+다음 YAML은 위 개념을 실제 실행 선언으로 표현한 예다.
+
 ```yaml
 topology: adas_brake_test
 
