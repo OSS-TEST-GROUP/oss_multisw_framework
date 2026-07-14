@@ -37,6 +37,7 @@
 #include <fastdds/dds/topic/TypeSupport.hpp>
 
 #include "VissRequestPubSubTypes.hpp"
+#include "behavior.hpp"
 #include "clock_source.hpp"
 #include "tick_inbox.hpp"
 
@@ -105,23 +106,18 @@ std::string EscapeJsonString(const std::string& in) {
     return out;
 }
 
-// Builds the envelope the real VISS server's RequestListener expects:
-// {"topic": <response topic>, "request": "<escaped inner JSON>"}.
-// A bare inner JSON without this envelope is rejected by the SUT as
-// "not a valid JSON or has missing fields" -- see dds_transport.cpp.
-std::string BuildRequestPayload(int seq, const std::string& request_action,
-                                 const std::string& request_path,
-                                 const std::string& response_topic_prefix) {
+// Wraps a behavior's inner request JSON in the envelope the real VISS server's
+// RequestListener expects: {"topic": <response topic>, "request": "<escaped inner>"}.
+// A bare inner JSON without this envelope is rejected by the SUT as "not a valid
+// JSON or has missing fields" -- see dds_transport.cpp. The inner request now comes
+// from IBehavior (behavior.hpp); this only owns the wire envelope.
+std::string WrapRequestEnvelope(const std::string& inner_request, uint64_t seq,
+                                const std::string& response_topic_prefix) {
     std::ostringstream response_topic;
     response_topic << response_topic_prefix << "/" << seq;
-
-    std::ostringstream inner;
-    inner << R"({"action":")" << request_action << R"(","path":")" << request_path
-          << R"(","requestId":"sils-)" << seq << R"("})";
-
     std::ostringstream outer;
     outer << R"({"topic":")" << response_topic.str() << R"(","request":")"
-          << EscapeJsonString(inner.str()) << R"("})";
+          << EscapeJsonString(inner_request) << R"("})";
     return outer.str();
 }
 
@@ -252,16 +248,27 @@ int main() {
         clock_mode, period_ms, &g_stop, participant, run_id, g_instance_id);
     TraceEvent(run_id, "clock_start", 0, "\"mode\":\"" + std::string(clock->mode()) + "\"");
 
-    // Publish one VISS request sample for a tick (identical wire behavior in both
-    // clock modes -- only WHEN it fires differs).
-    auto publish_one = [&](uint64_t seq) {
+    // Behavior port (§11 L2): what the vECU emits each tick. Default "viss-request"
+    // reproduces the Phase 1 wire payload; "accumulate" is a stateful example that
+    // consumes staged input. Selected by SILS_BEHAVIOR.
+    std::unique_ptr<sils::IBehavior> behavior =
+        sils::MakeBehavior(GetEnvOr("SILS_BEHAVIOR", "viss-request"), request_action, request_path);
+    TraceEvent(run_id, "behavior_start", 0, "\"name\":\"" + std::string(behavior->name()) + "\"");
+
+    // Run one tick: ask the behavior for this tick's output, trace it, wrap the
+    // inner request in the VISS envelope, and publish. Wire payload for the default
+    // behavior is identical to the original probe.
+    auto publish_one = [&](const sils::BehaviorContext& ctx) {
+        sils::BehaviorOutput out = behavior->OnTick(ctx);
+        std::cout << "{\"run_id\":\"" << run_id << "\",\"instance_id\":\"" << g_instance_id
+                  << "\",\"event\":\"behavior_output\",\"behavior\":\"" << behavior->name()
+                  << "\",\"tick_seq\":" << ctx.tick_seq << ",\"value\":" << out.value << "}" << std::endl;
         VissRequestTopic sample;
-        sample.payload(BuildRequestPayload(static_cast<int>(seq), request_action,
-                                           request_path, response_topic_prefix));
-        TraceEvent(run_id, "publish_intent", static_cast<int>(seq),
+        sample.payload(WrapRequestEnvelope(out.request_json, ctx.tick_seq, response_topic_prefix));
+        TraceEvent(run_id, "publish_intent", static_cast<int>(ctx.tick_seq),
                    "\"matched_count\":" + std::to_string(g_matched_count.load()));
         writer->write(&sample);
-        TraceEvent(run_id, "publish_result", static_cast<int>(seq));
+        TraceEvent(run_id, "publish_result", static_cast<int>(ctx.tick_seq));
     };
 
     // Optional input staging (TickInbox, §7.3): subscribe to an input stream and
@@ -288,16 +295,19 @@ int main() {
     sils::TickInfo tick;
     uint64_t last_seq = 0;
     while (clock->WaitForNextTick(tick)) {
+        std::size_t staged_count = 0;
         if (stage_input) {
             // §7.1: confirm this tick's inbound sample set at the tick boundary.
             std::vector<uint64_t> frozen = inbox.FreezeTick();
+            staged_count = frozen.size();
             std::cout << "{\"run_id\":\"" << run_id << "\",\"instance_id\":\"" << g_instance_id
                       << "\",\"event\":\"tick_input_frozen\",\"tick_seq\":" << tick.seq
                       << ",\"recv_seqs\":" << RecvSeqsJson(frozen)
                       << ",\"count\":" << frozen.size() << "}" << std::endl;
-            // (Behavior would consume `frozen` here; Phase 1 records the attribution.)
         }
-        publish_one(tick.seq);
+        // The behavior consumes this tick's staged input count (§7.3) + sim time.
+        sils::BehaviorContext ctx{tick.seq, tick.sim_time_ns, staged_count};
+        publish_one(ctx);
         clock->TickDone(tick);  // lockstep: sends TickComplete; wall: no-op
         last_seq = tick.seq;
     }
