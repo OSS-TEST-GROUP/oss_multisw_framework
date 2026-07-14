@@ -83,7 +83,7 @@ public:
             if (!info.valid_data) continue;
             {
                 std::lock_guard<std::mutex> l(m);
-                done[c.sequence()].insert(c.participant_id());
+                done[c.tick_seq()].insert(c.participant_id());
             }
             cv.notify_all();
         }
@@ -187,7 +187,7 @@ int main(int argc, char** argv) {
 
         TickGrant g;
         g.run_id(g_run_id);
-        g.sequence(seq);
+        g.tick_seq(seq);
         g.sim_time_ns(sim);
         g.dt_ns(dt_ns);
         grant_writer->write(&g);

@@ -142,7 +142,7 @@ public:
     void TickDone(const TickInfo& tick) override {
         TickComplete msg;
         msg.run_id(run_id_);
-        msg.sequence(tick.seq);
+        msg.tick_seq(tick.seq);
         msg.participant_id(participant_id_);
         msg.status(0);
         complete_writer_->write(&msg);
@@ -187,7 +187,7 @@ private:
             while (reader->take_next_sample(&g, &info) == eprosima::fastdds::dds::RETCODE_OK) {
                 if (info.valid_data) {
                     TickInfo t;
-                    t.seq = g.sequence();
+                    t.seq = g.tick_seq();
                     t.sim_time_ns = g.sim_time_ns();
                     t.dt_ns = g.dt_ns();
                     q_->push(t);

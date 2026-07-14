@@ -8,7 +8,7 @@
 struct TickGrant
 {
     string run_id;
-    unsigned long long sequence;
+    unsigned long long tick_seq;
     long long sim_time_ns;
     long long dt_ns;
 };
@@ -16,7 +16,7 @@ struct TickGrant
 struct TickComplete
 {
     string run_id;
-    unsigned long long sequence;
+    unsigned long long tick_seq;
     string participant_id;
     long status;              // 0 = ok
 };
