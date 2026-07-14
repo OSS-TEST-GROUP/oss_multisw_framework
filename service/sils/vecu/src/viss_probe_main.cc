@@ -29,10 +29,16 @@
 #include <fastdds/dds/publisher/DataWriterListener.hpp>
 #include <fastdds/dds/publisher/Publisher.hpp>
 #include <fastdds/dds/publisher/qos/DataWriterQos.hpp>
+#include <fastdds/dds/subscriber/DataReader.hpp>
+#include <fastdds/dds/subscriber/DataReaderListener.hpp>
+#include <fastdds/dds/subscriber/SampleInfo.hpp>
+#include <fastdds/dds/subscriber/Subscriber.hpp>
+#include <fastdds/dds/subscriber/qos/DataReaderQos.hpp>
 #include <fastdds/dds/topic/TypeSupport.hpp>
 
 #include "VissRequestPubSubTypes.hpp"
 #include "clock_source.hpp"
+#include "tick_inbox.hpp"
 
 namespace {
 
@@ -135,6 +141,43 @@ private:
     std::string run_id_;
 };
 
+// Stages SUT input arrivals into a TickInbox (§7.3). Runs on the reader thread;
+// assigns each arrival a reception sequence and traces input_received. The tick
+// loop later freezes the pending set per tick (tick_input_frozen).
+class InputStagingListener : public eprosima::fastdds::dds::DataReaderListener {
+public:
+    InputStagingListener(sils::TickInbox* inbox, std::string run_id, std::string topic)
+        : inbox_(inbox), run_id_(std::move(run_id)), topic_(std::move(topic)) {}
+
+    void on_data_available(eprosima::fastdds::dds::DataReader* reader) override {
+        VissRequestTopic sample;
+        eprosima::fastdds::dds::SampleInfo info;
+        while (reader->take_next_sample(&sample, &info) == eprosima::fastdds::dds::RETCODE_OK) {
+            if (!info.valid_data) continue;
+            uint64_t rs = inbox_->OnSample();
+            std::cout << "{\"run_id\":\"" << run_id_ << "\",\"instance_id\":\"" << g_instance_id
+                      << "\",\"event\":\"input_received\",\"recv_seq\":" << rs
+                      << ",\"topic\":\"" << topic_ << "\"}" << std::endl;
+        }
+    }
+
+private:
+    sils::TickInbox* inbox_;
+    std::string run_id_;
+    std::string topic_;
+};
+
+std::string RecvSeqsJson(const std::vector<uint64_t>& seqs) {
+    std::ostringstream os;
+    os << "[";
+    for (size_t i = 0; i < seqs.size(); ++i) {
+        if (i) os << ",";
+        os << seqs[i];
+    }
+    os << "]";
+    return os.str();
+}
+
 }  // namespace
 
 int main() {
@@ -221,9 +264,39 @@ int main() {
         TraceEvent(run_id, "publish_result", static_cast<int>(seq));
     };
 
+    // Optional input staging (TickInbox, §7.3): subscribe to an input stream and
+    // freeze the pending arrivals per tick, so which inputs a tick consumes is
+    // deterministic even though arrival timing isn't. Orthogonal to clock mode --
+    // freezing happens once per tick loop iteration in either mode. Reuses the
+    // VissRequestTopic type on a separate input topic (no new IDL).
+    const bool stage_input = GetEnvOr("SILS_STAGE_INPUT", "0") == "1";
+    const std::string input_topic = GetEnvOr("SILS_INPUT_TOPIC", "sils/input/stream");
+    sils::TickInbox inbox;
+    InputStagingListener input_listener(&inbox, run_id, input_topic);
+    if (stage_input) {
+        Subscriber* input_sub = participant->create_subscriber(SUBSCRIBER_QOS_DEFAULT, nullptr);
+        Topic* input_topic_obj =
+            participant->create_topic(input_topic, request_type.get_type_name(), TOPIC_QOS_DEFAULT);
+        DataReaderQos irq = DATAREADER_QOS_DEFAULT;
+        irq.reliability().kind = RELIABLE_RELIABILITY_QOS;
+        irq.history().kind = KEEP_LAST_HISTORY_QOS;
+        irq.history().depth = 256;
+        input_sub->create_datareader(input_topic_obj, irq, &input_listener);
+        TraceEvent(run_id, "input_staging_on", 0, "\"input_topic\":\"" + input_topic + "\"");
+    }
+
     sils::TickInfo tick;
     uint64_t last_seq = 0;
     while (clock->WaitForNextTick(tick)) {
+        if (stage_input) {
+            // §7.1: confirm this tick's inbound sample set at the tick boundary.
+            std::vector<uint64_t> frozen = inbox.FreezeTick();
+            std::cout << "{\"run_id\":\"" << run_id << "\",\"instance_id\":\"" << g_instance_id
+                      << "\",\"event\":\"tick_input_frozen\",\"tick_seq\":" << tick.seq
+                      << ",\"recv_seqs\":" << RecvSeqsJson(frozen)
+                      << ",\"count\":" << frozen.size() << "}" << std::endl;
+            // (Behavior would consume `frozen` here; Phase 1 records the attribution.)
+        }
         publish_one(tick.seq);
         clock->TickDone(tick);  // lockstep: sends TickComplete; wall: no-op
         last_seq = tick.seq;

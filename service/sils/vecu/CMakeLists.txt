@@ -85,5 +85,15 @@ target_include_directories(sils_clock_master PRIVATE ${SILS_TICK_GEN_DIR})
 target_link_libraries(sils_clock_master PRIVATE fastdds fastcdr)
 target_link_options(sils_clock_master PRIVATE ${SILS_ALLOW_MULTIDEF})
 
-install(TARGETS sils_vecu_viss_probe sils_vecu_viss_verify sils_clock_master
+# Test input source (§7.3 staging fixture) -- publishes async input on an input
+# topic; reuses VissRequestTopic (no new IDL).
+add_executable(sils_input_source
+    src/sils_input_source.cc
+    ${SILS_VISS_GENERATED_SRCS}
+)
+target_include_directories(sils_input_source PRIVATE ${SILS_VISS_GEN_DIR})
+target_link_libraries(sils_input_source PRIVATE fastdds fastcdr)
+target_link_options(sils_input_source PRIVATE ${SILS_ALLOW_MULTIDEF})
+
+install(TARGETS sils_vecu_viss_probe sils_vecu_viss_verify sils_clock_master sils_input_source
         RUNTIME DESTINATION bin)
