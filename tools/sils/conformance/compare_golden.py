@@ -53,6 +53,9 @@ DEFAULT_RULES = {
     "compare_events": [
         "publish_intent", "sample_received", "endpoint_matched", "endpoint_unmatched",
         "verify_pass", "verify_fail", "run_pass", "run_fail",
+        # behavior output (§11 L2 golden scenario): its per-tick `value` is compared
+        # under numeric_tolerance, so a behavior regression surfaces as a value diff.
+        "behavior_output",
     ],
     "key_fields": ["event"],
     # Per-run identity and transport noise never participate in value comparison;

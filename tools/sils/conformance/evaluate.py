@@ -227,6 +227,24 @@ def analyze_staging(events: list[dict]) -> tuple[dict, list[str]]:
     return staging, order_violations + completeness_violations
 
 
+def analyze_behavior(events: list[dict]) -> tuple[dict, list[str]]:
+    """Report the vECU behavior (§11 L2) and sanity-check its per-tick output.
+    Behavior *reproducibility* (same tick-indexed input -> same output) is verified
+    by golden-scenario comparison (compare_golden.py, §11 L2), not here; this just
+    surfaces which behavior ran and that each output carries a numeric value."""
+    starts = [e for e in events if e.get("event") == "behavior_start"]
+    outputs = [e for e in events if e.get("event") == "behavior_output"]
+    if not starts and not outputs:
+        return {"name": "none", "outputs": 0}, []
+    name = starts[-1].get("name") if starts else outputs[0].get("behavior", "unknown")
+    violations: list[str] = []
+    missing_val = [o.get("tick_seq") for o in outputs
+                   if not isinstance(o.get("value"), (int, float))]
+    if missing_val:
+        violations.append(f"behavior_output without a numeric value at tick(s) {missing_val[:10]} (§11 L2)")
+    return {"name": name, "outputs": len(outputs)}, violations
+
+
 def evaluate_run(events: list[dict], path: str) -> dict:
     """Reduce one run's merged event stream to a verdict + violations."""
     run_id = dominant_run_id(events)
@@ -300,6 +318,10 @@ def evaluate_run(events: list[dict], path: str) -> dict:
     staging, staging_violations = analyze_staging(events)
     violations.extend(staging_violations)
 
+    # --- behavior (§11 L2) --------------------------------------------------
+    behavior, behavior_violations = analyze_behavior(events)
+    violations.extend(behavior_violations)
+
     # --- identity (probe carries the vECU instance_id) ----------------------
     instance_ids = sorted({e["instance_id"] for e in events if e.get("instance_id")})
 
@@ -324,6 +346,7 @@ def evaluate_run(events: list[dict], path: str) -> dict:
         "duration_sec": duration_sec,
         "clock": clock,
         "staging": staging,
+        "behavior": behavior,
         "fidelity_evidenced": fidelity,
         "evidence": {
             "endpoints_matched": endpoints_matched,

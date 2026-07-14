@@ -153,6 +153,20 @@ def test_by_key_tolerates_intra_key_reorder_but_strict_catches_cross_key():
     assert r["ordering_diff"] is not None
 
 
+def test_behavior_output_golden_scenario():
+    # §11 L2: a behavior's per-tick value is golden-compared. Same values -> MATCH,
+    # a drifted value -> REGRESSION (behavior_output is a compared event).
+    bo = lambda rid, v2: [
+        {"event": "behavior_output", "tick_seq": 1, "value": 10.0, "run_id": rid},
+        {"event": "behavior_output", "tick_seq": 2, "value": v2, "run_id": rid},
+    ]
+    g = golden() + bo("G", 20.0)
+    assert cg.compare(g, candidate() + bo("C", 20.0), rules())["verdict"] == "MATCH"
+    r = cg.compare(g, candidate() + bo("C", 99.0), rules())
+    assert r["verdict"] == "REGRESSION"
+    assert any(d["field"] == "value" for d in r["field_diffs"]), r["field_diffs"]
+
+
 def test_input_mode_gate():
     assert cg.gate_input_mode(rules(input_mode="live")) is not None
     assert cg.gate_input_mode(rules(input_mode="local-staged")) is not None

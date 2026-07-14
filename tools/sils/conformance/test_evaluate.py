@@ -297,6 +297,31 @@ def test_staging_dropped_input_ok():
     assert r["staging"]["deterministic"] is True
 
 
+def test_behavior_none_when_absent():
+    r = ev.evaluate_run(ev.parse_trace(write_trace(passing_events()))[0], "x")
+    assert r["behavior"]["name"] == "none"
+    assert r["behavior"]["outputs"] == 0
+
+
+def test_behavior_reported_and_conformant():
+    evs = passing_events()
+    evs.insert(1, {"run_id": "r1", "event": "behavior_start", "wall_time_ms": 1001, "name": "accumulate"})
+    evs.insert(2, {"run_id": "r1", "instance_id": "viss-probe-1", "event": "behavior_output",
+                   "wall_time_ms": 1002, "behavior": "accumulate", "tick_seq": 1, "value": 3})
+    r = ev.evaluate_run(ev.parse_trace(write_trace(evs))[0], "x")
+    assert r["behavior"]["name"] == "accumulate"
+    assert r["behavior"]["outputs"] == 1
+    assert r["conformant"] is True
+
+
+def test_behavior_nonnumeric_value_flagged():
+    evs = passing_events()
+    evs.insert(1, {"run_id": "r1", "event": "behavior_output", "wall_time_ms": 1002,
+                   "behavior": "x", "tick_seq": 1, "value": "not-a-number"})
+    r = ev.evaluate_run(ev.parse_trace(write_trace(evs))[0], "x")
+    assert any("without a numeric value" in v for v in r["violations"]), r["violations"]
+
+
 def test_wall_run_reports_wall_clock():
     r = ev.evaluate_run(ev.parse_trace(write_trace(passing_events()))[0], "x")
     assert r["clock"]["mode"] == "wall"

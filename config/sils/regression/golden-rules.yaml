@@ -23,6 +23,7 @@ compare_events:
   - verify_fail
   - run_pass
   - run_fail
+  - behavior_output          # §11 L2: per-tick behavior `value` (golden scenario)
 
 # Events are aligned by this key, then paired positionally within each key group.
 key_fields: [event]
