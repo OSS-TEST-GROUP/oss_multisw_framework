@@ -1,0 +1,64 @@
+# SiLS golden-trace regression rules -- architecture v3 Final §12.4.
+#
+# Consumed by tools/sils/conformance/compare_golden.py to compare a candidate run
+# trace against a known-good golden trace with tolerances instead of byte-equality.
+# Regenerate the golden trace (not this file) when the SUT/vECU version legitimately
+# changes behavior; keep the golden linked to its SUT/vECU version out-of-band.
+
+# §12.4 input-mode gate: only deterministic modes may be golden exact-match targets.
+# `live` and `local-staged` are rejected outright. Set this to the mode the traces
+# were actually captured in; an undeclared mode is allowed but leaves the gate
+# unenforced (a warning is emitted).
+input_mode: replay
+reject_input_modes: [live, local-staged]
+
+# Only semantically meaningful events participate; coordinator bookkeeping
+# (domain_leased, cleanup_done, process_running, ...) is excluded by omission.
+compare_events:
+  - publish_intent
+  - sample_received
+  - endpoint_matched
+  - endpoint_unmatched
+  - verify_pass
+  - verify_fail
+  - run_pass
+  - run_fail
+
+# Events are aligned by this key, then paired positionally within each key group.
+key_fields: [event]
+
+# Per-run identity and transport noise never participate in value comparison.
+# wall_time_ms is compared as a relative offset via latency_window_ms, not here.
+ignore_fields:
+  - run_id
+  - instance_id
+  - expected_instance_id
+  - line_index
+  - pid
+  - container
+  - wall_time_ms
+  - backend
+  - pool
+
+# Floating-point tolerance (§12.4). `default` applies to any numeric field without
+# a specific entry; add per-field entries as plant signals are introduced.
+# within iff |golden - candidate| <= abs + rel*|golden|.
+numeric_tolerance:
+  default: {abs: 0.0, rel: 0.0}
+  fields:
+    # speed: {abs: 0.5}
+    # rpm:   {rel: 0.01}
+
+# Allowed relative-timing drift (ms) for a matched event's offset from the run's
+# first timestamp. null disables the latency check.
+latency_window_ms: 50
+
+# by_key = order matters only within a key group (unordered across keys);
+# strict = the full event sequence must match position-for-position.
+ordering: by_key
+
+# What to do about samples present in golden but not candidate (missing) or the
+# reverse (extra): fail | warn | ignore.
+sample_policy:
+  missing: fail
+  extra: fail

@@ -1,0 +1,259 @@
+#!/usr/bin/env python3
+"""Self-contained checks for compare_golden.py -- no pytest, just asserts.
+
+Run: python3 tools/sils/conformance/test_compare_golden.py
+"""
+
+from __future__ import annotations
+
+import copy
+import json
+import sys
+import tempfile
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import compare_golden as cg  # noqa: E402
+
+
+def golden():
+    """A replay-style trace: run_start (baseline, not compared) + two publishes
+    carrying a numeric 'speed', a received sample, and a pass."""
+    return [
+        {"event": "run_start", "wall_time_ms": 1000, "domain_id": 90, "run_id": "G"},
+        {"event": "publish_intent", "seq": 0, "wall_time_ms": 1100, "speed": 10.0, "run_id": "G"},
+        {"event": "publish_intent", "seq": 1, "wall_time_ms": 1200, "speed": 20.0, "run_id": "G"},
+        {"event": "sample_received", "wall_time_ms": 1300, "run_id": "G"},
+        {"event": "verify_pass", "wall_time_ms": 1400, "run_id": "G"},
+        {"event": "run_pass", "wall_time_ms": 1500, "run_id": "G"},
+    ]
+
+
+def rules(**over):
+    r = copy.deepcopy(cg.DEFAULT_RULES)
+    r["input_mode"] = "replay"  # pass the §12.4 gate by default in unit tests
+    for k, v in over.items():
+        if isinstance(v, dict) and isinstance(r.get(k), dict):
+            r[k] = {**r[k], **v}
+        else:
+            r[k] = v
+    return r
+
+
+def candidate(**mut):
+    """A copy of golden with per-run identity changed (run_id=C) so ignore_fields
+    is exercised; mut can override nothing here -- callers mutate the returned list."""
+    c = copy.deepcopy(golden())
+    for e in c:
+        e["run_id"] = "C"
+    return c
+
+
+def test_identical_is_match():
+    r = compare_result = cg.compare(golden(), candidate(), rules())
+    assert r["verdict"] == "MATCH", r
+    assert r["field_diffs"] == []
+
+
+def test_run_id_difference_is_ignored():
+    # candidate() already flips run_id to "C"; it must not register as a diff.
+    r = cg.compare(golden(), candidate(), rules())
+    assert r["verdict"] == "MATCH", r["field_diffs"]
+
+
+def test_numeric_within_tolerance_matches():
+    c = candidate()
+    for e in c:
+        if e["event"] == "publish_intent" and e["seq"] == 0:
+            e["speed"] = 10.3
+    r = cg.compare(golden(), c, rules(numeric_tolerance={"default": {"abs": 0.0, "rel": 0.0},
+                                                          "fields": {"speed": {"abs": 0.5}}}))
+    assert r["verdict"] == "MATCH", r["field_diffs"]
+
+
+def test_numeric_beyond_tolerance_regresses():
+    c = candidate()
+    for e in c:
+        if e["event"] == "publish_intent" and e["seq"] == 0:
+            e["speed"] = 12.0
+    r = cg.compare(golden(), c, rules(numeric_tolerance={"default": {"abs": 0.0, "rel": 0.0},
+                                                         "fields": {"speed": {"abs": 0.5}}}))
+    assert r["verdict"] == "REGRESSION"
+    assert any(d["kind"] == "numeric" and d["field"] == "speed" for d in r["field_diffs"]), r["field_diffs"]
+
+
+def test_no_tolerance_means_exact_numeric():
+    c = candidate()
+    for e in c:
+        if e["event"] == "publish_intent" and e["seq"] == 0:
+            e["speed"] = 10.0001
+    r = cg.compare(golden(), c, rules())  # default tol 0/0 -> exact
+    assert r["verdict"] == "REGRESSION", r
+
+
+def test_value_diff_regresses():
+    g = golden()
+    g[1]["mode"] = "get"          # add a string field to golden pub#0
+    c = candidate()
+    c[1]["mode"] = "set"          # candidate differs
+    r = cg.compare(g, c, rules())
+    assert r["verdict"] == "REGRESSION"
+    assert any(d["kind"] == "value" and d["field"] == "mode" for d in r["field_diffs"]), r["field_diffs"]
+
+
+def test_missing_sample_policy_fail_then_warn_then_ignore():
+    c = candidate()
+    c = [e for e in c if not (e["event"] == "publish_intent" and e["seq"] == 1)]  # drop pub#1
+    assert cg.compare(golden(), c, rules(sample_policy={"missing": "fail", "extra": "fail"}))["verdict"] == "REGRESSION"
+    warn = cg.compare(golden(), c, rules(sample_policy={"missing": "warn", "extra": "fail"}))
+    assert warn["verdict"] == "MATCH" and warn["warnings"], warn
+    ign = cg.compare(golden(), c, rules(sample_policy={"missing": "ignore", "extra": "fail"}))
+    assert ign["verdict"] == "MATCH" and not ign["warnings"], ign
+    # The dropped event is still reported structurally regardless of policy.
+    assert len(warn["missing_samples"]) == 1
+
+
+def test_extra_sample_policy():
+    c = candidate()
+    c.append({"event": "publish_intent", "seq": 2, "wall_time_ms": 1250, "speed": 30.0, "run_id": "C"})
+    assert cg.compare(golden(), c, rules(sample_policy={"missing": "fail", "extra": "fail"}))["verdict"] == "REGRESSION"
+    ok = cg.compare(golden(), c, rules(sample_policy={"missing": "fail", "extra": "ignore"}))
+    assert ok["verdict"] == "MATCH", ok
+    assert len(ok["extra_samples"]) == 1
+
+
+def test_latency_window():
+    c = candidate()
+    for e in c:  # shift every candidate timestamp +30ms; baseline shifts too, so offsets unchanged
+        e["wall_time_ms"] += 30
+    r_ok = cg.compare(golden(), c, rules(latency_window_ms=10))
+    assert r_ok["verdict"] == "MATCH", r_ok["latency_violations"]
+
+    c2 = candidate()
+    for e in c2:  # delay ONLY sample_received by 100ms -> its offset drifts
+        if e["event"] == "sample_received":
+            e["wall_time_ms"] += 100
+    r_bad = cg.compare(golden(), c2, rules(latency_window_ms=50))
+    assert r_bad["verdict"] == "REGRESSION"
+    assert len(r_bad["latency_violations"]) == 1, r_bad["latency_violations"]
+
+
+def test_by_key_tolerates_intra_key_reorder_but_strict_catches_cross_key():
+    # Move sample_received before the publishes (cross-key reorder).
+    c = candidate()
+    sample = next(e for e in c if e["event"] == "sample_received")
+    c.remove(sample)
+    c.insert(1, sample)  # right after run_start, before publish_intents
+    # by_key: each key group still aligns positionally -> MATCH.
+    assert cg.compare(golden(), c, rules(ordering="by_key"))["verdict"] == "MATCH"
+    # strict: flat key sequence differs -> REGRESSION with ordering_diff.
+    r = cg.compare(golden(), c, rules(ordering="strict"))
+    assert r["verdict"] == "REGRESSION"
+    assert r["ordering_diff"] is not None
+
+
+def test_input_mode_gate():
+    assert cg.gate_input_mode(rules(input_mode="live")) is not None
+    assert cg.gate_input_mode(rules(input_mode="local-staged")) is not None
+    assert cg.gate_input_mode(rules(input_mode="replay")) is None
+    assert cg.gate_input_mode(rules(input_mode="full-lockstep")) is None
+
+
+def test_numeric_tolerance_none_from_empty_yaml():
+    # YAML parses an empty `fields:`/`default:` as None; comparison must not crash
+    # and must fall back to exact (0/0) tolerance.
+    r = rules(numeric_tolerance={"default": None, "fields": None})
+    c = candidate()
+    c[1]["speed"] = 10.0001
+    res = cg.compare(golden(), c, r)
+    assert res["verdict"] == "REGRESSION"  # exact match required -> tiny drift fails
+    # And an exact-equal candidate still matches without error.
+    assert cg.compare(golden(), candidate(), r)["verdict"] == "MATCH"
+
+
+def test_reference_rules_file_loads():
+    # The shipped §12.4 rule set (config/sils/regression/golden-rules.yaml) must
+    # load and compare without error despite its commented-out empty tolerance maps.
+    ref = Path(__file__).resolve().parents[3] / "config/sils/regression/golden-rules.yaml"
+    if not ref.exists():
+        return  # tolerate running from a checkout without config/
+    r, err = cg.load_rules(ref)
+    assert err is None, err
+    assert cg.compare(golden(), candidate(), r)["verdict"] == "MATCH"
+
+
+def test_load_rules_merge_nested():
+    d = Path(tempfile.mkdtemp(prefix="sils-cmp-rules-"))
+    rp = d / "rules.yaml"
+    rp.write_text(
+        "input_mode: replay\n"
+        "latency_window_ms: 25\n"
+        "sample_policy:\n  missing: warn\n",  # only override 'missing'; 'extra' keeps default
+        encoding="utf-8",
+    )
+    r, err = cg.load_rules(rp)
+    assert err is None
+    assert r["latency_window_ms"] == 25
+    assert r["sample_policy"]["missing"] == "warn"
+    assert r["sample_policy"]["extra"] == "fail"  # default preserved through merge
+
+
+def _write(events, name):
+    d = Path(tempfile.mkdtemp(prefix="sils-cmp-"))
+    p = d / name
+    p.write_text("\n".join(json.dumps(e) for e in events) + "\n", encoding="utf-8")
+    return p
+
+
+def test_main_exit_codes():
+    import io
+    from contextlib import redirect_stdout
+    g = _write(golden(), "golden.jsonl")
+    c_ok = _write(candidate(), "cand.jsonl")
+    rp = _write([], "x")  # placeholder path reuse dir
+    rules_path = rp.parent / "rules.yaml"
+    rules_path.write_text("input_mode: replay\n", encoding="utf-8")
+
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        assert cg.main(["--golden", str(g), "--candidate", str(c_ok),
+                        "--rules", str(rules_path), "--quiet"]) == cg.EXIT_MATCH
+
+    # regression
+    c_bad_events = candidate()
+    c_bad_events[1]["speed"] = 99.0
+    c_bad = _write(c_bad_events, "cand2.jsonl")
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        assert cg.main(["--golden", str(g), "--candidate", str(c_bad),
+                        "--rules", str(rules_path), "--quiet"]) == cg.EXIT_REGRESSION
+
+    # rejected input mode
+    reject_rules = rp.parent / "reject.yaml"
+    reject_rules.write_text("input_mode: live\n", encoding="utf-8")
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        assert cg.main(["--golden", str(g), "--candidate", str(c_ok),
+                        "--rules", str(reject_rules), "--quiet"]) == cg.EXIT_REJECT
+
+
+def main() -> int:
+    tests = [v for k, v in globals().items() if k.startswith("test_") and callable(v)]
+    failed = 0
+    for t in tests:
+        try:
+            t()
+            print(f"PASS {t.__name__}")
+        except AssertionError as e:
+            failed += 1
+            print(f"FAIL {t.__name__}: {e}")
+        except Exception as e:  # noqa: BLE001
+            failed += 1
+            print(f"ERROR {t.__name__}: {type(e).__name__}: {e}")
+    print(f"\n{len(tests) - failed}/{len(tests)} passed")
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
