@@ -138,4 +138,6 @@ Phase 1 은 vECU 한 개가 `/VIN/Vehicle` 로 VISS 요청을 publish 하고 독
 
 **실검증 완료(x86_64)**: C++ 빌드; `run_phase1.sh` local·docker 단일 왕복(`run_pass`); 병렬 격리(§12, 동시 2런 각자 도메인); **Fleet(§11/§13, vECU 3개 동시 기동·도메인 공유·`run_pass`)**; 위 모든 실 trace 를 `evaluate.py` 가 그대로 PASSED 로 판정(fleet 은 instance_id 3개 나열). Docker 백엔드는 `--network host`(discovery)에 더해 **`--ipc=host`(SHM 데이터 경로)** 가 필수임을 실측으로 확인해 반영했다.
 
-**남은 것**: arm64(`--aarch64`) 실빌드·실행 검증, 실제 VISS SUT 와의 폐루프(현재는 독립 verify 로 왕복만 확인), 물리적 timing 충실도 실측(§0A Contract Spike), 그리고 §9.5-유효한 다중 topic/multi-owner contract 기반 fleet(현재 `--replicas` 는 single-owner 우회 스모크).
+**arm64 빌드 확인**: `./build.sh --aarch64 --build-sils` 로 aarch64 크로스빌드 성공(코드 수정 없이 — SiLS 는 arch 중립, core 와 동일 FastDDS/IDL 경로). arm64 **실행** 검증은 arm64 호스트(또는 qemu/binfmt) 필요.
+
+**남은 것**: arm64 실행 검증(arm64 머신/에뮬), 실제 VISS SUT 와의 폐루프(현재는 독립 verify 로 왕복만 확인), 물리적 timing 충실도 실측(§0A Contract Spike), 그리고 §9.5-유효한 다중 topic/multi-owner contract 기반 fleet(현재 `--replicas` 는 single-owner 우회 스모크), sim-time/lockstep 모드(§7).
