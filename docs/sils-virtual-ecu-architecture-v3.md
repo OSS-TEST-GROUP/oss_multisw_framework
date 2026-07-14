@@ -133,6 +133,34 @@ saved-service-list.yaml
 - **Relay Gateway(선택)**: source topic을 구독해 별도 target topic으로 재발행하는 명시적 relay다. 기존 peer 사이에 투명하게 개입하지 않는다.
 - **vECU Runtime**: Descriptor에 따라 ECU 동작, plant, fault, bus endpoint를 실행한다.
 
+### 4.1 외부 Simulator와 Protocol Bridge
+
+MORAI 같은 외부 차량 Simulator는 vECU 내부 adapter나 Relay Gateway로 모델링하지 않는다. Simulator와 UDP–ROS2 Bridge를 SiLS Run에 참여하는 **external component**로 등록한다.
+
+```text
+┌──────────────────────────────── SiLS control boundary ────────────────────────────────┐
+│ Run Coordinator                                                                       │
+│   ├─ topology/IP/port/domain 검증                                                      │
+│   ├─ managed component start/stop 또는 external component attach/health              │
+│   └─ readiness, scenario, pass/fail, artifact, cleanup                                │
+│                                                                                        │
+│ K-Autoware/MMF ◀── ROS2/DDS ──▶ [선택 Contract Adapter] ◀──▶ UDP–ROS2 Bridge          │
+└───────────────────────────────────────────────────────────────┬────────────────────────┘
+                                                                │ UDP
+                                                                ▼
+                                                        MORAI Simulator
+                                                        External Plant/Sensor
+```
+
+역할 원칙:
+
+- MORAI는 Ego 차량 동역학과 sensor/environment 생성을 소유한다.
+- 검증된 외부 Bridge는 MORAI UDP packet codec과 ROS2 pub/sub를 소유한다.
+- SiLS는 Bridge 기능을 중복 구현하지 않고 구성·계약·readiness·장애 감시·시험 판정을 소유한다.
+- Bridge가 `morai_msgs`까지만 제공하는 endpoint는 선택적 Contract Adapter가 K-Autoware canonical type으로 변환한다.
+- 이 Bridge는 DDS peer 사이 topic을 relay하는 §7의 Relay Gateway가 아니라 서로 다른 protocol 경계를 변환하는 **external protocol bridge**다.
+- 초기 연동은 `WallClock + live`이며 외부 Simulator/Bridge를 lockstep required participant에 넣지 않는다.
+
 ---
 
 ## 5. SiLS Run Coordinator
@@ -144,9 +172,9 @@ Run Coordinator는 다음 종단 흐름의 단일 소유자다.
 ```text
 Topology compile
  → deployment artifact 설치
- → SUT/vECU 컨테이너 기동 요청
+ → SUT/vECU와 managed external component 기동 또는 external component attach
  → container running 대기
- → VecuReady 및 필수 peer match 대기
+ → VecuReady, Bridge/Simulator readiness 및 필수 peer match 대기
  → scenario와 clock 시작
  → pass/fail/timeout 판정
  → clock 중지 및 trace flush
@@ -467,6 +495,24 @@ domain_bindings:
   VISS_DDS_DOMAIN_ID: "${run.domain_id}"
   ROS_DOMAIN_ID: "${run.domain_id}"  # ROS2 participant가 run에 참여할 때만
 
+external_components:
+  - name: morai-simulator
+    kind: simulator
+    deployment: external              # external | managed
+    vehicle_state_authority: morai
+    clock: {mode: wall, target_rate_hz: 50}
+    readiness: {kind: udp-connected, timeout_ms: 30000}
+  - name: hanyang-morai-bridge
+    kind: protocol-bridge
+    protocol: {source: morai-udp, target: ros2-dds}
+    deployment: external
+    host: "${MORAI_BRIDGE_HOST}"
+    udp_port_profile: morai-ego-0
+    ros_domain_id: "${run.domain_id}"
+    readiness:
+      required_endpoints: [vehicle-control, vehicle-status]
+      require_fresh_sample: true
+
 vecus:
   - {name: vecu-brake, descriptor: brake_ecu.yaml}
   - name: wheelspeed
@@ -494,6 +540,9 @@ Topology Compiler는 다음을 배포 전에 실패 처리한다.
 - container, participant, instance, key 중복
 - 필수 participant와 생성된 replica 불일치
 - MMF/VISS/ROS domain binding 불일치
+- external component의 host/port profile 누락 또는 run 간 UDP port 충돌
+- Simulator와 FMU/vECU가 동일 vehicle state를 동시에 소유
+- Bridge ROS2 endpoint type/QoS/rate/frame/unit 계약 불일치
 - 실 provider와 virtual provider 동시 활성화
 - 선택한 backend에 필요한 필드 또는 manifest 누락
 
@@ -564,6 +613,13 @@ domain_pool:
 - lease는 TTL과 owner heartbeat를 가지며 Coordinator 비정상 종료 후에도 회수 가능해야 한다.
 - runner별 domain pool을 분리해 서로 다른 runner의 할당 충돌을 피한다.
 - 동시성 요구가 측정 상한을 넘으면 DDS partition, network namespace 또는 runner/VM 격리를 평가한다.
+
+외부 Simulator run은 DDS domain 외에 UDP port와 Simulator/GPU/license도 예산으로 관리한다.
+
+- topology는 run별 UDP port block을 할당하고 종료 시 회수한다.
+- 화면이나 예제의 `127.0.0.1`과 고정 port를 운영 기본값으로 사용하지 않는다.
+- external host에 배치할 경우 routing, firewall, MTU와 container host networking을 manifest에 기록한다.
+- 병렬도 상한은 `domain × UDP port block × Simulator instance/license × GPU capacity` 중 최소값이다.
 - partition은 동일 domain의 discovery 부하까지 제거하지 않으며 모든 SUT participant의 일관된 partition 설정이 확인된 뒤 도입한다.
 
 ### 12.3 Trace metadata
@@ -695,6 +751,9 @@ service/sils/
     scenarios/
   clock_master/
   relay_gateway/                 # 선택 기능, 투명 interposition 아님
+  external_integration/
+    bridge_supervisor/           # external/managed bridge readiness와 health
+    contract_adapter/            # 선택: 누락된 canonical 변환만 구현
 
 config/sils/
   contracts/
@@ -723,11 +782,14 @@ docs/
 | 0A Contract Spike | 위험 검증 | DynamicData↔codegen, QoS, ARM64, 실제 topic 실험 | endpoint match와 sample 일치 |
 | 0B Contract Design | 계약 확정 | Catalog/schema, domain bindings, backend schema, readiness IDL | schema 및 설계 리뷰 |
 | 1 Vertical PoC | 종단 경로 | vECU 1개, Run Coordinator 최소본, lifecycle start/stop, trace | 기동·READY·수신·정리 성공 |
+| 1B External Simulator PoC | MORAI 폐루프 | MORAI 1개, 검증된 UDP–ROS2 Bridge 1개, K-Autoware control/status, Bridge Supervisor | UDP 연결·ROS2 match·직진/조향/정지·장애 정리 성공 |
 | 2 Fleet Runtime | 다중 인스턴스 | Topology Compiler, replica, run 격리, local-staged input | 병렬 run cross-talk 0 |
 | 3 Deterministic Regression | 반복 재현 | lockstep, replay, comparator | 반복 trace 허용 범위 내 일치 |
 | 4 High Fidelity | plant/protocol | FMI, vCAN/SOME-IP/CAN-FD, conformance suite | 선언 fidelity 통과 |
 
 Phase 1은 WallClock과 실제 MMF endpoint 하나를 사용한다. lockstep은 계약은 0B에서 정의하되 구현은 Phase 3에서 완료한다.
+
+Phase 1B는 Phase 1의 VISS vertical slice를 대체하지 않는다. Phase 1이 증명한 Coordinator/Contract/readiness 기반 위에서 external component 모델을 추가한다. Camera/LiDAR/Radar와 lockstep은 Phase 1B 범위에서 제외한다.
 
 ### Phase 1 Scope Gate
 
@@ -782,6 +844,7 @@ Phase 1 통과 전에는 제외 기능의 풀 구현을 시작하지 않는다. 
 - run별 `MMF_DDS_DOMAIN_ID` 주입
 - VISS 참여 시 동일 값의 `VISS_DDS_DOMAIN_ID` 주입
 - ROS2 참여 시 동일 값의 `ROS_DOMAIN_ID` 주입
+- 외부 Bridge 참여 시 host IP, UDP port profile, ROS2 endpoint contract와 `ROS_DOMAIN_ID` 주입
 - Topology Compiler가 backend별 saved-service-list와 manifest 생성
 
 따라서 **SUT 코드 변경 0**은 초기 목표로 유지할 수 있지만 **SUT 배포 설정 변경 0은 아니다**.
@@ -791,6 +854,7 @@ Phase 1 통과 전에는 제외 기능의 풀 구현을 시작하지 않는다. 
 - `tools/sils/topology_compiler`
 - `tools/sils/run_coordinator`
 - `service/sils/vecu`, clock master, input gateway
+- external Simulator/Bridge용 Supervisor와 선택적 Contract Adapter
 - `idl/dds/sils/` control 및 tick IDL
 - vECU Docker target과 build option
 
@@ -814,10 +878,21 @@ Phase 1 통과 전에는 제외 기능의 풀 구현을 시작하지 않는다. 
 8. script behavior의 sandbox와 timeout
 9. Clock Master 장애 시 checkpoint/restart 지원 여부
 10. FMU 결합 시점과 co-simulation master 역할
+11. external component를 직접 기동하는 managed 범위와 attach-only 범위
+12. MORAI/Bridge UDP port allocator와 운영 네트워크 소유자
+13. Bridge가 보장하는 K-Autoware canonical 변환 범위 및 인수 기준
 
 ---
 
 ## 20. 변경 이력
+
+### v3 external simulator 보강 (2026-07-14)
+
+- MORAI Simulator와 UDP–ROS2 Bridge를 vECU/Relay Gateway가 아닌 external component로 모델링
+- managed/external lifecycle, Bridge readiness, ROS2 endpoint match와 fresh sample 조건 추가
+- DDS domain 예산에 UDP port, Simulator instance/license와 GPU capacity를 추가
+- 기존 Phase 1을 유지하고 후속 External Simulator Vertical PoC를 별도 정의
+- 검증된 Bridge 기능은 재구현하지 않고 Supervisor/Contract Validator와 선택적 Adapter만 소유하도록 역할 분리
 
 ### v3 (2026-07-13)
 
