@@ -39,6 +39,7 @@
 #include "VissRequestPubSubTypes.hpp"
 #include "behavior.hpp"
 #include "clock_source.hpp"
+#include "replay_source.hpp"
 #include "tick_inbox.hpp"
 
 namespace {
@@ -292,11 +293,48 @@ int main() {
         TraceEvent(run_id, "input_staging_on", 0, "\"input_topic\":\"" + input_topic + "\"");
     }
 
+    // Optional tick-indexed replay (§7.4): pre-recorded input count per tick, so the
+    // tick->input attribution is fixed by the file (deterministic, reproducible) --
+    // no wall-clock arrival race. Takes precedence over DDS staging when set.
+    const std::string replay_file = GetEnvOr("SILS_REPLAY_FILE", "");
+    const bool replay_mode = !replay_file.empty();
+    sils::ReplaySource replay;
+    if (replay_mode) {
+        std::string err;
+        if (!replay.Load(replay_file, err)) {
+            std::cerr << "probe: " << err << std::endl;
+            participant->delete_contained_entities();
+            DomainParticipantFactory::get_instance()->delete_participant(participant);
+            return 2;
+        }
+        TraceEvent(run_id, "replay_start", 0,
+                   "\"file\":\"" + replay_file + "\",\"inputs\":" + std::to_string(replay.total()));
+    }
+
     sils::TickInfo tick;
     uint64_t last_seq = 0;
+    uint64_t replay_recv = 0;  // synthetic reception sequence for replayed inputs
     while (clock->WaitForNextTick(tick)) {
         std::size_t staged_count = 0;
-        if (stage_input) {
+        if (replay_mode) {
+            // §7.4: deliver this tick's pre-recorded inputs. Emit the same
+            // input_received / tick_input_frozen contract as DDS staging, but
+            // sourced from the file (source:"replay") so it's fully reproducible.
+            std::size_t c = replay.CountForTick(tick.seq);
+            std::vector<uint64_t> rs;
+            for (std::size_t k = 0; k < c; ++k) {
+                ++replay_recv;
+                rs.push_back(replay_recv);
+                std::cout << "{\"run_id\":\"" << run_id << "\",\"instance_id\":\"" << g_instance_id
+                          << "\",\"event\":\"input_received\",\"recv_seq\":" << replay_recv
+                          << ",\"source\":\"replay\"}" << std::endl;
+            }
+            staged_count = c;
+            std::cout << "{\"run_id\":\"" << run_id << "\",\"instance_id\":\"" << g_instance_id
+                      << "\",\"event\":\"tick_input_frozen\",\"tick_seq\":" << tick.seq
+                      << ",\"recv_seqs\":" << RecvSeqsJson(rs) << ",\"count\":" << c
+                      << ",\"source\":\"replay\"}" << std::endl;
+        } else if (stage_input) {
             // §7.1: confirm this tick's inbound sample set at the tick boundary.
             std::vector<uint64_t> frozen = inbox.FreezeTick();
             staged_count = frozen.size();
