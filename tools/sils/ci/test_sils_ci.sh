@@ -67,6 +67,29 @@ check 1 "incomplete trace -> fleet FAIL" \
 check 2 "usage: no --topology and no --resolved" --out-dir "${WORK}/u1"
 check 2 "usage: no --out-dir" --topology "${TOPO}"
 
+# lint gate: a broken catalog must fail BEFORE compile. --contracts is relative to
+# the repo root (that's what sils-ci hands the linter), so drop a broken catalog at
+# a repo-root-relative temp path and clean it up in the trap.
+BADREL="tmp-sils-ci-badcat-$$.yaml"
+cat > "${REPO_ROOT}/${BADREL}" <<'YAML'
+contracts:
+  - id: broken
+    transport: dds
+    domain_env: TYPO_DDS_DOMAIN_ID     # unknown env
+    idl: idl/does/not/exist.idl         # missing file
+    struct: X
+    registered_type: X
+    topic: /x
+    qos_profile: ghost                  # dangling qos ref
+    ownership: single
+    roles: {sut: subscribe, vecu: publish}
+YAML
+trap 'rm -rf "${WORK}"; rm -f "${REPO_ROOT}/${BADREL}"' EXIT
+check 1 "lint gate: broken catalog fails before compile" \
+    --topology "${TOPO}" --out-dir "${WORK}/lintfail" --contracts "${BADREL}"
+check 0 "lint gate: --no-lint bypasses lint (dry-run)" \
+    --topology "${TOPO}" --out-dir "${WORK}/nolint" --no-lint --dry-run
+
 # --- artifact presence check on the happy path -------------------------------
 for f in resolved-run.yaml saved-service-list.yaml verdict.json junit.xml; do
     if [[ -f "${WORK}/ok/${f}" ]]; then

@@ -36,6 +36,7 @@ set -u
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 
+LINT_PY="${REPO_ROOT}/tools/sils/contracts/lint_catalog.py"
 COMPILE_PY="${REPO_ROOT}/tools/sils/topology_compiler/compile.py"
 RESOLVED_TO_SHELL_PY="${REPO_ROOT}/tools/sils/topology_compiler/resolved_to_shell.py"
 RUN_PHASE1_SH="${REPO_ROOT}/service/sils/run_coordinator/run_phase1.sh"
@@ -55,7 +56,7 @@ usage() {
 topology="" out_dir="" contracts="" qos="" image=""
 resolved_in="" traces_dir_in="" golden_dir="" rules=""
 backend="local" bin_dir="" verify_bin="" run_id="" suite_name="sils-conformance"
-dry_run=false keep_going=false
+dry_run=false keep_going=false no_lint=false lint_strict=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -75,6 +76,8 @@ while [[ $# -gt 0 ]]; do
         --suite-name)  suite_name="$2"; shift 2 ;;
         --dry-run)     dry_run=true; shift ;;
         --keep-going)  keep_going=true; shift ;;
+        --no-lint)     no_lint=true; shift ;;
+        --lint-strict) lint_strict=true; shift ;;
         -h|--help)     usage 0 ;;
         *) die "unknown arg $1 (see --help)" ;;
     esac
@@ -90,6 +93,25 @@ mkdir -p "${out_dir}"
 traces_dir="${out_dir}/traces"
 mkdir -p "${traces_dir}"
 resolved="${out_dir}/resolved-run.yaml"
+
+# --- stage 0: lint the catalogs (pre-compile gate) ---------------------------
+# Lint only when we are about to compile (a topology draws on the live catalog);
+# with --resolved the catalog was already consumed upstream. Catches authoring
+# errors (missing fields, domain_env typos, dangling qos refs, missing IDL) before
+# the compiler hits them -- some of which the compiler would crash on.
+if [[ -z "${resolved_in}" && "${no_lint}" != true ]]; then
+    lint_args=()
+    [[ -n "${contracts}" ]] && lint_args+=(--catalog "${contracts}")
+    [[ -n "${qos}" ]] && lint_args+=(--qos "${qos}")
+    [[ "${lint_strict}" == true ]] && lint_args+=(--strict)
+    log "lint: catalog + qos"
+    if ! python3 "${LINT_PY}" --repo-root "${REPO_ROOT}" ${lint_args[@]+"${lint_args[@]}"}; then
+        log "error: catalog lint failed -- fix the Contract/QoS Catalog before compiling (or pass --no-lint)"
+        exit 1
+    fi
+else
+    log "lint: skipped"
+fi
 
 # --- stage 1: compile --------------------------------------------------------
 if [[ -n "${resolved_in}" ]]; then
@@ -179,7 +201,7 @@ if [[ -n "${golden_dir}" ]]; then
         fi
         report="${out_dir}/compare/${base%.jsonl}.compare.json"
         if ! python3 "${COMPARE_PY}" --golden "${golden}" --candidate "${tf}" \
-                "${cmp_args[@]}" --quiet > "${report}"; then
+                ${cmp_args[@]+"${cmp_args[@]}"} --quiet > "${report}"; then
             compare_rc=1
             log "compare: REGRESSION vs golden for ${base} (see ${report})"
         fi
