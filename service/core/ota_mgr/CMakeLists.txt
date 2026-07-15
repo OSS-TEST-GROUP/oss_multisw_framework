@@ -56,7 +56,8 @@ endif()
 # Add test application directory for integration testing
 option(BUILD_TEST "Build the test applications" ON) # Default to ON for development
 
-if(BUILD_TEST AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|amd64")
+
+if(BUILD_TEST AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|amd64" AND ${CMAKE_BUILD_TYPE} STREQUAL "Debug")
     add_subdirectory(test)
 endif()
 
