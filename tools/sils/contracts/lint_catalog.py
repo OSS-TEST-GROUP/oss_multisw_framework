@@ -44,7 +44,9 @@ import compile as tc  # noqa: E402  (reuse repo_root/load_yaml)
 # (e.g. VIS_DDS_DOMAIN_ID) would otherwise bind a vECU to the wrong/undefined domain.
 KNOWN_DOMAIN_ENVS = {"VISS_DDS_DOMAIN_ID", "MMF_DDS_DOMAIN_ID", "ROS_DOMAIN_ID"}
 TRANSPORTS = {"dds"}
-OWNERSHIPS = {"single", "shared"}
+# single: one owner of the topic. per-instance: templated topic ({instance_id}), each
+# replica owns its own resolved topic (§9.5/§13 fleet). shared/multi: co-producers allowed.
+OWNERSHIPS = {"single", "per-instance", "shared", "multi"}
 ROLE_DIRECTIONS = {"publish", "subscribe"}
 ENCODINGS = {"json", "cdr", "none", "raw"}
 RELIABILITY = {"RELIABLE", "BEST_EFFORT"}
@@ -125,6 +127,11 @@ def lint(catalog: dict, qos: dict, root: Path) -> tuple[list[str], list[str]]:
                           f"(expected one of {sorted(KNOWN_DOMAIN_ENVS)}; typo? §3.4)")
         if c.get("ownership") not in (None, "") and c["ownership"] not in OWNERSHIPS:
             errors.append(f"{where}: ownership '{c['ownership']}' invalid (expected one of {sorted(OWNERSHIPS)})")
+        # per-instance contracts must template {instance_id} into the topic, else
+        # replicas collide on one topic and fail the §9.5 producer check at compile.
+        if c.get("ownership") == "per-instance" and "{instance_id}" not in str(c.get("topic", "")):
+            errors.append(f"{where}: per-instance contract topic '{c.get('topic')}' must contain "
+                          "the {instance_id} placeholder (else replicas collide, §9.5/§13)")
 
         # semantic_version format (optional field, but if present must be x.y.z)
         sv = c.get("semantic_version")

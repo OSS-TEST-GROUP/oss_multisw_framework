@@ -1,0 +1,28 @@
+# Fleet example topology — §9.5-valid multi-instance (§13).
+#
+# 4 replicas of the wheelspeed probe. Each instance owns a DISTINCT resolved topic
+# (/VIN/WheelSpeed/wheelspeed-1 … -4) via the per-instance contract template, so the
+# Topology Compiler validates it as a real fleet -- not the single-owner workaround.
+# Compile with the fleet-example catalog:
+#   python3 tools/sils/topology_compiler/compile.py \
+#       config/sils/topologies/wheelspeed_fleet.yaml \
+#       --contracts config/sils/contracts/fleet-example.yaml --out-dir /tmp/fleet
+
+topology: wheelspeed_fleet
+
+run:
+  domain_strategy: inject
+  domain_id: "0"
+  input_mode: live
+  allow_degraded: false
+
+deployment:
+  backend: docker
+
+vecus:
+  - name: wheelspeed
+    descriptor: service/sils/vecu/descriptors/wheelspeed_probe.yaml
+    replicas: 4
+
+clock:
+  mode: wall

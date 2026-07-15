@@ -1,0 +1,25 @@
+# SiLS Fleet Example Contract Catalog — per-instance ownership demo (§9.5/§13).
+#
+# NOT MMF 실측 endpoint (그건 mmf-endpoints.yaml). 이건 다중 인스턴스 fleet 이 §9.5-valid
+# 하게 성립함을 보이는 합성 예제다: ownership: per-instance + topic 에 {instance_id}
+# 플레이스홀더를 두면, replica 각 인스턴스가 서로 다른 topic 을 소유 → 같은 topic 다중
+# producer(단일 owner 위반)가 아니라 "N 인스턴스 = N topic = 각 1 owner" 로 컴파일 검증된다.
+# 타입/도메인은 새 IDL 없이 VissRequestTopic 을 재사용(입력 스테이징이 그랬던 것처럼).
+
+contracts:
+  - id: wheelspeed
+    semantic_version: "0.1.0"
+    transport: dds
+    domain_env: VISS_DDS_DOMAIN_ID
+    idl: idl/dds/vehicle_info_mgr/VissRequest.idl
+    struct: VissRequestTopic
+    registered_type: VissRequestTopic
+    topic: "/VIN/WheelSpeed/{instance_id}"   # ★ per-instance: {instance_id} 치환
+    qos_profile: viss-sils-verifiable
+    ownership: per-instance                  # 인스턴스마다 자기 topic 을 단독 소유
+    late_sample_policy: next_tick
+    payload:
+      fields: [ { name: payload, type: string, encoding: json } ]
+    roles:
+      sut: subscribe
+      vecu: publish

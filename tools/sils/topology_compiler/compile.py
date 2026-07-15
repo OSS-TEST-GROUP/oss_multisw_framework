@@ -92,6 +92,7 @@ def expand_replicas(vecu_entry: dict, descriptor: dict) -> list[dict]:
                 "container_name": base_name,
                 "instance_id": descriptor.get("instance_id", base_name),
                 "params": {},
+                "index": 1,
             }
         ]
 
@@ -107,6 +108,7 @@ def expand_replicas(vecu_entry: dict, descriptor: dict) -> list[dict]:
                 "container_name": f"{base_name}-{suffix}",
                 "instance_id": f"{base_name}-{suffix}",
                 "params": params[i] if params else {},
+                "index": i + 1,
             }
         )
     return out
@@ -122,8 +124,12 @@ def resolve_topology(
     warnings: list[str] = []
     resolved: list[dict] = []
     seen_names: set[str] = set()
-    # contract_id -> list of container_names publishing to it (for §9.5 single-owner check)
-    producers_by_contract: dict[str, list[str]] = {}
+    # resolved topic -> list of (container_name, contract_id, ownership) publishing to it.
+    # §9.5 ownership is checked on the RESOLVED topic (post per-instance templating), so a
+    # per-instance fleet -- N replicas each owning a distinct topic -- is valid, while N
+    # producers on the SAME topic (single-owner, or a per-instance topic missing its
+    # {instance_id} placeholder) is a violation.
+    producers_by_topic: dict[str, list[tuple[str, str, str]]] = {}
     domain_envs_used: set[str] = set()
 
     run_domain_id = str(topology.get("run", {}).get("domain_id", "")).strip()
@@ -182,9 +188,18 @@ def resolve_topology(
                 errors.append(f"duplicate container/instance name: '{name}'")
             seen_names.add(name)
 
+            # Resolve per-instance topics: substitute {instance_id}/{index} in the
+            # contract topic template so each replica owns a distinct endpoint (§9.5,
+            # §13 multi-instance). Non-templated topics pass through unchanged.
+            inst_eps = []
             for ep in endpoints_resolved:
+                topic = str(ep["topic"]).replace("{instance_id}", inst["instance_id"]) \
+                    .replace("{index}", str(inst.get("index", "")))
+                ie = dict(ep, topic=topic)
+                inst_eps.append(ie)
                 if ep["direction"] == "publish":
-                    producers_by_contract.setdefault(ep["contract_id"], []).append(name)
+                    producers_by_topic.setdefault(topic, []).append(
+                        (name, ep["contract_id"], ep.get("ownership")))
 
             resolved.append(
                 {
@@ -194,18 +209,25 @@ def resolve_topology(
                     "ecu": descriptor.get("ecu"),
                     "fidelity": descriptor.get("fidelity"),
                     "params": inst["params"],
-                    "endpoints": endpoints_resolved,
+                    "endpoints": inst_eps,
                 }
             )
 
-    # §9.5: single-owner endpoint must have exactly one producer across the topology.
-    for contract_id, producers in producers_by_contract.items():
-        contract = contracts.get(contract_id, {})
-        if contract.get("ownership") == "single" and len(producers) > 1:
-            errors.append(
-                f"single-owner contract '{contract_id}' has {len(producers)} producers "
-                f"({', '.join(producers)}) -- expected exactly 1"
-            )
+    # §9.5: an exclusively-owned topic must have exactly one producer. Checked on the
+    # RESOLVED topic -- ownership 'multi'/'shared' is exempt (co-producers allowed).
+    for topic, producers in producers_by_topic.items():
+        if len(producers) <= 1:
+            continue
+        ownership = producers[0][2]
+        if ownership in ("multi", "shared"):
+            continue
+        cids = sorted({c for _, c, _ in producers})
+        names = ", ".join(n for n, _, _ in producers)
+        errors.append(
+            f"topic '{topic}' has {len(producers)} producers ({names}) but contract(s) "
+            f"{cids} are {ownership!r}-owned -- expected exactly 1 (per-instance contracts "
+            "must template {instance_id} into the topic so replicas own distinct topics)"
+        )
 
     if len(domain_envs_used) > 1:
         warnings.append(
