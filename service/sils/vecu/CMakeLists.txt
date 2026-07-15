@@ -56,6 +56,24 @@ endif()
 # IDLs join the sils build -- harmless on the GNU ld / Linux target.
 set(SILS_ALLOW_MULTIDEF -Wl,--allow-multiple-definition)
 
+# Optional FMU plant (§11 L3, FMI 2.0/3.0 co-sim via fmi4c). OFF by default so the
+# base build needs no extra dependency; enable with -DSILS_ENABLE_FMU=ON. Uses
+# fmi4c (FMI 1/2/3 loader). If fmi4c isn't installed, FetchContent pulls it. When
+# enabled, the probe is compiled with SILS_HAVE_FMU and linked against fmi4c so
+# FmuPlant (src/plant.hpp) is available (SILS_PLANT=fmu); otherwise SILS_PLANT=fmu
+# fails fast at runtime with a clear message.
+option(SILS_ENABLE_FMU "Build FmuPlant (FMI co-sim via fmi4c)" OFF)
+if(SILS_ENABLE_FMU)
+    find_package(fmi4c QUIET)
+    if(NOT fmi4c_FOUND)
+        include(FetchContent)
+        FetchContent_Declare(fmi4c
+            GIT_REPOSITORY https://github.com/robbr48/fmi4c.git
+            GIT_TAG main)
+        FetchContent_MakeAvailable(fmi4c)
+    endif()
+endif()
+
 # The probe now drives its tick loop through IClockSource (src/clock_source.hpp),
 # whose LockstepClockSource adapter uses the TickControl types -- so the probe
 # compiles/links both the VissRequest and TickControl generated sources.
@@ -67,6 +85,10 @@ add_executable(sils_vecu_viss_probe
 target_include_directories(sils_vecu_viss_probe PRIVATE ${SILS_VISS_GEN_DIR} ${SILS_TICK_GEN_DIR})
 target_link_libraries(sils_vecu_viss_probe PRIVATE fastdds fastcdr)
 target_link_options(sils_vecu_viss_probe PRIVATE ${SILS_ALLOW_MULTIDEF})
+if(SILS_ENABLE_FMU)
+    target_compile_definitions(sils_vecu_viss_probe PRIVATE SILS_HAVE_FMU)
+    target_link_libraries(sils_vecu_viss_probe PRIVATE fmi4c)
+endif()
 
 add_executable(sils_vecu_viss_verify
     src/viss_verify_main.cc

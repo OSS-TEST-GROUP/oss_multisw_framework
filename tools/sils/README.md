@@ -158,7 +158,13 @@ compare_golden MATCH). IBehavior 포트(viss-request/accumulate/p-controller 어
 `plant_step` 스트림에서 루프 연속성(feedback_in[N]==output[N-1]) + live + 결정론을 확인해
 **fidelity=L3** 판정, compare_golden 이 `plant_step` 출력을 model correlation(§11)으로
 비교. `SILS_PLANT=replay`(playback)는 결정론적 golden 이지만 명령을 무시하므로 L3-live
-아님(입력 replay 와 동일 구분). IPlant 어댑터(AnalyticPlant=live / ReplayPlant=playback).
+아님(입력 replay 와 동일 구분). IPlant 어댑터(AnalyticPlant=live / ReplayPlant=playback /
+**FmuPlant**=FMI 2.0/3.0 co-sim). **FmuPlant**(`SILS_PLANT=fmu SILS_FMU_FILE=vehicle.fmu
+SILS_FMU_INPUT_VR/OUTPUT_VR`)는 fmi4c 로 실제 `.fmu`(Simulink/Dymola/… export, 또는
+Reference-FMU)를 로드해 `SetInputs→fmiX_setReal`, `Step→fmiX_doStep`, `output→fmiX_getReal`
+로 구동 — **같은 plant_step 계약**을 방출하므로 analyze_plant/compare_golden 이 그대로 L3
+판정. doStep 실패/비유한 출력은 NaN 으로 §14 fail-fast. 빌드 옵션 `-DSILS_ENABLE_FMU=ON`
+(없으면 fmi4c FetchContent), 미빌드 시 `SILS_PLANT=fmu` 는 런타임에 명확히 실패.
 **x86 실런타임에서 두 번 독립 실행 → sim_time·궤적 소수점까지 동일(compare_golden MATCH)로
 재현성 확인**; FMI co-sim 이 3번째 구현.
 
@@ -173,4 +179,4 @@ echo 한 상관 응답을 발행. probe 는 `request_sent`, 응답 수신 시 `r
 
 **arm64 빌드 확인**: `./build.sh --aarch64 --build-sils` 로 aarch64 크로스빌드 성공(코드 수정 없이 — SiLS 는 arch 중립, core 와 동일 FastDDS/IDL 경로). arm64 **실행** 검증은 arm64 호스트(또는 qemu/binfmt) 필요.
 
-**남은 것**: L1 C++ 실런타임 trace 판정(도구 계약은 완료, 빌드 후 왕복 실측), arm64 실행 검증(arm64 머신/에뮬), 실제 VISS SUT 와의 폐루프(현재는 responder 스탠드인으로 왕복 확인), 물리적 timing 충실도 실측(§0A Contract Spike), §9.5-유효한 다중 topic/multi-owner contract 기반 fleet(현재 `--replicas` 는 single-owner 우회 스모크), IPlant 의 **FMI 2.0/3.0 co-sim 어댑터**(현재 AnalyticPlant/ReplayPlant 2구현으로 포트 확립 — 같은 포트 뒤에 FMU 드롭인), 그리고 L4(target parity) fidelity.
+**남은 것**: L1 C++ 실런타임 trace 판정(도구 계약은 완료, 빌드 후 왕복 실측), arm64 실행 검증(arm64 머신/에뮬), 실제 VISS SUT 와의 폐루프(현재는 responder 스탠드인으로 왕복 확인), 물리적 timing 충실도 실측(§0A Contract Spike), §9.5-유효한 다중 topic/multi-owner contract 기반 fleet(현재 `--replicas` 는 single-owner 우회 스모크), FmuPlant 의 **실 `.fmu` 실런타임 검증**(어댑터·빌드옵션 완료 — fmi4c + Reference-FMU 로 실측 남음)과 **MORAI 등 외부 시뮬 UDP–ROS2 브리지 트랙**(별도 Topology, §4.1), 그리고 L4(target parity) fidelity.
