@@ -155,12 +155,15 @@ public:
     void on_subscription_matched(
         eprosima::fastdds::dds::DataReader* /*reader*/,
         const eprosima::fastdds::dds::SubscriptionMatchedStatus& info) override {
+        matched_.store(info.current_count);
         if (info.current_count_change > 0) {
             TraceEvent(run_id_, "endpoint_matched", 0,
                        "\"role\":\"probe-response-reader\",\"matched_count\":" +
                            std::to_string(info.current_count));
         }
     }
+
+    int matched() const { return matched_.load(); }
 
     void on_data_available(eprosima::fastdds::dds::DataReader* reader) override {
         VissRequestTopic sample;
@@ -180,6 +183,7 @@ public:
 
 private:
     std::string run_id_;
+    std::atomic<int> matched_{0};
 };
 
 // Stages SUT input arrivals into a TickInbox (§7.3). Runs on the reader thread;
@@ -322,6 +326,24 @@ int main() {
         resp_sub->create_datareader(resp_topic_obj, rrq, &response_listener);
         TraceEvent(run_id, "protocol_on", 0, "\"mode\":\"reqresp\",\"response_topic\":\"" +
                                                  response_topic + "\"");
+
+        // First-response race (§11 L1): the response reader may match the responder's
+        // writer with an EMPTY history (before any reply), so TRANSIENT_LOCAL backfill
+        // delivers nothing; then the very first live reply races the reliable
+        // handshake and can be dropped (the first sample warms the channel). Wait for
+        // the match, then settle so idle heartbeats establish the reliable channel
+        // BEFORE the first request flows -- so no response (incl. the first) is missed.
+        const int match_timeout_ms = GetEnvIntOr("SILS_PROTOCOL_MATCH_TIMEOUT_MS", 3000);
+        const int settle_ms = GetEnvIntOr("SILS_PROTOCOL_SETTLE_MS", 300);
+        int waited = 0;
+        while (response_listener.matched() < 1 && waited < match_timeout_ms && !g_stop.load()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            waited += 20;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(settle_ms));
+        TraceEvent(run_id, "protocol_ready", 0,
+                   "\"response_matched\":" + std::to_string(response_listener.matched()) +
+                       ",\"waited_ms\":" + std::to_string(waited + settle_ms));
     }
 
     TraceEvent(run_id, "ready", 0);
