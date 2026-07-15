@@ -9,6 +9,7 @@ export CPU_CORES=`nproc`
 
 export CROSSCOMPILING="FALSE"
 export BUILD_UNITTEST="FALSE"
+export BUILD_SILS="FALSE"
 export EXTENSION_PLATFORM="ROS2"
 export SDK_DIR=/opt
 export TARGET_MF_NAME="ros2"
@@ -23,6 +24,7 @@ Usage: build.sh [OPTIONS]
 Available options:
   --release                    Set the build mode to Release
   --build-unittest             Enable building unit tests
+  --build-sils                 Enable building the SiLS vECU Phase 1 PoC
   --set-extension-platform={PLATFORM}
 							   Set the target platform for extension
 							   Supported platform:
@@ -60,6 +62,9 @@ do_parse_option()
 				;;
 			--build-unittest)
 				BUILD_UNITTEST="TRUE"
+				;;
+			--build-sils)
+				BUILD_SILS="TRUE"
 				;;
 			--set-extension-platform=*)
 				EXTENSION_PLATFORM="${arg#*=}"
@@ -174,6 +179,7 @@ do_build_cmd() {
 
 	cmake_args=(
 		-DBUILD_UNITTEST=${BUILD_UNITTEST}
+		-DBUILD_SILS=${BUILD_SILS}
 		-DBUILD_EXTENSION=${build_ext}
 		-DEXTENSION_PLATFORM=${EXTENSION_PLATFORM}
 		-DCMAKE_EXPORT_COMPILE_COMMANDS=ON

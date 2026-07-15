@@ -22,6 +22,7 @@ export CPU_CORES=`nproc`
 
 export CROSSCOMPILING=false
 export BUILD_UNITTEST="FALSE"
+export BUILD_SILS="FALSE"
 export EXTENSION_PLATFORM="ROS2"
 export SDK_DIR=${HOME}/obigo-sdk
 #export TARGET_MF_NAME="aadp"
@@ -33,6 +34,7 @@ Usage: build.sh [OPTIONS]
 Available options:
   --release                    Set the build mode to Release
   --build-unittest             Enable building unit tests
+  --build-sils                 Enable building the SiLS vECU Phase 1 PoC
   --build-extension            Enable building extension framework
   --set-extension-platform={PLATFORM}
 							   Set the target platform for extension
@@ -160,6 +162,9 @@ do_parse_option()
 			--build-unittest)
 				BUILD_UNITTEST="TRUE"
 				BUILD_MODE="Debug"
+				;;
+			--build-sils)
+				BUILD_SILS="TRUE"
 				;;
 			--set-extension-platform=*)
 				EXTENSION_PLATFORM="${arg#*=}"

@@ -1,0 +1,25 @@
+# Negative fixture for test_compile.py -- INVALID on purpose.
+#
+# viss-request (config/sils/contracts/mmf-endpoints.yaml) is declared
+# ownership: single. Requesting 2 replicas of a vECU that publishes to it
+# means 2 producers on a single-owner endpoint -- the Topology Compiler must
+# reject this (architecture v3 Final §9.5: "single-owner endpoint 의 producer
+# 중복 시 검증 실패"). Not meant to be compiled successfully; do not "fix" this
+# file to pass -- if it starts passing, the validation check itself broke.
+
+topology: viss_probe_replica_violation
+
+run:
+  domain_strategy: inject
+  domain_id: "0"
+
+deployment:
+  backend: docker
+
+vecus:
+  - name: viss-probe
+    descriptor: service/sils/vecu/descriptors/viss_probe.yaml
+    replicas: 2
+
+clock:
+  mode: wall

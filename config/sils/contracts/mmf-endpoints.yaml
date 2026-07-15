@@ -1,0 +1,32 @@
+# SiLS Endpoint Contract Catalog — MMF 실측 endpoint
+#
+# 아키텍처 §9.1 기준. IDL 은 type 만 정의하므로 topic/QoS/ownership/semantic 을
+# 기계 판독 가능한 계약으로 여기서 관리한다. 아래 항목은 저장소 코드로 검증됨:
+#   - topic /VIN/Vehicle             : service/core/vehicle_info_mgr/src/transport/dds_transport.cpp:37
+#   - struct VissRequestTopic        : idl/dds/vehicle_info_mgr/VissRequest.idl
+#   - PubSubType VissRequestTopic..  : dds_transport.cpp:97
+#   - domain env VISS_DDS_DOMAIN_ID  : dds_transport.cpp:308  (MMF_DDS_DOMAIN_ID 아님 — §3.4)
+#
+# semantic_version 은 계약 변경 추적용. 실제 QoS RxO 는 Phase 0A Contract Spike 에서
+# 실측/확정한다(아래 qos_profile 은 후보값).
+
+contracts:
+  - id: viss-request
+    semantic_version: "0.1.0"
+    transport: dds
+    domain_env: VISS_DDS_DOMAIN_ID        # ★ VISS 전용 domain env (§3.4)
+    idl: idl/dds/vehicle_info_mgr/VissRequest.idl
+    struct: VissRequestTopic
+    registered_type: VissRequestTopic
+    topic: /VIN/Vehicle
+    qos_profile: viss-default             # Phase 0A 에서 실 RxO 확정 필요
+    ownership: single                     # 단일 owner — producer 중복 시 검증 실패
+    payload:
+      # VissRequestTopic { string payload; } — VISS 는 JSON 문자열을 payload 에 실음
+      fields: [ { name: payload, type: string, encoding: json } ]
+    late_sample_policy: next_tick
+    roles:
+      # /VIN/Vehicle 은 VISS 클라이언트 → 서버 요청 토픽.
+      # Phase 1 slice 에서 vECU 는 클라이언트 역할로 요청을 publish, VISS(SUT)가 subscribe.
+      sut: subscribe
+      vecu: publish

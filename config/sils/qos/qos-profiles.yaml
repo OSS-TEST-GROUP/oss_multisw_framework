@@ -1,0 +1,32 @@
+# SiLS QoS Catalog — 아키텍처 §9.3
+#
+# endpoint 마다 QoS 를 반복하지 않고 여기서 참조한다.
+# viss-default 는 현재 VISS DDS transport 가 TOPIC_QOS_DEFAULT 를 쓰는 것에 대응하는
+# "후보" 값이다. Fast DDS 기본 RxO(Writer=RELIABLE, Reader=BEST_EFFORT 등)와 실제
+# 매칭 여부는 Phase 0A Contract Spike 에서 실측해 확정한다.
+
+viss-default:
+  reliability: RELIABLE            # TODO(0A): /VIN/Vehicle 실측으로 확정
+  durability: VOLATILE
+  history: { kind: KEEP_LAST, depth: 10 }
+
+# SiLS 내부 run 검증용(§9 verifiability). lockstep/plant run 은 tick 집합을 짧게
+# 몰아 publish 후 idle 하므로, 독립 기동한 verifier 가 마지막 샘플 이후에 match 하면
+# VOLATILE 에선 아무것도 못 받는다(matched-but-no-data). probe writer / verify reader
+# 는 기본으로 이 프로파일을 써서(코드상 SILS_DURABILITY=transient-local 기본) late-join
+# 이어도 히스토리를 받는다. TRANSIENT_LOCAL 은 superset offer 라 VOLATILE reader 와도
+# RxO 호환. SILS_DURABILITY=volatile 로 viss-default 동작을 강제할 수 있다.
+viss-sils-verifiable:
+  reliability: RELIABLE
+  durability: TRANSIENT_LOCAL
+  history: { kind: KEEP_LAST, depth: 256 }
+
+request-reliable:
+  reliability: RELIABLE
+  durability: VOLATILE
+  history: { kind: KEEP_LAST, depth: 10 }
+
+state-latest:
+  reliability: RELIABLE
+  durability: TRANSIENT_LOCAL
+  history: { kind: KEEP_LAST, depth: 1 }
