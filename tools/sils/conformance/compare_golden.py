@@ -151,6 +151,19 @@ def compare_fields(g: dict, c: dict, rules: dict, ctx: str) -> list[dict]:
     return diffs
 
 
+def is_lockstep(events: list[dict]) -> bool:
+    """A run is lockstep iff its clock announced mode 'lockstep' (or it carries tick
+    grants). In lockstep, sim_time_ns is decoupled from wall time by design (§8), so
+    wall-clock latency offsets are NOT part of the reproducibility contract -- the
+    deterministic timing axis is sim_time_ns, which is compared exactly as a field."""
+    for e in events:
+        if e.get("event") == "clock_start" and e.get("mode") == "lockstep":
+            return True
+        if e.get("event") == "tick_grant":
+            return True
+    return False
+
+
 def compare(golden: list[dict], candidate: list[dict], rules: dict) -> dict:
     key_fields = rules["key_fields"]
     compare_events = set(rules["compare_events"])
@@ -170,6 +183,13 @@ def compare(golden: list[dict], candidate: list[dict], rules: dict) -> dict:
     latency: list[dict] = []
 
     lat_win = rules["latency_window_ms"]
+    # Wall-clock latency is meaningless for a lockstep run (§8: sim-time is decoupled
+    # from wall time). Auto-disable the window when either side is lockstep; sim_time_ns
+    # equality (a compared field) carries the timing contract instead. A warning below
+    # records that the wall-latency check was skipped.
+    lockstep = is_lockstep(golden) or is_lockstep(candidate)
+    if lockstep:
+        lat_win = None
 
     for key, glist in gg.items():
         clist = cg.get(key, [])
@@ -208,6 +228,9 @@ def compare(golden: list[dict], candidate: list[dict], rules: dict) -> dict:
     if ordering_diff:
         hard.append({"kind": "ordering", **ordering_diff})
     warnings: list[str] = []
+    if lockstep and rules["latency_window_ms"] is not None:
+        warnings.append("lockstep run: wall-clock latency window skipped "
+                        "(sim_time_ns carries the timing contract, §8)")
 
     def apply_policy(items: list, kind: str, label: str) -> None:
         if not items:

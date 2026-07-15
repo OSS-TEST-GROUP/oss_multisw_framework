@@ -139,6 +139,36 @@ def test_latency_window():
     assert len(r_bad["latency_violations"]) == 1, r_bad["latency_violations"]
 
 
+def test_lockstep_skips_wall_latency():
+    # §8: lockstep decouples sim-time from wall time, so wall-clock latency offsets
+    # are not part of the contract -- sim_time_ns (a compared field) is. A lockstep
+    # run whose events drift in wall time but match on sim_time_ns must still MATCH.
+    ls = lambda rid, off: [
+        {"event": "clock_start", "mode": "lockstep", "wall_time_ms": 1000 + off, "run_id": rid},
+        {"event": "plant_step", "tick_seq": 1, "sim_time_ns": 100000000, "dt_ns": 100000000,
+         "feedback_in": 0.0, "command": 8.0, "output": 0.8, "wall_time_ms": 1005 + off, "run_id": rid},
+        {"event": "plant_step", "tick_seq": 2, "sim_time_ns": 200000000, "dt_ns": 100000000,
+         "feedback_in": 0.8, "command": 7.36, "output": 1.496, "wall_time_ms": 1200 + off, "run_id": rid},
+    ]
+    g = ls("G", 0)
+    c = ls("C", 300)  # +300ms wall drift on the whole run, > window -- but lockstep
+    tol = rules(latency_window_ms=50,
+                numeric_tolerance={"default": {"abs": 0.0, "rel": 0.0},
+                                   "fields": {"output": {"abs": 1e-6}, "command": {"abs": 1e-6},
+                                              "feedback_in": {"abs": 1e-6}}})
+    r = cg.compare(g, c, tol)
+    assert r["verdict"] == "MATCH", (r["latency_violations"], r["field_diffs"])
+    assert r["latency_violations"] == []
+    assert any("lockstep" in w for w in r["warnings"]), r["warnings"]
+
+    # A mismatched sim_time_ns (the real timing contract) still regresses.
+    c2 = ls("C", 0)
+    c2[2]["sim_time_ns"] = 250000000  # tick 2 sim time drifted
+    r2 = cg.compare(g, c2, tol)
+    assert r2["verdict"] == "REGRESSION"
+    assert any(d["field"] == "sim_time_ns" for d in r2["field_diffs"]), r2["field_diffs"]
+
+
 def test_by_key_tolerates_intra_key_reorder_but_strict_catches_cross_key():
     # Move sample_received before the publishes (cross-key reorder).
     c = candidate()
