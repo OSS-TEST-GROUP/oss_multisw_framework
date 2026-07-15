@@ -1,4 +1,0 @@
-/home/ossuser/workspace/output/aarch64/Debug/extension/agl/bin/agl_adsw_manager
-/home/ossuser/workspace/output/aarch64/Debug/extension/agl/bin/config/agl-service-list.yaml
-/home/ossuser/workspace/output/aarch64/Debug/extension/agl/bin/agl_ota_client
-/home/ossuser/workspace/output/aarch64/Debug/extension/agl/bin/config/ota_client_config.json
