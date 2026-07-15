@@ -42,7 +42,7 @@ service/sils/vecu/descriptors/*.yaml       (ECU Descriptor, §9.2)
 | 도구 | 역할 | § | 테스트 |
 |---|---|---|---|
 | [contracts/lint_catalog.py](contracts/lint_catalog.py) | Contract/QoS Catalog 단독 위생 검사(필수필드·중복·domain_env 오타·dangling qos·IDL 실존·enum). compile 前 게이트 | §9.1/§9.3 | [16](contracts/test_lint_catalog.py) |
-| [topology_compiler/compile.py](topology_compiler/compile.py) | Topology+Descriptor+Contract+QoS → `resolved-run.yaml` + `saved-service-list.yaml`. 정적 검증(single-owner, 이름 중복, domain_env 일관성) | §9.5/§11/§13 | [8](topology_compiler/test_compile.py) |
+| [topology_compiler/compile.py](topology_compiler/compile.py) | Topology+Descriptor+Contract+QoS → `resolved-run.yaml` + `saved-service-list.yaml`. 정적 검증(single-owner, 이름 중복, domain_env 일관성) + **Descriptor 포트 선언(clock/behavior/plant/scenario/attestation)→SILS_\* env 배선**(§9.2) | §9.2/§9.5/§11/§13 | [16](topology_compiler/test_compile.py) |
 | [topology_compiler/resolved_to_shell.py](topology_compiler/resolved_to_shell.py) | `resolved-run.yaml` → shell-safe `KEY='value'`(코디네이터 `--from-resolved` 급전) | §11 | (compile 테스트에 포함) |
 | [run_coordinator/domain_lease.py](run_coordinator/domain_lease.py) | 유한 pool 에서 DDS domain 원자적 임대(TTL+owner). 병렬 run 격리, Coordinator 사망 시 회수 | §12.1/§12.2 | [7](run_coordinator/test_domain_lease.py) |
 | [conformance/evaluate.py](conformance/evaluate.py) | trace.jsonl → conformance verdict. §5.2 상태기계(+verifier terminal), 증거기반 pass(L0), lockstep/staging/behavior/plant/scenario 판정(L1/L2/L3+결함주입), L4 attestation 기록, lease 무결성, fleet 완전성 | §5/§7/§8/§11/§12 | [61](conformance/test_evaluate.py) |
@@ -70,6 +70,7 @@ Run Coordinator 본체(Phase 1)는 도구가 아니라 서비스라 `service/` �
 | `contracts/mmf-endpoints.yaml` | Contract Catalog. MMF 실측 endpoint(`/VIN/Vehicle`, `VissRequestTopic`, `VISS_DDS_DOMAIN_ID`) |
 | `qos/qos-profiles.yaml` | QoS Catalog(viss-default/viss-sils-verifiable/request-reliable/state-latest) |
 | `topologies/viss_probe_smoke.yaml` | Phase 1 스모크 토폴로지(vECU 1개, docker 백엔드) |
+| `topologies/viss_scenario.yaml` | 선언적 포트 예제(behavior=accumulate + scheduled 결함주입 + attestation, §9.2) |
 | `regression/golden-rules.yaml` | §12.4 회귀 규칙 참조 세트(그대로 사용 가능) |
 | `parity/viss-target-parity.yaml` | §11 L4 target-parity 계약(비교 이벤트·신호별 tolerance·timing·attestation 게이트) |
 | `fmu/allowlist.yaml` | §5.6 FMU 보안 allowlist(sha256·공급자, `fmu_gate.py` 가 로드 전 대조) |
@@ -135,7 +136,7 @@ done
 bash tools/sils/ci/test_sils_ci.sh
 ```
 
-현재 전부 green: Python 10개 스위트(evaluate 61 · compare_golden 18 · capture 8 · to_junit 12 · parity 12 · lint 18 · compile 10 · domain_lease 7 · fmu_map 8 · fmu_gate 14 = 168) + shell smoke(fleet 17 · ci 12). 파이썬만 필요하며 DDS/도커 툴체인은 필요 없다.
+현재 전부 green: Python 10개 스위트(evaluate 61 · compare_golden 18 · capture 8 · to_junit 12 · parity 12 · lint 18 · compile 16 · domain_lease 7 · fmu_map 8 · fmu_gate 14 = 174) + shell smoke(fleet 17 · ci 12). 파이썬만 필요하며 DDS/도커 툴체인은 필요 없다.
 
 ---
 
@@ -198,6 +199,17 @@ fail — 결함이 조용히 미주입되면 'fault run' 이 거짓 PASS), (2) �
 `analyze_protocol` 의 unanswered/duplicate 집계에서 **제외**(주입 결함은 자극이지 프로토콜
 결함이 아님; 다른 요청의 왕복이 결함 때문에 깨지면 그건 진짜 위반). `SILS_SCENARIO=scheduled`
 인데 스펙이 비면 §14 fail-fast. Run Coordinator 가 없어도 도구 계약은 샌드박스 검증 완료.
+
+**선언적 포트 배선(§9.2) 확인**: 위 포트들(clock/behavior/plant/scenario/attestation)은 이제
+**Descriptor 로 선언**하면 파이프라인이 probe 의 `SILS_*` env 로 자동 배선한다 — 손으로
+export 할 필요 없음. `compile.py:resolve_runtime_env` 가 Descriptor 의 `plant:{type:fmu}` /
+`scenario:{type:scheduled,faults:[…]}` 등을 `SILS_PLANT`/`SILS_SCENARIO`/… 로 변환해
+resolved-run 에 싣고, `resolved_to_shell.py` 가 local 용 `export SILS_*`(coordinator 상속 +
+fmu_preflight 가 `SILS_FMU_FILE` 확인) 와 docker/fleet 용 `--env-args`(raw `KEY=VALUE`)를
+방출, `run_phase1.sh` 가 local(상속)·docker(`-e`)·fleet(`env`/`-e`) 로 주입한다. 변환·방출은
+전부 오프라인 테스트로 단언(빌드/DDS 불필요) — Descriptor→env 문자열이 손으로 넣던 값과
+동일함을 보장하므로 런타임 동작은 기존 실측(L1/L3/scenario)이 그대로 성립. 예:
+`config/sils/topologies/viss_scenario.yaml`(behavior=accumulate + scheduled 결함주입).
 
 **arm64 빌드 확인**: `./build.sh --aarch64 --build-sils` 로 aarch64 크로스빌드 성공(코드 수정 없이 — SiLS 는 arch 중립, core 와 동일 FastDDS/IDL 경로). arm64 **실행** 검증은 arm64 호스트(또는 qemu/binfmt) 필요.
 

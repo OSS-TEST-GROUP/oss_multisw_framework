@@ -176,6 +176,114 @@ def test_resolved_to_shell_sh_quote_escapes_single_quote():
     assert rts.sh_quote("a'b") == "'a'\\''b'"
 
 
+# --- Descriptor port declarations -> SILS_* env (§9.2 declarative path) -------
+
+def test_resolve_runtime_env_full_ports():
+    # A rich descriptor exercising every port -> the exact SILS_* the probe reads.
+    descriptor = {
+        "clock": {"mode": "lockstep"},
+        "behavior": {"type": "p-controller",
+                     "spec": {"period_ms": 100, "kp": 0.8, "setpoint": 10.0,
+                              "request_action": "set", "request_path": "Vehicle.Actuation"}},
+        "protocol": {"mode": "reqresp", "response_topic": "sils/viss/response"},
+        "plant": {"type": "fmu",
+                  "fmu": {"file": "vehicle.fmu", "input_vr": 7, "output_vr": 8,
+                          "allowlist_id": "reference-feedthrough"}},
+        "scenario": {"type": "scheduled", "faults": "3:drop,7:corrupt"},
+        "attestation": {"arch": "aarch64", "gateway": "real", "protocol": "real"},
+    }
+    env = tc.resolve_runtime_env(descriptor)
+    assert env["SILS_CLOCK_MODE"] == "lockstep"
+    assert env["SILS_BEHAVIOR"] == "p-controller"
+    assert env["SILS_CTRL_KP"] == "0.8" and env["SILS_CTRL_SETPOINT"] == "10.0"
+    assert env["SILS_VISS_PROBE_PERIOD_MS"] == "100"
+    assert env["SILS_PROTOCOL"] == "reqresp" and env["SILS_RESPONSE_TOPIC"] == "sils/viss/response"
+    assert env["SILS_PLANT"] == "fmu" and env["SILS_FMU_FILE"] == "vehicle.fmu"
+    assert env["SILS_FMU_INPUT_VR"] == "7" and env["SILS_FMU_OUTPUT_VR"] == "8"
+    assert env["SILS_FMU_ALLOWLIST_ID"] == "reference-feedthrough"
+    assert env["SILS_SCENARIO"] == "scheduled" and env["SILS_SCENARIO_FAULTS"] == "3:drop,7:corrupt"
+    assert env["SILS_ATTEST_ARCH"] == "aarch64" and env["SILS_ATTEST_GATEWAY"] == "real"
+
+
+def test_resolve_runtime_env_stub_maps_to_viss_request():
+    # 'stub' behavior -> the probe's default viss-request kind; plant none / empty scenario
+    # emit nothing (so the L0 smoke descriptor's run is unchanged).
+    env = tc.resolve_runtime_env({"clock": {"mode": "wall"}, "behavior": {"type": "stub"},
+                                  "plant": {"type": "none"}, "scenario": {}})
+    assert env["SILS_BEHAVIOR"] == "viss-request"
+    assert env["SILS_CLOCK_MODE"] == "wall"
+    assert "SILS_PLANT" not in env and "SILS_SCENARIO" not in env
+
+
+def test_resolve_runtime_env_faults_forms():
+    assert tc._normalize_faults("3:drop,7:corrupt") == "3:drop,7:corrupt"
+    assert tc._normalize_faults([{"tick": 3, "fault": "drop"}, {"tick": 7, "fault": "corrupt"}]) \
+        == "3:drop,7:corrupt"
+    assert tc._normalize_faults({4: "duplicate"}) == "4:duplicate"
+
+
+def test_smoke_descriptor_env_carried_into_resolved():
+    resolved_run, ssl, errors, _w = tc.compile_topology(
+        ROOT / "config/sils/topologies/viss_probe_smoke.yaml", ROOT,
+        "config/sils/contracts/mmf-endpoints.yaml",
+        "config/sils/qos/qos-profiles.yaml",
+        "registry.obigo.com/oss/oss-mmf-sils-vecu:latest",
+    )
+    assert errors == [], errors
+    env = resolved_run["containers"][0]["env"]
+    assert env["SILS_CLOCK_MODE"] == "wall"
+    assert env["SILS_BEHAVIOR"] == "viss-request"
+    assert env["SILS_VISS_PROBE_REQUEST_PATH"] == "Vehicle.Speed"
+    # docker path: the port env must also appear as -e flags in the saved-service-list
+    joined = " ".join(ssl["specs"][0]["containers"][0]["extra_args"])
+    assert "-e SILS_CLOCK_MODE=wall" in joined.replace("'", "") or "SILS_CLOCK_MODE=wall" in joined
+
+
+def test_scenario_example_topology_wires_ports():
+    # The shipped example: behavior=accumulate + scheduled faults + attestation, all
+    # resolved into env by the compiler (no hand-exported vars).
+    resolved_run, _ssl, errors, _w = tc.compile_topology(
+        ROOT / "config/sils/topologies/viss_scenario.yaml", ROOT,
+        "config/sils/contracts/mmf-endpoints.yaml",
+        "config/sils/qos/qos-profiles.yaml",
+        "registry.obigo.com/oss/oss-mmf-sils-vecu:latest",
+    )
+    assert errors == [], errors
+    env = resolved_run["containers"][0]["env"]
+    assert env["SILS_BEHAVIOR"] == "accumulate"
+    assert env["SILS_SCENARIO"] == "scheduled"
+    assert env["SILS_SCENARIO_FAULTS"] == "3:drop,7:duplicate"
+    assert env["SILS_ATTEST_ARCH"] == "x86_64"  # sim run -> not target-like (by design)
+
+
+def test_resolved_to_shell_emits_export_and_env_keys(tmp_out=Path("/tmp/sils-test-env-out")):
+    resolved_run = {
+        "topology": "t", "run": {"domain_id": "0"}, "deployment": {"backend": "local"},
+        "containers": [{
+            "name": "c", "instance_id": "c-1",
+            "env": {"SILS_CLOCK_MODE": "wall", "SILS_SCENARIO": "scheduled",
+                    "SILS_SCENARIO_FAULTS": "3:drop"},
+            "endpoints": [{"direction": "publish", "topic": "/VIN/Vehicle"}],
+        }],
+    }
+    tmp_out.mkdir(parents=True, exist_ok=True)
+    import yaml
+    rp = tmp_out / "resolved-run.yaml"
+    rp.write_text(yaml.safe_dump(resolved_run, sort_keys=False))
+
+    lines, err = rts.emit(rp, 0)
+    assert err is None, err
+    joined = "\n".join(lines)
+    assert "export SILS_CLOCK_MODE='wall'" in joined
+    assert "export SILS_SCENARIO_FAULTS='3:drop'" in joined
+    # RESOLVED_ENV_KEYS lists names so the docker path can rebuild -e NAME=$NAME
+    assert "SILS_CLOCK_MODE SILS_SCENARIO SILS_SCENARIO_FAULTS" in joined
+
+    # --env-args: raw unquoted KEY=VALUE for env / docker -e
+    args, err2 = rts.env_args(rp, 0)
+    assert err2 is None and "SILS_CLOCK_MODE=wall" in args and "SILS_SCENARIO_FAULTS=3:drop" in args
+
+
 def main() -> int:
     tests = [v for k, v in globals().items() if k.startswith("test_") and callable(v)]
     failed = 0

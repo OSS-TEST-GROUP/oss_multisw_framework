@@ -114,6 +114,98 @@ def expand_replicas(vecu_entry: dict, descriptor: dict) -> list[dict]:
     return out
 
 
+# Descriptor behavior 'type' -> the probe's SILS_BEHAVIOR kind (behavior.hpp MakeBehavior).
+BEHAVIOR_KIND = {
+    "stub": "viss-request", "viss-request": "viss-request",
+    "accumulate": "accumulate", "accumulator": "accumulate",
+    "p-controller": "p-controller",
+}
+
+
+def _normalize_faults(faults) -> str:
+    """A scenario fault schedule in the probe's spec form 'tick:fault[,tick:fault...]'.
+    Accepts a ready string, a list of {tick, fault} dicts, or a {tick: fault} mapping."""
+    if isinstance(faults, str):
+        return faults
+    if isinstance(faults, dict):
+        return ",".join(f"{k}:{v}" for k, v in faults.items())
+    if isinstance(faults, list):
+        parts = []
+        for f in faults:
+            if isinstance(f, dict) and "tick" in f and "fault" in f:
+                parts.append(f"{f['tick']}:{f['fault']}")
+        return ",".join(parts)
+    return ""
+
+
+def resolve_runtime_env(descriptor: dict) -> dict[str, str]:
+    """Translate a Descriptor's port declarations (clock/behavior/plant/scenario/
+    attestation/protocol) into the SILS_* environment the probe reads (§9.2). Pure and
+    file-I/O-free so it's unit-testable without a build. This is the declarative front
+    door: a Descriptor that says `plant: {type: fmu}` now drives the FmuPlant port via
+    env, instead of an operator hand-exporting SILS_PLANT. Per-run identity (SILS_RUN_ID,
+    SILS_VECU_INSTANCE_ID) and the resolved per-instance topic (SILS_TOPIC) are NOT set
+    here -- the Run Coordinator owns those. Values are returned as strings (env-ready)."""
+    env: dict[str, str] = {}  # dict is insertion-ordered (py3.7+): stable emit order
+
+    clock = descriptor.get("clock") or {}
+    if clock.get("mode"):
+        env["SILS_CLOCK_MODE"] = str(clock["mode"])
+
+    b = descriptor.get("behavior") or {}
+    if b.get("type"):
+        env["SILS_BEHAVIOR"] = BEHAVIOR_KIND.get(b["type"], str(b["type"]))
+    spec = b.get("spec") or {}
+    for key, envname in (("period_ms", "SILS_VISS_PROBE_PERIOD_MS"),
+                         ("response_topic_prefix", "SILS_VISS_PROBE_RESPONSE_TOPIC_PREFIX"),
+                         ("request_action", "SILS_VISS_PROBE_REQUEST_ACTION"),
+                         ("request_path", "SILS_VISS_PROBE_REQUEST_PATH"),
+                         ("kp", "SILS_CTRL_KP"), ("setpoint", "SILS_CTRL_SETPOINT")):
+        if key in spec:
+            env[envname] = str(spec[key])
+
+    proto = descriptor.get("protocol") or {}
+    if proto.get("mode"):
+        env["SILS_PROTOCOL"] = str(proto["mode"])
+    if proto.get("response_topic"):
+        env["SILS_RESPONSE_TOPIC"] = str(proto["response_topic"])
+
+    p = descriptor.get("plant") or {}
+    ptype = p.get("type")
+    if ptype and ptype != "none":
+        env["SILS_PLANT"] = str(ptype)
+        pspec = p.get("spec") or {}
+        for key, envname in (("drag", "SILS_PLANT_DRAG"), ("init", "SILS_PLANT_INIT"),
+                             ("replay_file", "SILS_PLANT_REPLAY_FILE")):
+            if key in pspec:
+                env[envname] = str(pspec[key])
+        fmu = p.get("fmu") or pspec.get("fmu") or {}
+        if fmu.get("file"):
+            env["SILS_FMU_FILE"] = str(fmu["file"])
+        if "input_vr" in fmu:
+            env["SILS_FMU_INPUT_VR"] = str(fmu["input_vr"])
+        if "output_vr" in fmu:
+            env["SILS_FMU_OUTPUT_VR"] = str(fmu["output_vr"])
+        if fmu.get("allowlist"):
+            env["SILS_FMU_ALLOWLIST"] = str(fmu["allowlist"])
+        if fmu.get("allowlist_id"):
+            env["SILS_FMU_ALLOWLIST_ID"] = str(fmu["allowlist_id"])
+
+    s = descriptor.get("scenario") or {}
+    if s.get("type"):
+        env["SILS_SCENARIO"] = str(s["type"])
+        faults = _normalize_faults(s.get("faults", ""))
+        if faults:
+            env["SILS_SCENARIO_FAULTS"] = faults
+
+    a = descriptor.get("attestation") or {}
+    for key in ("arch", "gateway", "protocol"):
+        if a.get(key):
+            env[f"SILS_ATTEST_{key.upper()}"] = str(a[key])
+
+    return env
+
+
 def resolve_topology(
     topology: dict, root: Path, contracts: dict[str, dict], qos_catalog: dict[str, dict]
 ) -> tuple[list[dict], list[str], list[str]]:
@@ -210,6 +302,8 @@ def resolve_topology(
                     "ecu": descriptor.get("ecu"),
                     "fidelity": descriptor.get("fidelity"),
                     "params": inst["params"],
+                    # Port declarations -> SILS_* env the probe reads (§9.2 declarative path).
+                    "env": resolve_runtime_env(descriptor),
                     "endpoints": inst_eps,
                 }
             )
@@ -248,6 +342,10 @@ def render_saved_service_list(resolved: list[dict], image: str, run_domain_id: s
             extra_args += ["-e", f"{env_name}={run_domain_id}"]
         extra_args += ["-e", "SILS_RUN_ID=${SILS_RUN_ID}"]
         extra_args += ["-e", f"SILS_VECU_INSTANCE_ID={c['instance_id']}"]
+        # Port declarations (§9.2): pass the Descriptor-derived SILS_* env into the
+        # container so the docker path drives the same ports as local.
+        for env_name, env_val in (c.get("env") or {}).items():
+            extra_args += ["-e", f"{env_name}={env_val}"]
 
         containers.append(
             {

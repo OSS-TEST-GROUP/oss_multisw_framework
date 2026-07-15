@@ -88,6 +88,16 @@ lease_helper() { echo "$(dirname "$0")/../../../tools/sils/run_coordinator/domai
 # tools/sils/fmu/fmu_gate.py, relative to this script.
 gate_helper() { echo "$(dirname "$0")/../../../tools/sils/fmu/fmu_gate.py"; }
 
+# Raw KEY=VALUE Descriptor port-env for a resolved-run container <index> (§9.2), one per
+# line; empty when there's no resolved-run. Used by the fleet launch path to feed `env`
+# (local) / `docker -e` (docker) so each member drives the same ports as `start`.
+member_env_args() {
+    local from_resolved="$1" idx="$2"
+    [[ -z "${from_resolved}" ]] && return 0
+    python3 "$(dirname "$0")/../../../tools/sils/topology_compiler/resolved_to_shell.py" \
+        "${from_resolved}" --index "${idx}" --env-args 2>/dev/null || true
+}
+
 # FMU security gate (§5.6): when a run configures an FMU (SILS_FMU_FILE), refuse to
 # launch unless the file is allowlisted + hash-verified. Loading an FMU runs its native
 # binary in-process, so this is fail-closed -- any gate error aborts the run. Overridable
@@ -327,6 +337,13 @@ start_docker() {
     #   endpoints match but ZERO samples arrive (verified 2026-07 -- the classic
     #   "matched but no data" symptom). Sharing the host IPC namespace opens the SHM
     #   data path. (Alternative would be disabling the SHM transport to force UDP.)
+    # §9.2: rebuild -e flags for the Descriptor-derived port env. cmd_start already
+    # eval'd resolved_to_shell (exporting SILS_* + setting RESOLVED_ENV_KEYS); read each
+    # name's exported value via indirect expansion so the container drives the same ports.
+    local -a runtime_e=() _k
+    for _k in ${RESOLVED_ENV_KEYS:-}; do
+        runtime_e+=(-e "${_k}=${!_k}")
+    done
     if ! docker run -d --name "${container_name}" \
         --network host \
         --ipc=host \
@@ -334,6 +351,7 @@ start_docker() {
         -e "SILS_RUN_ID=${run_id}" \
         -e "SILS_VECU_INSTANCE_ID=${instance_id}" \
         ${g_sils_topic:+-e SILS_TOPIC="${g_sils_topic}"} \
+        ${runtime_e[@]+"${runtime_e[@]}"} \
         "${image}" >/dev/null 2>>"${tfile}"; then
         trace "${run_id}" "start_failed" "\"reason\":\"docker run failed\"" | tee -a "${tfile}"
         do_teardown "${run_id}"
@@ -570,9 +588,16 @@ cmd_start() {
 # member failure must not abort the fleet before its siblings are torn down).
 fleet_start_member_local() {
     local run_id="$1" member_run_id="$2" domain="$3" bin_dir="$4" tfile="$5" instance_id="$6"
+    local from_resolved="${7:-}" idx="${8:-0}"
     local probe_bin="${bin_dir}/sils_vecu_viss_probe"
     [[ -x "${probe_bin}" ]] || { echo "fleet: ${probe_bin} not executable" >&2; return 1; }
-    SILS_RUN_ID="${member_run_id}" VISS_DDS_DOMAIN_ID="${domain}" SILS_VECU_INSTANCE_ID="${instance_id}" \
+    # §9.2: this member's Descriptor port-env, prefixed via `env` (scoped to the child,
+    # so members with different params don't leak env into each other).
+    local -a menv=() ; local kv
+    while IFS= read -r kv; do [[ -n "${kv}" ]] && menv+=("${kv}"); done \
+        < <(member_env_args "${from_resolved}" "${idx}")
+    env ${menv[@]+"${menv[@]}"} \
+        SILS_RUN_ID="${member_run_id}" VISS_DDS_DOMAIN_ID="${domain}" SILS_VECU_INSTANCE_ID="${instance_id}" \
         "${probe_bin}" >> "${tfile}" 2>&1 &
     local pid=$!
     echo "local ${pid} ${instance_id}" >> "$(members_file "${run_id}")"
@@ -585,12 +610,18 @@ fleet_start_member_local() {
 # container boundary (see start_docker's note); --network host for discovery.
 fleet_start_member_docker() {
     local run_id="$1" member_run_id="$2" domain="$3" image="$4" instance_id="$5" idx="$6"
+    local from_resolved="${7:-}"
     local cname="sils-vecu-${run_id}-m${idx}"
     echo "docker ${cname} ${instance_id}" >> "$(members_file "${run_id}")"
+    # §9.2: this member's Descriptor port-env as -e flags.
+    local -a re=() ; local kv
+    while IFS= read -r kv; do [[ -n "${kv}" ]] && re+=(-e "${kv}"); done \
+        < <(member_env_args "${from_resolved}" "${idx}")
     docker run -d --name "${cname}" --network host --ipc=host \
         -e "VISS_DDS_DOMAIN_ID=${domain}" \
         -e "SILS_RUN_ID=${member_run_id}" \
         -e "SILS_VECU_INSTANCE_ID=${instance_id}" \
+        ${re[@]+"${re[@]}"} \
         "${image}" >/dev/null 2>&1 || { echo "fleet: docker run failed for ${instance_id}" >&2; return 1; }
     sleep 0.3
     [[ "$(docker inspect -f '{{.State.Running}}' "${cname}" 2>/dev/null)" == "true" ]] \
@@ -718,9 +749,9 @@ cmd_fleet() {
         local inst="${instances[$i]}" member_run_id="${run_id}-m${i}"
         trace "${run_id}" "member_start" "\"instance_id\":\"${inst}\",\"index\":${i}" | tee -a "${tfile}"
         if [[ "${backend}" == "docker" ]]; then
-            fleet_start_member_docker "${run_id}" "${member_run_id}" "${domain}" "${image}" "${inst}" "${i}" || start_ok=false
+            fleet_start_member_docker "${run_id}" "${member_run_id}" "${domain}" "${image}" "${inst}" "${i}" "${from_resolved}" || start_ok=false
         else
-            fleet_start_member_local "${run_id}" "${member_run_id}" "${domain}" "${bin_dir}" "${tfile}" "${inst}" || start_ok=false
+            fleet_start_member_local "${run_id}" "${member_run_id}" "${domain}" "${bin_dir}" "${tfile}" "${inst}" "${from_resolved}" "${i}" || start_ok=false
         fi
     done
 

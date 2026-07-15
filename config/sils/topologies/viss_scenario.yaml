@@ -1,0 +1,23 @@
+# Example Topology — declarative ports (§9.2): L2 behavior + fault-injection scenario.
+#
+# References viss_scenario_probe.yaml, whose behavior/scenario/attestation declarations
+# the Topology Compiler resolves into the probe's SILS_* env. One vECU, local backend,
+# so it can be dry-run / compiled without a build.
+
+topology: viss_scenario
+
+run:
+  domain_strategy: inject
+  domain_id: "0"
+  input_mode: live
+  allow_degraded: false
+
+deployment:
+  backend: local
+
+vecus:
+  - name: viss-scenario
+    descriptor: service/sils/vecu/descriptors/viss_scenario_probe.yaml
+
+clock:
+  mode: wall

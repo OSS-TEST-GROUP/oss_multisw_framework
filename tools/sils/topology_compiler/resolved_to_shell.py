@@ -7,7 +7,8 @@ shouldn't hand-roll YAML parsing. Given a resolved-run.yaml and a container
 index, prints `KEY='value'` lines the coordinator can `eval`:
 
     RESOLVED_TOPOLOGY, RESOLVED_BACKEND, RESOLVED_DOMAIN,
-    RESOLVED_CONTAINER_COUNT, RESOLVED_NAME, RESOLVED_INSTANCE_ID
+    RESOLVED_CONTAINER_COUNT, RESOLVED_NAME, RESOLVED_INSTANCE_ID,
+    RESOLVED_TOPIC, RESOLVED_ENV_KEYS, and `export SILS_*` port-env lines (§9.2)
 
 Values are single-quoted with embedded single-quotes escaped, so `eval` is
 safe even though the inputs here (domain ids, instance names) are already
@@ -55,14 +56,46 @@ def emit(resolved_path: Path, index: int) -> tuple[list[str], str | None]:
     eps = c.get("endpoints", []) or []
     pub = next((e for e in eps if e.get("direction") == "publish"), None)
     lines.append(f"RESOLVED_TOPIC={sh_quote(pub.get('topic', '') if pub else '')}")
+    # Descriptor-derived port env (§9.2): `export SILS_*` so the local probe inherits them
+    # (and the coordinator's own fmu_preflight sees SILS_FMU_FILE). RESOLVED_ENV_KEYS lists
+    # the names so the docker path can rebuild `-e NAME=value` from the exported values.
+    env = c.get("env") or {}
+    for env_name, env_val in env.items():
+        lines.append(f"export {env_name}={sh_quote(env_val)}")
+    lines.append(f"RESOLVED_ENV_KEYS={sh_quote(' '.join(env.keys()))}")
     return lines, None
+
+
+def env_args(resolved_path: Path, index: int) -> tuple[list[str], str | None]:
+    """Raw, UNQUOTED `SILS_KEY=value` lines for the container's port env -- suitable as
+    `env`/`docker -e` arguments (the shell/docker, not eval, consumes them). Distinct from
+    emit()'s sh-quoted `export` lines. Used by the fleet launch path."""
+    if not resolved_path.exists():
+        return [], f"resolved-run file not found: {resolved_path}"
+    data = yaml.safe_load(resolved_path.read_text(encoding="utf-8")) or {}
+    containers = data.get("containers", [])
+    if index < 0 or index >= len(containers):
+        return [], f"container index {index} out of range (0..{len(containers) - 1})"
+    env = containers[index].get("env") or {}
+    return [f"{k}={v}" for k, v in env.items()], None
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("resolved_run", type=Path, help="path to a resolved-run.yaml")
     parser.add_argument("--index", type=int, default=0, help="container index (default 0)")
+    parser.add_argument("--env-args", action="store_true",
+                        help="print raw KEY=VALUE port-env lines (for env/docker -e), not shell vars")
     args = parser.parse_args(argv)
+
+    if args.env_args:
+        lines, err = env_args(args.resolved_run, args.index)
+        for line in lines:
+            print(line)
+        if err:
+            print(f"# error: {err}", file=sys.stderr)
+            return 1
+        return 0
 
     lines, err = emit(args.resolved_run, args.index)
     # Always emit the run-level vars we do have, even on a per-container error,
