@@ -17,7 +17,7 @@
 | **1** | **Topology Compiler — 정적 변환·검증** | ✅ 작성됨 |
 | **2** | **Contract / QoS Catalog — 무엇을 선언하나 (계약의 의미·QoS 매칭). *검증(lint)은 1장*** | ✅ 작성됨 |
 | **3** | **Descriptor → `SILS_*` env — 선언적 포트 배선(§9.2)** | ✅ 작성됨 |
-| 4 | Run Coordinator — 도메인 임대·기동·teardown·reap | ⬜ |
+| **4** | **Run Coordinator — 도메인 임대·기동·ready·verify·teardown·reap** | ✅ 작성됨 |
 | 5 | vECU 포트 — Clock / Behavior / Plant / Scenario | ⬜ |
 | 6 | Conformance 판정 — `evaluate.py` 가 trace 를 어떻게 읽나 | ⬜ |
 | 7 | 충실도 사다리 L0–L4 — 각 레벨의 증거 | ⬜ |
@@ -506,12 +506,108 @@ B 는 `accumulate` + tick 3 drop·tick 7 duplicate. **재빌드 없음** — §3
 
 ---
 
-# 4장~11장 (채우는 중)
+# 4장. Run Coordinator — 실행 오케스트레이터
 
-아래는 아직 stub. 이해하는 대로 각 장을 위 1~3장처럼 채운다.
+> 1~3장은 **실행 전(정적)** 이었다. 이 장부터 **실행**이다. Run Coordinator
+> ([run_phase1.sh](../service/sils/run_coordinator/run_phase1.sh))는 검증된 계획(resolved-run)과
+> SILS_* env 를 받아 **실제로 vECU 를 띄우고**, 도메인 격리·생명주기·정리를 책임지는 호스트측
+> bash 오케스트레이터다.
 
-- **4장 Run Coordinator** — 도메인 임대([domain_lease.py](../tools/sils/run_coordinator/domain_lease.py))·
-  local/docker 기동·teardown·고아 reap.
+## 4.1 한 문장
+
+Run Coordinator 는 한 run 을 **도메인 확보 → (FMU 게이트) → 기동 → ready 대기 → verify → 판정 →
+teardown** 으로 몰고 가며, 병렬 run 이 서로 간섭하지 않게 **DDS domain 을 격리**하고, 죽어도 자원이
+새지 않게 **lease·state 파일로 회수 가능**하게 만든다.
+
+## 4.2 네 서브명령 ([main](../service/sils/run_coordinator/run_phase1.sh) dispatch)
+
+| 명령 | 하는 일 |
+|---|---|
+| `start` | vECU 1개 run: 기동→ready→verify→판정→teardown |
+| `fleet` | vECU N개, **한 도메인 공유**, 동시 기동(§11/§13) |
+| `cleanup` | 특정 run 을 명시적으로 teardown(idempotent) |
+| `reap` | 고아 run 회수 + 만료 domain lease 정리(§14.4) |
+
+## 4.3 한 run 의 생명주기 (`start`)
+
+```
+domain 확보 ─▶ fmu_preflight ─▶ 기동 ─────▶ ready 대기 ─▶ verify ────▶ 판정 ─────▶ teardown
+(lease/inject)  (§5.6 게이트)   local/docker  (probe "ready"  (독립 one-shot  run_pass/    (컨테이너·PID 정리
+                              백엔드         trace 폴링,     구독자로 샘플   run_fail      + domain 반환)
+                                             timeout 시 실패) 검증)          terminal
+   trace:  domain_leased        process_running   vecu_ready    verify_invoke   run_pass     domain_released
+                                                  /ready_timeout /verify_pass                cleanup_done
+```
+
+- **ready 대기**: "VecuReady" 대용 — probe 가 스스로 찍는 `"event":"ready"` trace 를 폴링한다
+  (local 은 trace 파일, docker 는 `docker logs`). `ready_timeout_sec` 넘으면 `ready_timeout` +
+  teardown + 실패.
+- **verify**: Coordinator 가 **독립 one-shot 구독자**([sils_vecu_viss_verify](../service/sils/vecu/src/viss_verify_main.cc))를
+  띄워 실제 샘플이 오는지 본다. 이게 §11 L0(엔드포인트 match + 샘플 수신)의 런타임 증거.
+- 모든 단계가 **trace.jsonl 한 줄씩** 남고, 그 스트림이 6장 evaluate 의 입력이 된다.
+
+## 4.4 도메인 임대 — 병렬 run 격리 (§12, [domain_lease.py](../tools/sils/run_coordinator/domain_lease.py))
+
+DDS 는 **domain id** 로 통신을 격리한다. 같은 domain 이면 서로 샘플이 섞이므로, **병렬 run 은
+서로 다른 domain** 을 써야 한다. 그런데 domain 은 유한하다 → 유한 pool 에서 **임대(lease)**:
+
+- **atomic 획득**: per-domain lease 파일을 `O_CREAT|O_EXCL` 로 만든다 → 두 러너가 같은 domain 을
+  동시에 잡는 race 를 OS 가 막는다. pool 소진 시 `allocate` 는 **exit 3**.
+- **TTL + owner_pid**: lease 에 만료시각·소유 pid 를 기록. Coordinator 가 release 없이 죽어도
+  (crash) 만료되면 **reap** 이 회수 → domain 누수 방지(§14.4).
+- **release 는 idempotent**: 같은 run_id lease 를 지운다. teardown 이 항상 호출.
+- **pool 분리**: `--lease-dir`(env `SILS_DOMAIN_LEASE_DIR`)로 러너별 pool 을 나눠 CI 간섭 차단(§12.2).
+  이 도구는 **메커니즘**이고, "어느 러너가 어느 pool 을 쓰나"는 CI 정책.
+
+> domain 은 `--domain` 으로 **직접 주입(inject)** 하거나 `--domain-pool LO-HI` 로 **임대(allocate)**
+> 한다. 주입은 SUT 의 실제 domain 에 붙일 때(§3.4), 임대는 병렬 격리가 필요할 때.
+
+## 4.5 상태·추적 파일 — 두 개의 사이드카
+
+Coordinator 는 run 마다 `STATE_DIR` 에 두 파일을 둔다
+([state_file / trace_file](../service/sils/run_coordinator/run_phase1.sh#L82)):
+
+| 파일 | 역할 |
+|---|---|
+| `{run_id}.state` | **teardown 근거**. `BACKEND`·`PROBE_PID`/`CONTAINER_NAME`·`DOMAIN`·`DOMAIN_LEASED` 등. 죽어도 이 파일로 정리 가능 |
+| `{run_id}.trace.jsonl` | **판정 입력**. 생명주기 이벤트 한 줄씩 → 6장 evaluate 가 읽음 |
+
+state 파일에 `CONTAINER_NAME` 을 `docker run` **전에** 먼저 적는 이유: run 과 append 사이에서
+죽어도 teardown 이 컨테이너를 찾아 지울 수 있게 하기 위함(§14.4 crash 안전).
+
+## 4.6 teardown & reap — 새지 않게
+
+- **[do_teardown](../service/sils/run_coordinator/run_phase1.sh#L127)** (idempotent): state 를 읽어
+  컨테이너(`docker stop/rm`)·프로세스(`TERM`→안 죽으면 `KILL`)를 정리하고, `DOMAIN_LEASED` 면 lease
+  release, `domain_released`·`cleanup_done` trace. 이미 정리됐으면 `cleanup_noop`(성공).
+- **[cmd_reap](../service/sils/run_coordinator/run_phase1.sh#L198)**: Coordinator 가 mid-run 에 죽어
+  teardown 을 못 한 **고아 run** 을 state 파일 기준으로 회수 + state 파일이 이미 사라진 **만료 lease**
+  도 정리. 주기적으로 돌리는 안전망(§14.4).
+
+## 4.7 두 백엔드 — local vs docker
+
+| | local | docker |
+|---|---|---|
+| 실행 형태 | 호스트 프로세스(`&`, PROBE_PID) | 컨테이너(`docker run -d`, CONTAINER_NAME) |
+| env 주입 | export 상속 + inline(3장) | `-e` 플래그(3장) |
+| 네트워크 | 그대로 | `--network host` + `--ipc=host`(SHM 데이터 경로) |
+| verify | **둘 다 동일** — 호스트측 one-shot `sils_vecu_viss_verify` |
+
+`--ipc=host` 는 장식이 아니다 — 없으면 컨테이너가 자기 `/dev/shm` 을 써서 Fast DDS SHM 전송이
+호스트 reader 에 안 보인다 → **endpoint 는 match 인데 샘플 0**(2026-07 실측). 호스트 IPC 공유로
+SHM 데이터 경로를 연다.
+
+## 4.8 다음으로
+
+Coordinator 가 남긴 **trace.jsonl** 은 그 자체로 판정되지 않는다. 6장 **evaluate.py** 가 이 스트림을
+상태기계·증거로 읽어 verdict 로 환원한다(런타임 conformance — 전체 지도 cross-cutting 표의 ②).
+
+---
+
+# 5장~11장 (채우는 중)
+
+아래는 아직 stub. 이해하는 대로 각 장을 위 1~4장처럼 채운다.
+
 - **5장 vECU 포트** — Clock(wall/lockstep)·Behavior(viss-request/accumulate/p-controller)·
   Plant(analytic/replay/fmu)·Scenario(nominal/scheduled). earned-abstraction 원칙.
 - **6장 Conformance 판정** — [evaluate.py](../tools/sils/conformance/evaluate.py) 가 trace 를

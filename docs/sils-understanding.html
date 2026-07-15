@@ -201,12 +201,12 @@
 </head>
 <body>
 <div class="wrap">
-  <p class="eyebrow">MMF SiLS · 이해 다이어그램 · 1–3장</p>
-  <h1>SiLS 가상 ECU를 <em>정적</em>으로 어떻게 세우나</h1>
+  <p class="eyebrow">MMF SiLS · 이해 다이어그램 · 1–4장</p>
+  <h1>SiLS 가상 ECU를 어떻게 <em>세우고</em> <em>돌리나</em></h1>
   <p class="lede">SiLS 가상 ECU 전체를 훑는 <a href="sils-understanding.md" style="color:var(--accent)">이해 문서</a>의
-  다이어그램 모음. <b>1장</b> Topology Compiler(정적 변환·검증) · <b>2장</b> Contract/QoS Catalog(계약 선언) ·
-  <b>3장</b> Descriptor→SILS_* env(선언적 포트 배선). 모두 <b>실행 전, 호스트에서, DDS·arm64 없이</b>
-  다루는 정적 레이어. <em>(장이 늘면 다이어그램도 여기에 추가된다.)</em></p>
+  다이어그램 모음. <b>1장</b> Topology Compiler · <b>2장</b> Contract/QoS Catalog · <b>3장</b> Descriptor→SILS_* env
+  (여기까지 <b>실행 전·정적</b>) · <b>4장</b> Run Coordinator(<b>실행</b>: 기동·도메인 격리·생명주기).
+  <em>(장이 늘면 다이어그램도 여기에 추가된다.)</em></p>
 
   <div class="chap">1장 · Topology Compiler</div>
   <h2><span class="n">01</span> &nbsp;언제 — 수명주기에서의 위치</h2>
@@ -520,7 +520,37 @@ SILS_ATTEST_ARCH=x86_64  <span class="c"># sim</span></pre>
   <code style="font-family:var(--mono)">viss-request</code> 를 500ms 마다, B 는 <code style="font-family:var(--mono)">accumulate</code>
   + tick 3 drop·tick 7 duplicate. <b>재빌드 없음</b> — 같은 이미지에 env 만.</p>
 
-  <p class="foot">build.sh · compile.py:resolve_runtime_env · resolved_to_shell.py · run_phase1.sh &nbsp;|&nbsp; 문서: docs/sils-understanding.md (1·2·3장) &nbsp;|&nbsp; 검증: test_compile.py</p>
+  <div class="chap">4장 · Run Coordinator</div>
+  <h2><span class="n">08</span> &nbsp;한 run 의 생명주기 (실행)</h2>
+  <p class="lede" style="margin-bottom:18px">1–3장은 <b>실행 전(정적)</b>. 여기부터 <b>실행</b>이다.
+  Coordinator(run_phase1.sh)가 검증된 계획 + SILS_* 를 받아 vECU 를 띄우고, 도메인 격리·생명주기·정리를
+  책임진다. 각 단계는 <code class="inl">trace.jsonl</code> 한 줄로 남아 6장 evaluate 의 입력이 된다.</p>
+  <div class="scroll">
+    <div class="rail" style="min-width:1000px">
+      <div class="stage"><p class="who">① domain 확보</p><p class="what">lease / inject</p><p class="sub">trace: domain_leased</p></div>
+      <div class="stage"><p class="who">② FMU 게이트</p><p class="what">fmu_preflight</p><p class="sub">§5.6 (없으면 no-op)</p></div>
+      <div class="stage key"><p class="who">③ 기동</p><p class="what">local / docker</p><p class="sub">trace: process_running</p></div>
+      <div class="stage"><p class="who">④ ready 대기</p><p class="what">probe "ready" 폴링</p><p class="sub">vecu_ready / ready_timeout</p></div>
+      <div class="stage"><p class="who">⑤ verify</p><p class="what">독립 one-shot 구독자</p><p class="sub">verify_pass · §11 L0 증거</p></div>
+      <div class="stage"><p class="who">⑥ 판정 → teardown</p><p class="what">run_pass/fail</p><p class="sub">domain_released · cleanup_done</p></div>
+    </div>
+  </div>
+
+  <h2><span class="n">09</span> &nbsp;도메인 임대 — 병렬 run 격리 (§12)</h2>
+  <p class="lede" style="margin-bottom:16px">DDS 는 <b>domain id</b> 로 통신을 격리한다. 병렬 run 이 서로
+  샘플이 안 섞이려면 다른 domain 을 써야 하는데 domain 은 유한 → 유한 pool 에서 임대.</p>
+  <div class="whenline">
+    <div class="cell"><h3>atomic 획득</h3><p><code class="inl">O_CREAT|O_EXCL</code> per-domain 파일 — 두 러너 race 를 OS 가 차단. pool 소진 시 exit 3.</p></div>
+    <div class="cell"><h3>TTL + owner_pid</h3><p>Coordinator 가 release 없이 죽어도 만료되면 <b>reap</b> 이 회수 → domain 누수 방지(§14.4).</p></div>
+    <div class="cell"><h3>pool 분리</h3><p><code class="inl">--lease-dir</code> 로 러너별 pool 분리 → CI 간섭 차단(§12.2). 도구는 메커니즘, pool 배정은 정책.</p></div>
+    <div class="cell"><h3>inject vs allocate</h3><p><code class="inl">--domain</code> 직접 주입(SUT domain 에 붙일 때, §3.4) / <code class="inl">--domain-pool</code> 임대(병렬 격리).</p></div>
+  </div>
+  <p class="note"><b>teardown 은 idempotent, reap 은 안전망</b>: state 파일(<code class="inl">CONTAINER_NAME</code>·
+  <code class="inl">PROBE_PID</code>·<code class="inl">DOMAIN_LEASED</code>)을 <code>docker run</code> 전에 먼저 적어,
+  run 도중 죽어도 컨테이너·PID·lease 를 회수할 수 있다(§14.4 crash 안전). 두 백엔드는 같은 host-side verify 를
+  쓰며, docker 는 <code class="inl">--ipc=host</code> 가 없으면 SHM 경로가 끊겨 <b>matched-but-no-data</b>(2026-07 실측).</p>
+
+  <p class="foot">run_phase1.sh (start/fleet/cleanup/reap) · domain_lease.py &nbsp;|&nbsp; 문서: docs/sils-understanding.md (1–4장) &nbsp;|&nbsp; trace → 6장 evaluate</p>
 </div>
 </body>
 </html>
