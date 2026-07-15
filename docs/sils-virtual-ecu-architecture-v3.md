@@ -230,6 +230,57 @@ Run Coordinator는 필수 vECU가 모두 READY인 후에만 scenario와 Clock Ma
 
 ## 6. vECU 런타임 내부 구조
 
+### 6.1 논리 계층과 SiLS 플랫폼 경계
+
+제어 알고리즘을 실행하는 고충실도 vECU는 다음 네 계층으로 구성한다. 단, 네 계층이 항상 양산 AUTOSAR 수준으로 모두 구현된다는 뜻은 아니다. 요구 fidelity에 따라 실제 ASW/BSW를 사용하거나 behavior model과 최소 runtime으로 축약할 수 있다.
+
+```text
+┌────────────────────── vECU package ────────────────────────┐
+│ 1. ASW / Behavior                                          │
+│    production control algorithm 또는 대체 behavior model   │
+├────────────────────────────────────────────────────────────┤
+│ 2. Virtual BSW                                             │
+│    virtual OS scheduler · RTE · communication · diagnostics│
+├────────────────────────────────────────────────────────────┤
+│ 3. V-HAL                                                   │
+│    sensor · actuator · timer · bus · plant abstraction     │
+├────────────────────────────────────────────────────────────┤
+│ 4. SiLS Host Adapter                                       │
+│    clock client · lifecycle · I/O exchange · trace hook    │
+└────────────────────────────────────────────────────────────┘
+                         │
+                         ▼
+┌────────────────────── SiLS platform ────────────────────────┐
+│ Run Coordinator · Clock Master · Topology Compiler         │
+│ Recorder/Diagnostics · deployment backend · MORAI Bridge   │
+└────────────────────────────────────────────────────────────┘
+```
+
+| 논리 계층 | vECU 포함 | v3 구성요소 매핑 | 책임 |
+|---|---:|---|---|
+| ASW / Behavior | 포함 | `IBehavior`, behavior plugin | 제어 알고리즘, runnable 또는 상태 머신 실행 |
+| Virtual BSW | 포함 | `ExecutionKernel`, scheduler, bus/RTE adapter | task 순서, RTE 호출, 통신, 선택적 Diagnostics/NvM 제공 |
+| V-HAL | 포함 | `IBus`, `IPlant`, port/contract adapter | 실제 센서·actuator·timer·bus 접근을 simulation I/O로 치환 |
+| SiLS Host Adapter | 포함 | `IClockSource`, lifecycle client, trace hook | vECU를 외부 시간·실행 제어·관측 경로에 연결 |
+| SiLS control plane | **제외** | Run Coordinator, Clock Master, Topology Compiler | 여러 vECU와 외부 Simulator를 run 단위로 통제 |
+| External integration | **제외** | MORAI, UDP–ROS2 Bridge, Bridge Supervisor | 외부 Simulator 실행 및 protocol 연동 |
+
+Host Adapter는 vECU 내부의 **접속점**까지만 소유한다. 전체 participant에 tick을 승인하는 Clock Master와 start/readiness/teardown을 지휘하는 Run Coordinator는 vECU 밖에 둔다. 따라서 각 vECU에는 Clock Master의 client인 `IClockSource`가 들어가지만 master 역할의 `IClockCoordinator` 구현은 SiLS control plane에 배치한다.
+
+`DLL 컴파일`은 runtime 계층의 책임이 아니라 build/package 선택이다. Windows host는 `.dll`, 현재 Linux/ARM64 container는 `.so` 또는 executable, 표준 model exchange가 필요하면 FMU를 사용할 수 있다. Host Adapter의 플랫폼 독립 책임은 **시간 동기화, lifecycle, 입출력 교환, trace와 host API 연동**이다.
+
+Fidelity별 기본 구성은 다음과 같다.
+
+| Fidelity | ASW/Behavior | Virtual BSW | V-HAL/Host |
+|---|---|---|---|
+| L0 Interface Stub | 고정 응답 또는 echo | 최소 runtime | endpoint와 lifecycle 중심 |
+| L1 Behavior Model | 상태 머신/규칙 모델 | scheduler·통신 최소본 | simulated I/O와 clock 연결 |
+| L2 Production ASW | 실제 제어 코드 | 필요한 RTE/BSW 가상화 | ECU hardware API 치환 |
+| L3 Plant Coupled | L2 또는 고급 behavior | L2 범위 | FMU/MORAI plant 연결 추가 |
+| L4 Target-like | 실제 ASW | 실제 BSW/OS 동작에 최대한 근접 | target timing/interface 검증 강화 |
+
+### 6.2 포트-어댑터 런타임 구현
+
 ```text
 ┌─────────────────────────────────────────────────────────────┐
 │ Virtual ECU Runtime                                         │
@@ -254,6 +305,8 @@ Run Coordinator는 필수 vECU가 모두 READY인 후에만 scenario와 Clock Ma
 | `IScenario` | fault와 sequence 평가 | `evaluate(t,ctx)` |
 
 FMU step ownership은 `IPlant`에 둔다. FMI 자체가 ECU behavior인 특수 사례만 별도 behavior adapter로 허용한다.
+
+위 포트 구조는 6.1의 계층을 대체하는 별도 구조가 아니라 구현 방식이다. 예를 들어 `IBehavior`는 ASW/Behavior, `ExecutionKernel`은 Virtual BSW, `IBus`와 `IPlant`는 V-HAL, `IClockSource`와 trace/lifecycle adapter는 Host Adapter에 대응한다.
 
 ---
 
@@ -948,6 +1001,14 @@ Phase 1 통과 전에는 제외 기능의 풀 구현을 시작하지 않는다. 
 ---
 
 ## 20. 변경 이력
+
+### v3 vECU 계층 경계 보강 (2026-07-15)
+
+- vECU 내부를 ASW/Behavior, Virtual BSW, V-HAL, SiLS Host Adapter의 4개 논리 계층으로 명시
+- 기존 `ExecutionKernel`, `IBehavior`, `IBus`, `IPlant`, `IClockSource`의 계층별 매핑 추가
+- Host Adapter는 vECU에 포함하되 Run Coordinator, Clock Master, Topology Compiler와 MORAI 연동은 외부 SiLS 플랫폼으로 경계 설정
+- `DLL 컴파일`을 runtime 책임에서 제외하고 `.dll`/`.so`/executable/FMU를 build/package 선택으로 구분
+- L0~L4 fidelity별 ASW, Virtual BSW, V-HAL 구성 수준 정의
 
 ### v3 external simulator 보강 (2026-07-14)
 
