@@ -369,6 +369,34 @@ scenario/attestation        (SILS_* 로 변환·         (셸 주입 형태 2가
                              resolved-run 에 실음)
 ```
 
+### Descriptor 파일은 어디 있나 (실제 경로)
+
+Descriptor 는 레포의 손으로 쓴 YAML 이다 — `service/sils/vecu/descriptors/*.yaml`:
+
+```
+service/sils/vecu/descriptors/
+├─ viss_probe.yaml            # Phase 1 스모크(behavior: stub, plant: none)
+├─ viss_scenario_probe.yaml   # L2 accumulate + scheduled 결함주입 예
+└─ wheelspeed_probe.yaml      # per-instance fleet 멤버
+```
+
+Topology([config/sils/topologies/*.yaml](../config/sils/topologies/))가 `vecus[].descriptor` 로
+**경로를 참조**하고, compile.py 가 그 경로로 읽는다([load](../tools/sils/topology_compiler/compile.py#L140)):
+
+```yaml
+# config/sils/topologies/viss_scenario.yaml
+vecus:
+  - name: viss-scenario
+    descriptor: service/sils/vecu/descriptors/viss_scenario_probe.yaml   # ← 이 파일을 읽음
+```
+
+실제 참조 3건:
+| Topology | → Descriptor |
+|---|---|
+| [viss_probe_smoke.yaml](../config/sils/topologies/viss_probe_smoke.yaml) | `service/sils/vecu/descriptors/viss_probe.yaml` |
+| [viss_scenario.yaml](../config/sils/topologies/viss_scenario.yaml) | `service/sils/vecu/descriptors/viss_scenario_probe.yaml` |
+| [wheelspeed_fleet.yaml](../config/sils/topologies/wheelspeed_fleet.yaml) | `service/sils/vecu/descriptors/wheelspeed_probe.yaml` |
+
 ## 3.2 무엇이 변환되나 — Descriptor 필드 → `SILS_*`
 
 [resolve_runtime_env](../tools/sils/topology_compiler/compile.py#L118) 의 매핑(발췌):
