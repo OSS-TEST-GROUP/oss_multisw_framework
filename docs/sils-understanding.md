@@ -16,7 +16,7 @@
 |---|---|---|
 | **1** | **Topology Compiler — 정적 변환·검증** | ✅ 작성됨 |
 | **2** | **Contract / QoS Catalog — 무엇을 선언하나 (계약의 의미·QoS 매칭). *검증(lint)은 1장*** | ✅ 작성됨 |
-| 3 | Descriptor → `SILS_*` env — 선언적 포트 배선(§9.2) | ⬜ (1장 §1.3에 일부) |
+| **3** | **Descriptor → `SILS_*` env — 선언적 포트 배선(§9.2)** | ✅ 작성됨 |
 | 4 | Run Coordinator — 도메인 임대·기동·teardown·reap | ⬜ |
 | 5 | vECU 포트 — Clock / Behavior / Plant / Scenario | ⬜ |
 | 6 | Conformance 판정 — `evaluate.py` 가 trace 를 어떻게 읽나 | ⬜ |
@@ -335,11 +335,108 @@ domain_env 오타·enum·per-instance `{instance_id}`…)는 **1장 §1.4.A 의 
 
 ---
 
-# 3장~11장 (채우는 중)
+# 3장. Descriptor → `SILS_*` env — 선언적 포트 배선 (§9.2)
 
-아래는 아직 stub. 이해하는 대로 각 장을 위 1·2장처럼 채운다.
+> 1장 §1.3-④ 를 확장한다. 2장이 **wire 계약**(topic·QoS·ownership)을 다뤘다면, 이 장은 **vECU
+> 내부 동작**(어떤 clock·behavior·plant·scenario 로 돌지)을 Descriptor 선언에서 실행 env 로
+> 잇는 다리다.
 
-- **3장 Descriptor → `SILS_*` env** — 선언적 포트 배선(§9.2). 1장 §1.3-④ 를 확장.
+## 3.1 한 문장 — "정문(선언)"으로 포트를 켠다
+
+vECU 의 포트(clock/behavior/plant/scenario/attestation)는 **Descriptor 에 선언**하면 파이프라인이
+probe 가 읽는 `SILS_*` 환경변수로 **자동 배선**한다. 손으로 `export SILS_PLANT=fmu …` 할 필요 없이,
+Descriptor 가 `plant: {type: fmu}` 라고 쓰면 그게 실행까지 이어진다.
+
+```
+Descriptor (선언)              compile.py                resolved_to_shell.py         run_phase1.sh        probe (C++)
+clock/behavior/plant/    →  resolve_runtime_env  →   export SILS_* / --env-args  →  local:상속       →  SILS_* 읽고
+scenario/attestation        (SILS_* 로 변환·         (셸 주입 형태 2가지)          docker/fleet:-e      동작
+                             resolved-run 에 실음)
+```
+
+## 3.2 무엇이 변환되나 — Descriptor 필드 → `SILS_*`
+
+[resolve_runtime_env](../tools/sils/topology_compiler/compile.py#L118) 의 매핑(발췌):
+
+| Descriptor | `SILS_*` env | 비고 |
+|---|---|---|
+| `clock.mode` | `SILS_CLOCK_MODE` | wall / lockstep |
+| `behavior.type` | `SILS_BEHAVIOR` | `stub`→`viss-request`, accumulate, p-controller |
+| `behavior.spec.period_ms` | `SILS_VISS_PROBE_PERIOD_MS` | |
+| `behavior.spec.kp` / `setpoint` | `SILS_CTRL_KP` / `SILS_CTRL_SETPOINT` | p-controller |
+| `protocol.mode` / `response_topic` | `SILS_PROTOCOL` / `SILS_RESPONSE_TOPIC` | reqresp |
+| `plant.type` (≠none) | `SILS_PLANT` | first-order / replay / fmu |
+| `plant.spec.drag` / `init` / `replay_file` | `SILS_PLANT_DRAG` / `_INIT` / `SILS_PLANT_REPLAY_FILE` | |
+| `plant.fmu.file` / `input_vr` / `output_vr` | `SILS_FMU_FILE` / `SILS_FMU_INPUT_VR` / `_OUTPUT_VR` | |
+| `plant.fmu.allowlist` / `allowlist_id` | `SILS_FMU_ALLOWLIST` / `_ALLOWLIST_ID` | 5장·9장 보안 게이트 |
+| `scenario.type` / `faults` | `SILS_SCENARIO` / `SILS_SCENARIO_FAULTS` | `3:drop,7:corrupt` |
+| `attestation.{arch,gateway,protocol}` | `SILS_ATTEST_ARCH` / `_GATEWAY` / `_PROTOCOL` | 10장 L4 |
+
+이 env dict 는 resolved-run.yaml 의 각 container 에 `env:` 로 실린다(1장 §1.3 변환 출력).
+
+## 3.3 세 갈래 주입 경로 — local / docker / fleet
+
+[resolved_to_shell.py](../tools/sils/topology_compiler/resolved_to_shell.py) 가 **두 가지 형태**로
+방출하고, [run_phase1.sh](../service/sils/run_coordinator/run_phase1.sh) 가 백엔드별로 주입한다:
+
+| 경로 | 방출 형태 | 주입 방식 |
+|---|---|---|
+| **local** | `export SILS_*='...'` (eval 용, 따옴표) | coordinator 가 eval → 자식 probe 가 **상속** |
+| **docker** | 위 export + `RESOLVED_ENV_KEYS` | 키 목록으로 `-e NAME=${!NAME}` 재조립 |
+| **fleet** | `--env-args` (raw `KEY=VALUE`) | `env`(local)·`-e`(docker) 로 멤버별 주입 |
+
+- **왜 두 형태인가**: eval 용 `export` 는 따옴표가 붙어 `env`/`-e` 인자로 못 쓴다. 그래서 docker·fleet
+  용으로 따옴표 없는 raw `KEY=VALUE` 를 주는 `--env-args` 모드를 따로 둔다.
+- **local 이 export 를 쓰는 부수 효과**: coordinator 가 `SILS_FMU_FILE` 을 상속받아 launch 전
+  **fmu_preflight**(보안 게이트, 9장)가 그 값을 볼 수 있다.
+
+## 3.4 Descriptor 소유 vs Coordinator 소유
+
+`resolve_runtime_env` 는 **포트 설정만** 만든다. 아래는 **넣지 않는다** — Run Coordinator 가 소유:
+
+| Coordinator 가 주입 | 이유 |
+|---|---|
+| `SILS_RUN_ID` | run 마다 유일(추적·teardown) |
+| `SILS_VECU_INSTANCE_ID` | 인스턴스 식별(fleet) |
+| `SILS_TOPIC` | per-instance 해석된 topic(§9.5, 1장 §1.3-③); resolved endpoint 에서 옴 |
+| `VISS_DDS_DOMAIN_ID` | run.domain_id (도메인 임대, 4장) |
+
+즉 **"무엇을 하는 vECU인가"(포트)는 Descriptor**, **"이번 run 의 정체성"(누가·어디서)은 Coordinator**.
+
+## 3.5 왜 오프라인으로 검증되나
+
+이 배선이 보장할 것은 단 하나: **"Descriptor 가 만드는 env 문자열 = 손으로 넣던 env 문자열."**
+이 문자열 동등성은 DDS·빌드 없이 순수 파이썬/셸 테스트로 단언된다(1장 §1 도구들과 같은 방식).
+probe(C++)는 그 env 를 읽을 뿐이라, 문자열이 같으면 런타임 동작은 자동으로 따라온다 — 그래서
+이미 실측한 L1/L3/scenario 런타임 결과가 그대로 성립한다.
+검증: [test_compile.py](../tools/sils/topology_compiler/test_compile.py) 의 포트→env·smoke·예제·
+export/env-args 케이스.
+
+## 3.6 예 — 선언 하나가 env 로
+
+[viss_scenario_probe.yaml](../service/sils/vecu/descriptors/viss_scenario_probe.yaml)
+([topology](../config/sils/topologies/viss_scenario.yaml)):
+
+```yaml
+behavior: { type: accumulate, spec: { period_ms: 200 } }
+scenario:
+  type: scheduled
+  faults: [ {tick: 3, fault: drop}, {tick: 7, fault: duplicate} ]
+attestation: { arch: x86_64, gateway: sim, protocol: sim }
+```
+→ 컴파일·방출하면:
+```
+SILS_BEHAVIOR=accumulate  SILS_VISS_PROBE_PERIOD_MS=200
+SILS_SCENARIO=scheduled   SILS_SCENARIO_FAULTS=3:drop,7:duplicate
+SILS_ATTEST_ARCH=x86_64   SILS_ATTEST_GATEWAY=sim   SILS_ATTEST_PROTOCOL=sim
+```
+
+---
+
+# 4장~11장 (채우는 중)
+
+아래는 아직 stub. 이해하는 대로 각 장을 위 1~3장처럼 채운다.
+
 - **4장 Run Coordinator** — 도메인 임대([domain_lease.py](../tools/sils/run_coordinator/domain_lease.py))·
   local/docker 기동·teardown·고아 reap.
 - **5장 vECU 포트** — Clock(wall/lockstep)·Behavior(viss-request/accumulate/p-controller)·

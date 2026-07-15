@@ -184,11 +184,11 @@
 </head>
 <body>
 <div class="wrap">
-  <p class="eyebrow">MMF SiLS · 이해 다이어그램 · 1–2장</p>
+  <p class="eyebrow">MMF SiLS · 이해 다이어그램 · 1–3장</p>
   <h1>SiLS 가상 ECU를 <em>정적</em>으로 어떻게 세우나</h1>
   <p class="lede">SiLS 가상 ECU 전체를 훑는 <a href="sils-understanding.md" style="color:var(--accent)">이해 문서</a>의
-  다이어그램 모음. <b>1장</b>은 Topology Compiler(정적 변환·검증)를, <b>2장</b>은
-  Contract/QoS Catalog(계약 선언)를 그린다. 둘 다 <b>실행 전, 호스트에서, DDS·arm64 없이</b>
+  다이어그램 모음. <b>1장</b> Topology Compiler(정적 변환·검증) · <b>2장</b> Contract/QoS Catalog(계약 선언) ·
+  <b>3장</b> Descriptor→SILS_* env(선언적 포트 배선). 모두 <b>실행 전, 호스트에서, DDS·arm64 없이</b>
   다루는 정적 레이어. <em>(장이 늘면 다이어그램도 여기에 추가된다.)</em></p>
 
   <div class="chap">1장 · Topology Compiler</div>
@@ -401,7 +401,67 @@
   IDL 실존·§9.5 소유권…)의 <b>검증은 1장</b>(lint + compile). QoS 는 장식이 아니라
   <code class="inl">누가 언제 데이터를 받는지</code>를 좌우하는 계약 조항이다.</p>
 
-  <p class="foot">config/sils/contracts/*.yaml · qos/qos-profiles.yaml &nbsp;|&nbsp; 문서: docs/sils-understanding.md (1·2장) &nbsp;|&nbsp; 검증(lint)은 1장 · test_lint_catalog.py 18</p>
+  <div class="chap">3장 · Descriptor → SILS_* env</div>
+  <h2><span class="n">06</span> &nbsp;선언 → 실행 env 배선 (§9.2)</h2>
+  <p class="lede" style="margin-bottom:18px">2장이 <b>wire 계약</b>(topic·QoS)이라면, 3장은 <b>vECU 내부 동작</b>
+  (clock·behavior·plant·scenario)을 Descriptor 선언에서 실행 env 로 잇는 다리. 손으로 export 하지 않고,
+  <code class="inl">plant: {type: fmu}</code> 라고 쓰면 그게 probe 까지 이어진다.</p>
+  <div class="scroll">
+    <div class="rail">
+      <div class="stage">
+        <p class="who">Descriptor</p>
+        <p class="what">포트 선언</p>
+        <p class="sub">clock · behavior · plant · scenario · attestation</p>
+      </div>
+      <div class="stage key">
+        <p class="who">compile.py</p>
+        <p class="what">resolve_runtime_env</p>
+        <p class="sub">→ SILS_* 로 변환, resolved-run 의 env 에 실음</p>
+        <span class="badge gate">◆ 변환 (정적)</span>
+      </div>
+      <div class="stage">
+        <p class="who">resolved_to_shell</p>
+        <p class="what">export SILS_* · --env-args</p>
+        <p class="sub">eval 용(따옴표) · raw KEY=VALUE 두 형태</p>
+      </div>
+      <div class="stage">
+        <p class="who">run_phase1.sh</p>
+        <p class="what">백엔드별 주입</p>
+        <p class="sub">local: 상속 · docker/fleet: -e / env</p>
+      </div>
+      <div class="stage">
+        <p class="who">probe · C++</p>
+        <p class="what">SILS_* 읽고 동작</p>
+        <p class="sub">env 만 읽음. Python·검증 없음.</p>
+        <span class="badge trust">arm64/x86 컨테이너</span>
+      </div>
+    </div>
+  </div>
+  <div class="own" style="margin-top:20px">
+    <div class="o per">
+      <h4>Descriptor 가 소유 — "무엇을 하는 vECU인가"</h4>
+      <div class="topics">
+        <div class="t ok">SILS_CLOCK_MODE · SILS_BEHAVIOR · SILS_CTRL_*</div>
+        <div class="t ok">SILS_PLANT · SILS_FMU_* · SILS_SCENARIO(_FAULTS)</div>
+        <div class="t ok">SILS_ATTEST_ARCH/GATEWAY/PROTOCOL</div>
+      </div>
+      <p>포트 설정. resolve_runtime_env 가 생성.</p>
+    </div>
+    <div class="o single">
+      <h4>Coordinator 가 소유 — "이번 run 의 정체성"</h4>
+      <div class="topics">
+        <div class="t">SILS_RUN_ID · SILS_VECU_INSTANCE_ID</div>
+        <div class="t">SILS_TOPIC (per-instance 해석 topic)</div>
+        <div class="t">VISS_DDS_DOMAIN_ID (도메인 임대)</div>
+      </div>
+      <p>누가·어디서. run 마다 Coordinator 가 주입.</p>
+    </div>
+  </div>
+  <p class="note"><b>오프라인 검증</b>: 이 배선이 보장할 건 "Descriptor 가 만드는 env 문자열 = 손으로 넣던
+  문자열" 하나. 이 동등성은 DDS·빌드 없이 파이썬/셸 테스트로 단언되고, probe(C++)는 그 env 를 읽을
+  뿐이라 문자열이 같으면 런타임 동작(L1/L3/scenario 실측)은 그대로 따라온다.</p>
+
+  <p class="foot">compile.py:resolve_runtime_env · resolved_to_shell.py · run_phase1.sh &nbsp;|&nbsp; 문서: docs/sils-understanding.md (1·2·3장) &nbsp;|&nbsp; 검증: test_compile.py (포트→env·env-args)</p>
 </div>
 </body>
 </html>
