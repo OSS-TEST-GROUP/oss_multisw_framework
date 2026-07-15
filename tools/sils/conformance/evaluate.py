@@ -347,6 +347,12 @@ def analyze_plant(events: list[dict]) -> tuple[dict, list[str]]:
         "closed_loop": closed,
         "deterministic": deterministic,
     }
+    # FMU-backed plants (FmuPlant via FMI co-sim) emit the SAME plant_step contract as
+    # the built-in AnalyticPlant -- so closed-loop/determinism/model-correlation judging
+    # is unchanged. Surface the FMI metadata when present, for the report only.
+    fmi_version = resets[-1].get("fmi_version") if resets else None
+    if fmi_version:
+        plant["fmi_version"] = fmi_version
     return plant, violations
 
 
