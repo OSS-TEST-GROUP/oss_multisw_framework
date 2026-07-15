@@ -467,6 +467,7 @@ do_start_build_mmf()
 		--name mmf-builder \
 		-u 1000:1000 \
 		-w /home/ossuser/workspace \
+		-e SILS_ENABLE_FMU \
 		-v ${SDK_DIR}:/opt \
 		-v ${PWD}/docker/scripts/build.sh:/home/ossuser/workspace/build.sh \
 		-v ${PWD}/CMakeLists.txt:/home/ossuser/workspace/CMakeLists.txt \
