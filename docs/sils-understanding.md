@@ -872,6 +872,125 @@ brake ECU                              temp ECU
         └────── compile → 컨테이너 2개, 각자 probe(PID1) ──────┘
 ```
 
+### (f) 실제 파일 내용 (워크드 예제)
+
+> 아래는 **예시 스니펫**이다. 실 소스(`behavior.hpp`/`plant.hpp`)엔 넣지 않는다 — VISS 슬라이스에
+> 투기적 코드를 두지 않기 위함(earned-abstraction, §5.2). 현재 IBehavior/IPlant 시그니처에 맞춘 형태.
+
+**① `behavior.hpp` — `BrakeBehavior`** (제어 로직 → 바이너리, §4.8①). `PControllerBehavior` 와 같은 꼴:
+
+```cpp
+// 목표 감속도(target)와 피드백(실제 감속도)으로 유압 명령 u=Kp*(target-actual) 계산(0..max 클램프).
+// value 가 명령이라 probe 가 그대로 플랜트에 먹인다(§5.4 폐루프).
+class BrakeBehavior : public IBehavior {
+public:
+    BrakeBehavior(double kp, double target_decel, double max_pressure)
+        : kp_(kp), target_decel_(target_decel), max_pressure_(max_pressure) {}
+    BehaviorOutput OnTick(const BehaviorContext& ctx) override {
+        double pressure = kp_ * (target_decel_ - ctx.plant_feedback);   // P 제어
+        if (pressure < 0.0)           pressure = 0.0;                   // 브레이크는 음수 불가
+        if (pressure > max_pressure_) pressure = max_pressure_;
+        std::ostringstream inner;
+        inner << R"({"action":"set","path":"Vehicle.Brake.Pressure","value":)" << pressure
+              << R"(,"requestId":"sils-)" << ctx.tick_seq << R"("})";
+        return {inner.str(), pressure};
+    }
+    const char* name() const override { return "brake"; }
+private:
+    double kp_, target_decel_, max_pressure_;
+};
+```
+```cpp
+// MakeBehavior 팩토리에 분기 (SILS_BEHAVIOR=brake 로 선택)
+if (kind == "brake") return std::make_unique<BrakeBehavior>(kp, setpoint, /*max*/100.0);
+```
+
+**② 물리 모델 — (A) `plant.hpp` `BrakePlant`** (해석, FMU 불필요). `AnalyticPlant` 와 같은 꼴:
+
+```cpp
+// 브레이크+휠 물리(단순): 압력 u → 감속도 x. x' = b*u - a*x (forward-Euler).
+class BrakePlant : public IPlant {
+public:
+    BrakePlant(double gain, double drag) : b_(gain), a_(drag) {}
+    void Reset(double initial) override { x_ = initial; }
+    void SetInputs(double pressure) override { u_ = pressure; }
+    double Step(int64_t dt_ns) override {
+        double dt = static_cast<double>(dt_ns) / 1e9;
+        x_ += (b_ * u_ - a_ * x_) * dt;
+        return x_;
+    }
+    double output() const override { return x_; }
+    const char* name() const override { return "brake-plant"; }
+    const char* mode() const override { return "live"; }
+private:
+    double b_, a_, x_ = 0.0, u_ = 0.0;
+};
+// MakePlant 에: if (kind == "brake") return std::make_unique<BrakePlant>(gain, drag);
+```
+
+**② 물리 모델 — (B) `brake.fmu`** (실제 FMU, 외부 툴 export). `.fmu` 는 바이너리 ZIP 이라 직접 못 쓰고,
+안의 `modelDescription.xml` 이 인터페이스다:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<fmiModelDescription fmiVersion="3.0" modelName="BrakePlant">
+  <CoSimulation modelIdentifier="BrakePlant"/>
+  <ModelVariables>
+    <Float64 name="brake_pressure" valueReference="1" causality="input"  start="0"/>
+    <Float64 name="deceleration"   valueReference="2" causality="output"/>
+  </ModelVariables>
+</fmiModelDescription>
+```
+```bash
+# 변수 이름→VR 해석 + 보안 allowlist 등록 (9장·§5.6)
+python3 tools/sils/fmu/fmu_map.py  --fmu brake.fmu --input brake_pressure --output deceleration
+#   RESOLVED_FMU_INPUT_VR=1  RESOLVED_FMU_OUTPUT_VR=2  RESOLVED_FMU_FMI_VERSION='3.0'
+python3 tools/sils/fmu/fmu_gate.py --fmu brake.fmu --record   # 출력 stanza 를 allowlist.yaml 에
+```
+```yaml
+# config/sils/fmu/allowlist.yaml
+  - id: brake-plant
+    sha256: "…(실제 해시)…"
+    fmi_version: "3.0"
+    model_identifier: "BrakePlant"
+    supplier: "chassis 팀 Simulink export, 2026-07 검증"
+    platforms: [aarch64-linux]
+```
+
+**③ `service/sils/vecu/descriptors/brake_probe.yaml`** (선언 → env, 3장):
+
+```yaml
+ecu: brake_probe
+instance_id: brake-1
+fidelity: L3                       # Plant-coupled (폐루프)
+clock: { mode: lockstep }
+behavior:
+  type: brake                      # → SILS_BEHAVIOR=brake
+  spec: { kp: 2.5, setpoint: 6.0 } # Kp, 목표 감속도 6 m/s² → SILS_CTRL_KP/SETPOINT
+plant:
+  type: fmu                        # → SILS_PLANT=fmu   (해석 모델이면 type: brake)
+  fmu:
+    file: /models/brake.fmu        # → SILS_FMU_FILE (컨테이너 FS 에 존재)
+    input_vr: 1                    # → SILS_FMU_INPUT_VR   (fmu_map 결과)
+    output_vr: 2                   # → SILS_FMU_OUTPUT_VR
+    allowlist_id: brake-plant      # → SILS_FMU_ALLOWLIST_ID (게이트 sha256 확인)
+buses:
+  - name: chassis-bus
+    type: dds
+    endpoints: [ { contract_id: brake-command, direction: publish } ]
+scenario: {}
+```
+
+**무엇이 어디에**:
+
+| 조각 | 파일 | 장 |
+|---|---|---|
+| 제어 로직 `BrakeBehavior` | behavior.hpp (바이너리) | §4.8① · 5장 |
+| 물리 `BrakePlant` / `brake.fmu` | plant.hpp 클래스 / `.fmu` 파일 | §4.8③ · 9장 |
+| FMU 변수·보안 | fmu_map.py · allowlist.yaml · fmu_gate.py | 9장 · §5.6 |
+| 신호·타입 | BrakeCommand.idl · Contract Catalog | 2장 |
+| 선택·값 | brake_probe.yaml → SILS_* | 3장 |
+
 ## 5.8 다음으로
 
 이 포트들이 매 tick 남기는 trace(behavior_output·plant_step·scenario_fault·tick_grant…)가 6장
