@@ -111,7 +111,8 @@ FMI 실행 방식 3종 중 **Co-Simulation**을 쓴다:
 | 빌드 | ✅ `-DSILS_ENABLE_FMU=ON`, fmi4c **정적 링크**(런타임 `.so` 의존 없음) |
 | FMI 2.0 Co-Simulation | ⬜ 코드 경로 있음, **실 FMU 미실측** |
 | Model Exchange / Scheduled Execution | ⬜ 미지원 |
-| Descriptor 기반 변수·단위 매핑 | ⬜ 미구현 (현재 raw valueReference, §5.2) |
+| 변수 이름→VR 해석·검증 (fmu_map.py) | ✅ FMI 2.0/3.0, causality·type·unit 검증 (§5.2) |
+| Descriptor 통합 (계약이 이름으로 바인딩) | ⬜ 미구현 (도구는 있음; 스키마 배선 남음) |
 | ARM64에서 실 FMU 실행 | ⬜ 미검증 (fmi4c 빌드는 arch 중립; FMU 바이너리 별개, §5.1) |
 | FMI set/get 반환 status 검사 | ⬜ 미구현 (`doStep`만 status 검사) |
 | FMU reset/re-initialize | ⬜ 미구현 (`FmuPlant::Reset()`은 현재 no-op) |
@@ -143,14 +144,22 @@ vECU 컨테이너에서 그 FMU를 실행할 수 없다(x86_64 바이너리만 �
 fmi4c가 선택한 바이너리를 ARM64 컨테이너에서 실제 `instantiate → initialize → doStep`하여
 확인한다.
 
-### 5.2 변수 매핑 — 현재 raw VR, 향후 Descriptor
-현재 `FmuPlant`는 입력/출력을 **raw valueReference**로 지정한다:
-`SILS_FMU_INPUT_VR` / `SILS_FMU_OUTPUT_VR`. VR은 `modelDescription.xml`에서 확인:
+### 5.2 변수 매핑 — 이름으로 해석(fmu_map.py), 향후 Descriptor 통합
+`FmuPlant`는 입력/출력을 **raw valueReference**(`SILS_FMU_INPUT_VR`/`SILS_FMU_OUTPUT_VR`)로
+받지만, XML을 손으로 읽어 정수를 붙이는 대신 **`tools/sils/fmu/fmu_map.py`가 변수
+이름→VR을 해석·검증**한다(causality/type/unit). FMI 2.0(ScalarVariable/Real)·3.0
+(Float64) 모두 지원하고, `Float64/Real`이 아니거나(Float32·정수 등) causality가 안 맞으면
+거부한다:
 ```bash
-unzip -p model.fmu modelDescription.xml | grep -iE 'valueReference|<Float64|causality'
+# .fmu 안 modelDescription 을 읽어 이름으로 VR 해석 → 그대로 env 에 eval
+eval "$(python3 tools/sils/fmu/fmu_map.py --fmu model.fmu \
+          --input Float64_continuous_input --output Float64_continuous_output)"
+#   -> RESOLVED_FMU_INPUT_VR=7  RESOLVED_FMU_OUTPUT_VR=8  RESOLVED_FMU_FMI_VERSION='3.0'
+SILS_FMU_INPUT_VR=$RESOLVED_FMU_INPUT_VR SILS_FMU_OUTPUT_VR=$RESOLVED_FMU_OUTPUT_VR ...
+# 단위 assertion 도 가능: --expect-output-unit m/s  (불일치 시 fail)
 ```
-> **주의:** `FmuPlant`는 `Float64`(`getFloat64`/`setFloat64`)만 다룬다. `Float32`·정수형
-> 변수는 그 VR을 쓰면 안 된다.
+> **주의:** `FmuPlant`는 `Float64`/`Real`(`getFloat64`/`setFloat64`)만 다룬다. `Float32`·
+> 정수형 변수는 fmu_map 이 거부한다.
 
 **향후(Descriptor 매핑)**: DDS Contract ↔ FMU 변수를 이름으로 연결하고 아래를 검증:
 변수명·VR, input/output causality, 데이터 타입, **단위**, 초기값, min/max, sample period,
@@ -312,16 +321,20 @@ SILS_ENABLE_FMU=ON ./build.sh --build-sils          # (+ --aarch64 등)
 # 2) 샘플 FMU 확보 (Modelica Association Reference-FMUs)
 curl -LO https://github.com/modelica/Reference-FMUs/releases/download/v0.0.40/Reference-FMUs-0.0.40.zip
 unzip Reference-FMUs-0.0.40.zip -d ref-fmus
-unzip -p ref-fmus/3.0/Feedthrough.fmu modelDescription.xml | grep -iE 'valueReference|causality'
-#   → Float64_continuous_input=VR7(input), Float64_continuous_output=VR8(output)
 
-# 3) lockstep 폐루프 실행 (결정론)
+# 3) 변수 이름으로 VR 해석 (하드코딩 대신, §5.2)
 RID=fmu; DOM=93; BIN=<out>/bin; FMU=$PWD/ref-fmus/3.0/Feedthrough.fmu
+eval "$(python3 tools/sils/fmu/fmu_map.py --fmu "$FMU" \
+          --input Float64_continuous_input --output Float64_continuous_output)"
+#   → RESOLVED_FMU_INPUT_VR=7  RESOLVED_FMU_OUTPUT_VR=8
+
+# 4) lockstep 폐루프 실행 (결정론)
 SILS_RUN_ID=$RID VISS_DDS_DOMAIN_ID=$DOM \
   $BIN/sils_clock_master --participants 1 --ticks 20 --dt-ms 100 --tick-interval-ms 40 &
 SILS_RUN_ID=$RID VISS_DDS_DOMAIN_ID=$DOM SILS_VECU_INSTANCE_ID=viss-probe-1 \
   SILS_CLOCK_MODE=lockstep SILS_BEHAVIOR=p-controller \
-  SILS_PLANT=fmu SILS_FMU_FILE=$FMU SILS_FMU_INPUT_VR=7 SILS_FMU_OUTPUT_VR=8 \
+  SILS_PLANT=fmu SILS_FMU_FILE=$FMU \
+  SILS_FMU_INPUT_VR=$RESOLVED_FMU_INPUT_VR SILS_FMU_OUTPUT_VR=$RESOLVED_FMU_OUTPUT_VR \
   $BIN/sils_vecu_viss_probe
 SILS_RUN_ID=$RID VISS_DDS_DOMAIN_ID=$DOM $BIN/sils_vecu_viss_verify
 ```
@@ -336,7 +349,8 @@ SILS_RUN_ID=$RID VISS_DDS_DOMAIN_ID=$DOM $BIN/sils_vecu_viss_verify
 2. ⬜ **status/lifecycle 보강**: set/get 반환값, terminate, reset/re-initialize, FMI 3 unsupported capability 거부
 3. ⬜ **fmi4c commit 고정과 provenance manifest**(§5.10~§5.11)
 4. ⬜ **ARM64에서 실 FMU 실행** 검증(aarch64 바이너리 포함 FMU)
-5. ⬜ **Descriptor 기반 변수·단위·causality 매핑**(§5.2) + startup validation
+5. 🟡 변수 이름→VR 해석·검증은 `tools/sils/fmu/fmu_map.py`로 완료(§5.2, FMI 2.0/3.0·
+   causality·type·unit); **Descriptor/계약이 이름으로 바인딩**하는 스키마 통합은 남음
 6. ⬜ communication step 민감도와 controller/FMU rate 계약(§5.7)
 7. ⬜ FMI 2.0 Co-Simulation 실 FMU 실측
 8. ⬜ 실 차량 동역학 FMU(Simulink/Dymola/AMESim export)로 상관검증(model correlation)
