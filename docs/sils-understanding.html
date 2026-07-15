@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SiLS 가상 ECU — 이해 다이어그램</title>
+<style>
+  * { box-sizing: border-box; }
+  :root {
+    --bg:#eef2f5; --surface:#ffffff; --surface-2:#f7fafb;
+    --ink:#16222c; --muted:#5c6f7d; --line:#cdd8e0;
+    --accent:#0d7c86; --accent-soft:#0d7c8618;
+    --pass:#2e7d5b; --fail:#b3452f; --gate:#b9791a;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --radius:10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#0d141a; --surface:#151f28; --surface-2:#111a22;
+      --ink:#dbe6ee; --muted:#8698a6; --line:#283844;
+      --accent:#39c0cb; --accent-soft:#39c0cb1f;
+      --pass:#57c48d; --fail:#e0785f; --gate:#e0a83f;
+    }
+  }
+  :root[data-theme="light"] {
+    --bg:#eef2f5; --surface:#ffffff; --surface-2:#f7fafb;
+    --ink:#16222c; --muted:#5c6f7d; --line:#cdd8e0;
+    --accent:#0d7c86; --accent-soft:#0d7c8618;
+    --pass:#2e7d5b; --fail:#b3452f; --gate:#b9791a;
+  }
+  :root[data-theme="dark"] {
+    --bg:#0d141a; --surface:#151f28; --surface-2:#111a22;
+    --ink:#dbe6ee; --muted:#8698a6; --line:#283844;
+    --accent:#39c0cb; --accent-soft:#39c0cb1f;
+    --pass:#57c48d; --fail:#e0785f; --gate:#e0a83f;
+  }
+
+  html, body { margin:0; padding:0; }
+  body { background:var(--bg); color:var(--ink); font-family:var(--sans);
+    line-height:1.55; -webkit-font-smoothing:antialiased; }
+  .wrap { max-width:1080px; margin:0 auto; padding:40px 24px 72px; }
+
+  .eyebrow { font-family:var(--mono); font-size:12px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--accent); margin:0 0 8px; }
+  h1 { font-size:29px; line-height:1.2; margin:0 0 10px; text-wrap:balance; letter-spacing:-.01em; }
+  .lede { font-size:16px; color:var(--muted); margin:0 0 4px; max-width:66ch; }
+  .lede b { color:var(--ink); font-weight:600; }
+
+  h2 { font-size:13px; font-family:var(--mono); letter-spacing:.1em; text-transform:uppercase;
+    color:var(--muted); margin:52px 0 18px; padding-bottom:9px; border-bottom:1px solid var(--line); }
+  h2 .n { color:var(--accent); }
+
+  .scroll { overflow-x:auto; padding-bottom:6px; }
+
+  .rail { display:flex; align-items:stretch; gap:0; min-width:820px; }
+  .stage { flex:1; background:var(--surface); border:1px solid var(--line);
+    border-radius:var(--radius); padding:14px 15px; position:relative; }
+  .stage + .stage { margin-left:26px; }
+  .stage + .stage::before { content:"\203A"; position:absolute; left:-22px; top:50%;
+    transform:translateY(-50%); color:var(--muted); font-size:22px; line-height:1; }
+  .stage .who { font-family:var(--mono); font-size:10.5px; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--muted); margin:0 0 6px; }
+  .stage .what { font-weight:650; font-size:14.5px; margin:0 0 4px; }
+  .stage .sub { font-size:12.5px; color:var(--muted); margin:0; }
+  .stage.key { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent), 0 6px 22px -12px var(--accent); }
+  .stage.key .who { color:var(--accent); }
+  .badge { display:inline-block; font-family:var(--mono); font-size:10px; letter-spacing:.05em;
+    padding:2px 7px; border-radius:20px; margin-top:9px; }
+  .badge.gate { background:var(--accent-soft); color:var(--accent); border:1px solid var(--accent); }
+  .badge.trust { background:transparent; color:var(--muted); border:1px dashed var(--line); }
+
+  .whenline { display:flex; gap:18px; margin-top:20px; flex-wrap:wrap; }
+  .whenline .cell { flex:1; min-width:220px; background:var(--surface-2);
+    border:1px solid var(--line); border-left:3px solid var(--accent); border-radius:8px; padding:12px 14px; }
+  .whenline .cell h3 { font-size:13px; margin:0 0 5px; }
+  .whenline .cell p { font-size:12.5px; color:var(--muted); margin:0; }
+
+  .flow { display:grid; grid-template-columns:210px 1fr 200px; gap:22px; align-items:center; min-width:860px; }
+  .col-h { font-family:var(--mono); font-size:10.5px; letter-spacing:.09em; text-transform:uppercase;
+    color:var(--muted); margin:0 0 10px; }
+  .inputs, .outputs { display:flex; flex-direction:column; gap:9px; }
+  .chip { background:var(--surface); border:1px solid var(--line); border-radius:8px;
+    padding:9px 11px; font-family:var(--mono); font-size:12px; }
+  .chip small { display:block; font-family:var(--sans); color:var(--muted); font-size:11px; margin-top:2px; }
+  .chip.out { border-left:3px solid var(--pass); }
+  .chip.hash { border-style:dashed; color:var(--muted); }
+
+  .engine { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:4px; }
+  .band { border-radius:7px; padding:11px 13px; margin:4px; }
+  .band .lbl { font-family:var(--mono); font-size:10.5px; letter-spacing:.07em; text-transform:uppercase;
+    margin:0 0 7px; display:flex; align-items:center; gap:7px; }
+  .band.t { background:var(--accent-soft); }
+  .band.t .lbl { color:var(--accent); }
+  .band.v { background:color-mix(in srgb, var(--gate) 12%, transparent); }
+  .band.v .lbl { color:var(--gate); }
+  .steps { display:flex; flex-wrap:wrap; gap:6px; }
+  .steps span { background:var(--surface); border:1px solid var(--line); border-radius:6px;
+    padding:5px 9px; font-size:12px; }
+  .steps span b { color:var(--accent); font-weight:600; }
+  .checks { list-style:none; margin:0; padding:0; display:grid; grid-template-columns:1fr 1fr; gap:5px 14px; }
+  .checks li { font-size:12px; color:var(--ink); padding-left:15px; position:relative; }
+  .checks li::before { content:"\2713"; position:absolute; left:0; color:var(--gate); font-size:11px; top:1px; }
+  .checks li b { color:var(--gate); }
+
+  .verdict { display:flex; gap:10px; margin:8px 4px 4px; }
+  .verdict div { flex:1; border-radius:7px; padding:9px 11px; font-size:12px; }
+  .verdict .ok { border:1px solid var(--pass); color:var(--pass); background:color-mix(in srgb,var(--pass) 9%,transparent); }
+  .verdict .no { border:1px solid var(--fail); color:var(--fail); background:color-mix(in srgb,var(--fail) 9%,transparent); }
+  .verdict b { font-family:var(--mono); }
+
+  .arrow-mid { text-align:center; color:var(--muted); font-size:20px; }
+
+  /* ---- two planes (where) ---- */
+  .planes { display:flex; flex-direction:column; gap:16px; min-width:640px; }
+  .plane { border:1px solid var(--line); border-radius:var(--radius); padding:15px 16px; background:var(--surface); }
+  .plane.host { border-left:3px solid var(--accent); }
+  .plane.vecu { border-left:3px solid var(--gate); }
+  .plane .ph { font-family:var(--mono); font-size:11px; letter-spacing:.06em; text-transform:uppercase;
+    margin:0 0 9px; display:flex; justify-content:space-between; align-items:center; }
+  .plane.host .ph { color:var(--accent); }
+  .plane.vecu .ph { color:var(--gate); }
+  .plane .ph .lang { font-size:10px; padding:2px 8px; border-radius:20px; border:1px solid currentColor; }
+  .plane .rows { display:flex; flex-direction:column; gap:8px; }
+  .plane .row { font-size:12.5px; display:flex; gap:9px; align-items:baseline; }
+  .plane .row code { font-family:var(--mono); font-size:11.5px; color:var(--ink);
+    background:var(--surface-2); padding:1px 6px; border-radius:4px; white-space:nowrap; }
+  .plane .row span { color:var(--muted); }
+  .planes .link { text-align:center; color:var(--muted); font-family:var(--mono); font-size:11px; margin:2px 0; }
+
+  .note { font-size:12.5px; color:var(--muted); margin-top:22px; padding:13px 15px;
+    background:var(--surface-2); border:1px solid var(--line); border-radius:8px; }
+  .note code, code.inl { font-family:var(--mono); font-size:.92em; color:var(--ink);
+    background:color-mix(in srgb,var(--accent) 10%,transparent); padding:1px 5px; border-radius:4px; }
+  .foot { margin-top:34px; font-size:11.5px; color:var(--muted); font-family:var(--mono); }
+  @media (max-width:640px){ h1{font-size:24px;} .wrap{padding:28px 16px 56px;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="eyebrow">MMF SiLS · 이해 다이어그램 · 1장 Topology Compiler</p>
+  <h1>정적 변환·검증은 <em>언제</em>, <em>어떻게</em>, <em>어디서</em> 일어나는가</h1>
+  <p class="lede">SiLS 가상 ECU 전체를 훑는 <a href="sils-understanding.md" style="color:var(--accent)">이해 문서</a>의
+  1장 다이어그램. 토폴로지 컴파일은 <b>실행(launch) 전에</b> 한 번 돈다 — YAML 4종을 읽어
+  잘못된 조합을 실행 전에 잡고(<b>검증</b>), 맞으면 실행 가능한 계획으로 펼친다(<b>변환</b>).
+  DDS·도커·빌드·arm64 없이 도는 순수 정적 단계. <em>(장이 늘면 다이어그램도 여기에 추가된다.)</em></p>
+
+  <h2><span class="n">01</span> &nbsp;언제 — 수명주기에서의 위치</h2>
+  <div class="scroll">
+    <div class="rail">
+      <div class="stage">
+        <p class="who">작성 · PR</p>
+        <p class="what">Topology / Descriptor / Catalog 편집</p>
+        <p class="sub">"무엇을 돌릴지" 선언. 아직 실행 계획 아님.</p>
+      </div>
+      <div class="stage key">
+        <p class="who">CI · stage 0–1</p>
+        <p class="what">lint → compile<br>= 변환 · 검증</p>
+        <p class="sub">여기서 정적 검증. 실패 시 fail-closed.</p>
+        <span class="badge gate">◆ 검증 시점 (launch 前)</span>
+      </div>
+      <div class="stage">
+        <p class="who">산출물</p>
+        <p class="what">resolved-run.yaml<br>+ saved-service-list.yaml</p>
+        <p class="sub">검증 통과한 실행 계획 + 입력 sha256 봉인.</p>
+      </div>
+      <div class="stage">
+        <p class="who">실행 · Run Coordinator</p>
+        <p class="what">run_phase1.sh --from-resolved</p>
+        <p class="sub">산출물을 <b>읽기만</b> 함. 재검증 안 함.</p>
+        <span class="badge trust">신뢰 (no re-validate)</span>
+      </div>
+      <div class="stage">
+        <p class="who">판정</p>
+        <p class="what">trace → evaluate</p>
+        <p class="sub">런타임 결과(충실도·conformance) 판정.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="whenline">
+    <div class="cell"><h3>앞에서 한 번</h3><p>compile은 CI/PR/pre-commit에서 <b>launch보다 앞서</b> 실행. 문제를 실행 전으로 당겨 잡는 shift-left.</p></div>
+    <div class="cell"><h3>실행은 신뢰</h3><p>Coordinator는 <code class="inl">--from-resolved</code>로 이미 검증된 계획을 소비만. 컴파일러를 다시 호출하지 않는다.</p></div>
+    <div class="cell"><h3>순수 정적</h3><p>DDS·도커·빌드 불필요. 16개 테스트가 실런타임 없이 커버. 어느 머신·샌드박스에서든 동일.</p></div>
+  </div>
+
+  <h2><span class="n">02</span> &nbsp;어떻게 — 컴파일러 내부 (변환 + 검증)</h2>
+  <div class="scroll">
+    <div class="flow">
+      <div>
+        <p class="col-h">입력 (선언)</p>
+        <div class="inputs">
+          <div class="chip">Topology<small>어떤 vECU·replica·backend</small></div>
+          <div class="chip">Descriptor<small>포트: clock/behavior/plant/scenario</small></div>
+          <div class="chip">Contract Catalog<small>topic·domain·QoS·ownership</small></div>
+          <div class="chip">QoS Catalog<small>reliability·durability·history</small></div>
+        </div>
+      </div>
+
+      <div>
+        <p class="col-h">Topology Compiler &nbsp;·&nbsp; 정적</p>
+        <div class="engine">
+          <div class="band v">
+            <p class="lbl">◆ stage 0 · lint (사전 게이트)</p>
+            <ul class="checks">
+              <li>필수필드·<b>중복 id</b></li>
+              <li><b>IDL 파일 실존</b>(디스크)</li>
+              <li>domain_env 오타</li>
+              <li>dangling QoS 참조</li>
+              <li>enum(transport/ownership…)</li>
+              <li>per-instance ⊃ {instance_id}</li>
+            </ul>
+          </div>
+          <div class="arrow-mid">↓</div>
+          <div class="band t">
+            <p class="lbl">▶ 변환 (resolve_topology)</p>
+            <div class="steps">
+              <span><b>①</b> replica 전개 → 인스턴스 N</span>
+              <span><b>②</b> contract_id → topic·domain·QoS</span>
+              <span><b>③</b> {instance_id} 토픽 치환</span>
+              <span><b>④</b> 포트 → SILS_* env</span>
+            </div>
+          </div>
+          <div class="arrow-mid">↓</div>
+          <div class="band v">
+            <p class="lbl">◆ 문맥 검증 (토폴로지 안에서만 보임)</p>
+            <ul class="checks">
+              <li>run.domain_id 필수</li>
+              <li>미존재 contract_id</li>
+              <li>이름 중복</li>
+              <li>QoS 미존재</li>
+              <li><b>§9.5 단일소유</b>(RESOLVED 토픽)</li>
+              <li>replicas↔params 길이</li>
+            </ul>
+          </div>
+          <div class="verdict">
+            <div class="ok">errors == 0 → <b>산출물 write</b></div>
+            <div class="no">errors ≥ 1 → <b>(None,None) · exit 1 · 안 씀</b></div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <p class="col-h">출력 (실행 계획)</p>
+        <div class="outputs">
+          <div class="chip out">resolved-run.yaml<small>containers[]: endpoints·env</small></div>
+          <div class="chip out">saved-service-list.yaml<small>MMF 컨테이너 제어 -e/네트워크</small></div>
+          <div class="chip hash">input_hashes<small>topology·catalog·descriptor sha256 봉인</small></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h2><span class="n">03</span> &nbsp;어디서 — 두 개의 면(plane)</h2>
+  <div class="scroll">
+    <div class="planes">
+      <div class="plane host">
+        <p class="ph"><span>오케스트레이션 호스트 &nbsp;(CI 러너 / 개발 머신 / Coordinator)</span><span class="lang">Python 3</span></p>
+        <div class="rows">
+          <div class="row"><code>compile.py + lint_catalog.py</code><span>정적 변환·검증 (여기!). YAML→resolved-run.yaml. DDS·도커·arm64 불필요.</span></div>
+          <div class="row"><code>run_phase1.sh (start)</code><span>resolved_to_shell·domain_lease·fmu_gate — 검증된 계획 읽기 + 런타임 게이트 → 컨테이너 기동.</span></div>
+        </div>
+      </div>
+      <div class="planes"><p class="link">│ docker run -e SILS_*=… ▼</p></div>
+      <div class="plane vecu">
+        <p class="ph"><span>vECU 컨테이너 &nbsp;(arm64 또는 x86)</span><span class="lang">C++ 만</span></p>
+        <div class="rows">
+          <div class="row"><code>sils_vecu_viss_probe</code><span>SILS_* env 읽고 DDS publish. <b>Python 없음. 검증 안 함.</b></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="whenline">
+    <div class="cell"><h3>검증은 arch 중립</h3><p>x86 맥에서든 CI 러너에서든 같은 판정. arm64 불필요.</p></div>
+    <div class="cell"><h3>arm64는 런타임용</h3><p>probe C++ 바이너리를 arm64로 빌드·실행하는 것. L4 attestation(<code class="inl">arch=aarch64</code>)이 증명하려는 부분.</p></div>
+    <div class="cell"><h3>vECU엔 Python 불필요</h3><p>probe는 C++이고 <code class="inl">SILS_*</code> env만 읽는다.</p></div>
+  </div>
+
+  <p class="note"><b>Fail-closed</b>가 핵심: 에러가 하나라도 있으면 <code>compile_topology</code>는
+  <code>(None, None, errors)</code>를 반환하고 <b>아티팩트를 아예 쓰지 않는다</b> — 잘못된 실행
+  계획이 하류로 새지 않는다. <b>resolved-run.yaml 존재 = 그 순간의 입력에 대해 검증 통과</b>이며,
+  <code class="inl">input_hashes</code>로 현재 소스와의 drift를 검증할 수 있다(자동 대조는 미구현).</p>
+
+  <p class="foot">tools/sils/topology_compiler/compile.py · contracts/lint_catalog.py &nbsp;|&nbsp; 문서: docs/sils-understanding.md (1장) &nbsp;|&nbsp; 검증: test_compile.py 16 · test_lint_catalog.py 18 (DDS 불필요)</p>
+</div>
+</body>
+</html>
