@@ -201,11 +201,11 @@
 </head>
 <body>
 <div class="wrap">
-  <p class="eyebrow">MMF SiLS · 이해 다이어그램 · 1–4장</p>
+  <p class="eyebrow">MMF SiLS · 이해 다이어그램 · 1–5장</p>
   <h1>SiLS 가상 ECU를 어떻게 <em>세우고</em> <em>돌리나</em></h1>
   <p class="lede">SiLS 가상 ECU 전체를 훑는 <a href="sils-understanding.md" style="color:var(--accent)">이해 문서</a>의
-  다이어그램 모음. <b>1장</b> Topology Compiler · <b>2장</b> Contract/QoS Catalog · <b>3장</b> Descriptor→SILS_* env
-  (여기까지 <b>실행 전·정적</b>) · <b>4장</b> Run Coordinator(<b>실행</b>: 기동·도메인 격리·생명주기).
+  다이어그램 모음. <b>1</b> Topology Compiler · <b>2</b> Contract/QoS Catalog · <b>3</b> Descriptor→SILS_* env
+  (여기까지 <b>정적</b>) · <b>4</b> Run Coordinator(<b>실행</b>) · <b>5</b> vECU 포트(4 헥사고날 포트).
   <em>(장이 늘면 다이어그램도 여기에 추가된다.)</em></p>
 
   <div class="chap">1장 · Topology Compiler</div>
@@ -605,7 +605,32 @@ SILS_ATTEST_ARCH=x86_64  <span class="c"># sim</span></pre>
   도메인 1개 공유해 동시 기동. 한 프로세스에 여러 vECU 를 넣는 in-process 다중화는 fmi4c thread-safety 시험 전
   <b>미허용</b>(plant.hpp) — 지금은 "프로세스=인스턴스" 모델.</p>
 
-  <p class="foot">run_phase1.sh · domain_lease.py · Dockerfile.rel(entrypoint) · lifecycle_mgr · adsw_manager &nbsp;|&nbsp; 문서: docs/sils-understanding.md (1–4장) &nbsp;|&nbsp; trace → 6장 evaluate</p>
+  <div class="chap">5장 · vECU 포트 (헥사고날)</div>
+  <h2><span class="n">12</span> &nbsp;vECU 내부 — 4개 포트를 tick 루프가 조립</h2>
+  <p class="lede" style="margin-bottom:16px">§4.8 ①의 "바이너리 안 로직". probe 는 <b>4개 헥사고날 포트</b>로 짜이고,
+  env(3장)는 각 포트의 <b>어느 구현을 쓸지 고르는 스위치</b>. 추상화는 구현이 2개 이상일 때만(earned).</p>
+  <div class="whenline">
+    <div class="cell"><h3>Clock · IClockSource</h3><p>WallClock · Lockstep<br><code class="inl">SILS_CLOCK_MODE</code></p></div>
+    <div class="cell"><h3>Behavior · IBehavior</h3><p>viss-request · accumulate · p-controller<br><code class="inl">SILS_BEHAVIOR</code></p></div>
+    <div class="cell"><h3>Plant · IPlant</h3><p>Analytic · Replay · Fmu<br><code class="inl">SILS_PLANT</code></p></div>
+    <div class="cell"><h3>Scenario · IScenario</h3><p>Nominal · Scheduled<br><code class="inl">SILS_SCENARIO</code></p></div>
+  </div>
+  <div class="scroll" style="margin-top:16px">
+    <pre class="code">while (clock-&gt;WaitForNextTick(tick)) {          <span class="c">⟨Clock⟩    다음 tick 까지 블록 (wall:주기 / lockstep:grant)</span>
+    staged = &lt;replay / staging 입력 확정&gt;        <span class="c">           §7.3 입력 결정론</span>
+    if (plant) ctx.plant_feedback = plant-&gt;output()  <span class="c">⟨Plant⟩    지난 tick 출력 피드백</span>
+    act = scenario-&gt;OnTick({tick.seq, …})        <span class="c">⟨Scenario⟩ 이번 tick 결함?</span>
+    out = publish_one(ctx, act)                  <span class="c">⟨Behavior⟩ 명령 계산 → (fault 적용) → publish</span>
+    if (plant) { plant-&gt;SetInputs(out.value)     <span class="c">⟨Plant⟩    그 명령으로</span>
+                 y = plant-&gt;Step(tick.dt_ns) }   <span class="c">           한 dt 적분 → 다음 피드백</span>
+    clock-&gt;TickDone(tick)                        <span class="c">⟨Clock⟩    lockstep 이면 TickComplete</span>
+}</pre>
+  </div>
+  <p class="note"><b>결정론이 목적</b>: 같은 (clock·behavior·plant·scenario·입력)이면 같은 tick-indexed 출력 →
+  golden 재현(8장)·충실도 판정(7장) 성립. 각 구현은 tick·sim_time 기준, wall-clock·RNG 비의존(결함조차 tick
+  스케줄). <b>env 는 스위치, 로직은 바이너리</b>(§4.8 ①).</p>
+
+  <p class="foot">clock_source.hpp · behavior.hpp · plant.hpp · scenario.hpp · viss_probe_main.cc &nbsp;|&nbsp; 문서: docs/sils-understanding.md (1–5장) &nbsp;|&nbsp; trace → 6장 evaluate · 충실도 → 7장</p>
 </div>
 </body>
 </html>

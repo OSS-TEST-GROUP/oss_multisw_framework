@@ -18,7 +18,7 @@
 | **2** | **Contract / QoS Catalog — 무엇을 선언하나 (계약의 의미·QoS 매칭). *검증(lint)은 1장*** | ✅ 작성됨 |
 | **3** | **Descriptor → `SILS_*` env — 선언적 포트 배선(§9.2)** | ✅ 작성됨 |
 | **4** | **Run Coordinator — 도메인 임대·기동·ready·verify·teardown·reap** | ✅ 작성됨 |
-| 5 | vECU 포트 — Clock / Behavior / Plant / Scenario | ⬜ |
+| **5** | **vECU 포트 — Clock / Behavior / Plant / Scenario (헥사고날)** | ✅ 작성됨 |
 | 6 | Conformance 판정 — `evaluate.py` 가 trace 를 어떻게 읽나 | ⬜ |
 | 7 | 충실도 사다리 L0–L4 — 각 레벨의 증거 | ⬜ |
 | 8 | Golden / 회귀 — capture ↔ compare 재현성 | ⬜ |
@@ -727,12 +727,83 @@ Coordinator 가 남긴 **trace.jsonl** 은 그 자체로 판정되지 않는다.
 
 ---
 
-# 5장~11장 (채우는 중)
+# 5장. vECU 포트 — Clock / Behavior / Plant / Scenario
 
-아래는 아직 stub. 이해하는 대로 각 장을 위 1~4장처럼 채운다.
+> §4.8 ①에서 "행동 로직은 바이너리 안"이라 했다. 그 바이너리 안이 이 장이다. probe 는 **4개
+> 헥사고날 포트**로 짜여 있고, tick 루프가 이들을 조립한다. env(3장)는 각 포트의 **어느 구현을
+> 쓸지 고르는 스위치**일 뿐 — 구현 자체는 여기 헤더들에 컴파일돼 있다.
 
-- **5장 vECU 포트** — Clock(wall/lockstep)·Behavior(viss-request/accumulate/p-controller)·
-  Plant(analytic/replay/fmu)·Scenario(nominal/scheduled). earned-abstraction 원칙.
+## 5.1 한 문장
+
+vECU 내부는 **IClockSource·IBehavior·IPlant·IScenario** 네 포트로 나뉘고, [tick 루프](../service/sils/vecu/src/viss_probe_main.cc)
+가 매 tick 이들을 순서대로 호출해 하나의 vECU 동작을 만든다. 각 포트는 **≥2개 구현**을 갖고 env 로 선택된다.
+
+## 5.2 헥사고날 포트 + "earned abstraction"
+
+포트(=인터페이스)로 빼는 건 **구현이 2개 이상 생겼을 때만** 한다(투기적 추상화 금지). clock_source.hpp
+주석 그대로: *"clock 은 실제 구현이 둘이라 추상화가 earned 됐다. IBehavior/IPlant/IScenario 도 두 번째
+구현이 나올 때 같은 모양을 따른다 — 미리 하지 않는다."* 그래서 probe 본체는 **포트만 알고 구현은 모른다** —
+`SILS_*` 가 `Make*()` 팩토리에서 구현을 고른다.
+
+## 5.3 네 포트 지도
+
+| 포트 | 인터페이스 | 구현 (≥2) | env 선택 | 파일 |
+|---|---|---|---|---|
+| **Clock** | `IClockSource` | WallClockSource · LockstepClockSource | `SILS_CLOCK_MODE=wall\|lockstep` | [clock_source.hpp](../service/sils/vecu/src/clock_source.hpp) |
+| **Behavior** | `IBehavior` | VissRequestBehavior · AccumulatorBehavior · PControllerBehavior | `SILS_BEHAVIOR=viss-request\|accumulate\|p-controller` | [behavior.hpp](../service/sils/vecu/src/behavior.hpp) |
+| **Plant** | `IPlant` | AnalyticPlant · ReplayPlant · FmuPlant | `SILS_PLANT=first-order\|replay\|fmu\|none` | [plant.hpp](../service/sils/vecu/src/plant.hpp) |
+| **Scenario** | `IScenario` | NominalScenario · ScheduledFaultScenario | `SILS_SCENARIO=nominal\|scheduled` | [scenario.hpp](../service/sils/vecu/src/scenario.hpp) |
+
+## 5.4 tick 루프 — 4포트가 한 tick 에서 협력
+
+[viss_probe_main.cc](../service/sils/vecu/src/viss_probe_main.cc) 의 루프가 포트들을 조립한다:
+
+```
+while (clock->WaitForNextTick(tick)) {              # ⟨Clock⟩ 다음 tick 까지 블록 (wall: 주기 / lockstep: grant 대기)
+    staged = <replay / staging 로 이번 tick 입력 확정>   #        (§7.3 입력 결정론)
+    ctx = { tick.seq, tick.sim_time_ns, staged }
+    if (plant) ctx.plant_feedback = plant->output()  # ⟨Plant⟩ 지난 tick 출력을 피드백으로
+    act = scenario->OnTick({tick.seq, ...})          # ⟨Scenario⟩ 이번 tick 결함 주입할까?
+    out = publish_one(ctx, act)                      # ⟨Behavior⟩ 명령 계산 → (fault 적용) → DDS publish
+    if (plant) { plant->SetInputs(out.value)          # ⟨Plant⟩ 그 명령으로
+                 y = plant->Step(tick.dt_ns) }        #         한 dt 적분 → 다음 tick 피드백
+    clock->TickDone(tick)                            # ⟨Clock⟩ lockstep 이면 TickComplete 응답
+}
+```
+
+한 tick = **Clock 이 깨우고 → Plant 피드백 읽고 → Scenario 가 결함 결정 → Behavior 가 명령 만들어 publish
+→ Plant 가 그 명령으로 진행 → Clock 에 완료 통보.** 이 협력이 L1~L3 을 만든다(§5.5).
+
+## 5.5 포트별 요약
+
+- **IClockSource (§8)** — 시간의 원천. `WallClock`(free-running, `period_ms`, 비결정) vs
+  `Lockstep`(ClockMaster 의 TickGrant 를 기다렸다 TickComplete 응답 → sim-time 이 wall-time 과 분리,
+  결정론). 자세히는 7장(충실도)·§7/§8.
+- **IBehavior (§11 L2)** — 매 tick 무엇을 낼지. `viss-request`(무상태 VISS 요청) · `accumulate`(스테이징
+  입력 누적, 상태기계) · `p-controller`(플랜트 피드백으로 `u=Kp(setpoint−feedback)`, L3 제어).
+- **IPlant (§11 L3)** — 폐루프의 물리 모델. `AnalyticPlant`(1차 지연, live) · `ReplayPlant`(사전기록
+  재생) · `FmuPlant`(fmi4c 로 실제 `.fmu` co-sim). `none` 이면 개루프. 자세히는 [FMU 문서](sils-fmu-plant.md)·9장.
+- **IScenario (§11 negative path)** — tick-indexed 결함 주입. `nominal`(무주입) · `scheduled`
+  (`3:drop,7:corrupt` 스케줄). 결정론이라 결함 run 도 golden 재현. 자세히는 §11 negative path.
+
+## 5.6 결정론 — 왜 포트를 이렇게 짰나
+
+포트의 목적은 **결정론적 조립**이다: 같은 (clock, behavior, plant, scenario, 입력)이면 같은 tick-indexed
+출력이 나와야 golden 재현(8장)·충실도 판정(7장)이 성립한다. 그래서 각 구현은 tick·sim_time 기준으로만
+동작하고 wall-clock·RNG 에 의존하지 않는다(scenario 결함조차 tick 스케줄). **env 는 스위치, 로직은
+바이너리**(§4.8 ①) — 같은 바이너리가 env 조합만 바꿔 L0~L3 을 만든다.
+
+## 5.7 다음으로
+
+이 포트들이 매 tick 남기는 trace(behavior_output·plant_step·scenario_fault·tick_grant…)가 6장
+**evaluate** 의 입력이고, 그 조합이 7장 **충실도 사다리 L0–L4** 로 판정된다.
+
+---
+
+# 6장~11장 (채우는 중)
+
+아래는 아직 stub. 이해하는 대로 각 장을 위 1~5장처럼 채운다.
+
 - **6장 Conformance 판정** — [evaluate.py](../tools/sils/conformance/evaluate.py) 가 trace 를
   상태기계·증거로 어떻게 verdict 로 환원하나.
 - **7장 충실도 사다리 L0–L4** — 각 레벨이 요구하는 증거와 판정.
