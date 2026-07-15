@@ -50,7 +50,7 @@ service/sils/vecu/descriptors/*.yaml       (ECU Descriptor, §9.2)
 | [conformance/capture_golden.py](conformance/capture_golden.py) | run trace → 정규화 golden(식별자 제거·시각 rebase). PASSED+conformant·결정론 모드만 허용 | §12.4 | [8](conformance/test_capture_golden.py) |
 | [conformance/compare_golden.py](conformance/compare_golden.py) | candidate vs golden 회귀 판정(FP tolerance·behavior/plant/scenario 값 비교=model correlation·ordering·missing/extra 정책·입력모드 게이트·lockstep 시 벽시계 latency 스킵) | §11/§12.4 | [18](conformance/test_compare_golden.py) |
 | [conformance/parity.py](conformance/parity.py) | **L4 target parity** 판정: SiLS trace vs 실-타깃 레퍼런스 trace 비교(신호별 tolerance·timing) + attestation 게이트(arch/gateway/protocol). PARITY=L4 / PARITY_UNATTESTED=L3 / DIVERGENCE. golden(SiLS-vs-SiLS 재현성)과 달리 타깃이 authority | §11 | [12](conformance/test_parity.py) |
-| [ci/sils-ci.sh](ci/sils-ci.sh) | 위 전부를 한 진입점으로: lint→compile→run→evaluate→junit→compare. 단계별 skip | §9~§16 | [12](ci/test_sils_ci.sh) |
+| [ci/sils-ci.sh](ci/sils-ci.sh) | 위 전부를 한 진입점으로: lint→compile→run→evaluate→junit→compare→**parity(L4)→capture-golden**. 단계별 skip(`--parity-target/-contract`, `--capture-golden-dir`) | §9~§16 | [18](ci/test_sils_ci.sh) |
 
 Run Coordinator 본체(Phase 1)는 도구가 아니라 서비스라 `service/` 에 있다:
 
@@ -136,7 +136,7 @@ done
 bash tools/sils/ci/test_sils_ci.sh
 ```
 
-현재 전부 green: Python 10개 스위트(evaluate 61 · compare_golden 18 · capture 8 · to_junit 12 · parity 12 · lint 18 · compile 16 · domain_lease 7 · fmu_map 8 · fmu_gate 14 = 174) + shell smoke(fleet 17 · ci 12). 파이썬만 필요하며 DDS/도커 툴체인은 필요 없다.
+현재 전부 green: Python 10개 스위트(evaluate 61 · compare_golden 18 · capture 8 · to_junit 12 · parity 12 · lint 18 · compile 16 · domain_lease 7 · fmu_map 8 · fmu_gate 14 = 174) + shell smoke(fleet 17 · ci 18). 파이썬만 필요하며 DDS/도커 툴체인은 필요 없다.
 
 ---
 
