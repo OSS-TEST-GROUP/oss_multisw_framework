@@ -186,6 +186,15 @@ int main() {
 
     DataReaderQos reader_qos = DATAREADER_QOS_DEFAULT;
     reader_qos.reliability().kind = RELIABLE_RELIABILITY_QOS;  // must match probe's writer QoS
+    // Request TRANSIENT_LOCAL so a verifier that joins after the probe already burst
+    // its samples still receives the run's history (see probe writer QoS). Durability
+    // RxO is strict: reader-requested TRANSIENT_LOCAL matches only a TRANSIENT_LOCAL
+    // writer, so this MUST track SILS_DURABILITY with the probe. volatile -> volatile.
+    if (GetEnvOr("SILS_DURABILITY", "transient-local") != "volatile") {
+        reader_qos.durability().kind = TRANSIENT_LOCAL_DURABILITY_QOS;
+        reader_qos.history().kind = KEEP_LAST_HISTORY_QOS;
+        reader_qos.history().depth = 256;
+    }
 
     VerifyListener listener(run_id, min_samples);
     DataReader* reader = subscriber->create_datareader(topic, reader_qos, &listener);

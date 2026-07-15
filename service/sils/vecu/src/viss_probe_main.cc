@@ -227,10 +227,23 @@ int main() {
     Topic* topic = participant->create_topic(kTopic, request_type.get_type_name(), TOPIC_QOS_DEFAULT);
 
     DataWriterQos writer_qos = DATAWRITER_QOS_DEFAULT;
-    // Matches config/sils/qos/qos-profiles.yaml "viss-default" and the SUT's own
-    // reader QoS (dds_transport.cpp DataReaderQos.reliability = RELIABLE) -- a
-    // BEST_EFFORT writer would fail RxO matching against a RELIABLE reader.
+    // Matches config/sils/qos/qos-profiles.yaml "viss-default"/"viss-sils-verifiable"
+    // and the SUT's own reader QoS (dds_transport.cpp DataReaderQos.reliability =
+    // RELIABLE) -- a BEST_EFFORT writer would fail RxO matching against a RELIABLE reader.
     writer_qos.reliability().kind = RELIABLE_RELIABILITY_QOS;
+    // Late-joiner robustness (SiLS run verifiability): a lockstep/plant run emits its
+    // bounded tick set in a burst, then idles. An independently-started verifier may
+    // only match AFTER the last sample was written -- with VOLATILE it then receives
+    // nothing (matched-but-no-data). Offer TRANSIENT_LOCAL + KEEP_LAST history so a
+    // verifier joining while the probe is still alive gets the run's samples. A
+    // TRANSIENT_LOCAL offer is a superset (RxO-compatible with VOLATILE readers too).
+    // Opt out with SILS_DURABILITY=volatile to exercise pure volatile wire behavior;
+    // the verifier must use the SAME setting (durability RxO is strict).
+    if (GetEnvOr("SILS_DURABILITY", "transient-local") != "volatile") {
+        writer_qos.durability().kind = TRANSIENT_LOCAL_DURABILITY_QOS;
+        writer_qos.history().kind = KEEP_LAST_HISTORY_QOS;
+        writer_qos.history().depth = 256;
+    }
 
     ProbeWriterListener listener(run_id);
     DataWriter* writer = publisher->create_datawriter(topic, writer_qos, &listener);
