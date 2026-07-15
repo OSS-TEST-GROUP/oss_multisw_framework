@@ -178,6 +178,23 @@
   .own .o .t.clash { border-color:var(--fail); color:var(--fail); }
   .own .o .t.ok { border-color:var(--pass); }
   .own .o p { font-size:11.5px; color:var(--muted); margin:9px 0 0; }
+  /* ---- ch3 §07: two-compile table + concrete example ---- */
+  .ctbl { width:100%; border-collapse:collapse; min-width:560px; font-size:12.5px; }
+  .ctbl th, .ctbl td { text-align:left; padding:9px 12px; border-bottom:1px solid var(--line); vertical-align:top; }
+  .ctbl th { font-family:var(--mono); font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+  .ctbl td b { font-family:var(--mono); }
+  .ctbl .yes { color:var(--pass); font-family:var(--mono); } .ctbl .no { color:var(--fail); font-family:var(--mono); }
+  .ctbl tr.build td { background:color-mix(in srgb,var(--gate) 8%,transparent); }
+  .envcmp { display:flex; gap:14px; flex-wrap:wrap; margin-top:16px; }
+  .envcmp > div { flex:1; min-width:300px; }
+  .envcmp h5 { margin:0 0 7px; font-size:12px; font-family:var(--mono); color:var(--accent); }
+  .code { font-family:var(--mono); font-size:11px; background:var(--surface-2); border:1px solid var(--line);
+    border-radius:8px; padding:11px 13px; white-space:pre; overflow-x:auto; color:var(--ink); line-height:1.65; margin:0; }
+  .code .d { color:var(--gate); }
+  .code .c { color:var(--muted); }
+  .samebin { margin-top:14px; font-size:12.5px; color:var(--ink); background:var(--accent-soft);
+    border:1px solid var(--accent); border-left:3px solid var(--accent); border-radius:8px; padding:11px 13px; }
+  .samebin b { color:var(--accent); }
   .foot { margin-top:34px; font-size:11.5px; color:var(--muted); font-family:var(--mono); }
   @media (max-width:640px){ h1{font-size:24px;} .wrap{padding:28px 16px 56px;} }
 </style>
@@ -461,7 +478,44 @@
   문자열" 하나. 이 동등성은 DDS·빌드 없이 파이썬/셸 테스트로 단언되고, probe(C++)는 그 env 를 읽을
   뿐이라 문자열이 같으면 런타임 동작(L1/L3/scenario 실측)은 그대로 따라온다.</p>
 
-  <p class="foot">compile.py:resolve_runtime_env · resolved_to_shell.py · run_phase1.sh &nbsp;|&nbsp; 문서: docs/sils-understanding.md (1·2·3장) &nbsp;|&nbsp; 검증: test_compile.py (포트→env·env-args)</p>
+  <h2><span class="n">07</span> &nbsp;"컴파일"은 두 개 + 실제 예</h2>
+  <p class="lede" style="margin-bottom:16px"><code class="inl">SILS_*</code> 는 vECU 를 <b>컴파일하는 입력이 아니라</b>
+  실행 때 주입되는 런타임 env. vECU 는 descriptor 무관하게 미리 빌드된 <b>범용 바이너리 하나</b>이고,
+  실행 때 <code class="inl">getenv</code> 로 포트를 고른다 — descriptor 마다 재빌드하지 않는다.</p>
+  <div class="scroll">
+    <table class="ctbl">
+      <thead><tr><th>무엇</th><th>도구</th><th>언제</th><th>산출물</th><th>SILS_*</th></tr></thead>
+      <tbody>
+        <tr class="build"><td><b>vECU 빌드</b></td><td>build.sh (CMake·C++)</td><td>한 번, 미리</td><td>probe 바이너리·이미지 (범용)</td><td class="no">✗ 모름</td></tr>
+        <tr><td><b>Topology 컴파일</b></td><td>compile.py</td><td>설정마다</td><td>resolved-run.yaml (+SILS_* env)</td><td class="yes">✓ 생성</td></tr>
+        <tr><td><b>실행</b></td><td>run_phase1.sh</td><td>run 마다</td><td>바이너리 + SILS_* → 동작</td><td class="yes">✓ 주입·읽음</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="envcmp">
+    <div>
+      <h5>A) viss_probe_smoke — behavior: stub</h5>
+      <pre class="code">SILS_CLOCK_MODE=wall
+SILS_BEHAVIOR=viss-request
+SILS_VISS_PROBE_PERIOD_MS=500
+SILS_VISS_PROBE_REQUEST_ACTION=get
+SILS_VISS_PROBE_REQUEST_PATH=Vehicle.Speed</pre>
+    </div>
+    <div>
+      <h5>B) viss_scenario — accumulate + 결함주입</h5>
+      <pre class="code">SILS_CLOCK_MODE=wall
+<span class="d">SILS_BEHAVIOR=accumulate</span>
+<span class="d">SILS_VISS_PROBE_PERIOD_MS=200</span>
+<span class="d">SILS_SCENARIO=scheduled</span>
+<span class="d">SILS_SCENARIO_FAULTS=3:drop,7:duplicate</span>
+SILS_ATTEST_ARCH=x86_64  <span class="c"># sim</span></pre>
+    </div>
+  </div>
+  <p class="samebin"><b>바이너리는 동일</b>, resolved-run 의 env 만 다르다(실측 출력). A 는
+  <code style="font-family:var(--mono)">viss-request</code> 를 500ms 마다, B 는 <code style="font-family:var(--mono)">accumulate</code>
+  + tick 3 drop·tick 7 duplicate. <b>재빌드 없음</b> — 같은 이미지에 env 만.</p>
+
+  <p class="foot">build.sh · compile.py:resolve_runtime_env · resolved_to_shell.py · run_phase1.sh &nbsp;|&nbsp; 문서: docs/sils-understanding.md (1·2·3장) &nbsp;|&nbsp; 검증: test_compile.py</p>
 </div>
 </body>
 </html>

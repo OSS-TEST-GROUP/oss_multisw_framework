@@ -341,6 +341,21 @@ domain_env 오타·enum·per-instance `{instance_id}`…)는 **1장 §1.4.A 의 
 > 내부 동작**(어떤 clock·behavior·plant·scenario 로 돌지)을 Descriptor 선언에서 실행 env 로
 > 잇는 다리다.
 
+## 3.0 먼저 — "컴파일"이 두 개다 (헷갈리기 쉬움)
+
+`SILS_*` 는 vECU 를 *컴파일*하는 입력이 **아니다**. **실행 때 주입되는 런타임 환경변수**다.
+vECU 는 descriptor 와 무관하게 미리 빌드된 **범용 C++ 바이너리 하나**이고, 실행 때 `std::getenv`
+로 `SILS_*` 를 읽어 포트를 고른다(`SILS_PLANT`→어떤 IPlant, `SILS_BEHAVIOR`→어떤 IBehavior).
+
+| 무엇 | 도구 | 언제 | 산출물 | `SILS_*` |
+|---|---|---|---|---|
+| **vECU 빌드** | `build.sh` (CMake·C++) | 한 번, 미리 | probe 바이너리·도커 이미지 (**범용**) | ✗ 모름 |
+| **Topology 컴파일** | `compile.py` | 설정마다 | resolved-run.yaml (**+ SILS_\* env**) | ✓ 생성 |
+| **실행** | `run_phase1.sh` | run 마다 | 바이너리 + SILS_* → 동작 | ✓ 주입·읽음 |
+
+즉 **descriptor 마다 재컴파일하지 않는다** — 같은 이미지에 **env 만 바꿔** 다양한 vECU 를 만든다.
+(이 문서의 "Topology 컴파일"[1장]과 "vECU 빌드"는 서로 다른 것.)
+
 ## 3.1 한 문장 — "정문(선언)"으로 포트를 켠다
 
 vECU 의 포트(clock/behavior/plant/scenario/attestation)는 **Descriptor 에 선언**하면 파이프라인이
@@ -412,24 +427,54 @@ probe(C++)는 그 env 를 읽을 뿐이라, 문자열이 같으면 런타임 동
 검증: [test_compile.py](../tools/sils/topology_compiler/test_compile.py) 의 포트→env·smoke·예제·
 export/env-args 케이스.
 
-## 3.6 예 — 선언 하나가 env 로
+## 3.6 실제 예 — 같은 바이너리, env 만 다르게 (실측 출력)
 
-[viss_scenario_probe.yaml](../service/sils/vecu/descriptors/viss_scenario_probe.yaml)
-([topology](../config/sils/topologies/viss_scenario.yaml)):
+**① vECU 는 한 번만 빌드**한다(descriptor 무관, 범용):
+```bash
+./build.sh --build-sils            # → sils_vecu_viss_probe (범용 바이너리·이미지)
+```
 
-```yaml
-behavior: { type: accumulate, spec: { period_ms: 200 } }
-scenario:
-  type: scheduled
-  faults: [ {tick: 3, fault: drop}, {tick: 7, fault: duplicate} ]
-attestation: { arch: x86_64, gateway: sim, protocol: sim }
+**② 같은 바이너리에 두 다른 토폴로지를 컴파일**하면 `SILS_*` env 만 달라진다. 아래는 실제 출력:
+
+```console
+# A) viss_probe_smoke — behavior: stub
+$ python3 tools/sils/topology_compiler/compile.py \
+      config/sils/topologies/viss_probe_smoke.yaml --out-dir /tmp/smoke
+$ python3 tools/sils/topology_compiler/resolved_to_shell.py \
+      /tmp/smoke/resolved-run.yaml --index 0 --env-args
+SILS_CLOCK_MODE=wall
+SILS_BEHAVIOR=viss-request                 # stub → viss-request
+SILS_VISS_PROBE_PERIOD_MS=500
+SILS_VISS_PROBE_RESPONSE_TOPIC_PREFIX=sils/viss_probe/response
+SILS_VISS_PROBE_REQUEST_ACTION=get
+SILS_VISS_PROBE_REQUEST_PATH=Vehicle.Speed
+
+# B) viss_scenario — behavior: accumulate + 결함주입
+$ python3 tools/sils/topology_compiler/compile.py \
+      config/sils/topologies/viss_scenario.yaml --out-dir /tmp/scen
+$ python3 tools/sils/topology_compiler/resolved_to_shell.py \
+      /tmp/scen/resolved-run.yaml --index 0 --env-args
+SILS_CLOCK_MODE=wall
+SILS_BEHAVIOR=accumulate                   # ← 다름
+SILS_VISS_PROBE_PERIOD_MS=200              # ← 다름
+SILS_SCENARIO=scheduled                    # ← 결함주입 포트 켜짐
+SILS_SCENARIO_FAULTS=3:drop,7:duplicate
+SILS_ATTEST_ARCH=x86_64
+SILS_ATTEST_GATEWAY=sim
+SILS_ATTEST_PROTOCOL=sim
 ```
-→ 컴파일·방출하면:
+
+**③ 실행 — 같은 바이너리를 env 만 바꿔** 띄운다:
+```bash
+service/sils/run_coordinator/run_phase1.sh start \
+    --from-resolved /tmp/scen/resolved-run.yaml --bin-dir <build-dir> --backend local
+# run_phase1 이 위 SILS_* 를 주입 → 같은 sils_vecu_viss_probe 가
+#   accumulate behavior + scheduled 결함(tick 3 drop, tick 7 duplicate) 으로 동작
 ```
-SILS_BEHAVIOR=accumulate  SILS_VISS_PROBE_PERIOD_MS=200
-SILS_SCENARIO=scheduled   SILS_SCENARIO_FAULTS=3:drop,7:duplicate
-SILS_ATTEST_ARCH=x86_64   SILS_ATTEST_GATEWAY=sim   SILS_ATTEST_PROTOCOL=sim
-```
+
+**A vs B: 바이너리는 동일**, resolved-run 의 env 만 다르다. A 는 `viss-request` 를 500ms 마다,
+B 는 `accumulate` + tick 3 drop·tick 7 duplicate. **재빌드 없음** — §3.0 의 "같은 이미지, env 만"
+그대로다. (선언 원본: [viss_scenario_probe.yaml](../service/sils/vecu/descriptors/viss_scenario_probe.yaml))
 
 ---
 
