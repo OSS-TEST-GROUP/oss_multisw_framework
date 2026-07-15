@@ -45,10 +45,11 @@ service/sils/vecu/descriptors/*.yaml       (ECU Descriptor, §9.2)
 | [topology_compiler/compile.py](topology_compiler/compile.py) | Topology+Descriptor+Contract+QoS → `resolved-run.yaml` + `saved-service-list.yaml`. 정적 검증(single-owner, 이름 중복, domain_env 일관성) | §9.5/§11/§13 | [8](topology_compiler/test_compile.py) |
 | [topology_compiler/resolved_to_shell.py](topology_compiler/resolved_to_shell.py) | `resolved-run.yaml` → shell-safe `KEY='value'`(코디네이터 `--from-resolved` 급전) | §11 | (compile 테스트에 포함) |
 | [run_coordinator/domain_lease.py](run_coordinator/domain_lease.py) | 유한 pool 에서 DDS domain 원자적 임대(TTL+owner). 병렬 run 격리, Coordinator 사망 시 회수 | §12.1/§12.2 | [7](run_coordinator/test_domain_lease.py) |
-| [conformance/evaluate.py](conformance/evaluate.py) | trace.jsonl → conformance verdict. §5.2 상태기계(+verifier terminal), 증거기반 pass(L0), lockstep/staging/behavior/plant 판정(L2/L3), lease 무결성, fleet 완전성 | §5/§7/§8/§11/§12 | [40](conformance/test_evaluate.py) |
+| [conformance/evaluate.py](conformance/evaluate.py) | trace.jsonl → conformance verdict. §5.2 상태기계(+verifier terminal), 증거기반 pass(L0), lockstep/staging/behavior/plant/scenario 판정(L1/L2/L3+결함주입), L4 attestation 기록, lease 무결성, fleet 완전성 | §5/§7/§8/§11/§12 | [61](conformance/test_evaluate.py) |
 | [conformance/to_junit.py](conformance/to_junit.py) | verdict → JUnit XML(CI 수집). PASS/FAIL/ABORTED/INCOMPLETE → testcase/failure/error | §16 | [12](conformance/test_to_junit.py) |
 | [conformance/capture_golden.py](conformance/capture_golden.py) | run trace → 정규화 golden(식별자 제거·시각 rebase). PASSED+conformant·결정론 모드만 허용 | §12.4 | [8](conformance/test_capture_golden.py) |
-| [conformance/compare_golden.py](conformance/compare_golden.py) | candidate vs golden 회귀 판정(FP tolerance·behavior/plant 값 비교=model correlation·ordering·missing/extra 정책·입력모드 게이트·lockstep 시 벽시계 latency 스킵) | §11/§12.4 | [18](conformance/test_compare_golden.py) |
+| [conformance/compare_golden.py](conformance/compare_golden.py) | candidate vs golden 회귀 판정(FP tolerance·behavior/plant/scenario 값 비교=model correlation·ordering·missing/extra 정책·입력모드 게이트·lockstep 시 벽시계 latency 스킵) | §11/§12.4 | [18](conformance/test_compare_golden.py) |
+| [conformance/parity.py](conformance/parity.py) | **L4 target parity** 판정: SiLS trace vs 실-타깃 레퍼런스 trace 비교(신호별 tolerance·timing) + attestation 게이트(arch/gateway/protocol). PARITY=L4 / PARITY_UNATTESTED=L3 / DIVERGENCE. golden(SiLS-vs-SiLS 재현성)과 달리 타깃이 authority | §11 | [12](conformance/test_parity.py) |
 | [ci/sils-ci.sh](ci/sils-ci.sh) | 위 전부를 한 진입점으로: lint→compile→run→evaluate→junit→compare. 단계별 skip | §9~§16 | [12](ci/test_sils_ci.sh) |
 
 Run Coordinator 본체(Phase 1)는 도구가 아니라 서비스라 `service/` 에 있다:
@@ -70,6 +71,8 @@ Run Coordinator 본체(Phase 1)는 도구가 아니라 서비스라 `service/` �
 | `qos/qos-profiles.yaml` | QoS Catalog(viss-default/viss-sils-verifiable/request-reliable/state-latest) |
 | `topologies/viss_probe_smoke.yaml` | Phase 1 스모크 토폴로지(vECU 1개, docker 백엔드) |
 | `regression/golden-rules.yaml` | §12.4 회귀 규칙 참조 세트(그대로 사용 가능) |
+| `parity/viss-target-parity.yaml` | §11 L4 target-parity 계약(비교 이벤트·신호별 tolerance·timing·attestation 게이트) |
+| `fmu/allowlist.yaml` | §5.6 FMU 보안 allowlist(sha256·공급자, `fmu_gate.py` 가 로드 전 대조) |
 
 > **domain env 주의(§3.4).** MMF 는 서비스군마다 DDS domain env 가 다르다: 코어 `MMF_DDS_DOMAIN_ID`, VISS `VISS_DDS_DOMAIN_ID`, ROS2 `ROS_DOMAIN_ID`. vECU 가 SUT 와 같은 domain 에 붙으려면 **그 서비스의 env** 를 써야 한다. 린터가 오타를 잡는다.
 
@@ -124,6 +127,7 @@ for t in tools/sils/topology_compiler/test_compile.py \
          tools/sils/conformance/test_compare_golden.py \
          tools/sils/conformance/test_capture_golden.py \
          tools/sils/contracts/test_lint_catalog.py \
+         tools/sils/conformance/test_parity.py \
          tools/sils/fmu/test_fmu_map.py \
          tools/sils/fmu/test_fmu_gate.py; do
     python3 "$t" || echo "FAILED: $t"
@@ -131,7 +135,7 @@ done
 bash tools/sils/ci/test_sils_ci.sh
 ```
 
-현재 전부 green: Python 9개 스위트(evaluate 61 · compare_golden 18 · capture 8 · to_junit 12 · lint 18 · compile 10 · domain_lease 7 · fmu_map 8 · fmu_gate 14 = 156) + shell smoke(fleet 17 · ci 12). 파이썬만 필요하며 DDS/도커 툴체인은 필요 없다.
+현재 전부 green: Python 10개 스위트(evaluate 61 · compare_golden 18 · capture 8 · to_junit 12 · parity 12 · lint 18 · compile 10 · domain_lease 7 · fmu_map 8 · fmu_gate 14 = 168) + shell smoke(fleet 17 · ci 12). 파이썬만 필요하며 DDS/도커 툴체인은 필요 없다.
 
 ---
 
@@ -197,4 +201,18 @@ fail — 결함이 조용히 미주입되면 'fault run' 이 거짓 PASS), (2) �
 
 **arm64 빌드 확인**: `./build.sh --aarch64 --build-sils` 로 aarch64 크로스빌드 성공(코드 수정 없이 — SiLS 는 arch 중립, core 와 동일 FastDDS/IDL 경로). arm64 **실행** 검증은 arm64 호스트(또는 qemu/binfmt) 필요.
 
-**남은 것**: L1 C++ 실런타임 trace 판정(도구 계약은 완료, 빌드 후 왕복 실측), arm64 실행 검증(arm64 머신/에뮬), 실제 VISS SUT 와의 폐루프(현재는 responder 스탠드인으로 왕복 확인), 물리적 timing 충실도 실측(§0A Contract Spike), per-instance fleet 의 **x86 실런타임 실측**(컴파일 검증 + 런타임 배선 완료 — `ownership: per-instance` + `{instance_id}` 템플릿으로 replica 가 distinct topic 을 소유해 §9.5-valid; `resolved_to_shell`→`SILS_TOPIC`→probe 로 각 인스턴스가 자기 topic 에 publish; C++ 빌드 후 다중 topic 왕복 실측 남음), FmuPlant 의 **실 `.fmu` 실런타임 검증**(어댑터·빌드옵션 완료 — fmi4c + Reference-FMU 로 실측 남음)과 **MORAI 등 외부 시뮬 UDP–ROS2 브리지 트랙**(별도 Topology, §4.1), 그리고 L4(target parity) fidelity.
+**타깃 패리티(§11 L4) 정의·스캐폴딩**: L4 는 "SiLS vECU 가 실제 ECU 처럼 행동한다" — 같은
+자극을 **실 타깃 ECU**(레퍼런스/authority)와 SiLS vECU 에 주고 관측 인터페이스가 계약된
+tolerance 내에서 일치해야 한다. golden(SiLS-vs-SiLS **재현성**, §12.4)과 근본적으로 다르다:
+타깃이 authority. `parity.py --target t.jsonl --sils s.jsonl --contract c.yaml` 가 판정하며
+**두 조건을 모두** 요구한다 — (1) 값/timing 패리티(compare_golden 엔진 재사용, 신호별
+tolerance·timing window; `config/sils/parity/viss-target-parity.yaml`), (2) **attestation**:
+SiLS run 이 실제 target-like 구성요소(arch=aarch64·real gateway·real protocol)를 썼다는
+`target_attestation` 이벤트(probe: `SILS_ATTEST_ARCH/GATEWAY/PROTOCOL`)가 계약과 일치.
+값이 맞아도 x86·stub gateway 면 **PARITY_UNATTESTED(최대 L3)** — §11 "ARM64 는 L4 구성
+요소이지 L4 전체를 자동 충족하지 않는다" 를 코드로 강제. 판정: PARITY=L4 / PARITY_UNATTESTED /
+DIVERGENCE. evaluate 는 단일 trace 로 L4 를 주지 않고 attestation 만 기록(교차-trace 판정은
+parity.py 의 몫). 정의·플로우는 [docs/sils-target-parity.md](../../docs/sils-target-parity.md).
+**남은 것**: 실 타깃 ECU 레퍼런스 trace 캡처 + arm64/real-gateway 실행(실측 계열).
+
+**남은 것**: L1 C++ 실런타임 trace 판정(도구 계약은 완료, 빌드 후 왕복 실측), arm64 실행 검증(arm64 머신/에뮬), 실제 VISS SUT 와의 폐루프(현재는 responder 스탠드인으로 왕복 확인), 물리적 timing 충실도 실측(§0A Contract Spike), per-instance fleet 의 **x86 실런타임 실측**(컴파일 검증 + 런타임 배선 완료 — `ownership: per-instance` + `{instance_id}` 템플릿으로 replica 가 distinct topic 을 소유해 §9.5-valid; `resolved_to_shell`→`SILS_TOPIC`→probe 로 각 인스턴스가 자기 topic 에 publish; C++ 빌드 후 다중 topic 왕복 실측 남음), FmuPlant 의 **실 `.fmu` 실런타임 검증**(어댑터·빌드옵션 완료 — fmi4c + Reference-FMU 로 실측 남음)과 **MORAI 등 외부 시뮬 UDP–ROS2 브리지 트랙**(별도 Topology, §4.1). L4(target parity)는 **판정 도구·계약·attestation 게이트 완료**(`parity.py`) — 실 타깃 ECU 레퍼런스 trace 캡처 + arm64/real-gateway 실행만 남음(실측 계열).

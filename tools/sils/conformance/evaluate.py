@@ -441,6 +441,26 @@ def analyze_scenario(events: list[dict]) -> tuple[dict, list[str], dict]:
     return scenario, violations, injected
 
 
+def analyze_attestation(events: list[dict]) -> dict:
+    """Record the run's target attestation (§11 L4) if the probe emitted one. This does
+    NOT grant L4 -- target parity is judged cross-trace by parity.py against a real-target
+    reference. It only surfaces WHICH real target-like components the run claims (arch,
+    gateway, protocol), so a downstream parity check / CI can gate on it (§11: ARM64 is a
+    component of L4, not sufficient by itself)."""
+    att = None
+    for e in events:
+        if e.get("event") == "target_attestation":
+            att = e
+    if att is None:
+        return {"attested": False}
+    return {
+        "attested": True,
+        "arch": att.get("arch"),
+        "gateway": att.get("gateway"),
+        "protocol": att.get("protocol"),
+    }
+
+
 def analyze_protocol(events: list[dict], injected: dict | None = None) -> tuple[dict, list[str]]:
     """Check L1 protocol fidelity (§11): request/response correlation, QoS conformance,
     and error semantics. Returns (protocol_info, violations).
@@ -539,7 +559,10 @@ def analyze_protocol(events: list[dict], injected: dict | None = None) -> tuple[
 
 
 # Fidelity ladder rank (§11) -- fidelity_evidenced reports the HIGHEST level shown.
-FIDELITY_RANK = {"none": 0, "L0": 1, "L1": 2, "L2": 3, "L3": 4}
+# L4 (target parity) is NOT evidenced from a single trace: it needs a cross-trace
+# comparison against a real-target reference (tools/sils/conformance/parity.py). A single
+# run only records its attestation (analyze_attestation); parity.py is the L4 authority.
+FIDELITY_RANK = {"none": 0, "L0": 1, "L1": 2, "L2": 3, "L3": 4, "L4": 5}
 
 
 def evaluate_run(events: list[dict], path: str) -> dict:
@@ -640,6 +663,9 @@ def evaluate_run(events: list[dict], path: str) -> dict:
     plant, plant_violations = analyze_plant(events)
     violations.extend(plant_violations)
 
+    # --- target attestation (§11 L4, recorded not scored) -------------------
+    attestation = analyze_attestation(events)
+
     # fidelity_evidenced = highest level shown, on top of the L0 endpoint/sample
     # base (§11 ladder). L1 = conformant request/response protocol; L3 = a live,
     # closed, deterministic plant loop. Replay/broken/open plants do not lift L3.
@@ -682,6 +708,7 @@ def evaluate_run(events: list[dict], path: str) -> dict:
         "scenario": scenario,
         "protocol": protocol,
         "plant": plant,
+        "attestation": attestation,
         "fidelity_evidenced": fidelity,
         "evidence": {
             "endpoints_matched": endpoints_matched,
