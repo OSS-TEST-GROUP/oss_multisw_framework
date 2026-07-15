@@ -76,6 +76,17 @@ target_include_directories(sils_vecu_viss_verify PRIVATE ${SILS_VISS_GEN_DIR})
 target_link_libraries(sils_vecu_viss_verify PRIVATE fastdds fastcdr)
 target_link_options(sils_vecu_viss_verify PRIVATE ${SILS_ALLOW_MULTIDEF})
 
+# VISS responder (§11 L1) -- SUT stand-in: subscribes /VIN/Vehicle, publishes
+# correlated responses on the response topic. VissRequest type only (reused for
+# responses via json_min.hpp payload).
+add_executable(sils_vecu_viss_responder
+    src/viss_responder_main.cc
+    ${SILS_VISS_GENERATED_SRCS}
+)
+target_include_directories(sils_vecu_viss_responder PRIVATE ${SILS_VISS_GEN_DIR})
+target_link_libraries(sils_vecu_viss_responder PRIVATE fastdds fastcdr)
+target_link_options(sils_vecu_viss_responder PRIVATE ${SILS_ALLOW_MULTIDEF})
+
 # Lockstep ClockMaster (§8.2) -- independent process, TickControl only.
 add_executable(sils_clock_master
     src/sils_clock_master.cc
@@ -95,5 +106,6 @@ target_include_directories(sils_input_source PRIVATE ${SILS_VISS_GEN_DIR})
 target_link_libraries(sils_input_source PRIVATE fastdds fastcdr)
 target_link_options(sils_input_source PRIVATE ${SILS_ALLOW_MULTIDEF})
 
-install(TARGETS sils_vecu_viss_probe sils_vecu_viss_verify sils_clock_master sils_input_source
+install(TARGETS sils_vecu_viss_probe sils_vecu_viss_verify sils_vecu_viss_responder
+                sils_clock_master sils_input_source
         RUNTIME DESTINATION bin)

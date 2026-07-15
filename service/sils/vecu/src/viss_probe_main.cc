@@ -40,6 +40,7 @@
 #include "VissRequestPubSubTypes.hpp"
 #include "behavior.hpp"
 #include "clock_source.hpp"
+#include "json_min.hpp"
 #include "plant.hpp"
 #include "replay_source.hpp"
 #include "tick_inbox.hpp"
@@ -114,13 +115,17 @@ std::string EscapeJsonString(const std::string& in) {
 // A bare inner JSON without this envelope is rejected by the SUT as "not a valid
 // JSON or has missing fields" -- see dds_transport.cpp. The inner request now comes
 // from IBehavior (behavior.hpp); this only owns the wire envelope.
+std::string RequestId(uint64_t seq) { return "sils-" + std::to_string(seq); }
+
 std::string WrapRequestEnvelope(const std::string& inner_request, uint64_t seq,
                                 const std::string& response_topic_prefix) {
     std::ostringstream response_topic;
     response_topic << response_topic_prefix << "/" << seq;
     std::ostringstream outer;
-    outer << R"({"topic":")" << response_topic.str() << R"(","request":")"
-          << EscapeJsonString(inner_request) << R"("})";
+    // requestId at the envelope top level (real quotes) is the L1 correlation key --
+    // JsonFindString on the responder/probe finds it, not the escaped inner one.
+    outer << R"({"requestId":")" << RequestId(seq) << R"(","topic":")" << response_topic.str()
+          << R"(","request":")" << EscapeJsonString(inner_request) << R"("})";
     return outer.str();
 }
 
@@ -134,6 +139,43 @@ public:
         g_matched_count.store(info.current_count);
         TraceEvent(run_id_, info.current_count_change > 0 ? "endpoint_matched" : "endpoint_unmatched",
                    0, "\"matched_count\":" + std::to_string(info.current_count));
+    }
+
+private:
+    std::string run_id_;
+};
+
+// L1 (§11): receives correlated responses on the response topic and traces
+// response_received{request_id, status, error_code}. evaluate.py correlates these
+// against request_sent by request_id -- this side just reports each arrival.
+class ResponseListener : public eprosima::fastdds::dds::DataReaderListener {
+public:
+    explicit ResponseListener(std::string run_id) : run_id_(std::move(run_id)) {}
+
+    void on_subscription_matched(
+        eprosima::fastdds::dds::DataReader* /*reader*/,
+        const eprosima::fastdds::dds::SubscriptionMatchedStatus& info) override {
+        if (info.current_count_change > 0) {
+            TraceEvent(run_id_, "endpoint_matched", 0,
+                       "\"role\":\"probe-response-reader\",\"matched_count\":" +
+                           std::to_string(info.current_count));
+        }
+    }
+
+    void on_data_available(eprosima::fastdds::dds::DataReader* reader) override {
+        VissRequestTopic sample;
+        eprosima::fastdds::dds::SampleInfo info;
+        while (reader->take_next_sample(&sample, &info) == eprosima::fastdds::dds::RETCODE_OK) {
+            if (!info.valid_data) continue;
+            const std::string& p = sample.payload();
+            const std::string rid = sils::JsonFindString(p, "requestId", "");
+            const std::string status = sils::JsonFindString(p, "status", "");
+            const std::string code = sils::JsonFindString(p, "errorCode", "");
+            std::ostringstream extra;
+            extra << "\"request_id\":\"" << rid << "\",\"status\":\"" << status << "\"";
+            if (!code.empty()) extra << ",\"error_code\":\"" << code << "\"";
+            TraceEvent(run_id_, "response_received", 0, extra.str());
+        }
     }
 
 private:
@@ -251,6 +293,36 @@ int main() {
         std::cerr << "Failed to create DataWriter for topic " << kTopic << std::endl;
         return 1;
     }
+    // Report the negotiated request-writer QoS for L1 protocol conformance (§11):
+    // analyze_protocol checks reliability == contracted RELIABLE.
+    TraceEvent(run_id, "qos_negotiated", 0,
+               "\"role\":\"probe-writer\",\"reliability\":\"RELIABLE\",\"durability\":\"" +
+                   std::string(GetEnvOr("SILS_DURABILITY", "transient-local") != "volatile"
+                                   ? "TRANSIENT_LOCAL" : "VOLATILE") + "\"");
+
+    // L1 protocol mode (§11): when SILS_PROTOCOL=reqresp, subscribe to the response
+    // topic so a responder's correlated replies are received (request/response
+    // round-trip). Default "oneway" preserves the Phase 1 fire-and-forget probe.
+    const bool reqresp = GetEnvOr("SILS_PROTOCOL", "oneway") == "reqresp";
+    const std::string response_topic = GetEnvOr("SILS_RESPONSE_TOPIC", "sils/viss/response");
+    ResponseListener response_listener(run_id);
+    Topic* resp_topic_obj = nullptr;
+    Subscriber* resp_sub = nullptr;
+    if (reqresp) {
+        resp_sub = participant->create_subscriber(SUBSCRIBER_QOS_DEFAULT, nullptr);
+        resp_topic_obj = participant->create_topic(response_topic, request_type.get_type_name(),
+                                                   TOPIC_QOS_DEFAULT);
+        DataReaderQos rrq = DATAREADER_QOS_DEFAULT;
+        rrq.reliability().kind = RELIABLE_RELIABILITY_QOS;
+        if (GetEnvOr("SILS_DURABILITY", "transient-local") != "volatile") {
+            rrq.durability().kind = TRANSIENT_LOCAL_DURABILITY_QOS;
+            rrq.history().kind = KEEP_LAST_HISTORY_QOS;
+            rrq.history().depth = 256;
+        }
+        resp_sub->create_datareader(resp_topic_obj, rrq, &response_listener);
+        TraceEvent(run_id, "protocol_on", 0, "\"mode\":\"reqresp\",\"response_topic\":\"" +
+                                                 response_topic + "\"");
+    }
 
     TraceEvent(run_id, "ready", 0);
 
@@ -311,6 +383,12 @@ int main() {
         sample.payload(WrapRequestEnvelope(out.request_json, ctx.tick_seq, response_topic_prefix));
         TraceEvent(run_id, "publish_intent", static_cast<int>(ctx.tick_seq),
                    "\"matched_count\":" + std::to_string(g_matched_count.load()));
+        // L1 (§11): emit request_sent so evaluate can correlate the responder's reply.
+        if (reqresp) {
+            TraceEvent(run_id, "request_sent", static_cast<int>(ctx.tick_seq),
+                       "\"request_id\":\"" + RequestId(ctx.tick_seq) + "\",\"path\":\"" +
+                           request_path + "\",\"action\":\"" + request_action + "\"");
+        }
         writer->write(&sample);
         TraceEvent(run_id, "publish_result", static_cast<int>(ctx.tick_seq));
         return out;
@@ -408,6 +486,14 @@ int main() {
         clock->TickDone(tick);  // lockstep: sends TickComplete; wall: no-op
         last_seq = tick.seq;
     }
+
+    // L1 (§11): responses arrive asynchronously; give in-flight replies time to land
+    // and be traced before we tear the response reader down. Skipped in oneway mode.
+    if (reqresp && !g_stop.load()) {
+        std::this_thread::sleep_for(
+            std::chrono::milliseconds(GetEnvIntOr("SILS_RESPONSE_DRAIN_MS", 500)));
+    }
+    (void)resp_topic_obj; (void)resp_sub;  // owned by participant; freed below
 
     TraceEvent(run_id, "run_stopping", static_cast<int>(last_seq));
 
