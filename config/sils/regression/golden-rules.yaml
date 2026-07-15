@@ -24,6 +24,7 @@ compare_events:
   - run_pass
   - run_fail
   - behavior_output          # §11 L2: per-tick behavior `value` (golden scenario)
+  - plant_step               # §9 L3: per-tick plant output/command (model correlation)
 
 # Events are aligned by this key, then paired positionally within each key group.
 key_fields: [event]
@@ -47,6 +48,11 @@ ignore_fields:
 numeric_tolerance:
   default: {abs: 0.0, rel: 0.0}
   fields:
+    # plant_step signals (§9 L3 model correlation) -- physical trajectory, not
+    # bit-exact across builds/FMU versions, so compared with a small window.
+    output:      {abs: 1.0e-6, rel: 1.0e-9}
+    command:     {abs: 1.0e-6, rel: 1.0e-9}
+    feedback_in: {abs: 1.0e-6, rel: 1.0e-9}
     # speed: {abs: 0.5}
     # rpm:   {rel: 0.01}
 

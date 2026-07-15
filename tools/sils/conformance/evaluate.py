@@ -266,6 +266,89 @@ def analyze_behavior(events: list[dict]) -> tuple[dict, list[str]]:
     return {"name": name, "outputs": len(outputs)}, violations
 
 
+# Plant feedback continuity tolerance -- feedback_in[N] should equal output[N-1]
+# exactly (it IS the previous output fed back), but doubles round-trip through JSON
+# text, so allow a tiny epsilon.
+PLANT_EPS = 1e-9
+
+
+def _finite(x) -> bool:
+    return isinstance(x, (int, float)) and x == x and x not in (float("inf"), float("-inf"))
+
+
+def analyze_plant(events: list[dict]) -> tuple[dict, list[str]]:
+    """Check IPlant closed-loop determinism (§9 L3, §7 IPlant). Returns (plant_info, violations).
+
+    A run is plant-coupled iff it carries `plant_step` events -- each records one
+    tick of the loop: the controller read the plant's previous output (`feedback_in`),
+    computed a `command`, and the plant integrated one `dt` to a new `output`.
+
+    L3 ("plant-coupled fidelity, FMU-based closed loop") is evidenced only when the
+    loop is genuinely CLOSED and LIVE:
+      - closed loop: feedback_in[N] == output[N-1] -- the controller consumed the
+        real previous plant output, not a fixed reference. Broken continuity means
+        the loop is actually open (a real defect for a live plant).
+      - live: the plant responds to commands (mode="live", e.g. AnalyticPlant/FMU),
+        as opposed to mode="replay" which plays back recorded outputs (deterministic
+        and reproducible, but NOT plant-coupled -- like input replay in §7.4).
+      - deterministic: constant dt, monotone ticks, all-finite outputs (FMU step
+        NaN/Inf is a fail-fast condition per §14).
+    Model correlation against a reference trajectory (§9) is verified by
+    compare_golden (plant_step is a compared event), not here."""
+    steps = [e for e in events if e.get("event") == "plant_step"]
+    if not steps:
+        return {"model": "none"}, []
+
+    resets = [e for e in events if e.get("event") == "plant_reset"]
+    model = resets[-1].get("model") if resets else steps[0].get("model", "unknown")
+    mode = (resets[-1].get("mode") if resets else steps[0].get("mode")) or "live"
+    violations: list[str] = []
+
+    # finite outputs/commands (§14 fail-fast on FMU NaN/Inf)
+    nonfinite = [s.get("tick_seq") for s in steps
+                 if not _finite(s.get("output")) or not _finite(s.get("command"))]
+    if nonfinite:
+        violations.append(f"plant_step produced non-finite output/command at tick(s) "
+                          f"{nonfinite[:10]} -- FMU step NaN/Inf is fail-fast (§14)")
+
+    # deterministic integration: monotone ticks + constant dt
+    ticks = [s.get("tick_seq") for s in steps]
+    monotone = all(isinstance(a, int) and isinstance(b, int) and b > a
+                   for a, b in zip(ticks, ticks[1:]))
+    if not monotone:
+        violations.append("plant steps not in strictly increasing tick order")
+    dts = {s.get("dt_ns") for s in steps if "dt_ns" in s}
+    if len(dts) > 1:
+        violations.append(f"plant dt not constant across steps: saw {sorted(dts)} "
+                          "-- integration step must be fixed for a deterministic trajectory")
+
+    # closed-loop continuity: feedback_in[N] == output[N-1]. Only meaningful for a
+    # live plant; a replay plant ignores the command so the loop isn't "live".
+    closed = True
+    if mode == "live" and monotone and not nonfinite:
+        for prev, cur in zip(steps, steps[1:]):
+            fb, out_prev = cur.get("feedback_in"), prev.get("output")
+            if _finite(fb) and _finite(out_prev) and abs(fb - out_prev) > PLANT_EPS:
+                closed = False
+                violations.append(
+                    f"plant loop not closed at tick {cur.get('tick_seq')}: feedback_in "
+                    f"{fb} != previous output {out_prev} -- the controller did not consume "
+                    "the live plant output (loop is open, not L3 closed-loop §9)")
+                break
+    elif mode == "replay":
+        closed = False  # playback, not a live coupled loop
+
+    deterministic = monotone and len(dts) <= 1 and not nonfinite
+    plant = {
+        "model": model,
+        "mode": mode,
+        "steps": len(steps),
+        "closed_loop": closed,
+        "deterministic": deterministic,
+    }
+    return plant, violations
+
+
 def evaluate_run(events: list[dict], path: str) -> dict:
     """Reduce one run's merged event stream to a verdict + violations."""
     run_id = dominant_run_id(events)
@@ -351,6 +434,16 @@ def evaluate_run(events: list[dict], path: str) -> dict:
     behavior, behavior_violations = analyze_behavior(events)
     violations.extend(behavior_violations)
 
+    # --- plant coupling (§9 L3, IPlant closed loop) -------------------------
+    plant, plant_violations = analyze_plant(events)
+    violations.extend(plant_violations)
+    # L3 is evidenced only by a live, closed, deterministic plant loop (on top of
+    # the L0 endpoint/sample evidence). Replay/broken/open plants do not lift it.
+    if (plant.get("model", "none") != "none" and plant.get("mode") == "live"
+            and plant.get("closed_loop") and plant.get("deterministic")
+            and fidelity == "L0"):
+        fidelity = "L3"
+
     # --- identity (probe carries the vECU instance_id) ----------------------
     instance_ids = sorted({e["instance_id"] for e in events if e.get("instance_id")})
 
@@ -377,6 +470,7 @@ def evaluate_run(events: list[dict], path: str) -> dict:
         "clock": clock,
         "staging": staging,
         "behavior": behavior,
+        "plant": plant,
         "fidelity_evidenced": fidelity,
         "evidence": {
             "endpoints_matched": endpoints_matched,

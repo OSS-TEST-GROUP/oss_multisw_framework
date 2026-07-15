@@ -167,6 +167,25 @@ def test_behavior_output_golden_scenario():
     assert any(d["field"] == "value" for d in r["field_diffs"]), r["field_diffs"]
 
 
+def test_plant_step_model_correlation():
+    # §9 L3: a plant's per-tick output is golden-compared under field tolerance.
+    # Drift within tolerance -> MATCH; beyond -> REGRESSION (model correlation).
+    ps = lambda rid, out2: [
+        {"event": "plant_step", "tick_seq": 1, "dt_ns": 100_000_000,
+         "feedback_in": 0.0, "command": 8.0, "output": 0.76, "run_id": rid},
+        {"event": "plant_step", "tick_seq": 2, "dt_ns": 100_000_000,
+         "feedback_in": 0.76, "command": 7.392, "output": out2, "run_id": rid},
+    ]
+    tol = rules(numeric_tolerance={"default": {"abs": 0.0, "rel": 0.0},
+                                   "fields": {"output": {"abs": 1e-6}, "command": {"abs": 1e-6},
+                                              "feedback_in": {"abs": 1e-6}}})
+    g = golden() + ps("G", 1.4552)
+    assert cg.compare(g, candidate() + ps("C", 1.4552 + 5e-7), tol)["verdict"] == "MATCH"
+    r = cg.compare(g, candidate() + ps("C", 1.4552 + 0.01), tol)
+    assert r["verdict"] == "REGRESSION"
+    assert any(d["field"] == "output" for d in r["field_diffs"]), r["field_diffs"]
+
+
 def test_input_mode_gate():
     assert cg.gate_input_mode(rules(input_mode="live")) is not None
     assert cg.gate_input_mode(rules(input_mode="local-staged")) is not None

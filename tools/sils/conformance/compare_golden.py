@@ -56,6 +56,11 @@ DEFAULT_RULES = {
         # behavior output (§11 L2 golden scenario): its per-tick `value` is compared
         # under numeric_tolerance, so a behavior regression surfaces as a value diff.
         "behavior_output",
+        # plant step (§9 L3 model correlation): per-tick output/command/feedback_in
+        # are compared under numeric_tolerance, so a plant-trajectory regression
+        # surfaces as a value diff. Set field tolerances in the rules file (a physical
+        # signal rarely matches bit-exact across builds/FMU versions).
+        "plant_step",
     ],
     "key_fields": ["event"],
     # Per-run identity and transport noise never participate in value comparison;

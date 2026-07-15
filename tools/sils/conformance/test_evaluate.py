@@ -410,6 +410,92 @@ def test_lockstep_timeout_flagged():
     assert any("tick_timeout" in v for v in r["violations"]), r["violations"]
 
 
+def plant_events(mode="live", a=0.5, Kp=0.8, sp=10.0, dt_ns=100_000_000, ticks=6,
+                 break_loop_at=None, nonfinite_at=None, dts=None):
+    """A closed-loop run: first-order plant x += (u - a*x)*dt driven by a P-controller
+    u = Kp*(sp - x). feedback_in[N] == output[N-1] by construction (loop is closed)."""
+    dt = dt_ns / 1e9
+    ev_list = [
+        {"run_id": "pl", "event": "domain_leased", "wall_time_ms": 1000, "domain_id": 90, "pool": "90-92"},
+        {"run_id": "pl", "instance_id": "viss-probe-1", "event": "run_start", "wall_time_ms": 1001, "domain_id": 90},
+        {"run_id": "pl", "instance_id": "viss-probe-1", "event": "endpoint_matched", "wall_time_ms": 1002},
+        {"run_id": "pl", "instance_id": "viss-probe-1", "event": "ready", "wall_time_ms": 1003},
+        {"run_id": "pl", "event": "plant_reset", "wall_time_ms": 1004, "model": "first-order", "mode": mode, "initial": 0.0},
+        {"run_id": "pl", "event": "verify_invoke", "wall_time_ms": 1005},
+        {"run_id": "pl", "expected_instance_id": "viss-probe-1", "event": "verify_start", "wall_time_ms": 1006, "domain_id": 90},
+        {"run_id": "pl", "expected_instance_id": "viss-probe-1", "event": "endpoint_matched", "wall_time_ms": 1007},
+    ]
+    x = 0.0
+    wt = 1010
+    for n in range(1, ticks + 1):
+        fb = x
+        u = Kp * (sp - fb)
+        x = x + (u - a * x) * dt
+        out = x
+        this_dt = dts[n - 1] if dts else dt_ns
+        if break_loop_at == n:
+            fb = fb + 1.0  # controller did NOT consume the live previous output
+        if nonfinite_at == n:
+            out = float("nan")
+        ev_list.append({"run_id": "pl", "event": "plant_step", "wall_time_ms": wt, "tick_seq": n,
+                        "sim_time_ns": n * dt_ns, "dt_ns": this_dt,
+                        "feedback_in": round(fb, 9), "command": round(u, 9),
+                        "output": (out if out != out else round(out, 9))})
+        ev_list.append({"run_id": "pl", "expected_instance_id": "viss-probe-1", "event": "sample_received", "wall_time_ms": wt + 1, "received_count": n})
+        wt += 5
+    ev_list.append({"run_id": "pl", "expected_instance_id": "viss-probe-1", "event": "verify_pass", "wall_time_ms": wt, "received_count": ticks, "valid_count": ticks, "min_samples": 1})
+    ev_list.append({"run_id": "pl", "event": "domain_released", "wall_time_ms": wt + 1})
+    return ev_list
+
+
+def test_plant_none_when_absent():
+    r = ev.evaluate_run(ev.parse_trace(write_trace(passing_events()))[0], "x")
+    assert r["plant"] == {"model": "none"}
+    assert r["fidelity_evidenced"] == "L0"
+
+
+def test_plant_closed_loop_is_l3_conformant():
+    r = ev.evaluate_run(ev.parse_trace(write_trace(plant_events()))[0], "x")
+    assert r["verdict"] == "PASSED", r
+    assert r["plant"]["model"] == "first-order"
+    assert r["plant"]["mode"] == "live"
+    assert r["plant"]["closed_loop"] is True, r["violations"]
+    assert r["plant"]["deterministic"] is True
+    assert r["fidelity_evidenced"] == "L3", r
+    assert r["conformant"] is True, r["violations"]
+
+
+def test_plant_open_loop_flagged():
+    # feedback_in at some tick != previous output -> loop is open, not L3.
+    r = ev.evaluate_run(ev.parse_trace(write_trace(plant_events(break_loop_at=4)))[0], "x")
+    assert r["plant"]["closed_loop"] is False
+    assert r["fidelity_evidenced"] != "L3"
+    assert any("loop not closed" in v for v in r["violations"]), r["violations"]
+    assert r["conformant"] is False
+
+
+def test_plant_replay_mode_not_l3():
+    # replay plant plays back outputs -- deterministic, but not a live coupled loop.
+    r = ev.evaluate_run(ev.parse_trace(write_trace(plant_events(mode="replay")))[0], "x")
+    assert r["plant"]["mode"] == "replay"
+    assert r["plant"]["closed_loop"] is False
+    assert r["fidelity_evidenced"] != "L3"
+
+
+def test_plant_nonfinite_output_flagged():
+    r = ev.evaluate_run(ev.parse_trace(write_trace(plant_events(nonfinite_at=3)))[0], "x")
+    assert any("non-finite" in v for v in r["violations"]), r["violations"]
+    assert r["plant"]["deterministic"] is False
+    assert r["fidelity_evidenced"] != "L3"
+
+
+def test_plant_nonconstant_dt_flagged():
+    r = ev.evaluate_run(ev.parse_trace(write_trace(
+        plant_events(ticks=3, dts=[100_000_000, 100_000_000, 200_000_000])))[0], "x")
+    assert any("dt not constant" in v for v in r["violations"]), r["violations"]
+    assert r["plant"]["deterministic"] is False
+
+
 def test_fleet_completeness_unexpected_instance():
     results = [ev.evaluate_run(ev.parse_trace(write_trace(passing_events(instance_id="rogue")))[0], "x")]
     fleet = ev.evaluate_fleet(results, expected_instance_ids=["wheelspeed-FL"])
