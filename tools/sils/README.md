@@ -165,6 +165,8 @@ Reference-FMU)를 로드해 `SetInputs→fmiX_setReal`, `Step→fmiX_doStep`, `o
 로 구동 — **같은 plant_step 계약**을 방출하므로 analyze_plant/compare_golden 이 그대로 L3
 판정. doStep 실패/비유한 출력은 NaN 으로 §14 fail-fast. 빌드 옵션 `-DSILS_ENABLE_FMU=ON`
 (없으면 fmi4c FetchContent), 미빌드 시 `SILS_PLANT=fmu` 는 런타임에 명확히 실패.
+FMI/FMU/fmi4c 개념·현황·주의사항(ARM64 바이너리·변수매핑·실패정책·보안·MORAI 상태
+소유권)은 [docs/sils-fmu-plant.md](../../docs/sils-fmu-plant.md) 참조.
 **x86 실런타임에서 두 번 독립 실행 → sim_time·궤적 소수점까지 동일(compare_golden MATCH)로
 재현성 확인**; FMI co-sim 이 3번째 구현.
 
