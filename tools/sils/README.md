@@ -58,7 +58,7 @@ Run Coordinator 본체(Phase 1)는 도구가 아니라 서비스라 `service/` �
 | [service/sils/run_coordinator/run_phase1.sh](../../service/sils/run_coordinator/run_phase1.sh) | Run Coordinator: `start`(local/docker 백엔드) · `fleet`(다중 vECU) · `cleanup` · `reap`(고아 run 회수, §14.4) |
 | [service/sils/vecu/src/viss_probe_main.cc](../../service/sils/vecu/src/viss_probe_main.cc) | vECU probe: tick 루프를 IClockSource/IBehavior/IPlant 포트로 구동, `/VIN/Vehicle` 로 publish (C++, **빌드+실런타임 검증**) |
 | [service/sils/vecu/src/viss_verify_main.cc](../../service/sils/vecu/src/viss_verify_main.cc) | 독립 one-shot 구독 검증기 (C++, **빌드+실런타임 검증**) |
-| [clock_source.hpp](../../service/sils/vecu/src/clock_source.hpp) · [behavior.hpp](../../service/sils/vecu/src/behavior.hpp) · [plant.hpp](../../service/sils/vecu/src/plant.hpp) | 헥사고날 포트: IClockSource(wall/lockstep) · IBehavior(viss-request/accumulate/p-controller) · IPlant(AnalyticPlant/ReplayPlant) |
+| [clock_source.hpp](../../service/sils/vecu/src/clock_source.hpp) · [behavior.hpp](../../service/sils/vecu/src/behavior.hpp) · [plant.hpp](../../service/sils/vecu/src/plant.hpp) · [scenario.hpp](../../service/sils/vecu/src/scenario.hpp) | 헥사고날 포트: IClockSource(wall/lockstep) · IBehavior(viss-request/accumulate/p-controller) · IPlant(AnalyticPlant/ReplayPlant/FmuPlant) · IScenario(nominal/scheduled 결함주입) |
 
 ---
 
@@ -131,7 +131,7 @@ done
 bash tools/sils/ci/test_sils_ci.sh
 ```
 
-현재 전부 green: Python 9개 스위트(evaluate 53 · compare_golden 18 · capture 8 · to_junit 12 · lint 18 · compile 10 · domain_lease 7 · fmu_map 8 · fmu_gate 14 = 148) + shell smoke(fleet 17 · ci 12). 파이썬만 필요하며 DDS/도커 툴체인은 필요 없다.
+현재 전부 green: Python 9개 스위트(evaluate 61 · compare_golden 18 · capture 8 · to_junit 12 · lint 18 · compile 10 · domain_lease 7 · fmu_map 8 · fmu_gate 14 = 156) + shell smoke(fleet 17 · ci 12). 파이썬만 필요하며 DDS/도커 툴체인은 필요 없다.
 
 ---
 
@@ -183,6 +183,17 @@ echo 한 상관 응답을 발행. probe 는 `request_sent`, 응답 수신 시 `r
 위반 시 fail, 매칭된 왕복 ≥1 + 위반 0 이면 **fidelity=L1**. `SILS_RESPONDER_ERROR_EVERY=k`
 로 매 k 번째 응답을 well-formed error 로 주입해 오류 semantics 를 결정론적으로 시험.
 응답도 TRANSIENT_LOCAL(late-join). *(도구 계약 샌드박스 검증 완료; C++ 실런타임은 빌드 후.)*
+
+**결함 주입(§11 negative path) 확인**: `SILS_SCENARIO=scheduled SILS_SCENARIO_FAULTS="3:drop,7:corrupt,9:duplicate"`
+로 IScenario 포트가 **tick-indexed 결정론 스케줄**로 결함을 주입한다 — drop(요청 미발행),
+corrupt(파싱 불가 페이로드), duplicate(같은 requestId 2회). RNG·wall-clock 이 아니라 tick
+기준이라 **결함 run 자체가 golden-reproducible**(compare_golden 이 `scenario_fault` 를 비교).
+probe 는 `scenario_start`{name,scheduled_faults}·`scenario_fault`{tick,fault,request_id} 를
+방출하고, evaluate `analyze_scenario` 가 (1) 선언한 결함 수만큼 실제 주입됐는지 확인(안 되면
+fail — 결함이 조용히 미주입되면 'fault run' 이 거짓 PASS), (2) 주입된 결함 id 를
+`analyze_protocol` 의 unanswered/duplicate 집계에서 **제외**(주입 결함은 자극이지 프로토콜
+결함이 아님; 다른 요청의 왕복이 결함 때문에 깨지면 그건 진짜 위반). `SILS_SCENARIO=scheduled`
+인데 스펙이 비면 §14 fail-fast. Run Coordinator 가 없어도 도구 계약은 샌드박스 검증 완료.
 
 **arm64 빌드 확인**: `./build.sh --aarch64 --build-sils` 로 aarch64 크로스빌드 성공(코드 수정 없이 — SiLS 는 arch 중립, core 와 동일 FastDDS/IDL 경로). arm64 **실행** 검증은 arm64 호스트(또는 qemu/binfmt) 필요.
 

@@ -64,6 +64,10 @@ DEFAULT_RULES = {
         # surfaces as a value diff. Set field tolerances in the rules file (a physical
         # signal rarely matches bit-exact across builds/FMU versions).
         "plant_step",
+        # scenario fault (§11 negative path, IScenario): the injected fault type per tick
+        # is compared, so a fault-injection run is itself golden-reproducible -- the same
+        # schedule must inject the same fault at the same tick every run.
+        "scenario_fault",
     ],
     "key_fields": ["event"],
     # Per-run identity and transport noise never participate in value comparison;

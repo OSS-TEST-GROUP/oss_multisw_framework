@@ -392,9 +392,63 @@ def analyze_plant(events: list[dict]) -> tuple[dict, list[str]]:
 CONTRACT_RELIABILITY = "RELIABLE"
 
 
-def analyze_protocol(events: list[dict]) -> tuple[dict, list[str]]:
+def analyze_scenario(events: list[dict]) -> tuple[dict, list[str], dict]:
+    """Check the fault-injection scenario (IScenario port, §11 negative path). Returns
+    (scenario_info, violations, injected) where `injected` maps fault type -> the set of
+    request_ids perturbed, so analyze_protocol can treat them as intended stimulus rather
+    than protocol defects.
+
+    A scenario is deterministic: SILS_SCENARIO=scheduled injects a fixed, tick-indexed set
+    of faults, traced as scenario_fault. The scenario analyzer proves the negative stimulus
+    ACTUALLY happened -- if scenario_start declares N scheduled faults, exactly N
+    scenario_fault events must fire (a fault that silently didn't inject would make a
+    'fault run' falsely PASS). Whether the SUT then handled each fault is judged elsewhere
+    (drop/corrupt -> the id is expected-unanswered; duplicate -> expected-duplicate), so
+    those ids are excluded from analyze_protocol's violations via `injected`."""
+    starts = [e for e in events if e.get("event") == "scenario_start"]
+    faults = [e for e in events if e.get("event") == "scenario_fault"]
+    injected = {"drop": set(), "corrupt": set(), "duplicate": set()}
+    if not starts and not faults:
+        return {"scenario": "none"}, [], injected
+
+    violations: list[str] = []
+    # last scenario_start wins (single probe, but stay total)
+    start = starts[-1] if starts else {}
+    name = start.get("name", "unknown")
+    scheduled = start.get("scheduled_faults")
+
+    by_type: Counter = Counter()
+    for f in faults:
+        ft = f.get("fault")
+        rid = f.get("request_id")
+        by_type[ft] += 1
+        if ft in injected and rid is not None:
+            injected[ft].add(rid)
+
+    fired = len(faults)
+    if name == "scheduled" and isinstance(scheduled, int) and fired != scheduled:
+        violations.append(f"scenario declared {scheduled} scheduled fault(s) but {fired} "
+                          "fired -- an injected fault did not take effect (§11 negative path)")
+    if name == "scheduled" and fired == 0:
+        violations.append("scheduled scenario injected no faults (nominal run mislabeled, §11)")
+
+    scenario = {
+        "scenario": name,
+        "scheduled_faults": scheduled,
+        "faults_injected": fired,
+        "by_type": dict(by_type),
+    }
+    return scenario, violations, injected
+
+
+def analyze_protocol(events: list[dict], injected: dict | None = None) -> tuple[dict, list[str]]:
     """Check L1 protocol fidelity (§11): request/response correlation, QoS conformance,
     and error semantics. Returns (protocol_info, violations).
+
+    `injected` (from analyze_scenario) lists request_ids deliberately perturbed by a
+    fault scenario; those are the intended negative stimulus, so a dropped/corrupted id
+    is expected-unanswered and a duplicate-injected id is expected-duplicate -- excluded
+    here so an injected fault does not read as a protocol defect.
 
     L0 only proves a sample arrived; L1 proves the protocol CONVERSATION is correct:
       - request/response correlation: every request_sent gets exactly one
@@ -420,9 +474,17 @@ def analyze_protocol(events: list[dict]) -> tuple[dict, list[str]]:
     resp_by_id = Counter(e.get("request_id") for e in resps)
     req_set = set(req_ids)
 
-    unanswered = sorted(i for i in req_set if resp_by_id.get(i, 0) == 0)
+    inj = injected or {}
+    # Injected drop/corrupt ids are expected to get no response; duplicate-injected ids
+    # are expected to correlate to more than one -- exclude from the defect sets (§11).
+    expect_unanswered = set(inj.get("drop", set())) | set(inj.get("corrupt", set()))
+    expect_duplicate = set(inj.get("duplicate", set()))
+
+    unanswered = sorted(i for i in req_set
+                        if resp_by_id.get(i, 0) == 0 and i not in expect_unanswered)
     phantom = sorted(i for i in resp_by_id if i not in req_set)
-    duplicated = sorted(i for i, n in resp_by_id.items() if n > 1 and i in req_set)
+    duplicated = sorted(i for i, n in resp_by_id.items()
+                        if n > 1 and i in req_set and i not in expect_duplicate)
     matched = sum(1 for i in req_set if resp_by_id.get(i, 0) >= 1)
 
     if unanswered:
@@ -565,8 +627,13 @@ def evaluate_run(events: list[dict], path: str) -> dict:
     behavior, behavior_violations = analyze_behavior(events)
     violations.extend(behavior_violations)
 
+    # --- fault-injection scenario (§11 negative path, IScenario) ------------
+    # Analyzed before protocol so injected faults are excluded from protocol defects.
+    scenario, scenario_violations, injected = analyze_scenario(events)
+    violations.extend(scenario_violations)
+
     # --- protocol fidelity (§11 L1: request/response, QoS, errors) ----------
-    protocol, protocol_violations = analyze_protocol(events)
+    protocol, protocol_violations = analyze_protocol(events, injected)
     violations.extend(protocol_violations)
 
     # --- plant coupling (§11 L3, IPlant closed loop) ------------------------
@@ -612,6 +679,7 @@ def evaluate_run(events: list[dict], path: str) -> dict:
         "clock": clock,
         "staging": staging,
         "behavior": behavior,
+        "scenario": scenario,
         "protocol": protocol,
         "plant": plant,
         "fidelity_evidenced": fidelity,
