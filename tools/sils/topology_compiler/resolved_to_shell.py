@@ -50,6 +50,11 @@ def emit(resolved_path: Path, index: int) -> tuple[list[str], str | None]:
     c = containers[index]
     lines.append(f"RESOLVED_NAME={sh_quote(c.get('name', ''))}")
     lines.append(f"RESOLVED_INSTANCE_ID={sh_quote(c.get('instance_id', ''))}")
+    # First publish endpoint's resolved topic -> SILS_TOPIC, so a per-instance fleet
+    # member publishes to its own topic (e.g. /VIN/WheelSpeed/<instance>, §9.5/§13).
+    eps = c.get("endpoints", []) or []
+    pub = next((e for e in eps if e.get("direction") == "publish"), None)
+    lines.append(f"RESOLVED_TOPIC={sh_quote(pub.get('topic', '') if pub else '')}")
     return lines, None
 
 

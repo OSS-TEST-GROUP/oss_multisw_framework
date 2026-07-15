@@ -59,6 +59,17 @@ def test_duplicate_id():
     assert has(errors, "duplicate contract id"), errors
 
 
+def test_per_instance_requires_placeholder():
+    # per-instance topic without {instance_id} -> replicas would collide (§9.5).
+    c = good_contract(); c["ownership"] = "per-instance"; c["topic"] = "/VIN/WheelSpeed"
+    errors, _ = run([c])
+    assert has(errors, "per-instance", "{instance_id}"), errors
+    # with the placeholder it's clean.
+    c["topic"] = "/VIN/WheelSpeed/{instance_id}"
+    errors2, _ = run([c])
+    assert errors2 == [], errors2
+
+
 def test_unknown_domain_env_typo():
     c = good_contract(); c["domain_env"] = "VIS_DDS_DOMAIN_ID"  # typo
     errors, _ = run([c])

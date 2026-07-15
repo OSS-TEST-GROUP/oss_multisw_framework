@@ -56,8 +56,41 @@ def test_replica_violation_detected():
     assert resolved_run is None, "must fail closed: no artifacts on validation error"
     assert saved_service_list is None
     assert len(errors) == 1, f"expected exactly 1 error, got: {errors}"
-    assert "single-owner" in errors[0]
+    # replicas of a single-owner, non-templated topic collide on one topic (§9.5).
     assert "viss-request" in errors[0]
+    assert "single" in errors[0] and "expected exactly 1" in errors[0], errors[0]
+
+
+def test_per_instance_fleet_is_valid():
+    # 4 replicas of a per-instance contract -> 4 distinct resolved topics -> §9.5-valid.
+    resolved_run, saved_service_list, errors, warnings = tc.compile_topology(
+        ROOT / "config/sils/topologies/wheelspeed_fleet.yaml", ROOT,
+        "config/sils/contracts/fleet-example.yaml",
+        "config/sils/qos/qos-profiles.yaml",
+        "registry.obigo.com/oss/oss-mmf-sils-vecu:latest",
+    )
+    assert errors == [], f"expected no errors, got: {errors}"
+    containers = resolved_run["containers"]
+    assert len(containers) == 4, f"expected 4, got {len(containers)}"
+    topics = [c["endpoints"][0]["topic"] for c in containers]
+    assert topics == [f"/VIN/WheelSpeed/wheelspeed-{i}" for i in (1, 2, 3, 4)], topics
+    assert len(set(topics)) == 4, "per-instance topics must be distinct"
+    assert all(c["endpoints"][0]["ownership"] == "per-instance" for c in containers)
+
+
+def test_per_instance_missing_placeholder_collides():
+    # A per-instance contract whose topic lacks {instance_id}: replicas collide on one
+    # topic -> §9.5 violation (this is exactly what the placeholder prevents).
+    contracts = {"wheelspeed": {
+        "id": "wheelspeed", "topic": "/VIN/WheelSpeed",  # <-- no {instance_id}
+        "domain_env": "VISS_DDS_DOMAIN_ID", "qos_profile": "viss-sils-verifiable",
+        "ownership": "per-instance"}}
+    qos = tc.load_qos_catalog(ROOT, "config/sils/qos/qos-profiles.yaml")
+    topo = {"run": {"domain_id": "0"}, "vecus": [{
+        "name": "wheelspeed", "replicas": 3,
+        "descriptor": "service/sils/vecu/descriptors/wheelspeed_probe.yaml"}]}
+    resolved, errors, warnings = tc.resolve_topology(topo, ROOT, contracts, qos)
+    assert any("expected exactly 1" in e and "/VIN/WheelSpeed" in e for e in errors), errors
 
 
 def test_expand_replicas_with_params():
@@ -125,6 +158,7 @@ def test_resolved_to_shell_roundtrip(tmp_out=Path("/tmp/sils-test-compile-out"))
     assert "RESOLVED_DOMAIN='0'" in joined
     assert "RESOLVED_INSTANCE_ID='viss-probe-1'" in joined
     assert "RESOLVED_CONTAINER_COUNT='1'" in joined
+    assert "RESOLVED_TOPIC='/VIN/Vehicle'" in joined  # -> SILS_TOPIC for the probe
 
 
 def test_resolved_to_shell_out_of_range():

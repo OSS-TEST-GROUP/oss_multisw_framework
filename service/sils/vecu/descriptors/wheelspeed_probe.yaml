@@ -1,0 +1,29 @@
+# Fleet example vECU descriptor — per-instance wheel-speed sensor (§9.5/§13).
+#
+# 한 descriptor 를 replicas 로 확장하면(topology 참조) 각 인스턴스가 per-instance
+# 계약 'wheelspeed' 의 {instance_id} 치환 topic 을 단독 소유한다 — 진짜 센서 fleet 형태.
+# 타입/동작은 Phase 1 probe 와 동일(새 IDL 없음); topic 만 인스턴스별로 갈린다.
+
+ecu: wheelspeed_probe
+instance_id: wheelspeed         # replicas 확장 시 wheelspeed-1, wheelspeed-2, ...
+fidelity: L0
+
+clock: { mode: wall }
+
+buses:
+  - name: mmf-viss
+    type: dds
+    endpoints:
+      - contract_id: wheelspeed  # config/sils/contracts/fleet-example.yaml
+        direction: publish
+
+behavior:
+  type: stub
+  spec:
+    period_ms: 500
+    response_topic_prefix: "sils/wheelspeed/response"
+    request_action: get
+    request_path: "Vehicle.WheelSpeed"
+
+plant: { type: none }
+scenario: {}

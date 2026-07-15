@@ -133,6 +133,16 @@
   .cv p{margin:0;font-size:13px;color:var(--muted)}
   .cv code{font-size:12px}
 
+  .callout{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--signal);border-radius:0 12px 12px 0;padding:16px 18px;color:var(--muted);box-shadow:var(--shadow)}
+  .callout strong{color:var(--ink)}
+  .flow{margin-top:14px;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:14px 16px;font-family:var(--mono);font-size:12.5px;color:var(--muted);overflow-x:auto;white-space:pre}
+  .road{margin:.2rem 0 0;padding-left:1.5rem;color:var(--muted)}
+  .road li{padding:.32rem 0 .32rem .35rem;border-bottom:1px dashed var(--line-soft)}
+  .road li:last-child{border-bottom:none}
+  .road b{color:var(--ink)}
+  .refs{display:flex;flex-wrap:wrap;gap:.55rem}
+  .refs a{font-family:var(--mono);font-size:12px;text-decoration:none;border:1px solid var(--line);border-radius:999px;background:var(--surface);padding:.35rem .65rem}
+
   footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);font-family:var(--mono);font-size:12px;color:var(--faint);display:flex;flex-wrap:wrap;gap:.4rem 1.2rem;justify-content:space-between}
 
   @media (max-width:680px){
@@ -156,6 +166,7 @@
       <span class="chip"><span class="dot"></span>L3 <b>closed_loop&nbsp;· deterministic</b></span>
       <span class="chip"><span class="dot"></span>2회 재현 <b>MATCH</b></span>
       <span class="chip"><span class="dot"></span>fmi4c <b>정적 링크</b></span>
+      <span class="chip"><span class="dot p"></span><b>ARM64 · lifecycle · mapping</b> 후속</span>
     </div>
   </header>
 
@@ -269,18 +280,87 @@
       <div class="srow"><span class="dot p mk"></span><div><div class="t">Descriptor 변수·단위 매핑</div><div class="s p">미구현 · raw VR</div></div></div>
       <div class="srow"><span class="dot p mk"></span><div><div class="t">ARM64 실 FMU 실행</div><div class="s p">미검증</div></div></div>
       <div class="srow"><span class="dot p mk"></span><div><div class="t">Model Exchange · Scheduled Exec</div><div class="s p">미지원</div></div></div>
+      <div class="srow"><span class="dot p mk"></span><div><div class="t">set/get 반환 status 검사</div><div class="s p">미구현 · doStep만 검사</div></div></div>
+      <div class="srow"><span class="dot p mk"></span><div><div class="t">FMU reset · re-initialize</div><div class="s p">Reset() no-op</div></div></div>
+      <div class="srow"><span class="dot p mk"></span><div><div class="t">FMI 3 Event · early return</div><div class="s p">미지원</div></div></div>
+      <div class="srow"><span class="dot p mk"></span><div><div class="t">fmi4c commit · provenance</div><div class="s p">main 참조 · manifest 미구현</div></div></div>
     </div>
   </section>
 
   <section class="draw">
     <div class="sec-head"><span class="sec-n">07</span><h2>도입 주의</h2></div>
     <div class="cav">
-      <div class="cv"><h3>ARM64 바이너리</h3><p>fmi4c가 ARM64로 빌드돼도 <b>FMU 안에 <code>aarch64-linux/*.so</code>가 없으면</b> 실행 불가. 대상 아키텍처 바이너리(또는 소스)를 계약으로 요구.</p></div>
+      <div class="cv"><h3>ARM64 바이너리</h3><p>fmi4c가 ARM64로 빌드돼도 FMU native 바이너리가 없으면 실행 불가. FMI 2는 <code>linux64</code>, FMI 3은 <code>aarch64-linux</code> 등 <b>버전별 tuple</b>을 구분.</p></div>
       <div class="cv"><h3>변수 매핑</h3><p>현재 raw <code>valueReference</code>(<code>SILS_FMU_INPUT_VR/OUTPUT_VR</code>)로 지정, <b>Float64만</b>. 향후 Contract↔FMU 이름·단위·causality 매핑으로 확장.</p></div>
       <div class="cv"><h3>시간 소유권</h3><p>FMU가 임의 wall-clock을 쓰면 안 됨. <code>doStep(time_, dt)</code>로 lockstep dt 누적 → <b>sim_time == FMU time</b>. 결정론의 전제.</p></div>
       <div class="cv"><h3>실패 정책 (fail-fast)</h3><p>load 실패 · 버전 불일치 · init 실패 → probe 종료. doStep 오류 · NaN/Inf → <b>출력 NaN → §14 fail-fast</b>.</p></div>
       <div class="cv"><h3>MORAI와 상태 소유권</h3><p>FMU와 MORAI가 <b>동시에 같은 차량 동역학</b>을 계산 금지. MORAI가 authority면 FMU는 미사용 또는 보조 모델(타이어·브레이크)로 제한.</p></div>
       <div class="cv"><h3>보안 — FMU=native code</h3><p><code>.fmu</code> 안 <code>.so</code>는 실제 native. 신뢰 안 되는 FMU = 임의 코드 실행. 격리 컨테이너 · hash/공급자 기록 · allowlist.</p></div>
+    </div>
+  </section>
+
+  <section class="draw">
+    <div class="sec-head"><span class="sec-n">08</span><h2>플랫폼과 FMI 3 지원 경계</h2></div>
+    <p style="color:var(--muted);margin-top:-.6rem">버전 문자열과 라이브러리 지원 표만으로 실행 가능 판정을 내리지 않는다. <b>대상 바이너리와 실제 사용하는 기능</b>을 함께 확인한다.</p>
+    <div class="tblwrap" style="margin-bottom:14px">
+      <table>
+        <thead><tr><th>FMI 버전</th><th>Linux x86-64 예</th><th>Linux ARM64 예</th><th>판정</th></tr></thead>
+        <tbody>
+          <tr><td class="k">FMI 2.0</td><td><span class="m">binaries/linux64/</span></td><td>exporter 지원 확인</td><td>legacy tuple + 실 실행</td></tr>
+          <tr><td class="k">FMI 3.0</td><td><span class="m">binaries/x86_64-linux/</span></td><td><span class="m">binaries/aarch64-linux/</span></td><td>machine-system tuple + 실 실행</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="tblwrap">
+      <table>
+        <thead><tr><th>FMI 3 기능</th><th>현재 범위</th></tr></thead>
+        <tbody>
+          <tr><td class="k">Float64 CS set → doStep → get</td><td>검증 완료</td></tr>
+          <tr><td class="k">Array · Float32 · Integer</td><td>미지원</td></tr>
+          <tr><td class="k">Event Mode · early return · intermediate update</td><td>미지원</td></tr>
+          <tr><td class="k">Clocks · Scheduled Execution</td><td>미지원</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note" style="text-align:left">Startup에서 <code>modelDescription.xml</code> capability를 검사하고, 현재 범위를 벗어난 FMU는 step 전에 명시적으로 거부해야 한다.</p>
+  </section>
+
+  <section class="draw">
+    <div class="sec-head"><span class="sec-n">09</span><h2>실행 계약 — step · lifecycle · 재현성</h2></div>
+    <div class="cav">
+      <div class="cv"><h3>Communication step</h3><p><code>dt</code>는 단순 호출 주기가 아니라 FMU 간 값 교환 간격. 고정 dt뿐 아니라 <b>dt/2 · dt · 2dt 민감도</b>와 controller/FMU rate를 승인해야 한다.</p></div>
+      <div class="cv"><h3>시간과 solver</h3><p>FMU 내부 solver는 FMU가 소유한다. 실행 속도와 무관하게 <code>doStep</code>에는 SiLS의 <b>sim_time과 dt</b>만 전달한다.</p></div>
+      <div class="cv"><h3>Lifecycle · Reset</h3><p>현재 <code>Reset()</code>은 no-op. 재사용 프로세스는 FMI reset+재초기화 또는 instance 재생성이 필요하고 정상 종료는 terminate/free 순서를 지켜야 한다.</p></div>
+      <div class="cv"><h3>다중 인스턴스</h3><p>instance별 FMU handle과 extraction directory를 독립 소유. 동일 프로세스 다중 FMU는 fmi4c thread-safety·경로 충돌 실증 전 금지.</p></div>
+      <div class="cv"><h3>Golden provenance</h3><p>FMU·binary·parameter·mapping hash, step size, fmi4c commit, image digest를 run manifest에 남겨야 Golden 비교가 설명 가능하다.</p></div>
+      <div class="cv"><h3>의존성 고정</h3><p>현재 FetchContent의 <code>GIT_TAG main</code>은 재현 불가. 검증된 commit/tag 고정, SBOM·license·offline source를 관리한다.</p></div>
+    </div>
+    <div class="flow">load/unzip → instantiate → initialize → set/doStep/get 반복
+            → terminate → freeInstance → freeFmu/temp cleanup</div>
+  </section>
+
+  <section class="draw">
+    <div class="sec-head"><span class="sec-n">10</span><h2>다음 승인 순서</h2></div>
+    <ol class="road">
+      <li><b>Status와 lifecycle</b> — set/get 결과, terminate, reset/re-initialize, 미지원 capability 거부</li>
+      <li><b>재현 빌드</b> — fmi4c commit 고정과 FMU/importer provenance manifest</li>
+      <li><b>ARM64 실증</b> — 대상 바이너리가 든 FMU로 instantiate·initialize·doStep</li>
+      <li><b>Descriptor 매핑</b> — 변수명·VR·type·unit·causality·좌표계 startup 검증</li>
+      <li><b>수치 검증</b> — communication step 민감도, 실제 차량 동역학 FMU model correlation</li>
+      <li><b>운영 안전</b> — native-code sandbox, allowlist, resource limit</li>
+    </ol>
+    <div class="callout" style="margin-top:16px"><strong>현재 결론:</strong> FMI 3.0 기본 Co-Simulation의 L3 폐루프는 실증했지만, 범용 FMI 3.0 importer와 ARM64 양산 운용 준비가 완료된 것은 아니다.</div>
+  </section>
+
+  <section class="draw">
+    <div class="sec-head"><span class="sec-n">11</span><h2>공식·검증 참고자료</h2></div>
+    <div class="refs">
+      <a href="https://fmi-standard.org/docs/3.0.2/">FMI 3.0.2 사양</a>
+      <a href="https://fmi-standard.org/tools/">FMI Tools · fmi4c</a>
+      <a href="https://github.com/robbr48/fmi4c">fmi4c 저장소</a>
+      <a href="https://github.com/modelica/Reference-FMUs">Reference FMUs</a>
+      <a href="https://hopsan.github.io/documentation/fmi.html">Hopsan/fmi4c 호환성</a>
+      <a href="sils-fmu-plant.md">상세 Markdown 가이드</a>
     </div>
   </section>
 
