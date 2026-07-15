@@ -64,6 +64,11 @@ set(SILS_ALLOW_MULTIDEF -Wl,--allow-multiple-definition)
 # fails fast at runtime with a clear message.
 option(SILS_ENABLE_FMU "Build FmuPlant (FMI co-sim via fmi4c)" OFF)
 if(SILS_ENABLE_FMU)
+    # Build fmi4c STATIC so the probe has no runtime libfmi4c(d).so dependency (no
+    # LD_LIBRARY_PATH juggling at deploy). fmi4c uses its own FMI4C_BUILD_SHARED
+    # option (default ON), not BUILD_SHARED_LIBS -- force it off before the fetch.
+    # (The FMU's own binary is still dlopen'd from the .fmu at runtime; that's FMI.)
+    set(FMI4C_BUILD_SHARED OFF CACHE BOOL "" FORCE)
     find_package(fmi4c QUIET)
     if(NOT fmi4c_FOUND)
         include(FetchContent)
