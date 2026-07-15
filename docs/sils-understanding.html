@@ -151,6 +151,19 @@
     border:1px solid var(--accent); border-radius:20px; padding:4px 12px; display:inline-block; white-space:nowrap; }
   .wire .flowln { color:var(--muted); font-size:18px; margin:3px 0; }
   .wire .must { font-size:11px; color:var(--muted); margin-top:6px; max-width:200px; }
+  .qbundle { margin-top:16px; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:14px 16px; }
+  .qbundle .qtitle { font-family:var(--mono); font-size:11px; letter-spacing:.07em; text-transform:uppercase; color:var(--accent); margin:0 0 10px; }
+  .qrows { display:flex; flex-direction:column; gap:6px; }
+  .qrow { display:flex; gap:12px; align-items:baseline; font-size:12.5px; flex-wrap:wrap; }
+  .qrow .qp { font-family:var(--mono); font-size:11.5px; min-width:150px; color:var(--ink); }
+  .qrow .qv { font-family:var(--mono); font-size:11.5px; color:var(--muted); }
+  .qrow .qv b { color:var(--gate); background:color-mix(in srgb,var(--gate) 16%,transparent); padding:0 5px; border-radius:3px; }
+  .qrow.muted .qp, .qrow.muted .qv { opacity:.65; }
+  .qnote { font-size:11.5px; color:var(--muted); margin-top:10px; padding-top:9px; border-top:1px solid var(--line); }
+  .qnego { margin-top:14px; font-size:12.5px; color:var(--ink); background:var(--accent-soft);
+    border:1px solid var(--accent); border-left:3px solid var(--accent); border-radius:8px; padding:11px 13px; line-height:1.65; }
+  .qnego b { color:var(--accent); }
+  .qnego code { font-family:var(--mono); font-size:.92em; background:var(--surface); padding:1px 5px; border-radius:4px; }
   .rxo { display:flex; gap:10px; flex-wrap:wrap; margin-top:16px; }
   .rxo .r { flex:1; min-width:240px; background:var(--surface-2); border:1px solid var(--line);
     border-left:3px solid var(--pass); border-radius:8px; padding:11px 13px; font-size:12.5px; }
@@ -336,6 +349,27 @@
       <div class="node"><p class="r">roles.sut</p><p class="nm">SUT (VISS)</p><p class="dir">◀ subscribe</p></div>
     </div>
   </div>
+
+  <div class="qbundle">
+    <p class="qtitle">QoS 는 "하나"가 아니라 정책(policy)의 묶음</p>
+    <div class="qrows">
+      <div class="qrow"><span class="qp">Reliability</span><span class="qv">BEST_EFFORT · RELIABLE</span></div>
+      <div class="qrow"><span class="qp">Durability</span><span class="qv">VOLATILE · <b>TRANSIENT_LOCAL</b> · TRANSIENT · PERSISTENT</span></div>
+      <div class="qrow"><span class="qp">History</span><span class="qv">KEEP_LAST(depth) · KEEP_ALL</span></div>
+      <div class="qrow muted"><span class="qp">Deadline · Liveliness · Ownership …</span><span class="qv">그 외 다수</span></div>
+    </div>
+    <p class="qnote"><code style="font-family:var(--mono)">TRANSIENT_LOCAL</code> 은 QoS 자체가 아니라 <b style="color:var(--gate)">Durability 정책의 한 값</b>.
+    카탈로그의 "프로파일"(예: <code style="font-family:var(--mono)">viss-sils-verifiable</code>)은 이 정책 값들을 묶은 세트다.</p>
+  </div>
+
+  <div class="qnego">
+    <b>QoS 는 "협상(nego)"이 아니다 — RxO 호환성 판정이다.</b> Writer 는 자기 QoS 를 독립적으로
+    <b>제공(Offered)</b>, Reader 는 독립적으로 <b>요청(Requested)</b> — 통신 <em>전에</em> 각자 미리 정한다.
+    discovery 때 DDS 는 <b>호환성만 판정</b>: 제공이 요청을 만족하면 매칭, 아니면 <code>침묵(데이터 0)</code> +
+    <code>incompatible_qos</code> 이벤트. <b>중간값 타협도, 값 변경도 없다</b> — 그래서 카탈로그로 미리
+    호환되게 고정한다.
+  </div>
+
   <div class="rxo">
     <div class="r">durability: Writer <b>TRANSIENT_LOCAL</b> ⊒ Reader VOLATILE → late-join reader 도 히스토리 수신 ✓ (matched-but-no-data 해결)</div>
     <div class="r">reliability: Writer <b>RELIABLE</b> ⊒ Reader BEST_EFFORT/RELIABLE · Writer <span class="bad">BEST_EFFORT</span> 는 RELIABLE reader 못 만족 ✗</div>

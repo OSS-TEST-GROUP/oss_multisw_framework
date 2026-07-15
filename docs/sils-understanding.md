@@ -246,8 +246,45 @@ DDS 는 topic·type·QoS 가 **양쪽에서 맞아야** 통신이 성립한다. 
 
 ## 2.4 QoS 매칭 (RxO) — 왜 TRANSIENT_LOCAL 이 중요한가
 
-DDS QoS 는 **RxO(Requested ≤ Offered)** 로 매칭된다. Reader 가 "요청"하고 Writer 가 "제공"하며,
-제공이 요청보다 **같거나 세야** 붙는다.
+### 먼저: QoS 는 "하나"가 아니라 **정책(policy)의 묶음**이다
+DDS 에서 QoS 는 여러 정책의 세트다. `TRANSIENT_LOCAL` 은 QoS 자체가 아니라 그중
+**Durability 정책의 한 값**이다.
+
+```
+QoS (묶음)
+├─ Reliability   : { BEST_EFFORT, RELIABLE }
+├─ Durability    : { VOLATILE, TRANSIENT_LOCAL, TRANSIENT, PERSISTENT }   ← TRANSIENT_LOCAL 은 이 정책의 한 값
+├─ History       : { KEEP_LAST(depth), KEEP_ALL }
+└─ Deadline · Liveliness · Ownership · ResourceLimits …                    (그 외 다수)
+```
+
+그래서 QoS Catalog 의 한 "프로파일"은 정책 여러 개를 묶은 것이다
+([qos-profiles.yaml](../config/sils/qos/qos-profiles.yaml)):
+
+```yaml
+viss-sils-verifiable:              # ← 하나의 QoS 프로파일(묶음)
+  reliability: RELIABLE            #   Reliability 정책 값
+  durability:  TRANSIENT_LOCAL     #   Durability  정책 값
+  history: { kind: KEEP_LAST, depth: 256 }   # History 정책 값
+```
+
+### QoS 는 "협상(nego)"이 아니다 — **RxO 호환성 판정**이다
+흔한 오해: "통신하면서 서로 QoS 를 맞춰간다". DDS 는 그렇게 하지 않는다.
+
+- Writer 는 자기 QoS 를 **독립적으로 '제공(Offered)'**, Reader 는 **독립적으로 '요청(Requested)'** —
+  통신 *전에* 앱이 각자 **미리 정한다**.
+- discovery 때 DDS 는 **호환성만 판정**한다 (RxO: Requested vs Offered). **중간값 타협도, 값 변경도 없다.**
+
+```
+Writer.offered ──┐   제공이 요청을 만족?
+                 ├── YES → 매칭, 데이터 흐름
+Reader.requested─┘   NO  → 매칭 실패, 침묵(데이터 0). incompatible_qos 이벤트만. (아무도 값 안 바꿈)
+```
+
+즉 **양쪽이 미리 각자 선언 → DDS 는 "붙일지 말지"만 판정**. 이게 §2.6 "왜 카탈로그로 미리
+고정하나"의 이유다 — 자동으로 안 맞춰주니, 애초에 호환되게 선언돼 있어야 한다.
+
+### 만족 규칙 (제공 ⊒ 요청 — "제공이 같거나 세야")
 
 | 정책 | Offered 가 Requested 를 만족하려면 |
 |---|---|
