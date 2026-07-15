@@ -277,13 +277,13 @@ def _finite(x) -> bool:
 
 
 def analyze_plant(events: list[dict]) -> tuple[dict, list[str]]:
-    """Check IPlant closed-loop determinism (§9 L3, §7 IPlant). Returns (plant_info, violations).
+    """Check IPlant closed-loop determinism (§11 L3, IPlant port §6). Returns (plant_info, violations).
 
     A run is plant-coupled iff it carries `plant_step` events -- each records one
     tick of the loop: the controller read the plant's previous output (`feedback_in`),
     computed a `command`, and the plant integrated one `dt` to a new `output`.
 
-    L3 ("plant-coupled fidelity, FMU-based closed loop") is evidenced only when the
+    L3 ("plant-coupled fidelity, FMU-based closed loop", §11) is evidenced only when the
     loop is genuinely CLOSED and LIVE:
       - closed loop: feedback_in[N] == output[N-1] -- the controller consumed the
         real previous plant output, not a fixed reference. Broken continuity means
@@ -293,7 +293,7 @@ def analyze_plant(events: list[dict]) -> tuple[dict, list[str]]:
         and reproducible, but NOT plant-coupled -- like input replay in §7.4).
       - deterministic: constant dt, monotone ticks, all-finite outputs (FMU step
         NaN/Inf is a fail-fast condition per §14).
-    Model correlation against a reference trajectory (§9) is verified by
+    Model correlation against a reference trajectory (§11) is verified by
     compare_golden (plant_step is a compared event), not here."""
     steps = [e for e in events if e.get("event") == "plant_step"]
     if not steps:

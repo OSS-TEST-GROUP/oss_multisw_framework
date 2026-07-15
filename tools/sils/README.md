@@ -2,7 +2,7 @@
 
 MMF(oss_multisw_framework) 위에서 **SiLS(Software-in-the-Loop) 가상 ECU** 를 컴파일·실행·판정·회귀검사하는 도구 모음이다. 아키텍처 확정본은 **v3 Final** 문서(`docs/sils-virtual-ecu-architecture-v3.md`)이며, 아래 코드의 `§n` 주석은 모두 그 문서의 절 번호를 가리킨다.
 
-> **검증 상태 (중요).** 이 디렉터리의 Python/shell 도구 계층은 **샌드박스에서 실제 실행·테스트까지 완료**되어 있다(아래 "테스트" 참조). `service/sils/` 의 C++ vECU 본체(probe/verify)는 FastDDS 툴체인이 있는 Linux(x86_64)에서 **컴파일 빌드 + 실제 DDS 샘플 왕복이 검증**되었다: `run_phase1.sh` 의 **local·docker 두 백엔드 모두** vECU 가 `/VIN/Vehicle` 로 publish → 독립 verify 가 유효 VISS envelope 수신 → `run_pass`(2026-07 실측). 실런타임 trace 를 `evaluate.py` 가 그대로 판정(PASSED/L0)함도 확인. 도구 계층은 바이너리 없이도 dry-run·사전 캡처 trace 로 전 구간을 검증할 수 있게 설계되었다.
+> **검증 상태 (중요).** 이 디렉터리의 Python/shell 도구 계층은 **샌드박스에서 실제 실행·테스트까지 완료**되어 있다(아래 "테스트" 참조). `service/sils/` 의 C++ vECU 본체는 FastDDS 툴체인이 있는 Linux(x86_64)에서 **컴파일 + 실제 DDS 왕복이 검증**되었고, fidelity **L0·L2·L3 를 실런타임 trace 로 판정 완료**(2026-07 실측): local·docker 두 백엔드 `run_pass`, 병렬 격리·Fleet(vECU 3개), lockstep 결정론(§8), 입력 스테이징·replay(§7), 행동 상태기계(§11 L2), **플랜트 폐루프(§11 L3, AnalyticPlant)를 두 번 독립 실행해 sim_time·궤적이 소수점까지 재현**(compare_golden MATCH). 실행이라 드러난 결함 3건도 수정: docker `--ipc=host`(SHM), late-join verifier 용 `TRANSIENT_LOCAL`, lockstep golden 의 벽시계 latency 스킵. 도구 계층은 바이너리 없이도 dry-run·사전 캡처 trace 로 전 구간을 검증할 수 있게 설계되었다.
 
 ---
 
@@ -45,19 +45,20 @@ service/sils/vecu/descriptors/*.yaml       (ECU Descriptor, §9.2)
 | [topology_compiler/compile.py](topology_compiler/compile.py) | Topology+Descriptor+Contract+QoS → `resolved-run.yaml` + `saved-service-list.yaml`. 정적 검증(single-owner, 이름 중복, domain_env 일관성) | §9.5/§11/§13 | [8](topology_compiler/test_compile.py) |
 | [topology_compiler/resolved_to_shell.py](topology_compiler/resolved_to_shell.py) | `resolved-run.yaml` → shell-safe `KEY='value'`(코디네이터 `--from-resolved` 급전) | §11 | (compile 테스트에 포함) |
 | [run_coordinator/domain_lease.py](run_coordinator/domain_lease.py) | 유한 pool 에서 DDS domain 원자적 임대(TTL+owner). 병렬 run 격리, Coordinator 사망 시 회수 | §12.1/§12.2 | [7](run_coordinator/test_domain_lease.py) |
-| [conformance/evaluate.py](conformance/evaluate.py) | trace.jsonl → conformance verdict. §5.2 상태기계 매핑, 증거기반 pass(L0), lease 무결성, fleet 완전성 | §9/§11/§12 | [14](conformance/test_evaluate.py) |
+| [conformance/evaluate.py](conformance/evaluate.py) | trace.jsonl → conformance verdict. §5.2 상태기계(+verifier terminal), 증거기반 pass(L0), lockstep/staging/behavior/plant 판정(L2/L3), lease 무결성, fleet 완전성 | §5/§7/§8/§11/§12 | [40](conformance/test_evaluate.py) |
 | [conformance/to_junit.py](conformance/to_junit.py) | verdict → JUnit XML(CI 수집). PASS/FAIL/ABORTED/INCOMPLETE → testcase/failure/error | §16 | [12](conformance/test_to_junit.py) |
 | [conformance/capture_golden.py](conformance/capture_golden.py) | run trace → 정규화 golden(식별자 제거·시각 rebase). PASSED+conformant·결정론 모드만 허용 | §12.4 | [8](conformance/test_capture_golden.py) |
-| [conformance/compare_golden.py](conformance/compare_golden.py) | candidate vs golden 회귀 판정(FP tolerance·latency window·ordering·missing/extra 정책·입력모드 게이트) | §12.4 | [15](conformance/test_compare_golden.py) |
+| [conformance/compare_golden.py](conformance/compare_golden.py) | candidate vs golden 회귀 판정(FP tolerance·behavior/plant 값 비교=model correlation·ordering·missing/extra 정책·입력모드 게이트·lockstep 시 벽시계 latency 스킵) | §11/§12.4 | [18](conformance/test_compare_golden.py) |
 | [ci/sils-ci.sh](ci/sils-ci.sh) | 위 전부를 한 진입점으로: lint→compile→run→evaluate→junit→compare. 단계별 skip | §9~§16 | [12](ci/test_sils_ci.sh) |
 
 Run Coordinator 본체(Phase 1)는 도구가 아니라 서비스라 `service/` 에 있다:
 
 | 파일 | 역할 |
 |---|---|
-| [service/sils/run_coordinator/run_phase1.sh](../../service/sils/run_coordinator/run_phase1.sh) | Run Coordinator: `start`(local/docker 백엔드) · `cleanup` · `reap`(고아 run 회수, §14.4) |
-| service/sils/vecu/src/viss_probe_main.cc | vECU probe: `VissRequestTopic` 을 `/VIN/Vehicle` 로 publish (C++, **빌드 미검증**) |
-| service/sils/vecu/src/viss_verify_main.cc | 독립 one-shot 구독 검증기 (C++, **빌드 미검증**) |
+| [service/sils/run_coordinator/run_phase1.sh](../../service/sils/run_coordinator/run_phase1.sh) | Run Coordinator: `start`(local/docker 백엔드) · `fleet`(다중 vECU) · `cleanup` · `reap`(고아 run 회수, §14.4) |
+| [service/sils/vecu/src/viss_probe_main.cc](../../service/sils/vecu/src/viss_probe_main.cc) | vECU probe: tick 루프를 IClockSource/IBehavior/IPlant 포트로 구동, `/VIN/Vehicle` 로 publish (C++, **빌드+실런타임 검증**) |
+| [service/sils/vecu/src/viss_verify_main.cc](../../service/sils/vecu/src/viss_verify_main.cc) | 독립 one-shot 구독 검증기 (C++, **빌드+실런타임 검증**) |
+| [clock_source.hpp](../../service/sils/vecu/src/clock_source.hpp) · [behavior.hpp](../../service/sils/vecu/src/behavior.hpp) · [plant.hpp](../../service/sils/vecu/src/plant.hpp) | 헥사고날 포트: IClockSource(wall/lockstep) · IBehavior(viss-request/accumulate/p-controller) · IPlant(AnalyticPlant/ReplayPlant) |
 
 ---
 
@@ -66,7 +67,7 @@ Run Coordinator 본체(Phase 1)는 도구가 아니라 서비스라 `service/` �
 | 파일 | 내용 |
 |---|---|
 | `contracts/mmf-endpoints.yaml` | Contract Catalog. MMF 실측 endpoint(`/VIN/Vehicle`, `VissRequestTopic`, `VISS_DDS_DOMAIN_ID`) |
-| `qos/qos-profiles.yaml` | QoS Catalog(viss-default/request-reliable/state-latest) |
+| `qos/qos-profiles.yaml` | QoS Catalog(viss-default/viss-sils-verifiable/request-reliable/state-latest) |
 | `topologies/viss_probe_smoke.yaml` | Phase 1 스모크 토폴로지(vECU 1개, docker 백엔드) |
 | `regression/golden-rules.yaml` | §12.4 회귀 규칙 참조 세트(그대로 사용 가능) |
 
@@ -128,7 +129,7 @@ done
 bash tools/sils/ci/test_sils_ci.sh
 ```
 
-현재 전부 green (Python 6개 스위트 + shell smoke = 총 92 checks). 파이썬만 필요하며 DDS/도커 툴체인은 필요 없다.
+현재 전부 green: Python 7개 스위트(evaluate 40 · compare_golden 18 · capture 8 · to_junit 12 · lint 16 · compile 8 · domain_lease 7 = 109) + shell smoke(fleet 17 · ci 12). 파이썬만 필요하며 DDS/도커 툴체인은 필요 없다.
 
 ---
 
@@ -151,13 +152,15 @@ staged 입력 수를 누적하는 상태기계 — 같은 tick-indexed 입력이
 고정돼 벽시계 도착 경합 없이 **run 간 재현 가능**(evaluate `input_mode=replay`,
 compare_golden MATCH). IBehavior 포트(viss-request/accumulate/p-controller 어댑터).
 
-**플랜트 폐루프(§9 L3) 확인**: `SILS_PLANT=first-order` + `SILS_BEHAVIOR=p-controller`
+**플랜트 폐루프(§11 L3) 확인**: `SILS_PLANT=first-order` + `SILS_BEHAVIOR=p-controller`
 로 컨트롤러가 매 tick 플랜트 출력을 피드백 받아 명령을 계산하고, 플랜트가 그 명령으로
-한 dt 적분하는 **실 폐루프**를 구성. evaluate `analyze_plant` 가 `plant_step` 스트림에서
-루프 연속성(feedback_in[N]==output[N-1]) + live + 결정론을 확인해 **fidelity=L3** 판정,
-compare_golden 이 `plant_step` 출력을 model correlation 으로 비교. `SILS_PLANT=replay`
-(playback)는 결정론적 golden 이지만 명령을 무시하므로 L3-live 아님(입력 replay 와 동일
-구분). IPlant 포트(AnalyticPlant=live / ReplayPlant=playback 어댑터). *(x86 실런타임 트레이스 판정 검증됨; 아래 남은 것의 FMI 어댑터가 3번째 구현.)*
+한 dt 적분하는 **실 폐루프**를 구성(IPlant 포트는 §6 정의). evaluate `analyze_plant` 가
+`plant_step` 스트림에서 루프 연속성(feedback_in[N]==output[N-1]) + live + 결정론을 확인해
+**fidelity=L3** 판정, compare_golden 이 `plant_step` 출력을 model correlation(§11)으로
+비교. `SILS_PLANT=replay`(playback)는 결정론적 golden 이지만 명령을 무시하므로 L3-live
+아님(입력 replay 와 동일 구분). IPlant 어댑터(AnalyticPlant=live / ReplayPlant=playback).
+**x86 실런타임에서 두 번 독립 실행 → sim_time·궤적 소수점까지 동일(compare_golden MATCH)로
+재현성 확인**; FMI co-sim 이 3번째 구현.
 
 **arm64 빌드 확인**: `./build.sh --aarch64 --build-sils` 로 aarch64 크로스빌드 성공(코드 수정 없이 — SiLS 는 arch 중립, core 와 동일 FastDDS/IDL 경로). arm64 **실행** 검증은 arm64 호스트(또는 qemu/binfmt) 필요.
 

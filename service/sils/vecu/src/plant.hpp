@@ -1,4 +1,4 @@
-// IPlant -- SiLS vECU plant-coupling port (architecture v3 Final §9 L3, §7 IPlant).
+// IPlant -- SiLS vECU plant-coupling port (architecture v3 Final §11 L3, IPlant port §6).
 //
 // The third hexagonal port (after IClockSource and IBehavior). A plant is the
 // physical/external model the vECU controls in CLOSED LOOP: each tick the
@@ -19,7 +19,7 @@
 //                     ignores the command) -- the doc's "Replay" IPlant row, and the
 //                     analogue of §7.4 input replay: a golden target, not L3-live.
 //
-// L3 conformance (§9) is judged from the trace by evaluate.py analyze_plant: a live
+// L3 conformance (§11) is judged from the trace by evaluate.py analyze_plant: a live
 // plant with closed-loop feedback continuity (feedback_in[N] == output[N-1]) and a
 // deterministic trajectory (constant dt, finite outputs). Model correlation against
 // a reference trajectory is compare_golden (plant_step is a compared event).
