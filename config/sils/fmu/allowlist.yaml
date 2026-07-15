@@ -1,0 +1,30 @@
+# SiLS FMU security allowlist (FMU guide docs/sils-fmu-plant.md §5.6).
+#
+# A `.fmu` ships a native `.so`/`.dll`; loading it runs that code in-process, so only
+# FMUs vetted and listed here may be loaded. tools/sils/fmu/fmu_gate.py verifies a
+# candidate's sha256 against these entries BEFORE FmuPlant opens it, and denies
+# (fail-closed) anything absent, tampered, or bound to a different id.
+#
+# To add an FMU: vet its provenance, then
+#     python3 tools/sils/fmu/fmu_gate.py --fmu path/to.fmu --record
+# and paste the printed stanza here, filling in `supplier` with where it came from and
+# who vetted it. `sha256` is the file's exact bytes (the gate recomputes and compares).
+#
+# Fields:
+#   id                (recommended) stable name the topology/Run Coordinator binds to
+#   sha256            (required)    lowercase hex of the whole .fmu file
+#   fmi_version       (note)        declared FMI version; gate warns on drift vs the file
+#   model_identifier  (note)        CoSimulation model identifier; gate warns on drift
+#   supplier          (note)        provenance: origin + who vetted it
+#   platforms         (note)        target platforms the binary was validated on
+
+fmus:
+  # Modelica Association Reference-FMUs -- the free L3 closed-loop smoke plant used to
+  # verify the FMU track (Feedthrough: VR7 input -> VR8 output). Replace the sha256
+  # below with your local copy's hash via --record before relying on the gate.
+  - id: reference-feedthrough
+    sha256: "0000000000000000000000000000000000000000000000000000000000000000"
+    fmi_version: "3.0"
+    model_identifier: "Feedthrough"
+    supplier: "Modelica Association Reference-FMUs (github.com/modelica/Reference-FMUs); vet + rehash local copy"
+    platforms: [aarch64-linux]

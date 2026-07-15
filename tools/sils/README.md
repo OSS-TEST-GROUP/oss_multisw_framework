@@ -124,13 +124,14 @@ for t in tools/sils/topology_compiler/test_compile.py \
          tools/sils/conformance/test_compare_golden.py \
          tools/sils/conformance/test_capture_golden.py \
          tools/sils/contracts/test_lint_catalog.py \
-         tools/sils/fmu/test_fmu_map.py; do
+         tools/sils/fmu/test_fmu_map.py \
+         tools/sils/fmu/test_fmu_gate.py; do
     python3 "$t" || echo "FAILED: $t"
 done
 bash tools/sils/ci/test_sils_ci.sh
 ```
 
-현재 전부 green: Python 8개 스위트(evaluate 53 · compare_golden 18 · capture 8 · to_junit 12 · lint 18 · compile 10 · domain_lease 7 · fmu_map 8 = 134) + shell smoke(fleet 17 · ci 12). 파이썬만 필요하며 DDS/도커 툴체인은 필요 없다.
+현재 전부 green: Python 9개 스위트(evaluate 53 · compare_golden 18 · capture 8 · to_junit 12 · lint 18 · compile 10 · domain_lease 7 · fmu_map 8 · fmu_gate 14 = 148) + shell smoke(fleet 17 · ci 12). 파이썬만 필요하며 DDS/도커 툴체인은 필요 없다.
 
 ---
 
