@@ -15,7 +15,7 @@
 | 장 | 주제 | 상태 |
 |---|---|---|
 | **1** | **Topology Compiler — 정적 변환·검증** | ✅ 작성됨 |
-| 2 | Contract / QoS Catalog — 무엇을 **선언**하나 (계약의 의미·QoS 매칭). *검증(lint)은 1장* | ⬜ |
+| **2** | **Contract / QoS Catalog — 무엇을 선언하나 (계약의 의미·QoS 매칭). *검증(lint)은 1장*** | ✅ 작성됨 |
 | 3 | Descriptor → `SILS_*` env — 선언적 포트 배선(§9.2) | ⬜ (1장 §1.3에 일부) |
 | 4 | Run Coordinator — 도메인 임대·기동·teardown·reap | ⬜ |
 | 5 | vECU 포트 — Clock / Behavior / Plant / Scenario | ⬜ |
@@ -186,14 +186,122 @@ per-instance fleet(replica 마다 고유 토픽)은 유효, `{instance_id}` 안 
 
 ---
 
-# 2장~11장 (채우는 중)
+# 2장. Contract / QoS Catalog — 무엇을 선언하나 (계약 모델)
 
-아래는 아직 stub. 이해하는 대로 각 장을 위 1장처럼 채운다.
+> 이 장은 **선언(declaration)** 만 다룬다. 카탈로그의 *검증*(lint)은 1장 §1.4.A 소관 — 여기선
+> 반복하지 않는다.
 
-- **2장 Contract / QoS Catalog** — `config/sils/contracts/*.yaml`·`qos/qos-profiles.yaml` 가
-  topic·domain·type·QoS·ownership 을 **선언**하는 단일 출처. 왜 이게 "계약"인가(SUT↔vECU 합의),
-  QoS 매칭(RxO) 의미론(RELIABLE/TRANSIENT_LOCAL 이 late-join 검증에 왜 중요한지), 카탈로그로
-  빼는 이유(재사용·단일 소유·`semantic_version`). **검증(lint)은 1장 §1.4.A 참조 — 여기선 반복 X.**
+## 2.1 한 문장
+
+**IDL 은 타입만 정의한다.** "이 타입을 *어느 topic·domain 에서, 어떤 QoS 로, 누가 발행/구독하며,
+누가 소유하는가*"는 IDL 에 없다. 그 **기계 판독 가능한 합의**를 한곳에 모은 게 Contract Catalog
+([mmf-endpoints.yaml](../config/sils/contracts/mmf-endpoints.yaml))와 QoS Catalog
+([qos-profiles.yaml](../config/sils/qos/qos-profiles.yaml))다.
+
+```
+IDL (VissRequest.idl)      "타입"    → struct VissRequestTopic { string payload; }
+        +
+Contract Catalog           "합의"    → 이 타입을 /VIN/Vehicle, VISS domain, viss-default QoS,
+                                        single-owner 로, vECU=publish / SUT=subscribe
+        +
+QoS Catalog                "품질"    → viss-default = RELIABLE · VOLATILE · KEEP_LAST 10
+```
+
+## 2.2 계약이 선언하는 것 — 필드
+
+한 계약([viss-request](../config/sils/contracts/mmf-endpoints.yaml)) 기준:
+
+| 필드 | 값(예) | 의미 |
+|---|---|---|
+| `id` | `viss-request` | 계약 이름. Descriptor/Topology 가 이 id 로 참조 |
+| `semantic_version` | `0.1.0` | 계약 변경 추적(x.y.z) |
+| `transport` | `dds` | 전송 |
+| `domain_env` | `VISS_DDS_DOMAIN_ID` | **어느 DDS domain env 에 바인딩**(★ MMF 아닌 VISS, §3.4) |
+| `idl` / `struct` / `registered_type` | `VissRequest.idl` / `VissRequestTopic` | 타입 출처·이름 |
+| `topic` | `/VIN/Vehicle` | wire 상의 topic 이름(per-instance 면 `{instance_id}` 템플릿) |
+| `qos_profile` | `viss-default` | QoS Catalog 참조 |
+| `ownership` | `single` | 소유권 모델(§2.5) |
+| `payload` | `{payload: string, json}` | 페이로드 필드·인코딩 |
+| `late_sample_policy` | `next_tick` | tick 경계 이후 도착 입력 처리(§7.3, evaluate 강제) |
+| `roles` | `sut: subscribe / vecu: publish` | **방향 합의**(§2.3) |
+
+## 2.3 왜 "계약"인가 — SUT ↔ vECU 합의
+
+DDS 는 topic·type·QoS 가 **양쪽에서 맞아야** 통신이 성립한다. 계약은 그 합의를 명문화한다:
+
+```
+        contract: viss-request
+        topic /VIN/Vehicle · type VissRequestTopic · qos viss-default
+   ┌──────────────┐                                   ┌──────────────┐
+   │  vECU (probe) │ ── publish ──▶  /VIN/Vehicle  ──▶ │  SUT (VISS)  │ subscribe
+   │  roles.vecu  │                                    │  roles.sut  │
+   └──────────────┘                                   └──────────────┘
+        같은 topic + 같은 type + 호환 QoS  ⇒  match. 하나라도 어긋나면 침묵(no data).
+```
+
+- `roles` 가 **방향**을 고정한다: Phase 1 slice 에서 vECU 는 클라이언트라 요청을 **publish**,
+  VISS(SUT)가 **subscribe**. (lint 는 "둘 다 publish → 구독자 없음"을 경고한다 — 검증은 1장.)
+- 계약이 깨지면(topic 오타·타입 불일치·QoS 비호환) endpoint 가 **match 안 되고 조용히 실패**한다.
+  그래서 이 합의를 사람 기억이 아니라 **파일로 고정**하고 정적 검증한다.
+
+## 2.4 QoS 매칭 (RxO) — 왜 TRANSIENT_LOCAL 이 중요한가
+
+DDS QoS 는 **RxO(Requested ≤ Offered)** 로 매칭된다. Reader 가 "요청"하고 Writer 가 "제공"하며,
+제공이 요청보다 **같거나 세야** 붙는다.
+
+| 정책 | Offered 가 Requested 를 만족하려면 |
+|---|---|
+| reliability | Writer `RELIABLE` ⊒ Reader `BEST_EFFORT`/`RELIABLE` (BEST_EFFORT writer 는 RELIABLE reader 못 만족) |
+| durability | Writer `TRANSIENT_LOCAL` ⊒ Reader `VOLATILE`/`TRANSIENT_LOCAL` |
+
+**실제로 물린 defect**(코드 주석에 기록): lockstep/plant run 은 tick 을 **짧게 몰아 publish 후
+idle** 한다. 독립 기동한 verifier(reader)가 마지막 샘플 *이후에* match 하면, **VOLATILE writer 는
+히스토리를 안 남겨** → endpoint 는 match 됐는데 **샘플 0개**(matched-but-no-data).
+
+→ 해결: probe writer/verify reader 가 [viss-sils-verifiable](../config/sils/qos/qos-profiles.yaml)
+(`TRANSIENT_LOCAL`, depth 256)을 기본으로 쓴다(코드상 `SILS_DURABILITY=transient-local` 기본).
+`TRANSIENT_LOCAL` 은 **superset offer** 라 VOLATILE reader 와도 RxO 호환 → late-join 이어도
+히스토리를 받는다. `SILS_DURABILITY=volatile` 로 원래 `viss-default` 동작을 강제할 수도 있다.
+
+> QoS 는 "장식"이 아니라 **누가 언제 데이터를 받는지를 좌우하는 계약 조항**이다. 그래서 카탈로그가
+> 관리하고, 실 RxO 는 Phase 0A Contract Spike 에서 실측·확정한다(현재 값은 후보).
+
+## 2.5 Ownership 모델
+
+`ownership` 은 "한 topic 을 누가 소유(발행)할 수 있나"를 선언한다. 1장 §1.4-B 의 §9.5 검사가
+이걸 **RESOLVED 토픽 기준**으로 강제한다.
+
+| ownership | 의미 | §9.5 |
+|---|---|---|
+| `single` | 단일 owner. 한 topic 에 producer 정확히 1 | producer 2+ → 위반 |
+| `per-instance` | replica 마다 자기 topic 단독 소유. `topic` 에 `{instance_id}` 필수 | N 인스턴스 = N topic = 각 1 owner → valid |
+| `shared` / `multi` | co-producer 허용 | 다중 producer 면제 |
+
+[fleet-example.yaml](../config/sils/contracts/fleet-example.yaml) 의 `wheelspeed` 가
+`per-instance` + `/VIN/WheelSpeed/{instance_id}` 예: replica 4개가 `/VIN/WheelSpeed/wheelspeed-1…4`
+로 각자 다른 topic 을 소유 → 같은 topic 다중 producer(single 위반)가 아니라 §9.5-valid.
+
+## 2.6 왜 IDL 인라인이 아니라 카탈로그로 빼나
+
+- **IDL 은 타입 전용** — topic/QoS/ownership/버전은 IDL 문법에 없다.
+- **단일 출처**: 여러 Descriptor 가 같은 계약을 `contract_id` 로 참조(재사용). 정의가 한 곳.
+- **단일 소유·추적**: `(topic, domain_env)` 유일성·`semantic_version` 으로 "누가 이 topic 을
+  소유하고 계약이 언제 바뀌었나"를 기계가 추적(1장 §1.4 lint 가 강제).
+- **QoS 재사용**: endpoint 마다 QoS 를 반복하지 않고 `qos_profile` 로 참조(§9.3).
+
+## 2.7 검증은 어디서?
+
+이 장은 **선언**만 설명했다. 이 카탈로그가 *올바른지*(필수필드·중복 id·dangling qos·IDL 실존·
+domain_env 오타·enum·per-instance `{instance_id}`…)는 **1장 §1.4.A 의 lint_catalog** 가,
+토폴로지 문맥의 §9.5 소유권은 **1장 §1.4.B 의 compile** 이 검증한다. → 6장(런타임 conformance)·
+8·10장(회귀·패리티)은 또 다른 검증 계층(전체 지도의 cross-cutting 표 참조).
+
+---
+
+# 3장~11장 (채우는 중)
+
+아래는 아직 stub. 이해하는 대로 각 장을 위 1·2장처럼 채운다.
+
 - **3장 Descriptor → `SILS_*` env** — 선언적 포트 배선(§9.2). 1장 §1.3-④ 를 확장.
 - **4장 Run Coordinator** — 도메인 임대([domain_lease.py](../tools/sils/run_coordinator/domain_lease.py))·
   local/docker 기동·teardown·고아 reap.

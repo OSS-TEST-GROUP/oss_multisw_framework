@@ -137,19 +137,48 @@
     background:var(--surface-2); border:1px solid var(--line); border-radius:8px; }
   .note code, code.inl { font-family:var(--mono); font-size:.92em; color:var(--ink);
     background:color-mix(in srgb,var(--accent) 10%,transparent); padding:1px 5px; border-radius:4px; }
+  /* ---- chapter banner + ch2 diagrams ---- */
+  .chap { font-family:var(--mono); font-size:12px; letter-spacing:.1em; text-transform:uppercase;
+    color:#fff; background:var(--accent); display:inline-block; padding:6px 13px;
+    border-radius:6px; margin:64px 0 -30px; }
+  .agree { display:grid; grid-template-columns:1fr auto 1fr; gap:18px; align-items:center; min-width:640px; }
+  .node { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:15px 16px; text-align:center; }
+  .node .r { font-family:var(--mono); font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+  .node .nm { font-weight:650; font-size:15px; margin:5px 0 3px; }
+  .node .dir { font-size:11.5px; color:var(--accent); font-family:var(--mono); }
+  .wire { text-align:center; }
+  .wire .topic { font-family:var(--mono); font-size:12px; background:var(--accent-soft); color:var(--accent);
+    border:1px solid var(--accent); border-radius:20px; padding:4px 12px; display:inline-block; white-space:nowrap; }
+  .wire .flowln { color:var(--muted); font-size:18px; margin:3px 0; }
+  .wire .must { font-size:11px; color:var(--muted); margin-top:6px; max-width:200px; }
+  .rxo { display:flex; gap:10px; flex-wrap:wrap; margin-top:16px; }
+  .rxo .r { flex:1; min-width:240px; background:var(--surface-2); border:1px solid var(--line);
+    border-left:3px solid var(--pass); border-radius:8px; padding:11px 13px; font-size:12.5px; }
+  .rxo .r b { font-family:var(--mono); color:var(--pass); }
+  .rxo .r .bad { color:var(--fail); font-family:var(--mono); }
+  .own { display:flex; gap:14px; flex-wrap:wrap; margin-top:4px; min-width:620px; }
+  .own .o { flex:1; min-width:280px; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:14px 15px; }
+  .own .o h4 { margin:0 0 8px; font-size:13px; font-family:var(--mono); }
+  .own .o.single h4 { color:var(--gate); } .own .o.per h4 { color:var(--pass); }
+  .own .o .topics { display:flex; flex-direction:column; gap:6px; }
+  .own .o .t { font-family:var(--mono); font-size:11.5px; padding:5px 9px; border-radius:6px; background:var(--surface-2); border:1px solid var(--line); }
+  .own .o .t.clash { border-color:var(--fail); color:var(--fail); }
+  .own .o .t.ok { border-color:var(--pass); }
+  .own .o p { font-size:11.5px; color:var(--muted); margin:9px 0 0; }
   .foot { margin-top:34px; font-size:11.5px; color:var(--muted); font-family:var(--mono); }
   @media (max-width:640px){ h1{font-size:24px;} .wrap{padding:28px 16px 56px;} }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <p class="eyebrow">MMF SiLS · 이해 다이어그램 · 1장 Topology Compiler</p>
-  <h1>정적 변환·검증은 <em>언제</em>, <em>어떻게</em>, <em>어디서</em> 일어나는가</h1>
+  <p class="eyebrow">MMF SiLS · 이해 다이어그램 · 1–2장</p>
+  <h1>SiLS 가상 ECU를 <em>정적</em>으로 어떻게 세우나</h1>
   <p class="lede">SiLS 가상 ECU 전체를 훑는 <a href="sils-understanding.md" style="color:var(--accent)">이해 문서</a>의
-  1장 다이어그램. 토폴로지 컴파일은 <b>실행(launch) 전에</b> 한 번 돈다 — YAML 4종을 읽어
-  잘못된 조합을 실행 전에 잡고(<b>검증</b>), 맞으면 실행 가능한 계획으로 펼친다(<b>변환</b>).
-  DDS·도커·빌드·arm64 없이 도는 순수 정적 단계. <em>(장이 늘면 다이어그램도 여기에 추가된다.)</em></p>
+  다이어그램 모음. <b>1장</b>은 Topology Compiler(정적 변환·검증)를, <b>2장</b>은
+  Contract/QoS Catalog(계약 선언)를 그린다. 둘 다 <b>실행 전, 호스트에서, DDS·arm64 없이</b>
+  다루는 정적 레이어. <em>(장이 늘면 다이어그램도 여기에 추가된다.)</em></p>
 
+  <div class="chap">1장 · Topology Compiler</div>
   <h2><span class="n">01</span> &nbsp;언제 — 수명주기에서의 위치</h2>
   <div class="scroll">
     <div class="rail">
@@ -291,7 +320,54 @@
   계획이 하류로 새지 않는다. <b>resolved-run.yaml 존재 = 그 순간의 입력에 대해 검증 통과</b>이며,
   <code class="inl">input_hashes</code>로 현재 소스와의 drift를 검증할 수 있다(자동 대조는 미구현).</p>
 
-  <p class="foot">tools/sils/topology_compiler/compile.py · contracts/lint_catalog.py &nbsp;|&nbsp; 문서: docs/sils-understanding.md (1장) &nbsp;|&nbsp; 검증: test_compile.py 16 · test_lint_catalog.py 18 (DDS 불필요)</p>
+  <div class="chap">2장 · Contract / QoS Catalog</div>
+  <h2><span class="n">04</span> &nbsp;계약 = SUT ↔ vECU 합의 (+ QoS 매칭)</h2>
+  <p class="lede" style="margin-bottom:18px">IDL 은 <b>타입</b>만 정의한다. "어느 topic·domain 에서, 어떤 QoS 로,
+  누가 발행/구독하나"는 계약이 선언한다. DDS 는 양쪽이 맞아야 통신이 성립하므로, 이 합의를
+  파일로 고정하고 정적 검증한다(검증은 1장).</p>
+  <div class="scroll">
+    <div class="agree">
+      <div class="node"><p class="r">roles.vecu</p><p class="nm">vECU (probe)</p><p class="dir">publish ▶</p></div>
+      <div class="wire">
+        <div class="topic">/VIN/Vehicle · VissRequestTopic</div>
+        <div class="flowln">──▶</div>
+        <div class="must">같은 topic + type + 호환 QoS 라야 match. 하나라도 어긋나면 <b>침묵(no data)</b>.</div>
+      </div>
+      <div class="node"><p class="r">roles.sut</p><p class="nm">SUT (VISS)</p><p class="dir">◀ subscribe</p></div>
+    </div>
+  </div>
+  <div class="rxo">
+    <div class="r">durability: Writer <b>TRANSIENT_LOCAL</b> ⊒ Reader VOLATILE → late-join reader 도 히스토리 수신 ✓ (matched-but-no-data 해결)</div>
+    <div class="r">reliability: Writer <b>RELIABLE</b> ⊒ Reader BEST_EFFORT/RELIABLE · Writer <span class="bad">BEST_EFFORT</span> 는 RELIABLE reader 못 만족 ✗</div>
+  </div>
+
+  <h2><span class="n">05</span> &nbsp;Ownership — 누가 topic 을 소유하나 (§9.5)</h2>
+  <div class="scroll">
+    <div class="own">
+      <div class="o single">
+        <h4>single</h4>
+        <div class="topics">
+          <div class="t clash">/VIN/Vehicle ◀ probe A</div>
+          <div class="t clash">/VIN/Vehicle ◀ probe B</div>
+        </div>
+        <p>같은 topic 에 producer 2개 → §9.5 위반 (compile 이 fail-closed)</p>
+      </div>
+      <div class="o per">
+        <h4>per-instance · {instance_id}</h4>
+        <div class="topics">
+          <div class="t ok">/VIN/WheelSpeed/ws-1 ◀ ws-1</div>
+          <div class="t ok">/VIN/WheelSpeed/ws-2 ◀ ws-2</div>
+        </div>
+        <p>replica 마다 고유 topic = 각 1 owner → §9.5-valid</p>
+      </div>
+    </div>
+  </div>
+  <p class="note"><b>계약(선언) vs 검증</b>은 다른 일이다. 이 장(2장)은 카탈로그가 <b>무엇을 선언하는가</b>
+  — topic·type·QoS·ownership·roles — 를 그린다. 그게 <em>올바른지</em>(필수필드·중복·dangling QoS·
+  IDL 실존·§9.5 소유권…)의 <b>검증은 1장</b>(lint + compile). QoS 는 장식이 아니라
+  <code class="inl">누가 언제 데이터를 받는지</code>를 좌우하는 계약 조항이다.</p>
+
+  <p class="foot">config/sils/contracts/*.yaml · qos/qos-profiles.yaml &nbsp;|&nbsp; 문서: docs/sils-understanding.md (1·2장) &nbsp;|&nbsp; 검증(lint)은 1장 · test_lint_catalog.py 18</p>
 </div>
 </body>
 </html>
