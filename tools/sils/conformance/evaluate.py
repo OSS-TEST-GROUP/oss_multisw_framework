@@ -48,6 +48,18 @@ TERMINAL = {
     "aborted_orphaned": "ABORTED",
 }
 
+# Verifier-derived terminal (§5.2 fallback for standalone runs). When the run is
+# driven by raw binaries with no Run Coordinator in the loop, no coordinator
+# terminal is ever emitted -- but the independent verifier still concludes with
+# verify_pass/verify_fail. That is not truncation: the verifier only reports pass
+# once received_count >= min_samples, so its verdict is a complete signal. We
+# accept it (recording terminal_source="verifier") so manual/CI raw-binary runs
+# are judgeable, while coordinator runs still take the coordinator verdict.
+VERIFIER_TERMINAL = {
+    "verify_pass": "PASSED",
+    "verify_fail": "FAILED",
+}
+
 # Canonical happy-path order (§5.2). Only milestones actually present are checked,
 # so a run that legitimately stops early (ABORTED) isn't penalised for the tail.
 HAPPY_ORDER = [
@@ -262,13 +274,21 @@ def evaluate_run(events: list[dict], path: str) -> dict:
 
     # --- terminal verdict (§5.2) --------------------------------------------
     verdict = "INCOMPLETE"
-    for e in events:  # last terminal event wins if several somehow appear
+    terminal_source = None
+    for e in events:  # last coordinator terminal wins if several somehow appear
         if e.get("event") in TERMINAL:
             verdict = TERMINAL[e["event"]]
+            terminal_source = "coordinator"
+    if verdict == "INCOMPLETE":  # no coordinator terminal -> fall back to verifier
+        for e in events:
+            if e.get("event") in VERIFIER_TERMINAL:
+                verdict = VERIFIER_TERMINAL[e["event"]]
+                terminal_source = "verifier"
     if verdict == "INCOMPLETE" and events:
         violations.append(
-            "no terminal event (run_pass/run_fail/ready_timeout/start_failed/"
-            "aborted_orphaned) -- trace truncated or run still in flight"
+            "no terminal event (run_pass/run_fail/verify_pass/verify_fail/"
+            "ready_timeout/start_failed/aborted_orphaned) -- trace truncated "
+            "or run still in flight"
         )
 
     # --- lifecycle ordering (§5.2) ------------------------------------------
@@ -287,12 +307,12 @@ def evaluate_run(events: list[dict], path: str) -> dict:
     if verdict == "PASSED":
         if samples < 1:
             violations.append(
-                "PASS without evidence: run_pass but no sample_received "
+                "PASS without evidence: terminal PASS but no sample_received "
                 "(§11 L0 requires >=1 received sample)"
             )
         if endpoints_matched < 1:
             violations.append(
-                "PASS without endpoint match: run_pass but no endpoint_matched "
+                "PASS without endpoint match: terminal PASS but no endpoint_matched "
                 "(§11 L0 requires type/topic matching)"
             )
         if not verify_pass:
@@ -351,6 +371,7 @@ def evaluate_run(events: list[dict], path: str) -> dict:
         "run_id": run_id,
         "trace": path,
         "verdict": verdict,
+        "terminal_source": terminal_source,
         "conformant": conformant,
         "duration_sec": duration_sec,
         "clock": clock,

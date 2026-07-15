@@ -114,11 +114,45 @@ def test_ready_timeout_is_aborted():
 
 
 def test_incomplete_when_no_terminal():
-    events = passing_events()[:6]  # stops after 'ready', no terminal event
+    events = passing_events()[:6]  # stops after 'ready', no terminal/verify event
     p = write_trace(events)
     r = ev.evaluate_run(ev.parse_trace(p)[0], str(p))
     assert r["verdict"] == "INCOMPLETE"
+    assert r["terminal_source"] is None
     assert any("no terminal event" in v for v in r["violations"]), r["violations"]
+
+
+def test_coordinator_terminal_source():
+    # A full coordinator run takes the coordinator verdict.
+    p = write_trace(passing_events())
+    r = ev.evaluate_run(ev.parse_trace(p)[0], str(p))
+    assert r["verdict"] == "PASSED"
+    assert r["terminal_source"] == "coordinator"
+
+
+def test_verifier_terminal_when_no_coordinator():
+    # Raw-binary run: no run_pass, but the independent verifier concluded with
+    # verify_pass -> accept it as a verifier-derived terminal (not truncation).
+    events = [e for e in passing_events() if e["event"] != "run_pass"]
+    p = write_trace(events)
+    r = ev.evaluate_run(ev.parse_trace(p)[0], str(p))
+    assert r["verdict"] == "PASSED", r
+    assert r["terminal_source"] == "verifier"
+    assert r["conformant"] is True, r["violations"]
+    assert not any("no terminal event" in v for v in r["violations"]), r["violations"]
+
+
+def test_verify_fail_is_verifier_terminal_failed():
+    # verify_fail with no coordinator terminal -> FAILED (verifier-derived).
+    events = [e for e in passing_events() if e["event"] != "run_pass"]
+    for e in events:
+        if e["event"] == "verify_pass":
+            e["event"] = "verify_fail"
+    p = write_trace(events)
+    r = ev.evaluate_run(ev.parse_trace(p)[0], str(p))
+    assert r["verdict"] == "FAILED", r
+    assert r["terminal_source"] == "verifier"
+    assert r["conformant"] is False
 
 
 def test_domain_inconsistency_is_flagged():
