@@ -496,6 +496,115 @@ def test_plant_nonconstant_dt_flagged():
     assert r["plant"]["deterministic"] is False
 
 
+def l1_events(pairs=5, error_at=None, drop_response=None, phantom=False,
+              duplicate=None, bad_status=None, error_no_code=False, qos_reliability="RELIABLE",
+              qos_incompatible=False):
+    """A request/response protocol run (§11 L1). Each request_sent gets a correlated
+    response_received unless perturbed."""
+    ev_list = [
+        {"run_id": "l1", "event": "domain_leased", "wall_time_ms": 1000, "domain_id": 90, "pool": "90-92"},
+        {"run_id": "l1", "instance_id": "viss-probe-1", "event": "run_start", "wall_time_ms": 1001, "domain_id": 90},
+        {"run_id": "l1", "instance_id": "viss-probe-1", "event": "endpoint_matched", "wall_time_ms": 1002},
+        {"run_id": "l1", "event": "qos_negotiated", "wall_time_ms": 1003, "role": "probe-writer",
+         "reliability": qos_reliability, "durability": "TRANSIENT_LOCAL"},
+        {"run_id": "l1", "instance_id": "viss-probe-1", "event": "ready", "wall_time_ms": 1004},
+        {"run_id": "l1", "event": "verify_invoke", "wall_time_ms": 1005},
+        {"run_id": "l1", "expected_instance_id": "viss-probe-1", "event": "verify_start", "wall_time_ms": 1006, "domain_id": 90},
+        {"run_id": "l1", "expected_instance_id": "viss-probe-1", "event": "endpoint_matched", "wall_time_ms": 1007},
+    ]
+    if qos_incompatible:
+        ev_list.append({"run_id": "l1", "event": "qos_incompatible", "wall_time_ms": 1008,
+                        "role": "probe-writer", "reason": "durability RxO"})
+    wt = 1010
+    for n in range(1, pairs + 1):
+        rid = f"sils-{n}"
+        ev_list.append({"run_id": "l1", "event": "request_sent", "wall_time_ms": wt,
+                        "request_id": rid, "path": "Vehicle.Speed", "action": "get"})
+        if drop_response != n:
+            st = bad_status if (bad_status and n == pairs) else ("error" if error_at == n else "ok")
+            r = {"run_id": "l1", "event": "response_received", "wall_time_ms": wt + 2,
+                 "request_id": rid, "status": st}
+            if st == "error" and not error_no_code:
+                r["error_code"] = "UNKNOWN_PATH"
+            ev_list.append(r)
+            if duplicate == n:  # emit a second response for the same id
+                ev_list.append(dict(r, wall_time_ms=wt + 3))
+        ev_list.append({"run_id": "l1", "expected_instance_id": "viss-probe-1",
+                        "event": "sample_received", "wall_time_ms": wt + 4, "received_count": n})
+        wt += 6
+    if phantom:
+        ev_list.append({"run_id": "l1", "event": "response_received", "wall_time_ms": wt,
+                        "request_id": "sils-999", "status": "ok"})
+    ev_list.append({"run_id": "l1", "expected_instance_id": "viss-probe-1", "event": "verify_pass",
+                    "wall_time_ms": wt + 1, "received_count": pairs, "valid_count": pairs, "min_samples": 1})
+    ev_list.append({"run_id": "l1", "event": "domain_released", "wall_time_ms": wt + 2})
+    return ev_list
+
+
+def test_protocol_none_when_absent():
+    r = ev.evaluate_run(ev.parse_trace(write_trace(passing_events()))[0], "x")
+    assert r["protocol"] == {"mode": "none"}
+
+
+def test_protocol_reqresp_is_l1_conformant():
+    r = ev.evaluate_run(ev.parse_trace(write_trace(l1_events(error_at=5)))[0], "x")
+    assert r["verdict"] == "PASSED", r
+    assert r["protocol"]["conformant"] is True, r["violations"]
+    assert r["protocol"]["matched"] == 5
+    assert r["protocol"]["errors"] == 1  # well-formed error counts, not a violation
+    assert r["protocol"]["qos_conformant"] is True
+    assert r["fidelity_evidenced"] == "L1", r
+    assert r["conformant"] is True, r["violations"]
+
+
+def test_protocol_unanswered_request_flagged():
+    r = ev.evaluate_run(ev.parse_trace(write_trace(l1_events(drop_response=3)))[0], "x")
+    assert r["protocol"]["unanswered"] == 1
+    assert r["fidelity_evidenced"] != "L1"
+    assert any("unanswered" in v for v in r["violations"]), r["violations"]
+
+
+def test_protocol_phantom_response_flagged():
+    r = ev.evaluate_run(ev.parse_trace(write_trace(l1_events(phantom=True)))[0], "x")
+    assert r["protocol"]["phantom"] == 1
+    assert any("no matching request" in v for v in r["violations"]), r["violations"]
+
+
+def test_protocol_duplicate_response_flagged():
+    r = ev.evaluate_run(ev.parse_trace(write_trace(l1_events(duplicate=2)))[0], "x")
+    assert r["protocol"]["duplicated"] == 1
+    assert any("more than one response" in v for v in r["violations"]), r["violations"]
+
+
+def test_protocol_bad_status_and_illformed_error_flagged():
+    r = ev.evaluate_run(ev.parse_trace(write_trace(l1_events(bad_status="weird")))[0], "x")
+    assert any("invalid status" in v for v in r["violations"]), r["violations"]
+    r2 = ev.evaluate_run(ev.parse_trace(write_trace(l1_events(error_at=2, error_no_code=True)))[0], "x")
+    assert any("no error_code" in v for v in r2["violations"]), r2["violations"]
+
+
+def test_protocol_qos_violations_flagged():
+    r = ev.evaluate_run(ev.parse_trace(write_trace(l1_events(qos_reliability="BEST_EFFORT")))[0], "x")
+    assert r["protocol"]["qos_conformant"] is False
+    assert any("reliability" in v for v in r["violations"]), r["violations"]
+    r2 = ev.evaluate_run(ev.parse_trace(write_trace(l1_events(qos_incompatible=True)))[0], "x")
+    assert r2["protocol"]["qos_conformant"] is False
+    assert any("QoS incompatible" in v for v in r2["violations"]), r2["violations"]
+
+
+def test_protocol_l3_takes_precedence_over_l1():
+    # A run that shows BOTH a conformant protocol and a live closed plant loop
+    # reports the higher level (L3).
+    combined = plant_events() + [
+        {"run_id": "pl", "event": "request_sent", "wall_time_ms": 1500, "request_id": "r1", "path": "p", "action": "get"},
+        {"run_id": "pl", "event": "response_received", "wall_time_ms": 1502, "request_id": "r1", "status": "ok"},
+    ]
+    r = ev.evaluate_run(ev.parse_trace(write_trace(combined))[0], "x")
+    assert r["protocol"]["conformant"] is True
+    assert r["plant"]["closed_loop"] is True
+    assert r["fidelity_evidenced"] == "L3", r
+
+
 def test_fleet_completeness_unexpected_instance():
     results = [ev.evaluate_run(ev.parse_trace(write_trace(passing_events(instance_id="rogue")))[0], "x")]
     fleet = ev.evaluate_fleet(results, expected_instance_ids=["wheelspeed-FL"])

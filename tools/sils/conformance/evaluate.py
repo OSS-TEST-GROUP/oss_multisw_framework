@@ -33,6 +33,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections import Counter
 from pathlib import Path
 
 EXIT_PASS = 0
@@ -349,6 +350,99 @@ def analyze_plant(events: list[dict]) -> tuple[dict, list[str]]:
     return plant, violations
 
 
+# Contracted transport reliability for the VISS protocol (dds_transport.cpp uses
+# RELIABLE; a vECU that negotiated anything weaker isn't protocol-faithful).
+CONTRACT_RELIABILITY = "RELIABLE"
+
+
+def analyze_protocol(events: list[dict]) -> tuple[dict, list[str]]:
+    """Check L1 protocol fidelity (§11): request/response correlation, QoS conformance,
+    and error semantics. Returns (protocol_info, violations).
+
+    L0 only proves a sample arrived; L1 proves the protocol CONVERSATION is correct:
+      - request/response correlation: every request_sent gets exactly one
+        response_received with a matching request_id -- no unanswered request
+        (orphan), no phantom response (response with no request), no duplicate.
+      - error semantics: a response status is 'ok' or 'error'; an 'error' response
+        must carry an error_code (a well-formed error is valid protocol, not a
+        failure -- an ill-formed one is).
+      - QoS conformance: every negotiated endpoint reports the contracted reliability
+        (RELIABLE); a qos_incompatible event (RxO mismatch) is a violation.
+    L1 is evidenced when >=1 request/response pair correlates with zero correlation
+    or QoS violations."""
+    reqs = [e for e in events if e.get("event") == "request_sent"]
+    resps = [e for e in events if e.get("event") == "response_received"]
+    qos = [e for e in events if e.get("event") == "qos_negotiated"]
+    if not reqs and not resps and not qos:
+        return {"mode": "none"}, []
+
+    violations: list[str] = []
+
+    # --- request/response correlation ---------------------------------------
+    req_ids = [e.get("request_id") for e in reqs]
+    resp_by_id = Counter(e.get("request_id") for e in resps)
+    req_set = set(req_ids)
+
+    unanswered = sorted(i for i in req_set if resp_by_id.get(i, 0) == 0)
+    phantom = sorted(i for i in resp_by_id if i not in req_set)
+    duplicated = sorted(i for i, n in resp_by_id.items() if n > 1 and i in req_set)
+    matched = sum(1 for i in req_set if resp_by_id.get(i, 0) >= 1)
+
+    if unanswered:
+        h = unanswered if len(unanswered) <= 10 else unanswered[:10] + ["..."]
+        violations.append(f"{len(unanswered)} request(s) unanswered (no correlated "
+                          f"response) {h} -- protocol round-trip incomplete (§11 L1)")
+    if phantom:
+        violations.append(f"response(s) with no matching request {phantom[:10]} "
+                          "(phantom/uncorrelated response, §11 L1)")
+    if duplicated:
+        violations.append(f"request(s) with more than one response {duplicated[:10]} "
+                          "(duplicate response, §11 L1)")
+
+    # --- error semantics ----------------------------------------------------
+    errors = 0
+    for r in resps:
+        st = r.get("status")
+        if st not in ("ok", "error"):
+            violations.append(f"response {r.get('request_id')} has invalid status "
+                              f"{st!r} (expected 'ok'|'error', §11 L1)")
+        elif st == "error":
+            errors += 1
+            if not r.get("error_code") and not r.get("reason"):
+                violations.append(f"error response {r.get('request_id')} carries no "
+                                  "error_code/reason (ill-formed error, §11 L1)")
+
+    # --- QoS conformance ----------------------------------------------------
+    bad_qos = [q for q in qos if q.get("reliability") not in (None, CONTRACT_RELIABILITY)]
+    for q in bad_qos:
+        violations.append(f"endpoint {q.get('role','?')} negotiated reliability "
+                          f"{q.get('reliability')!r} != contracted {CONTRACT_RELIABILITY} (§11 L1)")
+    incompat = [e for e in events if e.get("event") == "qos_incompatible"]
+    for e in incompat:
+        violations.append(f"QoS incompatible (RxO mismatch) on {e.get('role','?')}: "
+                          f"{e.get('reason','')} (§11 L1)")
+    qos_conformant = not bad_qos and not incompat
+
+    conformant = matched >= 1 and not violations
+    protocol = {
+        "mode": "reqresp",
+        "requests": len(reqs),
+        "responses": len(resps),
+        "matched": matched,
+        "unanswered": len(unanswered),
+        "phantom": len(phantom),
+        "duplicated": len(duplicated),
+        "errors": errors,
+        "qos_conformant": qos_conformant,
+        "conformant": conformant,
+    }
+    return protocol, violations
+
+
+# Fidelity ladder rank (§11) -- fidelity_evidenced reports the HIGHEST level shown.
+FIDELITY_RANK = {"none": 0, "L0": 1, "L1": 2, "L2": 3, "L3": 4}
+
+
 def evaluate_run(events: list[dict], path: str) -> dict:
     """Reduce one run's merged event stream to a verdict + violations."""
     run_id = dominant_run_id(events)
@@ -434,15 +528,26 @@ def evaluate_run(events: list[dict], path: str) -> dict:
     behavior, behavior_violations = analyze_behavior(events)
     violations.extend(behavior_violations)
 
-    # --- plant coupling (§9 L3, IPlant closed loop) -------------------------
+    # --- protocol fidelity (§11 L1: request/response, QoS, errors) ----------
+    protocol, protocol_violations = analyze_protocol(events)
+    violations.extend(protocol_violations)
+
+    # --- plant coupling (§11 L3, IPlant closed loop) ------------------------
     plant, plant_violations = analyze_plant(events)
     violations.extend(plant_violations)
-    # L3 is evidenced only by a live, closed, deterministic plant loop (on top of
-    # the L0 endpoint/sample evidence). Replay/broken/open plants do not lift it.
+
+    # fidelity_evidenced = highest level shown, on top of the L0 endpoint/sample
+    # base (§11 ladder). L1 = conformant request/response protocol; L3 = a live,
+    # closed, deterministic plant loop. Replay/broken/open plants do not lift L3.
+    def _bump(level: str) -> None:
+        nonlocal fidelity
+        if FIDELITY_RANK[level] > FIDELITY_RANK[fidelity]:
+            fidelity = level
+    if fidelity != "none" and protocol.get("mode") == "reqresp" and protocol.get("conformant"):
+        _bump("L1")
     if (plant.get("model", "none") != "none" and plant.get("mode") == "live"
-            and plant.get("closed_loop") and plant.get("deterministic")
-            and fidelity == "L0"):
-        fidelity = "L3"
+            and plant.get("closed_loop") and plant.get("deterministic")):
+        _bump("L3")
 
     # --- identity (probe carries the vECU instance_id) ----------------------
     instance_ids = sorted({e["instance_id"] for e in events if e.get("instance_id")})
@@ -470,6 +575,7 @@ def evaluate_run(events: list[dict], path: str) -> dict:
         "clock": clock,
         "staging": staging,
         "behavior": behavior,
+        "protocol": protocol,
         "plant": plant,
         "fidelity_evidenced": fidelity,
         "evidence": {

@@ -24,7 +24,8 @@ compare_events:
   - run_pass
   - run_fail
   - behavior_output          # §11 L2: per-tick behavior `value` (golden scenario)
-  - plant_step               # §9 L3: per-tick plant output/command (model correlation)
+  - plant_step               # §11 L3: per-tick plant output/command (model correlation)
+  - response_received        # §11 L1: per-request status/error_code (protocol)
 
 # Events are aligned by this key, then paired positionally within each key group.
 key_fields: [event]
