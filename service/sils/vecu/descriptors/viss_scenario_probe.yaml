@@ -1,0 +1,49 @@
+# Example vECU — declarative ports (§9.2): L2 behavior + fault-injection scenario.
+#
+# Demonstrates that the Topology Compiler now wires a Descriptor's port declarations
+# into the probe's SILS_* env (tools/sils/topology_compiler/resolve_runtime_env), so a
+# run is defined by THIS file, not by hand-exported env vars. Everything here except the
+# DDS endpoint is probe-internal (behavior/scenario/attestation), so it reuses the same
+# viss-request publish contract as the smoke descriptor.
+#
+# Compile + inspect the env it produces without running anything:
+#   python3 tools/sils/topology_compiler/compile.py \
+#       config/sils/topologies/viss_scenario.yaml --out-dir /tmp/out
+#   python3 tools/sils/topology_compiler/resolved_to_shell.py /tmp/out/resolved-run.yaml --index 0
+
+ecu: viss_scenario_probe
+instance_id: viss-scenario-1
+fidelity: L2                       # Behavioral Fidelity (stateful behavior + golden)
+
+clock: { mode: wall }
+
+buses:
+  - name: mmf-viss
+    type: dds
+    endpoints:
+      - contract_id: viss-request
+        direction: publish
+
+behavior:
+  type: accumulate                 # -> SILS_BEHAVIOR=accumulate (stateful L2 example)
+  spec:
+    period_ms: 200
+
+plant: { type: none }
+
+# Fault-injection scenario (IScenario, §11 negative path). Deterministic tick-indexed
+# schedule -> a fault run is itself golden-reproducible. -> SILS_SCENARIO=scheduled,
+# SILS_SCENARIO_FAULTS="3:drop,7:duplicate".
+scenario:
+  type: scheduled
+  faults:
+    - { tick: 3, fault: drop }
+    - { tick: 7, fault: duplicate }
+
+# Target attestation (§11 L4). Defaults here declare a sim run (NOT target-like), so
+# parity.py would report PARITY_UNATTESTED — set arch=aarch64/gateway=real for a real
+# target-parity run. Present to show the field is part of the declarative surface.
+attestation:
+  arch: x86_64
+  gateway: sim
+  protocol: sim
