@@ -19,7 +19,7 @@
 | **3** | **Descriptor → `SILS_*` env — 선언적 포트 배선(§9.2)** | ✅ 작성됨 |
 | **4** | **Run Coordinator — 도메인 임대·기동·ready·verify·teardown·reap** | ✅ 작성됨 |
 | **5** | **vECU 포트 — Clock / Behavior / Plant / Scenario (헥사고날)** | ✅ 작성됨 |
-| 6 | Conformance 판정 — `evaluate.py` 가 trace 를 어떻게 읽나 | ⬜ |
+| **6** | **Conformance 판정 — `evaluate.py` 가 trace 를 verdict 로** | ✅ 작성됨 |
 | 7 | 충실도 사다리 L0–L4 — 각 레벨의 증거 | ⬜ |
 | 8 | Golden / 회귀 — capture ↔ compare 재현성 | ⬜ |
 | 9 | FMU 트랙 — fmi4c·보안 게이트 (별도: [sils-fmu-plant.md](sils-fmu-plant.md)) | ↗ 링크 |
@@ -998,12 +998,95 @@ scenario: {}
 
 ---
 
-# 6장~11장 (채우는 중)
+# 6장. Conformance 판정 — `evaluate.py` 가 trace 를 verdict 로
 
-아래는 아직 stub. 이해하는 대로 각 장을 위 1~5장처럼 채운다.
+> 4장이 남긴 **trace.jsonl** 은 그 자체로 합/불이 아니다. [evaluate.py](../tools/sils/conformance/evaluate.py)
+> 가 이 이벤트 스트림을 **상태기계·증거**로 읽어 verdict 로 환원한다. 이게 cross-cutting 검증(전체
+> 지도 표)의 **② 런타임 conformance**.
 
-- **6장 Conformance 판정** — [evaluate.py](../tools/sils/conformance/evaluate.py) 가 trace 를
-  상태기계·증거로 어떻게 verdict 로 환원하나.
+## 6.1 한 문장
+
+evaluate 는 **trace.jsonl(이벤트 스트림) → verdict(합/불 + 충실도 + 위반 목록)** 변환이다. run 을
+다시 돌리지 않고 **남은 trace 만** 읽어 판정하므로 순수 정적 — DDS·도커 없이 pre-captured trace 로도
+돈다(1장 도구들과 같은 성질).
+
+## 6.2 입력 — 누가 남긴 무엇
+
+한 run 의 trace 는 **Coordinator + probe + verify** 가 각자 찍은 JSON 라인의 합류 스트림이다
+(4장). 예: `domain_leased`·`process_running`·`ready`·`behavior_output`·`plant_step`·`scenario_fault`·
+`verify_pass`·`run_pass`·`domain_released`. evaluate 는 이 이름들을 근거로 판정한다.
+
+## 6.3 terminal verdict (§5.2)
+
+먼저 "이 run 이 어떻게 끝났나"를 정한다([evaluate_run](../tools/sils/conformance/evaluate.py#L568)):
+
+| 이벤트 | verdict | 출처 |
+|---|---|---|
+| `run_pass` / `run_fail` | PASSED / FAILED | coordinator |
+| `ready_timeout` · `start_failed` · `aborted_orphaned` | ABORTED | coordinator |
+| (coordinator terminal 없을 때) `verify_pass` / `verify_fail` | PASSED / FAILED | **verifier fallback** |
+| 아무 terminal 도 없음 | INCOMPLETE (trace 잘림/진행 중) | — |
+
+`terminal_source`(coordinator/verifier)도 기록 — raw verify-only run 도 판정되게 fallback 을 둔다.
+
+## 6.4 판정 축 — 여러 `analyze_*` 가 한 verdict 로
+
+evaluate_run 은 축마다 정보 + 위반을 모은다:
+
+| 축 | 함수/위치 | 무엇을 검사 | § |
+|---|---|---|---|
+| lifecycle 순서 | HAPPY_ORDER | 이벤트 정렬 순서(뒤집힘 감지) | §5.2 |
+| **evidence (L0)** | inline | `sample_received` ≥1 + `endpoint_matched` ≥1 | §11 L0 |
+| lease 무결성 | inline | `domain_leased` → `domain_released`(누수) | §12.2 |
+| domain 일관성 | inline | 한 run == 한 domain_id | §12.1 |
+| lockstep 결정론 | [analyze_lockstep](../tools/sils/conformance/evaluate.py#L119) | clock mode·grant/ack·sim_time | §7/§8 |
+| 입력 staging | [analyze_staging](../tools/sils/conformance/evaluate.py#L188) | tick 별 입력 확정·late-sample 정책 | §7.3 |
+| behavior (L2) | [analyze_behavior](../tools/sils/conformance/evaluate.py#L283) | 상태기계 출력 | §11 L2 |
+| scenario | [analyze_scenario](../tools/sils/conformance/evaluate.py#L395) | 선언 결함이 실제 주입됐나 + injected 집합 | §11 |
+| protocol (L1) | [analyze_protocol](../tools/sils/conformance/evaluate.py#L464) | req/resp 상관·QoS·오류(주입 결함 제외) | §11 L1 |
+| plant (L3) | [analyze_plant](../tools/sils/conformance/evaluate.py#L311) | 폐루프 연속성·live·결정론 | §11 L3 |
+| attestation | [analyze_attestation](../tools/sils/conformance/evaluate.py#L444) | arch/gateway/protocol **기록만**(L4 는 parity.py) | §11 L4 |
+
+## 6.5 증거 기반 판정 — "PASS 인데 증거가 없다"를 잡는다
+
+terminal 이 PASSED 여도 그것만으로 합격이 아니다. **증거**가 있어야 한다:
+
+- `run_pass` 인데 `sample_received` 가 0 → **"PASS without evidence"** 위반(§11 L0 은 샘플 ≥1 요구).
+- `run_pass` 인데 `endpoint_matched` 0 → **"PASS without endpoint match"** 위반.
+- `run_pass` 인데 `verify_pass` 없음 → coordinator/verifier **불일치** 위반.
+
+이게 "matched-but-no-data"(4장 §4.7 `--ipc=host` defect)를 **판정 레벨에서** 잡는 그물이다 —
+terminal 만 믿지 않는다.
+
+## 6.6 fidelity_evidenced — 보인 최고 레벨
+
+[FIDELITY_RANK](../tools/sils/conformance/evaluate.py) `{none, L0, L1, L2, L3, L4}` 중 **보인 최고**를
+`_bump` 으로 올린다: L0(엔드포인트+샘플) 기반 위에 protocol 이 conformant 면 L1, live·폐루프·결정론
+plant 면 L3 … replay/broken/open plant 는 L3 못 올림. **L4 는 단일 trace 로 안 준다**(교차-trace
+parity.py, 10장). 각 레벨의 정의는 **7장**.
+
+## 6.7 conformant
+
+한 줄: **`conformant = (verdict == PASSED) and (violations == [])`**. FAILED/ABORTED/INCOMPLETE 거나,
+PASSED 라도 위반이 하나라도 있으면 conformant 아님. verdict(끝났나)와 conformant(제대로 끝났나)는 다르다.
+
+## 6.8 fleet 판정 (§13)
+
+여러 인스턴스 run 은 [evaluate_fleet](../tools/sils/conformance/evaluate.py#L736) 가 합친다: 각 run
+verdict + **완전성**(기대한 instance_id 가 다 나왔나 — 빠지거나 rogue 면 FAIL) + 전원 conformant 여야
+fleet PASS.
+
+## 6.9 다음으로
+
+verdict 는 [to_junit.py](../tools/sils/conformance/to_junit.py) 로 **JUnit XML**(CI 수집, §16)이 되고,
+`fidelity_evidenced` 는 **7장 충실도 사다리**로, 재현성은 **8장 golden**(compare_golden)으로 이어진다.
+
+---
+
+# 7장~11장 (채우는 중)
+
+아래는 아직 stub. 이해하는 대로 각 장을 위 1~6장처럼 채운다.
+
 - **7장 충실도 사다리 L0–L4** — 각 레벨이 요구하는 증거와 판정.
 - **8장 Golden / 회귀** — capture ↔ compare, 결정론 모드 게이트.
 - **9장 FMU 트랙** → [sils-fmu-plant.md](sils-fmu-plant.md).

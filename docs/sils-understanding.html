@@ -201,7 +201,7 @@
 </head>
 <body>
 <div class="wrap">
-  <p class="eyebrow">MMF SiLS · 이해 다이어그램 · 1–5장</p>
+  <p class="eyebrow">MMF SiLS · 이해 다이어그램 · 1–6장</p>
   <h1>SiLS 가상 ECU를 어떻게 <em>세우고</em> <em>돌리나</em></h1>
   <p class="lede">SiLS 가상 ECU 전체를 훑는 <a href="sils-understanding.md" style="color:var(--accent)">이해 문서</a>의
   다이어그램 모음. <b>1</b> Topology Compiler · <b>2</b> Contract/QoS Catalog · <b>3</b> Descriptor→SILS_* env
@@ -671,6 +671,62 @@ SILS_ATTEST_ARCH=x86_64  <span class="c"># sim</span></pre>
   <a href="sils-understanding.md" style="color:var(--accent)">문서 §5.7 (f)</a>. (실 소스엔 미포함 — 예시 스니펫)</p>
 
   <p class="foot">clock_source.hpp · behavior.hpp · plant.hpp · scenario.hpp · viss_probe_main.cc &nbsp;|&nbsp; 문서: docs/sils-understanding.md (1–5장) &nbsp;|&nbsp; trace → 6장 evaluate · 충실도 → 7장</p>
+
+  <div class="chap">6장 · Conformance 판정</div>
+  <h2><span class="n">14</span> &nbsp;trace → verdict (evaluate)</h2>
+  <p class="lede" style="margin-bottom:18px">4장이 남긴 trace 는 그 자체로 합/불이 아니다. evaluate 가 이벤트 스트림을
+  <b>상태기계·증거</b>로 읽어 verdict 로 환원(run 재실행 없이 trace 만 — 순수 정적). cross-cutting 검증의 ②.</p>
+  <div class="scroll">
+    <div class="flow">
+      <div>
+        <p class="col-h">입력 · trace 이벤트</p>
+        <div class="inputs">
+          <div class="chip">domain_leased<small>Coordinator</small></div>
+          <div class="chip">endpoint_matched · sample_received<small>verify (L0 증거)</small></div>
+          <div class="chip">behavior_output · plant_step<small>probe (L2/L3)</small></div>
+          <div class="chip">scenario_fault · response_received<small>probe/SUT (§11/L1)</small></div>
+          <div class="chip">run_pass / run_fail<small>Coordinator terminal</small></div>
+        </div>
+      </div>
+      <div>
+        <p class="col-h">evaluate · 판정 축</p>
+        <div class="engine">
+          <div class="band v">
+            <p class="lbl">◆ terminal + 증거 (§5.2 · L0)</p>
+            <ul class="checks">
+              <li>run_pass→<b>PASSED</b> · verify fallback</li>
+              <li>lifecycle 순서</li>
+              <li><b>PASS without evidence</b> 차단</li>
+              <li>lease 누수 · domain 일관성</li>
+            </ul>
+          </div>
+          <div class="arrow-mid">↓</div>
+          <div class="band t">
+            <p class="lbl">▶ analyze_* (축별 정보+위반)</p>
+            <div class="steps">
+              <span>lockstep</span><span>staging</span><span>behavior</span>
+              <span>scenario</span><span>protocol</span><span>plant</span><span>attestation</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <p class="col-h">출력 · verdict</p>
+        <div class="outputs">
+          <div class="chip out">verdict<small>PASSED/FAILED/ABORTED/INCOMPLETE</small></div>
+          <div class="chip out">conformant<small>= PASSED &amp; 위반 0</small></div>
+          <div class="chip out">fidelity_evidenced<small>none·L0·L1·L2·L3·L4 (최고)</small></div>
+          <div class="chip hash">violations[]<small>위반 목록</small></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="note"><b>terminal 만 믿지 않는다</b>: <code class="inl">run_pass</code> 여도 <code class="inl">sample_received</code>·
+  <code class="inl">endpoint_matched</code>·<code class="inl">verify_pass</code> 가 없으면 위반 — "matched-but-no-data"를
+  <b>판정 레벨</b>에서 잡는 그물. <b>verdict</b>(끝났나)와 <b>conformant</b>(제대로 끝났나)는 다르다. fleet 은 완전성
+  (기대 instance_id 다 나왔나)+전원 conformant 로 판정(§13). L4 는 단일 trace 로 안 줌(→ parity.py, 10장).</p>
+
+  <p class="foot">evaluate.py (analyze_*·evaluate_run·evaluate_fleet) · to_junit.py &nbsp;|&nbsp; 문서: docs/sils-understanding.md (1–6장) &nbsp;|&nbsp; 충실도 → 7장 · golden → 8장</p>
 </div>
 </body>
 </html>
