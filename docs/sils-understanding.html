@@ -128,6 +128,11 @@
   .plane .row span { color:var(--muted); }
   .planes .link { text-align:center; color:var(--muted); font-family:var(--mono); font-size:11px; margin:2px 0; }
 
+  .crosscut { font-size:12.5px; color:var(--ink); margin:20px 0 0; padding:12px 15px;
+    background:var(--accent-soft); border:1px solid var(--accent); border-left:3px solid var(--accent);
+    border-radius:8px; line-height:1.7; }
+  .crosscut b { color:var(--accent); }
+  .crosscut em { color:var(--muted); font-style:normal; }
   .note { font-size:12.5px; color:var(--muted); margin-top:22px; padding:13px 15px;
     background:var(--surface-2); border:1px solid var(--line); border-radius:8px; }
   .note code, code.inl { font-family:var(--mono); font-size:.92em; color:var(--ink);
@@ -157,7 +162,7 @@
         <p class="who">CI · stage 0–1</p>
         <p class="what">lint → compile<br>= 변환 · 검증</p>
         <p class="sub">여기서 정적 검증. 실패 시 fail-closed.</p>
-        <span class="badge gate">◆ 검증 시점 (launch 前)</span>
+        <span class="badge gate">◆ 정적 계획 검증 (launch 前)</span>
       </div>
       <div class="stage">
         <p class="who">산출물</p>
@@ -173,10 +178,15 @@
       <div class="stage">
         <p class="who">판정</p>
         <p class="what">trace → evaluate</p>
-        <p class="sub">런타임 결과(충실도·conformance) 판정.</p>
+        <p class="sub">런타임 conformance 검증(6장) · 회귀/패리티(8·10장).</p>
       </div>
     </div>
   </div>
+
+  <p class="crosscut"><b>검증은 이 한 곳(compile)만이 아니다.</b> 3계층으로 흩어진 cross-cutting 주제다 —
+  ① <b>정적 계획 검증</b>(카탈로그 lint + 토폴로지 compile, <em>이 다이어그램·1장</em>) ·
+  ② <b>런타임 conformance</b>(trace→verdict, evaluate.py, 6장) ·
+  ③ <b>회귀·패리티</b>(compare_golden·parity, 8·10장). 이 다이어그램은 ①만 그린다.</p>
 
   <div class="whenline">
     <div class="cell"><h3>앞에서 한 번</h3><p>compile은 CI/PR/pre-commit에서 <b>launch보다 앞서</b> 실행. 문제를 실행 전으로 당겨 잡는 shift-left.</p></div>
