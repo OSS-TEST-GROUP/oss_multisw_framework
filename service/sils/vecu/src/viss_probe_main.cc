@@ -43,6 +43,7 @@
 #include "json_min.hpp"
 #include "plant.hpp"
 #include "replay_source.hpp"
+#include "scenario.hpp"
 #include "tick_inbox.hpp"
 
 namespace {
@@ -372,6 +373,25 @@ int main() {
                            ctrl_kp, ctrl_setpoint);
     TraceEvent(run_id, "behavior_start", 0, "\"name\":\"" + std::string(behavior->name()) + "\"");
 
+    // Scenario port (§11 L1/L2 negative path): tick-indexed fault injection. SILS_SCENARIO
+    // selects "scheduled" (faults from SILS_SCENARIO_FAULTS, e.g. "3:drop,7:corrupt"); any
+    // other value = nominal (no perturbation). Deterministic -> a fault run is reproducible.
+    const std::string scenario_kind = GetEnvOr("SILS_SCENARIO", "nominal");
+    const std::string scenario_spec = GetEnvOr("SILS_SCENARIO_FAULTS", "");
+    std::unique_ptr<sils::IScenario> scenario = sils::MakeScenario(scenario_kind, scenario_spec);
+    // §14 fail-fast: a scheduled scenario with an empty/unparseable spec would silently run
+    // as nominal and a "fault" run would falsely PASS. Reject before any tick.
+    if (scenario_kind == "scheduled" && scenario->scheduled_faults() == 0) {
+        std::cerr << "probe: SILS_SCENARIO=scheduled but SILS_SCENARIO_FAULTS injects no faults "
+                     "(spec: '" << scenario_spec << "')" << std::endl;
+        participant->delete_contained_entities();
+        DomainParticipantFactory::get_instance()->delete_participant(participant);
+        return 2;
+    }
+    TraceEvent(run_id, "scenario_start", 0,
+               "\"name\":\"" + std::string(scenario->name()) +
+               "\",\"scheduled_faults\":" + std::to_string(scenario->scheduled_faults()));
+
     // Plant port (§11 L3): the physical model the controller closes the loop around.
     // SILS_PLANT selects "first-order" (live, drag=SILS_PLANT_DRAG), "replay"
     // (playback from SILS_PLANT_REPLAY_FILE), or "fmu" (FMI 2.0/3.0 co-sim via fmi4c,
@@ -406,22 +426,57 @@ int main() {
     // Run one tick: ask the behavior for this tick's output, trace it, wrap the
     // inner request in the VISS envelope, and publish. Wire payload for the default
     // behavior is identical to the original probe.
-    auto publish_one = [&](const sils::BehaviorContext& ctx) -> sils::BehaviorOutput {
+    auto publish_one = [&](const sils::BehaviorContext& ctx,
+                           const sils::ScenarioAction& act) -> sils::BehaviorOutput {
+        // The behavior runs unconditionally and deterministically; a fault only perturbs
+        // what reaches the wire, never the vECU's internal computation (so the plant loop
+        // and behavior state stay reproducible regardless of the injected fault).
         sils::BehaviorOutput out = behavior->OnTick(ctx);
         std::cout << "{\"run_id\":\"" << run_id << "\",\"instance_id\":\"" << g_instance_id
                   << "\",\"event\":\"behavior_output\",\"behavior\":\"" << behavior->name()
                   << "\",\"tick_seq\":" << ctx.tick_seq << ",\"value\":" << out.value << "}" << std::endl;
+
+        // §11 negative path: apply the scenario's fault for this tick.
+        if (act.fault == sils::Fault::Drop) {
+            // The request the vECU computed never reaches the wire (lost output). No
+            // request_sent, no write -> analyze_protocol sees the gap / unanswered tick.
+            TraceEvent(run_id, "scenario_fault", static_cast<int>(ctx.tick_seq),
+                       "\"fault\":\"drop\",\"request_id\":\"" + RequestId(ctx.tick_seq) + "\"");
+            return out;
+        }
+
         VissRequestTopic sample;
-        sample.payload(WrapRequestEnvelope(out.request_json, ctx.tick_seq, response_topic_prefix));
+        const bool corrupt = act.fault == sils::Fault::Corrupt;
+        if (corrupt) {
+            // Malformed payload with no recoverable requestId: the SUT/responder cannot
+            // parse it, so the request goes unanswered -- an on-wire garbage fault, not a
+            // missing sample (distinct from Drop). Deterministic bytes -> reproducible.
+            sample.payload("<<CORRUPT SILS SCENARIO PAYLOAD tick " +
+                           std::to_string(ctx.tick_seq) + ">>");
+        } else {
+            sample.payload(WrapRequestEnvelope(out.request_json, ctx.tick_seq, response_topic_prefix));
+        }
         TraceEvent(run_id, "publish_intent", static_cast<int>(ctx.tick_seq),
                    "\"matched_count\":" + std::to_string(g_matched_count.load()));
         // L1 (§11): emit request_sent so evaluate can correlate the responder's reply.
+        // A corrupt request is still "sent" (it left the vECU); its reply won't correlate.
         if (reqresp) {
             TraceEvent(run_id, "request_sent", static_cast<int>(ctx.tick_seq),
                        "\"request_id\":\"" + RequestId(ctx.tick_seq) + "\",\"path\":\"" +
-                           request_path + "\",\"action\":\"" + request_action + "\"");
+                           request_path + "\",\"action\":\"" + request_action + "\"" +
+                           (corrupt ? ",\"corrupt\":true" : ""));
         }
         writer->write(&sample);
+        if (act.fault == sils::Fault::Duplicate) {
+            // Same requestId on the wire twice -> the SUT replies twice -> analyze_protocol
+            // "duplicate". One logical request (single request_sent), two writes.
+            writer->write(&sample);
+            TraceEvent(run_id, "scenario_fault", static_cast<int>(ctx.tick_seq),
+                       "\"fault\":\"duplicate\",\"request_id\":\"" + RequestId(ctx.tick_seq) + "\"");
+        } else if (corrupt) {
+            TraceEvent(run_id, "scenario_fault", static_cast<int>(ctx.tick_seq),
+                       "\"fault\":\"corrupt\",\"request_id\":\"" + RequestId(ctx.tick_seq) + "\"");
+        }
         TraceEvent(run_id, "publish_result", static_cast<int>(ctx.tick_seq));
         return out;
     };
@@ -505,7 +560,8 @@ int main() {
         // and (L3) the plant output fed back from the previous tick (§9 closed loop).
         sils::BehaviorContext ctx{tick.seq, tick.sim_time_ns, staged_count};
         if (plant) ctx.plant_feedback = plant->output();
-        sils::BehaviorOutput out = publish_one(ctx);
+        sils::ScenarioAction act = scenario->OnTick({tick.seq, tick.sim_time_ns});
+        sils::BehaviorOutput out = publish_one(ctx, act);
         if (plant) {
             // Close the loop: the command just published drives the plant one dt; the
             // new output becomes next tick's feedback. Trace the whole tick of the loop

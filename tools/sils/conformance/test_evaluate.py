@@ -650,6 +650,130 @@ def test_protocol_l3_takes_precedence_over_l1():
     assert r["fidelity_evidenced"] == "L3", r
 
 
+# --- fault-injection scenario (§11 negative path, IScenario / A1) -----------
+
+def _scenario_base(faults):
+    """A minimal reqresp run overlaid with a scheduled fault scenario. `faults` is a
+    dict tick->type, modeling the probe's actual trace: drop -> no request_sent/response;
+    corrupt -> request_sent(corrupt) but no response; duplicate -> request_sent + two
+    responses. scenario_start declares len(faults) scheduled."""
+    evs = [
+        {"run_id": "sc", "event": "domain_leased", "wall_time_ms": 1000, "domain_id": 90, "pool": "90-92"},
+        {"run_id": "sc", "instance_id": "viss-probe-1", "event": "run_start", "wall_time_ms": 1001, "domain_id": 90},
+        {"run_id": "sc", "instance_id": "viss-probe-1", "event": "endpoint_matched", "wall_time_ms": 1002},
+        {"run_id": "sc", "event": "qos_negotiated", "wall_time_ms": 1003, "role": "probe-writer",
+         "reliability": "RELIABLE", "durability": "TRANSIENT_LOCAL"},
+        {"run_id": "sc", "instance_id": "viss-probe-1", "event": "ready", "wall_time_ms": 1004},
+        {"run_id": "sc", "expected_instance_id": "viss-probe-1", "event": "verify_start", "wall_time_ms": 1006, "domain_id": 90},
+        {"run_id": "sc", "expected_instance_id": "viss-probe-1", "event": "endpoint_matched", "wall_time_ms": 1007},
+        {"run_id": "sc", "event": "scenario_start", "wall_time_ms": 1008, "name": "scheduled",
+         "scheduled_faults": len(faults)},
+    ]
+    wt = 1010
+    for n in range(1, 6):
+        rid = f"sils-{n}"
+        f = faults.get(n)
+        if f == "drop":
+            evs.append({"run_id": "sc", "event": "scenario_fault", "wall_time_ms": wt,
+                        "tick_seq": n, "fault": "drop", "request_id": rid})
+            wt += 6
+            continue
+        evs.append({"run_id": "sc", "event": "request_sent", "wall_time_ms": wt,
+                    "request_id": rid, "path": "Vehicle.Speed", "action": "get"})
+        if f == "corrupt":
+            evs.append({"run_id": "sc", "event": "scenario_fault", "wall_time_ms": wt + 1,
+                        "tick_seq": n, "fault": "corrupt", "request_id": rid})
+            # no response for a corrupt request
+        else:
+            r = {"run_id": "sc", "event": "response_received", "wall_time_ms": wt + 2,
+                 "request_id": rid, "status": "ok"}
+            evs.append(r)
+            if f == "duplicate":
+                evs.append(dict(r, wall_time_ms=wt + 3))
+                evs.append({"run_id": "sc", "event": "scenario_fault", "wall_time_ms": wt + 1,
+                            "tick_seq": n, "fault": "duplicate", "request_id": rid})
+        evs.append({"run_id": "sc", "expected_instance_id": "viss-probe-1",
+                    "event": "sample_received", "wall_time_ms": wt + 4, "received_count": n})
+        wt += 6
+    evs.append({"run_id": "sc", "expected_instance_id": "viss-probe-1", "event": "verify_pass",
+                "wall_time_ms": wt + 1, "received_count": 5, "min_samples": 1})
+    evs.append({"run_id": "sc", "event": "run_pass", "wall_time_ms": wt + 2})
+    evs.append({"run_id": "sc", "event": "domain_released", "wall_time_ms": wt + 3})
+    return evs
+
+
+def test_scenario_none_when_absent():
+    r = ev.evaluate_run(ev.parse_trace(write_trace(passing_events()))[0], "x")
+    assert r["scenario"] == {"scenario": "none"}
+
+
+def test_scenario_corrupt_excluded_from_unanswered():
+    # A corrupt-injected request has no response, but that is the intended stimulus,
+    # not a protocol defect -- it must NOT be flagged unanswered.
+    r = ev.evaluate_run(ev.parse_trace(write_trace(_scenario_base({3: "corrupt"})))[0], "x")
+    assert r["scenario"]["faults_injected"] == 1
+    assert r["scenario"]["by_type"] == {"corrupt": 1}
+    assert r["protocol"]["unanswered"] == 0, r["protocol"]
+    assert not any("unanswered" in v for v in r["violations"]), r["violations"]
+    assert r["conformant"] is True, r["violations"]
+
+
+def test_scenario_duplicate_excluded_from_duplicated():
+    r = ev.evaluate_run(ev.parse_trace(write_trace(_scenario_base({2: "duplicate"})))[0], "x")
+    assert r["scenario"]["by_type"] == {"duplicate": 1}
+    assert r["protocol"]["duplicated"] == 0, r["protocol"]
+    assert not any("more than one response" in v for v in r["violations"]), r["violations"]
+    assert r["conformant"] is True, r["violations"]
+
+
+def test_scenario_drop_is_no_protocol_defect():
+    r = ev.evaluate_run(ev.parse_trace(write_trace(_scenario_base({4: "drop"})))[0], "x")
+    assert r["scenario"]["by_type"] == {"drop": 1}
+    # a dropped tick emits no request_sent, so it never enters the correlation sets
+    assert r["protocol"]["unanswered"] == 0 and r["protocol"]["duplicated"] == 0
+    assert r["conformant"] is True, r["violations"]
+
+
+def test_scenario_mixed_faults_summary():
+    r = ev.evaluate_run(ev.parse_trace(write_trace(
+        _scenario_base({1: "drop", 3: "corrupt", 5: "duplicate"})))[0], "x")
+    assert r["scenario"]["faults_injected"] == 3
+    assert r["scenario"]["by_type"] == {"drop": 1, "corrupt": 1, "duplicate": 1}
+    assert r["conformant"] is True, r["violations"]
+
+
+def test_scenario_scheduled_count_mismatch_flagged():
+    # scenario_start declares 2 scheduled but only 1 scenario_fault fires -> a fault
+    # silently didn't inject; a 'fault run' must not pass on that.
+    evs = _scenario_base({3: "corrupt"})
+    for e in evs:
+        if e["event"] == "scenario_start":
+            e["scheduled_faults"] = 2
+    r = ev.evaluate_run(ev.parse_trace(write_trace(evs))[0], "x")
+    assert any("did not take effect" in v for v in r["violations"]), r["violations"]
+    assert r["conformant"] is False
+
+
+def test_scenario_scheduled_zero_fired_flagged():
+    evs = [e for e in _scenario_base({3: "corrupt"}) if e["event"] != "scenario_fault"]
+    # keep request_sent for tick 3 but its response too, so protocol stays clean;
+    # scenario_start still says scheduled 1 -> zero fired is the violation.
+    evs.append({"run_id": "sc", "event": "response_received", "wall_time_ms": 1099,
+                "request_id": "sils-3", "status": "ok"})
+    r = ev.evaluate_run(ev.parse_trace(write_trace(evs))[0], "x")
+    assert any("injected no faults" in v or "did not take effect" in v for v in r["violations"]), r["violations"]
+
+
+def test_analyze_scenario_direct_injected_sets():
+    evs = _scenario_base({1: "drop", 3: "corrupt", 5: "duplicate"})
+    info, viol, injected = ev.analyze_scenario(evs)
+    assert viol == [], viol
+    assert injected["drop"] == {"sils-1"}
+    assert injected["corrupt"] == {"sils-3"}
+    assert injected["duplicate"] == {"sils-5"}
+    assert info["scheduled_faults"] == 3 and info["faults_injected"] == 3
+
+
 def test_fleet_completeness_unexpected_instance():
     results = [ev.evaluate_run(ev.parse_trace(write_trace(passing_events(instance_id="rogue")))[0], "x")]
     fleet = ev.evaluate_fleet(results, expected_instance_ids=["wheelspeed-FL"])
