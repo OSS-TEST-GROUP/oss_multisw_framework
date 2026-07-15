@@ -250,15 +250,18 @@ def lockstep_events(seqs=(1, 2, 3), dt=1_000_000, sims=None, complete=None,
 
 
 def staging_events(received=(1, 2, 3, 4, 5), freezes=((1, [1, 2]), (2, [3, 4]), (3, [5])),
-                   dropped=(), replay=False, run_id="stg", instance_id="viss-probe-1"):
+                   dropped=(), replay=False, policy=None, run_id="stg", instance_id="viss-probe-1"):
     """A PASSED run with TickInbox staging events: inputs received in order, then
     frozen per tick. `freezes` = list of (tick_seq, [recv_seqs]). replay=True marks
-    it as tick-indexed replay (§7.4)."""
+    it as tick-indexed replay (§7.4). `policy` sets the declared late_sample_policy."""
     evs = [
         {"run_id": run_id, "event": "run_start", "wall_time_ms": 1000, "domain_id": 90,
          "backend": "local", "instance_id": instance_id},
         {"run_id": run_id, "instance_id": instance_id, "event": "ready", "wall_time_ms": 1001},
     ]
+    if policy is not None:
+        evs.append({"run_id": run_id, "instance_id": instance_id, "event": "input_staging_on",
+                    "wall_time_ms": 1001, "late_sample_policy": policy})
     if replay:
         evs.append({"run_id": run_id, "instance_id": instance_id, "event": "replay_start",
                     "wall_time_ms": 1001, "file": "replay.txt"})
@@ -327,12 +330,37 @@ def test_staging_lost_input_flagged():
     assert r["conformant"] is False, "but loss still fails conformance"
 
 
-def test_staging_dropped_input_ok():
-    # 6 received but explicitly dropped -> no "lost" violation
-    r = _stg(staging_events(received=(1, 2, 3, 4, 5, 6), dropped=(6,)))
+def test_staging_dropped_input_ok_under_drop_policy():
+    # 6 received but explicitly dropped, declared policy 'drop' -> no violation.
+    r = _stg(staging_events(received=(1, 2, 3, 4, 5, 6), dropped=(6,), policy="drop"))
     assert r["staging"]["inputs_dropped"] == 1
-    assert not any("never staged" in v for v in r["violations"]), r["violations"]
-    assert r["staging"]["deterministic"] is True
+    assert r["staging"]["late_sample_policy"] == "drop"
+    assert not any("never staged" in v or "dropped under" in v for v in r["violations"]), r["violations"]
+    assert r["conformant"] is True, r["violations"]
+
+
+def test_staging_default_policy_is_next_tick():
+    r = _stg(staging_events())
+    assert r["staging"]["late_sample_policy"] == "next_tick"
+
+
+def test_staging_drop_under_next_tick_flagged():
+    # default next_tick policy defers late input; an explicit drop breaches it.
+    r = _stg(staging_events(received=(1, 2, 3, 4, 5, 6), dropped=(6,)))  # no policy -> next_tick
+    assert any("dropped under late_sample_policy 'next_tick'" in v for v in r["violations"]), r["violations"]
+    assert r["conformant"] is False
+
+
+def test_staging_fail_policy_rejects_late():
+    # 'fail' admits no late samples: a drop makes the run non-conformant.
+    r = _stg(staging_events(received=(1, 2, 3, 4, 5, 6), dropped=(6,), policy="fail"))
+    assert any("'fail'" in v for v in r["violations"]), r["violations"]
+    assert r["conformant"] is False
+
+
+def test_staging_unknown_policy_flagged():
+    r = _stg(staging_events(policy="whenever"))
+    assert any("unknown late_sample_policy" in v for v in r["violations"]), r["violations"]
 
 
 def test_replay_mode_detected():

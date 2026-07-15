@@ -144,7 +144,10 @@ Phase 1 은 vECU 한 개가 `/VIN/Vehicle` 로 VISS 요청을 publish 하고 독
 sim_time dt 전진, barrier 닫힘) 판정. `SILS_STAGE_INPUT=1` + sils_input_source 로
 입력이 tick 에 **수신 순서대로 분할 소비**(§7.2 "소비 순서 고정")됨을 실측 —
 `staging.deterministic=true`. IClockSource 포트(wall/lockstep 어댑터) + TickInbox 로
-구현.
+구현. **late-sample 정책(§7.3)** 은 계약의 `late_sample_policy`(next_tick/drop/fail,
+lint enum·컴파일러 전파·probe `SILS_LATE_SAMPLE_POLICY` 방출)로 선언하고, evaluate 가
+정책대로 판정한다: next_tick 은 지연 소비(드롭이면 위반)·drop 은 폐기 허용·fail 은 늦은
+입력 불허. 어떤 정책이든 **스테이징도 드롭도 안 된 입력**은 손실(위반).
 
 **행동(§11 L2) + 입력 replay(§7.4) 확인**: `SILS_BEHAVIOR=accumulate` 는 tick 별
 staged 입력 수를 누적하는 상태기계 — 같은 tick-indexed 입력이면 같은 `value` 수열을

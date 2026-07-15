@@ -174,8 +174,20 @@ def analyze_lockstep(events: list[dict]) -> tuple[dict, list[str]]:
     return clock, violations
 
 
+# Late-sample policy (§7.3): what a staging vECU does with an input that arrives after
+# its tick boundary. Declared per contract (late_sample_policy) and surfaced in the
+# trace; analyze_staging judges completeness ACCORDING TO the declared policy.
+#   next_tick (default): defer the late input to the next tick -- every received input
+#                        must eventually be staged; an explicit drop is a policy breach.
+#   drop:                a late input MAY be dropped (input_dropped) -- tolerated.
+#   fail:                no late handling permitted -- any drop or unstaged input fails.
+# In all policies a received input that was neither staged nor dropped is truly LOST.
+LATE_SAMPLE_POLICIES = {"next_tick", "drop", "fail"}
+
+
 def analyze_staging(events: list[dict]) -> tuple[dict, list[str]]:
-    """Check TickInbox input-staging determinism (§7.3). Returns (staging_info, violations).
+    """Check TickInbox input-staging determinism + late-sample policy (§7.3).
+    Returns (staging_info, violations).
 
     A run stages input iff it carries `tick_input_frozen` events (the vECU froze a
     set of already-received inputs at a tick boundary). The §7.3 attribution rules:
@@ -183,8 +195,7 @@ def analyze_staging(events: list[dict]) -> tuple[dict, list[str]]:
         recv_seqs in tick order must be non-decreasing,
       - no input consumed in more than one tick (no duplicate across freeze sets),
       - a frozen recv_seq must actually have been received,
-      - every received input is eventually staged, unless dropped under a declared
-        late-sample policy (`input_dropped`).
+      - every received input is staged or dropped per the declared late_sample_policy.
     """
     frozen = [e for e in events if e.get("event") == "tick_input_frozen"]
     if not frozen:
@@ -225,20 +236,40 @@ def analyze_staging(events: list[dict]) -> tuple[dict, list[str]]:
     if phantom:
         order_violations.append(f"staging froze never-received input(s) {phantom} (§7.3)")
 
-    # Input loss (received but never consumed) is a SEPARATE, completeness/policy
-    # concern (§7.3 late-sample policy), not an order-determinism break -- it still
-    # fails conformance, but doesn't flip `deterministic`.
+    # Declared late-sample policy (§7.3). Surfaced in the trace (input_staging_on /
+    # replay_start / any event carrying late_sample_policy); defaults to next_tick.
+    policy = next((e["late_sample_policy"] for e in events
+                   if e.get("late_sample_policy")), "next_tick")
+
+    # Input loss / late handling is a SEPARATE, completeness/policy concern (§7.3),
+    # not an order-determinism break -- it fails conformance but doesn't flip
+    # `deterministic`. What counts as a violation depends on the declared policy.
     completeness_violations: list[str] = []
+    if policy not in LATE_SAMPLE_POLICIES:
+        completeness_violations.append(
+            f"unknown late_sample_policy '{policy}' (expected one of {sorted(LATE_SAMPLE_POLICIES)}, §7.3)")
+
     lost = sorted(recv_set - set(all_frozen) - dropped)
-    if lost:
+    if lost:  # neither staged nor dropped -> truly lost, a violation under EVERY policy
         head = lost if len(lost) <= 10 else lost[:10] + ["..."]
         completeness_violations.append(
             f"{len(lost)} received input(s) never staged into a tick nor dropped "
-            f"{head} -- declare a late-sample policy or pace the clock so input lands "
-            "in ticks (§7.2/§7.3)")
+            f"{head} -- pace the clock so input lands in ticks, or declare a drop policy (§7.2/§7.3)")
+
+    # Drops are only legitimate under the 'drop' policy. next_tick defers (no drop
+    # expected); fail permits neither drop nor loss.
+    if dropped and policy == "next_tick":
+        completeness_violations.append(
+            f"{len(dropped)} input(s) dropped under late_sample_policy 'next_tick' -- "
+            "this policy defers late input to the next tick, it does not drop (§7.3)")
+    if policy == "fail" and (dropped or lost):
+        completeness_violations.append(
+            f"late_sample_policy 'fail': {len(dropped)} dropped + {len(lost)} unstaged input(s) "
+            "-- this policy admits no late samples, so the run must fail (§7.3)")
 
     staging = {
         "input_mode": mode,
+        "late_sample_policy": policy,
         "inputs_received": len(received),
         "inputs_staged": len(all_frozen),
         "inputs_dropped": len(dropped),
