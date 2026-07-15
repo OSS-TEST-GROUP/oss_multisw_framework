@@ -617,6 +617,52 @@ docker run -d -e SILS_*=… -e VISS_DDS_DOMAIN_ID=90 <image>
   바이너리·env 계약은 동일.
 - `VISS_DDS_DOMAIN_ID` 는 일부러 기본값을 안 준다 → 누락 시 probe 로그로 드러남(§3.4).
 
+### entrypoint·이미지는 범용 — vECU 정보를 담지 않는다
+
+[sils_vecu_entrypoint.sh](../docker/entrypoint/sils_vecu_entrypoint.sh) 전문에는 vECU 를 특정하는
+값이 **하나도 없다**:
+
+- ✅ 하는 일: `LD_LIBRARY_PATH` 세팅 → 바이너리 존재 확인 → `exec /oss/bin/sils_vecu_viss_probe`
+- ❌ 없는 것: behavior/plant/scenario 값·instance_id·domain — 전부 없음
+
+모든 vECU 인스턴스(viss-request든 accumulate+결함이든 wheelspeed든)가 **동일한 entrypoint·동일한
+이미지**를 쓴다. core 컨테이너([core_entrypoint.sh](../docker/entrypoint/core_entrypoint.sh), ~4KB,
+다중 서비스 supervised fan-out)와 달리 sils 는 **probe 하나만 exec**(~1KB) — 그래서 "컨테이너 수명 =
+probe".
+
+### 그럼 "실 vECU 정보"는 어디에? — 세 군데로 나뉜다
+
+"vECU 정보 = env" 는 반쪽이다. 실제 vECU 를 이루는 것은 세 군데에 있다:
+
+| 무엇 | 어디 | 언제 | 예 |
+|---|---|---|---|
+| **① 로직(구현)** | **probe 바이너리** (컴파일 baked) | 빌드 | behavior/plant/scenario.hpp 의 실제 C++ — 범용 바이너리에 **모든 포트 구현**이 들어있고 env 가 하나를 고름 |
+| **② 선택·파라미터·경로** | **`SILS_*` env** (런타임 주입) | 실행 | `SILS_BEHAVIOR=accumulate` · `SILS_CTRL_KP=0.8` · `SILS_SCENARIO_FAULTS=3:drop` · `SILS_FMU_FILE=/models/vehicle.fmu`(경로) |
+| **③ 모델 아티팩트(데이터)** | **컨테이너 파일시스템** (파일) | 이미지 bake / mount | 실제 `.fmu` 파일 · replay 데이터 — env 는 **PATH 만** 주고 파일 자체는 FS 에 있어야 함 |
+
+- **로직**은 바이너리에 컴파일된다([viss_probe_main.cc 가 behavior/plant/scenario.hpp include](../service/sils/vecu/CMakeLists.txt#L85))
+  — 범용 바이너리가 4개 포트의 **모든 구현**을 담고, env(②)가 그중 하나를 선택. 그래서 "어떤 vECU인가"의
+  **행동 로직 자체는 이미 바이너리 안**에 있다(env 는 스위치일 뿐).
+- **모델 데이터**(FMU 등)는 파일이라 **컨테이너 FS 에 실제로 존재**해야 한다. `SILS_FMU_FILE` 은
+  경로일 뿐 — 파일이 없으면 로드 실패(fmu_gate 가 sha256 로 검증, §5.6/9장). 현재 local 백엔드는
+  호스트 FS 에서 읽고, docker 로 FMU 를 쓰려면 이미지에 bake 하거나 `-v` mount 필요
+  (**자동 마운트 미구현** — FMU 는 지금까지 local 로 검증).
+
+즉 **"실 vECU 정보"는 env 에만 있는 게 아니다** — 로직은 바이너리(①), 모델 데이터는 파일(③),
+env(②)는 그 둘을 **고르고 파라미터를 주는 스위치**다.
+
+### 실행 중 컨테이너가 무슨 vECU 인지 확인
+
+entrypoint·이미지가 범용이라 "이 컨테이너가 무슨 vECU 인지"는 **주입된 env 를 봐야** 안다:
+
+```bash
+docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' <container> | grep '^SILS_'
+#   SILS_BEHAVIOR=accumulate
+#   SILS_SCENARIO=scheduled
+#   SILS_SCENARIO_FAULTS=3:drop,7:duplicate
+#   ...
+```
+
 ## 4.9 MMF 통합 — 두 경로 (기동을 누가 하나)
 
 vECU 를 실제로 띄우는 주체는 두 가지다:

@@ -559,6 +559,16 @@ SILS_ATTEST_ARCH=x86_64  <span class="c"># sim</span></pre>
   └─ entrypoint.sh ──exec──▶ sils_vecu_viss_probe <span class="d">(PID 1)</span>
                                └─ getenv(SILS_*) 로 포트 선택 ──▶ DDS publish   <span class="c"># 컨테이너 수명 = probe</span></pre>
   </div>
+  <div class="qbundle" style="margin-top:16px">
+    <p class="qtitle">entrypoint·이미지는 범용 — "실 vECU 정보"는 세 군데로 나뉜다</p>
+    <div class="qrows">
+      <div class="qrow"><span class="qp">① 로직(구현)</span><span class="qv">probe 바이너리 (컴파일 baked) — 모든 포트 구현. env 가 하나 선택</span></div>
+      <div class="qrow"><span class="qp">② 선택·파라미터·경로</span><span class="qv"><b>SILS_* env</b> (런타임 주입) — behavior·Kp·faults·FMU 경로</span></div>
+      <div class="qrow"><span class="qp">③ 모델 데이터</span><span class="qv">컨테이너 파일시스템 — 실제 .fmu·replay (env 는 PATH 만)</span></div>
+    </div>
+    <p class="qnote">entrypoint 에는 vECU 정보가 <b style="color:var(--gate)">전혀 없다</b> — 모든 인스턴스가 동일 이미지·entrypoint.
+    실행 중 정체 확인: <code style="font-family:var(--mono)">docker inspect … | grep ^SILS_</code>.</p>
+  </div>
   <div class="own" style="margin-top:16px">
     <div class="o single">
       <h4>(A) Phase 1 직접 — 현재 구현</h4>
