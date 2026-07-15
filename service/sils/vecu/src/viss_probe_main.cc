@@ -392,6 +392,16 @@ int main() {
                "\"name\":\"" + std::string(scenario->name()) +
                "\",\"scheduled_faults\":" + std::to_string(scenario->scheduled_faults()));
 
+    // Target attestation (§11 L4): declare which real target-like components this run used
+    // so the L4 target-parity check (parity.py) can gate on them. Self-declared via env
+    // (the deployment/CI sets these truthfully; defaults mark a sim run, NOT target-like).
+    // ARM64 alone is a COMPONENT of L4, not sufficient -- parity.py also requires value
+    // parity against a real-target reference trace.
+    TraceEvent(run_id, "target_attestation", 0,
+               "\"arch\":\"" + GetEnvOr("SILS_ATTEST_ARCH", "unknown") +
+               "\",\"gateway\":\"" + GetEnvOr("SILS_ATTEST_GATEWAY", "sim") +
+               "\",\"protocol\":\"" + GetEnvOr("SILS_ATTEST_PROTOCOL", "sim") + "\"");
+
     // Plant port (§11 L3): the physical model the controller closes the loop around.
     // SILS_PLANT selects "first-order" (live, drag=SILS_PLANT_DRAG), "replay"
     // (playback from SILS_PLANT_REPLAY_FILE), or "fmu" (FMI 2.0/3.0 co-sim via fmi4c,

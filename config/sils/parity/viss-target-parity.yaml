@@ -1,0 +1,49 @@
+# L4 target-parity contract (architecture v3 §11 Target-like Fidelity).
+#
+# Declares what "the SiLS vECU behaves like the real ECU" means for the VISS probe, so
+# the claim is verified (tools/sils/conformance/parity.py), not asserted. The SAME
+# stimulus is run against the real target ECU (reference/authority) and against the SiLS
+# vECU; parity.py compares the two traces under this contract AND checks the SiLS run's
+# attestation. L4 (PARITY) requires BOTH to hold.
+
+target:
+  descriptor: viss-probe
+  # Provenance of the reference trace -- captured from the real target, not a SiLS run.
+  reference: "VISS probe stimulus captured on the target ECU (aarch64, real gateway)"
+
+# L4 attestation gate (§11: ARM64 is a COMPONENT of L4, not sufficient on its own). The
+# SiLS run must emit a target_attestation event (probe: SILS_ATTEST_ARCH/GATEWAY/PROTOCOL)
+# declaring these real components; a value mismatch or a missing event drops the verdict to
+# PARITY_UNATTESTED (at best L3) even if every value matches. A run that matched a
+# reference on x86 with a stubbed gateway is NOT target parity.
+attestation:
+  arch: aarch64
+  gateway: real
+  protocol: real
+
+# Which observable interface events must agree between target and SiLS. These are the
+# vECU's externally visible outputs -- the same events L1/L2/L3 already emit.
+compare_events:
+  - behavior_output      # §11 L2: per-tick emitted value
+  - response_received    # §11 L1: protocol response status/error per request
+  - plant_step           # §11 L3: closed-loop plant trajectory per tick
+
+# Alignment keys: behavior_output/plant_step align by tick, response_received by request.
+key_fields: [event, tick_seq, request_id]
+
+# Per-signal tolerance. The target is a real (often physical) system, so a plant signal
+# is NOT expected bit-exact -- unlike golden reproducibility. Discrete/protocol fields
+# (status) fall through to default and must match exactly.
+default_tolerance: {abs: 0.0, rel: 0.0}
+signals:
+  value:       {abs: 0.0,  rel: 0.0}     # discrete behavior output: exact
+  output:      {abs: 0.05, rel: 0.005}   # plant output: physical tolerance
+  command:     {abs: 0.05, rel: 0.005}   # actuation command
+  feedback_in: {abs: 0.05, rel: 0.005}   # fed-back plant output
+
+# Per-event wall-clock offset the target and SiLS may differ by. The target runs in real
+# time; a lockstep SiLS run decouples sim-time from wall time (§8), in which case parity.py
+# (via compare_golden) skips this window and sim_time_ns equality carries the timing axis.
+timing_window_ms: 10
+
+sample_policy: {missing: fail, extra: fail}
