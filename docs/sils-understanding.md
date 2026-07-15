@@ -793,7 +793,86 @@ while (clock->WaitForNextTick(tick)) {              # ⟨Clock⟩ 다음 tick �
 동작하고 wall-clock·RNG 에 의존하지 않는다(scenario 결함조차 tick 스케줄). **env 는 스위치, 로직은
 바이너리**(§4.8 ①) — 같은 바이너리가 env 조합만 바꿔 L0~L3 을 만든다.
 
-## 5.7 다음으로
+## 5.7 실전 — 새 ECU 를 포트로 추가하기 (brake · temp 예)
+
+실제로 **brake ECU** 와 **온도조절(temp) ECU** 를 만든다고 하자.
+
+### (a) 두 ECU = 두 vECU = 두 컨테이너
+
+서로 다른 ECU(다른 로직·신호·물리)라 **각자 Descriptor → 각자 인스턴스 → 각자 컨테이너**
+(§4.10). 한 Topology 의 `vecus[]` 에 둘 다 넣으면 compile 이 2 컨테이너로 전개:
+
+```yaml
+# config/sils/topologies/chassis.yaml
+vecus:
+  - name: brake-ecu
+    descriptor: service/sils/vecu/descriptors/brake_probe.yaml
+  - name: temp-ecu
+    descriptor: service/sils/vecu/descriptors/temp_probe.yaml
+# → 컨테이너 2개, fleet 로 동시 기동 (brake 휠별 이중화면 replicas + per-instance → FL/FR/RL/RR)
+```
+
+### (b) 각 ECU 를 4포트에 매핑 — "실제 구현부"의 자리
+
+| 포트 | brake ECU | temp ECU |
+|---|---|---|
+| **IBehavior** (제어 로직) | `BrakeBehavior` — 요청 감속도 → 유압 명령 | `TempControlBehavior` — 목표온도 PID (또는 p-controller 재사용) |
+| **IPlant** (물리 모델) | `BrakePlant`(유압·휠·감속) 또는 `brake.fmu` | `ThermalPlant`(열질량 RC) 또는 `thermal.fmu` |
+| **IClockSource** | lockstep(차량 동기) / wall(단독) | 동일 |
+| **IScenario** | 센서 드롭·명령 손실 | 센서 고착·지연 |
+| **Contract** (신호) | brake 요청/상태 topic·type·QoS | temp topic·type·QoS |
+
+### (c) 구현부가 물리적으로 어디 가나 (§4.8 세 군데 재확인)
+
+| 무엇 | 어디에 |
+|---|---|
+| 제어 로직(brake/temp 알고리즘) | **IBehavior 구현 클래스** → `behavior.hpp`(또는 새 파일), **바이너리에 컴파일**(§4.8 ①). 고충실도면 실제 ASW 를 IBehavior 어댑터로 감쌈 |
+| 물리 모델 | **IPlant 구현 클래스**(analytic) 또는 **`.fmu` 파일**(§4.8 ③, 컨테이너 FS) |
+| 신호/타입/QoS | **IDL** + **Contract Catalog**(2장) |
+| 선택·파라미터 | **Descriptor → `SILS_*`**(3장) |
+
+### (d) 연결·구현 절차 (brake 추가)
+
+```
+① IDL:        BrakeCommand.idl (타입)                                    [2장]
+② Contract:   catalog 에 brake-command (topic /VIN/Brake · domain · QoS) [2장]
+③ IBehavior:  class BrakeBehavior : public IBehavior {                  [5장 — 로직!]
+                 BehaviorOutput OnTick(ctx){ /* 유압 명령 계산 */ } };
+              MakeBehavior 에 "brake" 분기 추가
+④ IPlant:     class BrakePlant : public IPlant {...}  또는 brake.fmu     [5장/9장]
+              (fmu 면 allowlist 등록 §5.6)
+⑤ Descriptor: brake_probe.yaml
+                 behavior: { type: brake, spec: {...} }
+                 plant:    { type: fmu, fmu: { file: /models/brake.fmu, ... } }
+                 clock:    { mode: lockstep }
+                 buses:    [ endpoints: [ { contract_id: brake-command, direction: publish } ] ]
+⑥ Topology:   vecus[] 에 brake-ecu + temp-ecu → compile → 컨테이너 2개
+```
+
+tick 루프(§5.4)는 **안 건드린다** — `MakeBehavior`/`MakePlant` 팩토리에 **분기 하나** 추가하면
+probe 본체가 그대로 새 포트를 조립한다(earned-abstraction, §5.2).
+
+### (e) 정직한 현재 경계 ★
+
+- **포트(로직·물리·결함·클록)는 지금 바로 재사용** — `BrakeBehavior`/`ThermalPlant` 는 위처럼 꽂힌다.
+- **하지만 현재 probe 는 wire 타입이 `VissRequestTopic` 하나로 고정**(VISS 슬라이스). 두 길:
+  - **(지금 가능)** brake/temp 가 `VissRequestTopic` 엔벨로프(JSON payload)를 **다른 topic**
+    (`/VIN/Brake`, `/VIN/Temp`)에 publish — 새 IDL 없이 2 vECU 구성 가능(입력 스테이징·fleet 예제가
+    이미 이 방식).
+  - **(확장 필요)** 네이티브 `BrakeCommand` IDL 타입으로 가려면 probe 의 transport 바인딩을 **계약 타입
+    구동**으로 일반화(또는 타입 계열별 probe 바이너리) — 아직 미구현.
+- 즉 **로직·물리·결함은 포트로 지금**, **네이티브 신규 DDS 타입은 transport 일반화가 남은 작업**.
+
+```
+brake ECU                              temp ECU
+ ├ IBehavior: BrakeBehavior (로직→바이너리)   ├ IBehavior: TempControlBehavior
+ ├ IPlant:    brake.fmu (물리→파일)           ├ IPlant:    thermal.fmu
+ ├ Contract:  /VIN/Brake                      ├ Contract:  /VIN/Temp
+ └ Descriptor: brake_probe.yaml → SILS_*      └ Descriptor: temp_probe.yaml → SILS_*
+        └────── compile → 컨테이너 2개, 각자 probe(PID1) ──────┘
+```
+
+## 5.8 다음으로
 
 이 포트들이 매 tick 남기는 trace(behavior_output·plant_step·scenario_fault·tick_grant…)가 6장
 **evaluate** 의 입력이고, 그 조합이 7장 **충실도 사다리 L0–L4** 로 판정된다.
