@@ -597,7 +597,84 @@ state 파일에 `CONTAINER_NAME` 을 `docker run` **전에** 먼저 적는 이�
 호스트 reader 에 안 보인다 → **endpoint 는 match 인데 샘플 0**(2026-07 실측). 호스트 IPC 공유로
 SHM 데이터 경로를 연다.
 
-## 4.8 다음으로
+## 4.8 실행 환경 — 컨테이너 안에서 probe 가 어떻게 뜨나
+
+SiLS vECU 이미지 `runtime-mmf-sils-vecu`([Dockerfile.rel](../docker/Dockerfile.rel#L147))는 probe
+바이너리를 `/oss/bin/` 에 넣고 `ENTRYPOINT ["/oss/entrypoint.sh"]`
+([sils_vecu_entrypoint.sh](../docker/entrypoint/sils_vecu_entrypoint.sh))를 둔다. 엔트리포인트가
+하는 건 딱 하나 — **probe 를 PID 1 로 `exec`**:
+
+```
+docker run -d -e SILS_*=… -e VISS_DDS_DOMAIN_ID=90 <image>
+   └─▶ entrypoint.sh ──exec──▶ sils_vecu_viss_probe (PID 1)
+                                   └─ getenv(SILS_*) 로 포트 선택 → DDS publish
+```
+
+- **컨테이너 수명 = probe 프로세스 수명** (멀티서비스 fan-out 없음 — MMF core 컨테이너와 다름).
+- probe 가 PID 1 이라 `docker stop` → **SIGTERM 이 probe 에 직접** → wall-clock 루프 배수 + participant
+  정리(graceful). 4장 §4.6 teardown 이 이걸 노린다.
+- local 백엔드는 컨테이너 없이 **호스트 프로세스로 같은 바이너리**를 돌린다(§4.7). 실행 형태만 다르고
+  바이너리·env 계약은 동일.
+- `VISS_DDS_DOMAIN_ID` 는 일부러 기본값을 안 준다 → 누락 시 probe 로그로 드러남(§3.4).
+
+## 4.9 MMF 통합 — 두 경로 (기동을 누가 하나)
+
+vECU 를 실제로 띄우는 주체는 두 가지다:
+
+**(A) Phase 1 직접 경로** — [run_phase1.sh](../service/sils/run_coordinator/run_phase1.sh) 가 직접
+`docker run`(또는 로컬 프로세스). **현재 구현·검증된 런타임**. MMF 서비스 제어를 우회하는 **부트스트랩**
+(vECU 런타임 자체를 먼저 세우는 최소 경로).
+
+**(B) MMF 통합 경로** (아키텍처 목표) — compile 이 낸
+[saved-service-list.yaml](../tools/sils/topology_compiler/compile.py#L336)(MMF ServiceRegistry 포맷)을
+MMF 의 기존 컨테이너 제어가 소비한다:
+
+```
+saved-service-list.yaml   (name · image · container-type:docker · extra_args(-e SILS_*) · services[])
+        │
+adsw_manager   "the yaml owner" (service/extension/{ros2,agl}/adsw_manager)
+        │        saved-service-list.yaml + ServiceRegistry 소유, Save() 영속
+lifecycle_mgr  DDS 제어 (service/core/lifecycle_mgr)
+        │        StartContainer/StopContainer · ContainerType={DOCKER, DOCKER_COMPOSE, K3S} · 회복정책
+        ▼
+   컨테이너 기동 — MMF 자기 서비스와 동일 경로
+```
+
+- `extra_args` 에 **`-e SILS_*`(3장 포트 env)**가 그대로 들어가 MMF 가 **올바른 포트로** 컨테이너를 띄운다.
+- MMF 는 DOCKER 외 **DOCKER_COMPOSE·K3S** 도 지원([ContainerType](../service/core/lifecycle_mgr/include/ContainerType.hpp)).
+
+| | (A) Phase 1 직접 | (B) MMF 통합 |
+|---|---|---|
+| 기동 주체 | run_phase1.sh `docker run` | adsw_manager + lifecycle_mgr |
+| 소비 산출물 | `resolved-run.yaml` | **`saved-service-list.yaml`** |
+| 상태 | 구현·검증됨 | 포맷 방출됨, MMF 제어 배선은 목표 |
+| 용도 | 런타임 부트스트랩·CI | 실제 MMF 플릿 운용 |
+
+→ compile 이 **두 산출물**을 내는 이유: `resolved-run.yaml`(A용) + `saved-service-list.yaml`(B용, MMF 정문).
+
+## 4.10 멀티 인스턴스 — "N 컨테이너 = N 인스턴스"
+
+토폴로지 `vecus[]` 는 여러 vECU 를, 각각 `replicas` 로 여러 복제본을 가질 수 있고, compile 의
+[expand_replicas](../tools/sils/topology_compiler/compile.py#L72) 가 이를 **N 개 container 로 전개**한다
+(resolved-run·saved-service-list **둘 다 N개**). 하지만 **한 컨테이너/프로세스 = 정확히 1 인스턴스**:
+
+```
+topology.vecus[]  ──expand──▶  c1 (instance_id=ws-1) → probe(PID1)   ┐
+                               c2 (instance_id=ws-2) → probe(PID1)   ├ fleet: 도메인 1개 공유,
+                               c3 (instance_id=ws-3) → probe(PID1)   │ 동시 기동
+                               c4 (instance_id=ws-4) → probe(PID1)   ┘
+```
+
+- entrypoint 가 probe **하나**만 exec 하고 "컨테이너 수명 = 그 probe" 라, **한 프로세스에 인스턴스 여러
+  개는 안 들어간다.**
+- 여러 인스턴스 = **분리된 N 개 컨테이너/프로세스**(각자 instance_id), `fleet` 명령이 도메인 1개를 공유해
+  동시 기동(§4.2).
+- 한 프로세스에 여러 vECU 를 넣는 in-process 다중화는 [plant.hpp](../service/sils/vecu/src/plant.hpp) 주석대로
+  fmi4c thread-safety·임시경로 충돌 시험 전 **미허용** — 지금은 "프로세스=인스턴스" 모델.
+
+즉 "vECU 패키지/플릿"엔 인스턴스가 여러 개 **들어가지만**, 그건 **컨테이너 N개**로 실현된다.
+
+## 4.11 다음으로
 
 Coordinator 가 남긴 **trace.jsonl** 은 그 자체로 판정되지 않는다. 6장 **evaluate.py** 가 이 스트림을
 상태기계·증거로 읽어 verdict 로 환원한다(런타임 conformance — 전체 지도 cross-cutting 표의 ②).

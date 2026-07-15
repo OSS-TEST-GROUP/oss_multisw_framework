@@ -550,7 +550,52 @@ SILS_ATTEST_ARCH=x86_64  <span class="c"># sim</span></pre>
   run 도중 죽어도 컨테이너·PID·lease 를 회수할 수 있다(§14.4 crash 안전). 두 백엔드는 같은 host-side verify 를
   쓰며, docker 는 <code class="inl">--ipc=host</code> 가 없으면 SHM 경로가 끊겨 <b>matched-but-no-data</b>(2026-07 실측).</p>
 
-  <p class="foot">run_phase1.sh (start/fleet/cleanup/reap) · domain_lease.py &nbsp;|&nbsp; 문서: docs/sils-understanding.md (1–4장) &nbsp;|&nbsp; trace → 6장 evaluate</p>
+  <h2><span class="n">10</span> &nbsp;컨테이너 실행 &amp; MMF 통합 (누가 띄우나)</h2>
+  <p class="lede" style="margin-bottom:16px">이미지의 엔트리포인트는 probe 를 <b>PID 1 로 exec</b> — 컨테이너 수명이
+  곧 probe 프로세스다(<code class="inl">docker stop</code>→SIGTERM 직접→graceful). vECU 를 실제로 띄우는
+  주체는 두 경로가 있다.</p>
+  <div class="scroll">
+    <pre class="code">docker run -d <span class="d">-e SILS_*=…  -e VISS_DDS_DOMAIN_ID=90</span> &lt;image&gt;
+  └─ entrypoint.sh ──exec──▶ sils_vecu_viss_probe <span class="d">(PID 1)</span>
+                               └─ getenv(SILS_*) 로 포트 선택 ──▶ DDS publish   <span class="c"># 컨테이너 수명 = probe</span></pre>
+  </div>
+  <div class="own" style="margin-top:16px">
+    <div class="o single">
+      <h4>(A) Phase 1 직접 — 현재 구현</h4>
+      <div class="topics">
+        <div class="t">run_phase1.sh 가 직접 docker run / 프로세스</div>
+        <div class="t">소비: resolved-run.yaml</div>
+      </div>
+      <p>MMF 제어 우회하는 부트스트랩. 런타임·CI 검증용.</p>
+    </div>
+    <div class="o per">
+      <h4>(B) MMF 통합 — 아키텍처 목표</h4>
+      <div class="topics">
+        <div class="t ok">saved-service-list.yaml (MMF ServiceRegistry)</div>
+        <div class="t ok">adsw_manager(yaml owner) + lifecycle_mgr(DDS)</div>
+        <div class="t ok">ContainerType: DOCKER · DOCKER_COMPOSE · K3S</div>
+      </div>
+      <p>MMF 자기 서비스와 <b>동일 경로</b>로 기동·종료. extra_args 의 -e SILS_* 그대로.</p>
+    </div>
+  </div>
+  <p class="note">compile 이 <b>두 산출물</b>을 내는 이유: <code class="inl">resolved-run.yaml</code>(A용) +
+  <code class="inl">saved-service-list.yaml</code>(B용, MMF 정문).</p>
+
+  <h2><span class="n">11</span> &nbsp;멀티 인스턴스 — "N 컨테이너 = N 인스턴스"</h2>
+  <p class="lede" style="margin-bottom:16px"><code class="inl">vecus[]</code>×<code class="inl">replicas</code> 를 compile 이
+  N 컨테이너로 전개(resolved-run·saved-service-list 둘 다). 단 <b>한 컨테이너/프로세스 = 정확히 1 인스턴스</b> —
+  entrypoint 가 probe 하나만 exec 하므로.</p>
+  <div class="scroll">
+    <pre class="code">topology.vecus[]  ──expand──▶  c1 (instance_id=ws-1) → probe(PID1)   ┐
+                               c2 (instance_id=ws-2) → probe(PID1)   ├ <span class="d">fleet: 도메인 1개 공유,</span>
+                               c3 (instance_id=ws-3) → probe(PID1)   │ <span class="d">동시 기동</span>
+                               c4 (instance_id=ws-4) → probe(PID1)   ┘</pre>
+  </div>
+  <p class="note">여러 인스턴스 = <b>분리된 N 컨테이너/프로세스</b>(각자 instance_id), <code class="inl">fleet</code> 이
+  도메인 1개 공유해 동시 기동. 한 프로세스에 여러 vECU 를 넣는 in-process 다중화는 fmi4c thread-safety 시험 전
+  <b>미허용</b>(plant.hpp) — 지금은 "프로세스=인스턴스" 모델.</p>
+
+  <p class="foot">run_phase1.sh · domain_lease.py · Dockerfile.rel(entrypoint) · lifecycle_mgr · adsw_manager &nbsp;|&nbsp; 문서: docs/sils-understanding.md (1–4장) &nbsp;|&nbsp; trace → 6장 evaluate</p>
 </div>
 </body>
 </html>
