@@ -245,6 +245,7 @@ start_local() {
     fi
 
     SILS_RUN_ID="${run_id}" VISS_DDS_DOMAIN_ID="${domain}" SILS_VECU_INSTANCE_ID="${instance_id}" \
+        ${g_sils_topic:+SILS_TOPIC="${g_sils_topic}"} \
         "${probe_bin}" >> "${tfile}" 2>&1 &
     local probe_pid=$!
     # Append (state file was created at allocation time in cmd_start so lease info
@@ -310,6 +311,7 @@ start_docker() {
         -e "VISS_DDS_DOMAIN_ID=${domain}" \
         -e "SILS_RUN_ID=${run_id}" \
         -e "SILS_VECU_INSTANCE_ID=${instance_id}" \
+        ${g_sils_topic:+-e SILS_TOPIC="${g_sils_topic}"} \
         "${image}" >/dev/null 2>>"${tfile}"; then
         trace "${run_id}" "start_failed" "\"reason\":\"docker run failed\"" | tee -a "${tfile}"
         do_teardown "${run_id}"
@@ -334,6 +336,7 @@ start_docker() {
 cmd_start() {
     local backend="" bin_dir="" image="" verify_bin_arg="" domain="" run_id=""
     local instance_id="" from_resolved="" container_index=0 dry_run=false
+    local sils_topic=""
     local domain_pool="" lease_ttl=3600 lease_dir=""
     local ready_timeout_sec=5
     while [[ $# -gt 0 ]]; do
@@ -345,6 +348,7 @@ cmd_start() {
             --domain) domain="$2"; shift 2 ;;
             --run-id) run_id="$2"; shift 2 ;;
             --instance-id) instance_id="$2"; shift 2 ;;
+            --topic) sils_topic="$2"; shift 2 ;;
             --from-resolved) from_resolved="$2"; shift 2 ;;
             --container-index) container_index="$2"; shift 2 ;;
             --domain-pool) domain_pool="$2"; shift 2 ;;
@@ -372,6 +376,7 @@ cmd_start() {
         [[ -z "${backend}"     ]] && backend="${RESOLVED_BACKEND}"
         [[ -z "${domain}"      ]] && domain="${RESOLVED_DOMAIN}"
         [[ -z "${instance_id}" ]] && instance_id="${RESOLVED_INSTANCE_ID}"
+        [[ -z "${sils_topic}"  ]] && sils_topic="${RESOLVED_TOPIC:-}"
     fi
 
     # Defaults for anything still unset after (optional) resolved-run + CLI.
@@ -442,6 +447,7 @@ cmd_start() {
     # NOTE: start_* run in the CURRENT shell (not $(...)) and set g_verify_bin;
     # their `exit` therefore aborts this function on failure (see g_verify_bin decl).
     g_verify_bin=""
+    g_sils_topic="${sils_topic}"   # per-instance fleet topic (empty -> probe default /VIN/Vehicle)
     case "${backend}" in
         local)
             if [[ -z "${bin_dir}" ]]; then

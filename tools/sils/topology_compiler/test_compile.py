@@ -158,6 +158,7 @@ def test_resolved_to_shell_roundtrip(tmp_out=Path("/tmp/sils-test-compile-out"))
     assert "RESOLVED_DOMAIN='0'" in joined
     assert "RESOLVED_INSTANCE_ID='viss-probe-1'" in joined
     assert "RESOLVED_CONTAINER_COUNT='1'" in joined
+    assert "RESOLVED_TOPIC='/VIN/Vehicle'" in joined  # -> SILS_TOPIC for the probe
 
 
 def test_resolved_to_shell_out_of_range():

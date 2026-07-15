@@ -47,8 +47,11 @@
 
 namespace {
 
-// contract id: viss-request (config/sils/contracts/mmf-endpoints.yaml)
+// contract id: viss-request (config/sils/contracts/mmf-endpoints.yaml). Default
+// /VIN/Vehicle; overridable via SILS_TOPIC so a per-instance fleet (§9.5/§13) publishes
+// to its resolved topic (e.g. /VIN/WheelSpeed/<instance_id>) -- set from main().
 const std::string kTopic("/VIN/Vehicle");
+std::string g_topic(kTopic);
 
 std::atomic<bool> g_stop{false};
 std::atomic<int> g_matched_count{0};
@@ -95,7 +98,7 @@ void TraceEvent(const std::string& run_id, const std::string& event, int seq,
                 const std::string& extra_json_fields = "") {
     std::cout << "{\"run_id\":\"" << run_id << "\",\"instance_id\":\"" << g_instance_id
               << "\",\"event\":\"" << event << "\",\"seq\":" << seq
-              << ",\"wall_time_ms\":" << WallTimeMs() << ",\"topic\":\"" << kTopic << "\""
+              << ",\"wall_time_ms\":" << WallTimeMs() << ",\"topic\":\"" << g_topic << "\""
               << (extra_json_fields.empty() ? "" : ("," + extra_json_fields)) << "}"
               << std::endl;
 }
@@ -231,6 +234,7 @@ int main() {
 
     const std::string run_id = GetEnvOr("SILS_RUN_ID", "local");
     g_instance_id = GetEnvOr("SILS_VECU_INSTANCE_ID", "viss-probe-1");
+    g_topic = GetEnvOr("SILS_TOPIC", kTopic);  // per-instance fleet publishes to its resolved topic
     const int period_ms = GetEnvIntOr("SILS_VISS_PROBE_PERIOD_MS", 500);
     const std::string response_topic_prefix =
         GetEnvOr("SILS_VISS_PROBE_RESPONSE_TOPIC_PREFIX", "sils/viss_probe/response");
@@ -270,7 +274,7 @@ int main() {
     request_type.register_type(participant);
 
     Publisher* publisher = participant->create_publisher(PUBLISHER_QOS_DEFAULT, nullptr);
-    Topic* topic = participant->create_topic(kTopic, request_type.get_type_name(), TOPIC_QOS_DEFAULT);
+    Topic* topic = participant->create_topic(g_topic, request_type.get_type_name(), TOPIC_QOS_DEFAULT);
 
     DataWriterQos writer_qos = DATAWRITER_QOS_DEFAULT;
     // Matches config/sils/qos/qos-profiles.yaml "viss-default"/"viss-sils-verifiable"
@@ -294,7 +298,7 @@ int main() {
     ProbeWriterListener listener(run_id);
     DataWriter* writer = publisher->create_datawriter(topic, writer_qos, &listener);
     if (writer == nullptr) {
-        std::cerr << "Failed to create DataWriter for topic " << kTopic << std::endl;
+        std::cerr << "Failed to create DataWriter for topic " << g_topic << std::endl;
         return 1;
     }
     // Report the negotiated request-writer QoS for L1 protocol conformance (§11):
