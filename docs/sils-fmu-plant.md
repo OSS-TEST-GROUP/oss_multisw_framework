@@ -118,7 +118,8 @@ FMI 실행 방식 3종 중 **Co-Simulation**을 쓴다:
 | FMU reset/re-initialize | ⬜ 미구현 (`FmuPlant::Reset()`은 현재 no-op) |
 | FMI 3.0 Event Mode / early return | ⬜ 미지원(기본 CS step만 검증) |
 | fmi4c dependency pinning | ⬜ 미구현(`GIT_TAG main`, 재현 가능한 commit/tag 고정 필요) |
-| FMU/fmi4c provenance manifest | ⬜ 미구현(hash·parameter·step size 기록 필요) |
+| FMU 보안 게이트 (allowlist·hash) | ✅ `fmu_gate.py` — 로드 전 sha256·allowlist 검증(§5.6), Run Coordinator 프리플라이트 |
+| FMU/fmi4c provenance manifest | 🟨 부분 — 게이트가 file·sha256·fmi_version·model_identifier 기록(§5.10); binary/parameter 하위 hash·importer commit은 미구현 |
 
 **검증 예시 (Feedthrough, FMI 3.0, p-controller Kp=0.8 setpoint=10):**
 출력=입력 통과 → `u_n = 0.8·(10 − u_{n-1})` → `0, 8, 1.6, 6.72, 2.624, 5.9008 … → 4.44` 수렴.
@@ -207,6 +208,33 @@ FMU와 MORAI가 **동시에 같은 차량 동역학**을 계산하면 안 된다
 `.fmu` 안의 `.so`/`.dll`은 실제 native 코드다. **신뢰하지 않는 FMU 로드 = 임의 코드 실행
 위험.** 권장: 별도 컨테이너, read-only FS, 네트워크 제한, CPU/메모리/timeout 제한, FMU
 **hash·공급자 기록**, **허용된 FMU만** 실행(allowlist).
+
+**구현: FMU 보안 게이트 (`tools/sils/fmu/fmu_gate.py`).** allowlist·hash 검증을
+FmuPlant가 파일을 열기 **전에** Run Coordinator가 수행한다(프리플라이트).
+
+- **allowlist**: `config/sils/fmu/allowlist.yaml` — 검증된 FMU만 등록. 각 항목은
+  `id`·`sha256`(파일 전체 바이트)·`supplier`(출처/검증자)·`fmi_version`·`model_identifier`·
+  `platforms`. 등록·해시는 `--record`로 stanza를 생성해 붙여넣는다.
+- **fail-closed**: allowlist에 없거나(해시 불일치·변조·파일 없음), allowlist가 아예 없으면
+  **거부(exit 1)** → Run Coordinator가 launch 하지 않는다.
+- **이름 바인딩(`--expect-id`)**: 토폴로지가 특정 항목을 지정하면, 그 id에 **승인된 바이트와
+  정확히 일치**해야 통과 — allowlist된 다른 FMU가 대신 실행되는 것을 차단.
+- **provenance(§5.10)**: 통과 시 `file`·`sha256`·`fmi_version`·`model_identifier`·`size`·
+  allowlist `id`/`supplier`를 기록(`--manifest`/`--json`).
+- **드리프트 경고**: allowlist 메타데이터가 (해시 검증된) modelDescription과 다르면
+  **경고만**(바이트가 실행 대상이므로 차단하지 않음).
+
+```bash
+# 신뢰하는 FMU 등록용 stanza 생성 → allowlist.yaml 에 붙여넣기
+python3 tools/sils/fmu/fmu_gate.py --fmu Feedthrough.fmu --record
+# 로드 전 게이트(Run Coordinator 가 SILS_FMU_FILE 설정 시 자동 실행)
+python3 tools/sils/fmu/fmu_gate.py --fmu Feedthrough.fmu --expect-id reference-feedthrough
+```
+
+Run Coordinator는 `SILS_FMU_FILE`가 설정된 run에서 이 게이트를 자동 실행한다
+(`SILS_FMU_ALLOWLIST`/`SILS_FMU_ALLOWLIST_ID`로 override). 거부 시 `fmu_gate_denied`
+trace 후 teardown. 컨테이너 격리·read-only FS·리소스 제한은 배포/오케스트레이션 계층의
+별도 과제로 남는다(게이트는 "어떤 바이트를 실행할지"를 통제).
 
 ### 5.7 Co-Simulation step의 의미와 수치 안정성
 
@@ -354,7 +382,8 @@ SILS_RUN_ID=$RID VISS_DDS_DOMAIN_ID=$DOM $BIN/sils_vecu_viss_verify
 6. ⬜ communication step 민감도와 controller/FMU rate 계약(§5.7)
 7. ⬜ FMI 2.0 Co-Simulation 실 FMU 실측
 8. ⬜ 실 차량 동역학 FMU(Simulink/Dymola/AMESim export)로 상관검증(model correlation)
-9. ⬜ FMU 보안 샌드박싱(§5.6)
+9. 🟡 FMU 보안(§5.6): allowlist·hash 게이트 `fmu_gate.py` 완료(로드 전 검증·provenance 기록·
+   Run Coordinator 프리플라이트); **컨테이너 격리·read-only FS·리소스 제한**(배포 계층 샌드박싱)은 남음
 10. ⬜ (검토 후) FMI 3.0 Scheduled Execution
 
 **요약:** fmi4c는 vECU가 아니라 **vECU가 외부 물리 모델 FMU를 실행하도록 해주는 importer

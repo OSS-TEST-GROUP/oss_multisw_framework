@@ -85,6 +85,28 @@ trace_file() { echo "${STATE_DIR}/${1}.trace.jsonl"; }
 # tools/sils/run_coordinator/domain_lease.py, relative to this script.
 lease_helper() { echo "$(dirname "$0")/../../../tools/sils/run_coordinator/domain_lease.py"; }
 
+# tools/sils/fmu/fmu_gate.py, relative to this script.
+gate_helper() { echo "$(dirname "$0")/../../../tools/sils/fmu/fmu_gate.py"; }
+
+# FMU security gate (§5.6): when a run configures an FMU (SILS_FMU_FILE), refuse to
+# launch unless the file is allowlisted + hash-verified. Loading an FMU runs its native
+# binary in-process, so this is fail-closed -- any gate error aborts the run. Overridable
+# via SILS_FMU_ALLOWLIST (path) and SILS_FMU_ALLOWLIST_ID (bind to a named entry).
+fmu_preflight() {
+    local run_id="$1" tfile="$2"
+    [[ -z "${SILS_FMU_FILE:-}" ]] && return 0   # no FMU configured -> nothing to gate
+    local gate; gate="$(gate_helper)"
+    local args=(--fmu "${SILS_FMU_FILE}")
+    [[ -n "${SILS_FMU_ALLOWLIST:-}" ]] && args+=(--allowlist "${SILS_FMU_ALLOWLIST}")
+    [[ -n "${SILS_FMU_ALLOWLIST_ID:-}" ]] && args+=(--expect-id "${SILS_FMU_ALLOWLIST_ID}")
+    if ! python3 "${gate}" "${args[@]}" >/dev/null; then
+        trace "${run_id}" "fmu_gate_denied" "\"fmu\":\"${SILS_FMU_FILE}\"" | tee -a "${tfile}"
+        do_teardown "${run_id}"
+        exit 1
+    fi
+    trace "${run_id}" "fmu_gate_allowed" "\"fmu\":\"${SILS_FMU_FILE}\"" | tee -a "${tfile}"
+}
+
 # --- teardown (idempotent, backend-aware) -----------------------------------
 
 # do_teardown does the actual cleanup and RETURNS (no exit), so it's safe to call
@@ -448,6 +470,7 @@ cmd_start() {
     # their `exit` therefore aborts this function on failure (see g_verify_bin decl).
     g_verify_bin=""
     g_sils_topic="${sils_topic}"   # per-instance fleet topic (empty -> probe default /VIN/Vehicle)
+    fmu_preflight "${run_id}" "${tfile}"   # §5.6: gate FMU before any launch (no-op if none)
     case "${backend}" in
         local)
             if [[ -z "${bin_dir}" ]]; then
