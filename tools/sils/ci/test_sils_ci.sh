@@ -46,7 +46,27 @@ for e in bad:
 dump(bad, work+"/golden-bad/cap-c0.trace.jsonl")
 # truncated (no terminal event) -> INCOMPLETE
 dump(evs[:6], work+"/traces-bad/cap-c0.trace.jsonl")
+
+# L4 parity fixtures: a target reference + two sils runs (attested / not).
+import os
+os.makedirs(work+"/parity", exist_ok=True)
+os.makedirs(work+"/parity-ok", exist_ok=True)
+os.makedirs(work+"/parity-x86", exist_ok=True)
+dump(evs, work+"/parity/target.trace.jsonl")                       # target = authority
+attest_ok = {"run_id":"cap-c0","instance_id":"viss-probe-1","event":"target_attestation",
+             "arch":"aarch64","gateway":"real","protocol":"real","wall_time_ms":1004}
+attest_x86 = dict(attest_ok, arch="x86_64", gateway="sim", protocol="sim")
+dump([attest_ok]+evs, work+"/parity-ok/cap-c0.trace.jsonl")        # values match + attested -> PARITY
+dump([attest_x86]+evs, work+"/parity-x86/cap-c0.trace.jsonl")      # values match, x86/sim -> UNATTESTED
 PY
+cat > "${WORK}/parity-contract.yaml" <<'YAML'
+attestation: {arch: aarch64, gateway: real, protocol: real}
+compare_events: [publish_intent]
+key_fields: [event, seq]
+signals: {speed: {abs: 0.0, rel: 0.0}}
+timing_window_ms: 100
+sample_policy: {missing: fail, extra: fail}
+YAML
 cat > "${WORK}/rules.yaml" <<'YAML'
 input_mode: replay
 latency_window_ms: 50
@@ -66,6 +86,22 @@ check 1 "incomplete trace -> fleet FAIL" \
     --topology "${TOPO}" --out-dir "${WORK}/inc" --traces-dir "${WORK}/traces-bad"
 check 2 "usage: no --topology and no --resolved" --out-dir "${WORK}/u1"
 check 2 "usage: no --out-dir" --topology "${TOPO}"
+
+# L4 parity stage
+check 0 "parity: values match + attested -> L4 PASS" \
+    --topology "${TOPO}" --out-dir "${WORK}/pok" --traces-dir "${WORK}/parity-ok" \
+    --parity-target "${WORK}/parity/target.trace.jsonl" --parity-contract "${WORK}/parity-contract.yaml"
+check 1 "parity: values match but x86/sim -> NOT-L4 (unattested)" \
+    --topology "${TOPO}" --out-dir "${WORK}/px86" --traces-dir "${WORK}/parity-x86" \
+    --parity-target "${WORK}/parity/target.trace.jsonl" --parity-contract "${WORK}/parity-contract.yaml"
+check 2 "parity: --parity-target without --parity-contract -> usage" \
+    --topology "${TOPO}" --out-dir "${WORK}/pusage" --traces-dir "${WORK}/parity-ok" \
+    --parity-target "${WORK}/parity/target.trace.jsonl"
+
+# capture-golden stage: a conformant run gets baselined
+check 0 "capture-golden: baseline conformant run" \
+    --topology "${TOPO}" --out-dir "${WORK}/caprun" --traces-dir "${WORK}/traces" \
+    --rules "${WORK}/rules.yaml" --capture-golden-dir "${WORK}/captured"
 
 # lint gate: a broken catalog must fail BEFORE compile. --contracts is relative to
 # the repo root (that's what sils-ci hands the linter), so drop a broken catalog at
@@ -98,6 +134,18 @@ for f in resolved-run.yaml saved-service-list.yaml verdict.json junit.xml; do
         echo "FAIL artifact ${f} missing"; fail=$((fail+1))
     fi
 done
+
+# new-stage artifacts: parity report + captured golden
+if [[ -f "${WORK}/pok/parity/cap-c0.trace.parity.json" ]]; then
+    echo "PASS artifact parity report"; pass=$((pass+1))
+else
+    echo "FAIL artifact parity report missing"; fail=$((fail+1))
+fi
+if [[ -f "${WORK}/captured/cap-c0.trace.jsonl" ]]; then
+    echo "PASS artifact captured golden"; pass=$((pass+1))
+else
+    echo "FAIL artifact captured golden missing"; fail=$((fail+1))
+fi
 
 echo
 echo "$((pass))/$((pass+fail)) passed"

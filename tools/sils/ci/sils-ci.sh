@@ -14,19 +14,27 @@
 #     (tools/sils/conformance/to_junit.py)
 #   compare        each trace vs a golden trace        (§12.4 regression, optional)
 #     (tools/sils/conformance/compare_golden.py)
+#   parity         each trace vs a real-target reference (§11 L4 target parity, optional)
+#     (tools/sils/conformance/parity.py)
+#   capture-golden baseline the run's traces as goldens  (§12.4, optional)
+#     (tools/sils/conformance/capture_golden.py)
 #
 # Every stage is skippable so the pipeline is usable at any maturity:
-#   --resolved R     skip compile, use an existing resolved-run.yaml
-#   --traces-dir D   skip run, evaluate pre-captured traces (the deterministic
-#                    CI path once goldens exist; also the sandbox-testable path
-#                    with no DDS toolchain)
-#   --dry-run        compile for real, run the Coordinator in --dry-run (prints
-#                    each container's plan, launches nothing), then stop before
-#                    evaluate (nothing was produced to evaluate)
-#   --golden-dir G   enable the regression compare stage
+#   --resolved R           skip compile, use an existing resolved-run.yaml
+#   --traces-dir D         skip run, evaluate pre-captured traces (the deterministic
+#                          CI path once goldens exist; also the sandbox-testable path
+#                          with no DDS toolchain)
+#   --dry-run              compile for real, run the Coordinator in --dry-run (prints
+#                          each container's plan, launches nothing), then stop before
+#                          evaluate (nothing was produced to evaluate)
+#   --golden-dir G         enable the regression compare stage
+#   --parity-target T      enable the L4 parity stage (needs --parity-contract too);
+#   --parity-contract C    T = real-target reference trace, C = parity contract YAML
+#   --capture-golden-dir D baseline conformant traces into D (capture_golden self-refuses
+#                          a non-conformant/non-deterministic run)
 #
 # Artifacts land under --out-dir: resolved-run.yaml, saved-service-list.yaml,
-# traces/, verdict.json, junit.xml, compare/.
+# traces/, verdict.json, junit.xml, compare/, parity/.
 #
 # Exit: 0 = pipeline OK (and fleet PASS / no regression), 1 = a stage failed or a
 # verdict was FAIL / REGRESSION, 2 = usage error.
@@ -43,6 +51,8 @@ RUN_PHASE1_SH="${REPO_ROOT}/service/sils/run_coordinator/run_phase1.sh"
 EVALUATE_PY="${REPO_ROOT}/tools/sils/conformance/evaluate.py"
 TO_JUNIT_PY="${REPO_ROOT}/tools/sils/conformance/to_junit.py"
 COMPARE_PY="${REPO_ROOT}/tools/sils/conformance/compare_golden.py"
+CAPTURE_PY="${REPO_ROOT}/tools/sils/conformance/capture_golden.py"
+PARITY_PY="${REPO_ROOT}/tools/sils/conformance/parity.py"
 
 log() { echo "[sils-ci] $*" >&2; }
 die() { echo "[sils-ci] error: $*" >&2; exit 2; }
@@ -55,6 +65,7 @@ usage() {
 # --- args --------------------------------------------------------------------
 topology="" out_dir="" contracts="" qos="" image=""
 resolved_in="" traces_dir_in="" golden_dir="" rules=""
+capture_golden_dir="" parity_target="" parity_contract=""
 backend="local" bin_dir="" verify_bin="" run_id="" suite_name="sils-conformance"
 dry_run=false keep_going=false no_lint=false lint_strict=false
 
@@ -69,6 +80,9 @@ while [[ $# -gt 0 ]]; do
         --traces-dir)  traces_dir_in="$2"; shift 2 ;;
         --golden-dir)  golden_dir="$2"; shift 2 ;;
         --rules)       rules="$2"; shift 2 ;;
+        --capture-golden-dir) capture_golden_dir="$2"; shift 2 ;;
+        --parity-target)      parity_target="$2"; shift 2 ;;
+        --parity-contract)    parity_contract="$2"; shift 2 ;;
         --backend)     backend="$2"; shift 2 ;;
         --bin-dir)     bin_dir="$2"; shift 2 ;;
         --verify-bin)  verify_bin="$2"; shift 2 ;;
@@ -208,11 +222,53 @@ if [[ -n "${golden_dir}" ]]; then
     done
 fi
 
+# --- stage 6: L4 target parity (optional) ------------------------------------
+# Compare each run trace against a real-target reference under a parity contract
+# (§11 L4). Non-PARITY (divergence OR unattested) fails the stage. Distinct from the
+# golden compare above: golden = SiLS reproducibility, parity = likeness to the target.
+parity_rc=0
+if [[ -n "${parity_target}" || -n "${parity_contract}" ]]; then
+    if [[ -z "${parity_target}" || -z "${parity_contract}" ]]; then
+        die "L4 parity needs BOTH --parity-target and --parity-contract"
+    fi
+    log "parity: target=${parity_target} contract=${parity_contract}"
+    mkdir -p "${out_dir}/parity"
+    for tf in "${trace_files[@]}"; do
+        base="$(basename "${tf}")"
+        report="${out_dir}/parity/${base%.jsonl}.parity.json"
+        if ! python3 "${PARITY_PY}" --target "${parity_target}" --sils "${tf}" \
+                --contract "${parity_contract}" --quiet > "${report}"; then
+            parity_rc=1
+            log "parity: NOT L4 for ${base} (divergence or unattested; see ${report})"
+        fi
+    done
+fi
+
+# --- stage 7: capture golden (optional) --------------------------------------
+# Baseline the run's traces as goldens for future regression compares. capture_golden
+# self-refuses a non-conformant / non-deterministic run (exit 1), so a bad run never
+# becomes a golden -- we log the refusal but don't fail the pipeline on it.
+if [[ -n "${capture_golden_dir}" ]]; then
+    log "capture-golden: dir=${capture_golden_dir}"
+    mkdir -p "${capture_golden_dir}"
+    cap_args=()
+    [[ -n "${rules}" ]] && cap_args+=(--rules "${rules}")
+    for tf in "${trace_files[@]}"; do
+        base="$(basename "${tf}")"
+        if python3 "${CAPTURE_PY}" --trace "${tf}" --out "${capture_golden_dir}/${base}" \
+                ${cap_args[@]+"${cap_args[@]}"}; then
+            log "capture-golden: baselined ${base}"
+        else
+            log "capture-golden: refused ${base} (non-conformant/non-deterministic -- not baselined)"
+        fi
+    done
+fi
+
 # --- aggregate ---------------------------------------------------------------
 fleet_verdict="$(python3 -c "import json,sys; print(json.load(open('${verdict}')).get('fleet_verdict','?'))" 2>/dev/null || echo '?')"
-log "SUMMARY: fleet=${fleet_verdict} junit=${junit}$( [[ -n "${golden_dir}" ]] && echo " regression=$( [[ ${compare_rc} -eq 0 ]] && echo PASS || echo FAIL )" )"
+log "SUMMARY: fleet=${fleet_verdict} junit=${junit}$( [[ -n "${golden_dir}" ]] && echo " regression=$( [[ ${compare_rc} -eq 0 ]] && echo PASS || echo FAIL )" )$( [[ -n "${parity_target}" ]] && echo " parity=$( [[ ${parity_rc} -eq 0 ]] && echo L4 || echo NOT-L4 )" )"
 
-if [[ "${eval_rc}" -ne 0 || "${compare_rc}" -ne 0 ]]; then
+if [[ "${eval_rc}" -ne 0 || "${compare_rc}" -ne 0 || "${parity_rc}" -ne 0 ]]; then
     exit 1
 fi
 exit 0
