@@ -162,6 +162,15 @@ compare_golden MATCH). IBehavior 포트(viss-request/accumulate/p-controller 어
 **x86 실런타임에서 두 번 독립 실행 → sim_time·궤적 소수점까지 동일(compare_golden MATCH)로
 재현성 확인**; FMI co-sim 이 3번째 구현.
 
+**프로토콜 충실도(§11 L1) 확인**: `SILS_PROTOCOL=reqresp` 로 probe 가 요청을 보내고
+응답 토픽을 구독, `sils_vecu_viss_responder`(SUT 스탠드인)가 요청을 받아 `requestId` 를
+echo 한 상관 응답을 발행. probe 는 `request_sent`, 응답 수신 시 `response_received`
+{request_id,status,error_code} 를 방출하고, evaluate `analyze_protocol` 이 request_id 로
+**왕복을 상관**한다: unanswered(orphan)/phantom/duplicate/ill-formed error/QoS(RELIABLE)
+위반 시 fail, 매칭된 왕복 ≥1 + 위반 0 이면 **fidelity=L1**. `SILS_RESPONDER_ERROR_EVERY=k`
+로 매 k 번째 응답을 well-formed error 로 주입해 오류 semantics 를 결정론적으로 시험.
+응답도 TRANSIENT_LOCAL(late-join). *(도구 계약 샌드박스 검증 완료; C++ 실런타임은 빌드 후.)*
+
 **arm64 빌드 확인**: `./build.sh --aarch64 --build-sils` 로 aarch64 크로스빌드 성공(코드 수정 없이 — SiLS 는 arch 중립, core 와 동일 FastDDS/IDL 경로). arm64 **실행** 검증은 arm64 호스트(또는 qemu/binfmt) 필요.
 
-**남은 것**: arm64 실행 검증(arm64 머신/에뮬), 실제 VISS SUT 와의 폐루프(현재는 독립 verify 로 왕복만 확인), 물리적 timing 충실도 실측(§0A Contract Spike), §9.5-유효한 다중 topic/multi-owner contract 기반 fleet(현재 `--replicas` 는 single-owner 우회 스모크), IPlant 의 **FMI 2.0/3.0 co-sim 어댑터**(현재 AnalyticPlant/ReplayPlant 2구현으로 포트 확립 — 같은 포트 뒤에 FMU 드롭인), 그리고 L1(protocol)·L4(target parity) fidelity.
+**남은 것**: L1 C++ 실런타임 trace 판정(도구 계약은 완료, 빌드 후 왕복 실측), arm64 실행 검증(arm64 머신/에뮬), 실제 VISS SUT 와의 폐루프(현재는 responder 스탠드인으로 왕복 확인), 물리적 timing 충실도 실측(§0A Contract Spike), §9.5-유효한 다중 topic/multi-owner contract 기반 fleet(현재 `--replicas` 는 single-owner 우회 스모크), IPlant 의 **FMI 2.0/3.0 co-sim 어댑터**(현재 AnalyticPlant/ReplayPlant 2구현으로 포트 확립 — 같은 포트 뒤에 FMU 드롭인), 그리고 L4(target parity) fidelity.
