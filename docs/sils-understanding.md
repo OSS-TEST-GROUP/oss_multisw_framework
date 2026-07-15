@@ -15,7 +15,7 @@
 | 장 | 주제 | 상태 |
 |---|---|---|
 | **1** | **Topology Compiler — 정적 변환·검증** | ✅ 작성됨 |
-| 2 | Contract / QoS Catalog — 계약·QoS 카탈로그가 무엇을 고정하나 | ⬜ |
+| 2 | Contract / QoS Catalog — 무엇을 **선언**하나 (계약의 의미·QoS 매칭). *검증(lint)은 1장* | ⬜ |
 | 3 | Descriptor → `SILS_*` env — 선언적 포트 배선(§9.2) | ⬜ (1장 §1.3에 일부) |
 | 4 | Run Coordinator — 도메인 임대·기동·teardown·reap | ⬜ |
 | 5 | vECU 포트 — Clock / Behavior / Plant / Scenario | ⬜ |
@@ -27,6 +27,18 @@
 | 11 | Fleet / run 격리 / 재현성 | ⬜ |
 
 이해한 장을 ✅ 로 바꿔가며 진행한다. `↗` 는 이미 전용 문서가 있어 링크로 대체하는 장.
+
+> **"검증"은 한 장이 아니라 시스템 전반에 흩어진 cross-cutting 주제다.** 장을 혼동하지 않도록
+> 어디서 무엇을 검증하는지 미리 못 박는다:
+>
+> | 검증 계층 | 무엇을 | 코드 | 장 |
+> |---|---|---|---|
+> | 정적 계획 검증 | 카탈로그 위생 + 토폴로지 문맥 | lint_catalog · compile | **1** |
+> | 런타임 conformance | run trace → verdict | evaluate.py | 6 |
+> | 회귀 · 패리티 | 재현성 · 타깃 동등성 | compare_golden · parity | 8 · 10 |
+>
+> 따라서 **카탈로그의 *검증*(lint)은 1장 소관**이고, 2장은 카탈로그가 *무엇을 선언하는가*(계약
+> 모델)만 다룬다 — 검증을 반복하지 않는다.
 
 ---
 
@@ -179,7 +191,9 @@ per-instance fleet(replica 마다 고유 토픽)은 유효, `{instance_id}` 안 
 아래는 아직 stub. 이해하는 대로 각 장을 위 1장처럼 채운다.
 
 - **2장 Contract / QoS Catalog** — `config/sils/contracts/*.yaml`·`qos/qos-profiles.yaml` 가
-  topic·domain·QoS·ownership·late_sample_policy 를 어떻게 고정하고, 왜 이게 "계약"인가.
+  topic·domain·type·QoS·ownership 을 **선언**하는 단일 출처. 왜 이게 "계약"인가(SUT↔vECU 합의),
+  QoS 매칭(RxO) 의미론(RELIABLE/TRANSIENT_LOCAL 이 late-join 검증에 왜 중요한지), 카탈로그로
+  빼는 이유(재사용·단일 소유·`semantic_version`). **검증(lint)은 1장 §1.4.A 참조 — 여기선 반복 X.**
 - **3장 Descriptor → `SILS_*` env** — 선언적 포트 배선(§9.2). 1장 §1.3-④ 를 확장.
 - **4장 Run Coordinator** — 도메인 임대([domain_lease.py](../tools/sils/run_coordinator/domain_lease.py))·
   local/docker 기동·teardown·고아 reap.
