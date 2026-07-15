@@ -34,6 +34,7 @@ struct BehaviorContext {
     uint64_t tick_seq = 0;
     int64_t sim_time_ns = 0;
     std::size_t staged_input_count = 0;  // this tick's frozen input set size (§7.3)
+    double plant_feedback = 0.0;         // plant output read back this tick (§9 L3 closed loop)
 };
 
 struct BehaviorOutput {
@@ -86,12 +87,47 @@ private:
     double acc_ = 0.0;
 };
 
+// L3 controller: a proportional controller closing the loop around an IPlant. It
+// reads the plant's fed-back output (ctx.plant_feedback) and emits the actuation
+// command u = Kp*(setpoint - feedback). value = command, so behavior_output carries
+// the command and the probe feeds that same command into the plant -- one number,
+// no divergence between what's published and what's actuated. Deterministic given
+// (Kp, setpoint) and the fixed dt/feedback stream -> the closed loop is golden-
+// reproducible (§9 model correlation).
+class PControllerBehavior : public IBehavior {
+public:
+    PControllerBehavior(double kp, double setpoint) : kp_(kp), setpoint_(setpoint) {}
+    BehaviorOutput OnTick(const BehaviorContext& ctx) override {
+        double command = kp_ * (setpoint_ - ctx.plant_feedback);
+        std::ostringstream inner;
+        inner << R"({"action":"set","path":"Vehicle.Actuation","value":)" << command
+              << R"(,"requestId":"sils-)" << ctx.tick_seq << R"("})";
+        return {inner.str(), command};
+    }
+    const char* name() const override { return "p-controller"; }
+
+private:
+    double kp_;
+    double setpoint_;
+};
+
 inline std::unique_ptr<IBehavior> MakeBehavior(
     const std::string& kind, const std::string& action, const std::string& path) {
     if (kind == "accumulate") {
         return std::make_unique<AccumulatorBehavior>();
     }
     return std::make_unique<VissRequestBehavior>(action, path);
+}
+
+// Overload carrying controller gains (SILS_CTRL_KP / SILS_CTRL_SETPOINT) for the
+// L3 "p-controller" behavior; other kinds ignore them.
+inline std::unique_ptr<IBehavior> MakeBehavior(
+    const std::string& kind, const std::string& action, const std::string& path,
+    double kp, double setpoint) {
+    if (kind == "p-controller") {
+        return std::make_unique<PControllerBehavior>(kp, setpoint);
+    }
+    return MakeBehavior(kind, action, path);
 }
 
 }  // namespace sils

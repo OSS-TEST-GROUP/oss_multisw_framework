@@ -18,6 +18,7 @@
 #include <chrono>
 #include <csignal>
 #include <cstdlib>
+#include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -39,6 +40,7 @@
 #include "VissRequestPubSubTypes.hpp"
 #include "behavior.hpp"
 #include "clock_source.hpp"
+#include "plant.hpp"
 #include "replay_source.hpp"
 #include "tick_inbox.hpp"
 
@@ -252,14 +254,42 @@ int main() {
     // Behavior port (§11 L2): what the vECU emits each tick. Default "viss-request"
     // reproduces the Phase 1 wire payload; "accumulate" is a stateful example that
     // consumes staged input. Selected by SILS_BEHAVIOR.
+    const double ctrl_kp = std::stod(GetEnvOr("SILS_CTRL_KP", "0.8"));
+    const double ctrl_setpoint = std::stod(GetEnvOr("SILS_CTRL_SETPOINT", "10.0"));
     std::unique_ptr<sils::IBehavior> behavior =
-        sils::MakeBehavior(GetEnvOr("SILS_BEHAVIOR", "viss-request"), request_action, request_path);
+        sils::MakeBehavior(GetEnvOr("SILS_BEHAVIOR", "viss-request"), request_action, request_path,
+                           ctrl_kp, ctrl_setpoint);
     TraceEvent(run_id, "behavior_start", 0, "\"name\":\"" + std::string(behavior->name()) + "\"");
+
+    // Plant port (§9 L3): the physical model the controller closes the loop around.
+    // SILS_PLANT selects "first-order" (live, drag=SILS_PLANT_DRAG) or "replay"
+    // (playback from SILS_PLANT_REPLAY_FILE); unset/other = no plant (open loop, L2).
+    const std::string plant_kind = GetEnvOr("SILS_PLANT", "none");
+    const double plant_drag = std::stod(GetEnvOr("SILS_PLANT_DRAG", "0.5"));
+    const double plant_init = std::stod(GetEnvOr("SILS_PLANT_INIT", "0.0"));
+    const std::string plant_replay_file = GetEnvOr("SILS_PLANT_REPLAY_FILE", "");
+    std::string plant_err;
+    std::unique_ptr<sils::IPlant> plant =
+        sils::MakePlant(plant_kind, plant_drag, plant_replay_file, plant_err);
+    if (plant_kind != "none" && !plant) {
+        std::cerr << "probe: " << (plant_err.empty() ? "unknown plant: " + plant_kind : plant_err)
+                  << std::endl;
+        participant->delete_contained_entities();
+        DomainParticipantFactory::get_instance()->delete_participant(participant);
+        return 2;
+    }
+    if (plant) {
+        plant->Reset(plant_init);
+        std::ostringstream pr;
+        pr << "\"model\":\"" << plant->name() << "\",\"mode\":\"" << plant->mode()
+           << "\",\"initial\":" << plant_init;
+        TraceEvent(run_id, "plant_reset", 0, pr.str());
+    }
 
     // Run one tick: ask the behavior for this tick's output, trace it, wrap the
     // inner request in the VISS envelope, and publish. Wire payload for the default
     // behavior is identical to the original probe.
-    auto publish_one = [&](const sils::BehaviorContext& ctx) {
+    auto publish_one = [&](const sils::BehaviorContext& ctx) -> sils::BehaviorOutput {
         sils::BehaviorOutput out = behavior->OnTick(ctx);
         std::cout << "{\"run_id\":\"" << run_id << "\",\"instance_id\":\"" << g_instance_id
                   << "\",\"event\":\"behavior_output\",\"behavior\":\"" << behavior->name()
@@ -270,6 +300,7 @@ int main() {
                    "\"matched_count\":" + std::to_string(g_matched_count.load()));
         writer->write(&sample);
         TraceEvent(run_id, "publish_result", static_cast<int>(ctx.tick_seq));
+        return out;
     };
 
     // Optional input staging (TickInbox, §7.3): subscribe to an input stream and
@@ -343,9 +374,24 @@ int main() {
                       << ",\"recv_seqs\":" << RecvSeqsJson(frozen)
                       << ",\"count\":" << frozen.size() << "}" << std::endl;
         }
-        // The behavior consumes this tick's staged input count (§7.3) + sim time.
+        // The behavior consumes this tick's staged input count (§7.3) + sim time,
+        // and (L3) the plant output fed back from the previous tick (§9 closed loop).
         sils::BehaviorContext ctx{tick.seq, tick.sim_time_ns, staged_count};
-        publish_one(ctx);
+        if (plant) ctx.plant_feedback = plant->output();
+        sils::BehaviorOutput out = publish_one(ctx);
+        if (plant) {
+            // Close the loop: the command just published drives the plant one dt; the
+            // new output becomes next tick's feedback. Trace the whole tick of the loop
+            // (feedback_in -> command -> output) for L3 conformance / model correlation.
+            plant->SetInputs(out.value);
+            double y = plant->Step(tick.dt_ns);
+            std::ostringstream ps;
+            ps << std::setprecision(12)
+               << "\"tick_seq\":" << tick.seq << ",\"sim_time_ns\":" << tick.sim_time_ns
+               << ",\"dt_ns\":" << tick.dt_ns << ",\"feedback_in\":" << ctx.plant_feedback
+               << ",\"command\":" << out.value << ",\"output\":" << y;
+            TraceEvent(run_id, "plant_step", static_cast<int>(tick.seq), ps.str());
+        }
         clock->TickDone(tick);  // lockstep: sends TickComplete; wall: no-op
         last_seq = tick.seq;
     }

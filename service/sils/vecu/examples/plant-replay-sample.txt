@@ -1,0 +1,23 @@
+# SiLS plant output replay sample (architecture v3 Final §9 L3, IPlant "Replay").
+#
+# Consumed by sils_vecu_viss_probe when SILS_PLANT=replay and
+# SILS_PLANT_REPLAY_FILE points here. Each line fixes the plant OUTPUT for one
+# tick, so ReplayPlant reproduces a recorded trajectory bit-for-bit (deterministic
+# golden target). Unlike AnalyticPlant this ignores the command -- it's playback,
+# NOT a live closed loop, so it does not evidence L3-live (see evaluate.py).
+#
+# This trajectory is exactly what the built-in AnalyticPlant (first-order,
+# drag=0.5) produces under the default P-controller (Kp=0.8, setpoint=10, dt=0.1s):
+# record a live run once, then replay it anywhere without the model.
+#
+# format:  <tick_seq>  <output>
+1 0.8
+2 1.496
+3 2.10152
+4 2.6283224
+5 3.086640488
+6 3.485377225
+7 3.832278185
+8 4.134082021
+9 4.396651359
+10 4.625086682

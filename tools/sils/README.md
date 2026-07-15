@@ -145,6 +145,20 @@ sim_time dt 전진, barrier 닫힘) 판정. `SILS_STAGE_INPUT=1` + sils_input_so
 `staging.deterministic=true`. IClockSource 포트(wall/lockstep 어댑터) + TickInbox 로
 구현.
 
+**행동(§11 L2) + 입력 replay(§7.4) 확인**: `SILS_BEHAVIOR=accumulate` 는 tick 별
+staged 입력 수를 누적하는 상태기계 — 같은 tick-indexed 입력이면 같은 `value` 수열을
+재생산. `SILS_REPLAY_FILE` 로 입력을 파일 구동하면(§7.4) tick→입력 귀속이 파일로
+고정돼 벽시계 도착 경합 없이 **run 간 재현 가능**(evaluate `input_mode=replay`,
+compare_golden MATCH). IBehavior 포트(viss-request/accumulate/p-controller 어댑터).
+
+**플랜트 폐루프(§9 L3) 확인**: `SILS_PLANT=first-order` + `SILS_BEHAVIOR=p-controller`
+로 컨트롤러가 매 tick 플랜트 출력을 피드백 받아 명령을 계산하고, 플랜트가 그 명령으로
+한 dt 적분하는 **실 폐루프**를 구성. evaluate `analyze_plant` 가 `plant_step` 스트림에서
+루프 연속성(feedback_in[N]==output[N-1]) + live + 결정론을 확인해 **fidelity=L3** 판정,
+compare_golden 이 `plant_step` 출력을 model correlation 으로 비교. `SILS_PLANT=replay`
+(playback)는 결정론적 golden 이지만 명령을 무시하므로 L3-live 아님(입력 replay 와 동일
+구분). IPlant 포트(AnalyticPlant=live / ReplayPlant=playback 어댑터). *(x86 실런타임 트레이스 판정 검증됨; 아래 남은 것의 FMI 어댑터가 3번째 구현.)*
+
 **arm64 빌드 확인**: `./build.sh --aarch64 --build-sils` 로 aarch64 크로스빌드 성공(코드 수정 없이 — SiLS 는 arch 중립, core 와 동일 FastDDS/IDL 경로). arm64 **실행** 검증은 arm64 호스트(또는 qemu/binfmt) 필요.
 
-**남은 것**: arm64 실행 검증(arm64 머신/에뮬), 실제 VISS SUT 와의 폐루프(현재는 독립 verify 로 왕복만 확인), 물리적 timing 충실도 실측(§0A Contract Spike), §9.5-유효한 다중 topic/multi-owner contract 기반 fleet(현재 `--replicas` 는 single-owner 우회 스모크), 그리고 상위 fidelity 포트(IPlant L3/IBehavior L2 — 2번째 구현이 생기는 시점에 IClockSource 패턴대로 도입).
+**남은 것**: arm64 실행 검증(arm64 머신/에뮬), 실제 VISS SUT 와의 폐루프(현재는 독립 verify 로 왕복만 확인), 물리적 timing 충실도 실측(§0A Contract Spike), §9.5-유효한 다중 topic/multi-owner contract 기반 fleet(현재 `--replicas` 는 single-owner 우회 스모크), IPlant 의 **FMI 2.0/3.0 co-sim 어댑터**(현재 AnalyticPlant/ReplayPlant 2구현으로 포트 확립 — 같은 포트 뒤에 FMU 드롭인), 그리고 L1(protocol)·L4(target parity) fidelity.
