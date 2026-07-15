@@ -38,7 +38,21 @@
 #include <string>
 #include <vector>
 
+#ifdef SILS_HAVE_FMU
+#include <cmath>
+#include <limits>
+#include <fmi4c.h>  // FMI 1/2/3 loader (build with -DSILS_ENABLE_FMU); FmuPlant only
+#endif
+
 namespace sils {
+
+// Config for the FMU-backed plant (SILS_PLANT=fmu). value references address the
+// FMU's input (command) and output variables per its modelDescription.xml.
+struct FmuConfig {
+    std::string file;      // path to the .fmu
+    int input_vr = -1;     // command input value reference; <0 = FMU takes no command
+    int output_vr = 0;     // output value reference read back as the plant output
+};
 
 class IPlant {
 public:
@@ -53,6 +67,8 @@ public:
     virtual double output() const = 0;
     virtual const char* name() const = 0;
     virtual const char* mode() const = 0;  // "live" | "replay"
+    // FMI version string for the trace (e.g. "2.0"/"3.0"); nullptr for non-FMU plants.
+    virtual const char* fmi_version() const { return nullptr; }
 };
 
 // First-order lag: x' = u - a*x, forward-Euler x += (u - a*x)*dt. A real, command-
@@ -121,10 +137,125 @@ private:
     double x_ = 0.0;
 };
 
-// Factory. kind "first-order" (live, drag=a) or "replay" (needs replay_file). Any
-// other value (including "none") returns nullptr -> plant coupling off (open loop).
+#ifdef SILS_HAVE_FMU
+// FMU-backed plant (FMI 2.0/3.0 co-simulation, §11 L3, third IPlant implementation).
+// The port maps 1:1 onto FMI co-sim: SetInputs->fmiX_setReal/setFloat64,
+// Step->fmiX_doStep, output->fmiX_getReal/getFloat64. So a real, validated physics
+// FMU (from Simulink/Dymola/AMESim, or a Reference-FMU) drops in behind IPlant with
+// NO change to the tick loop / evaluate / golden -- it emits the same plant_step
+// contract as AnalyticPlant. A doStep that fails or yields non-finite output surfaces
+// as NaN, which analyze_plant fail-fasts (§14). fmi4c provides FMI 1/2/3 loading.
+class FmuPlant : public IPlant {
+public:
+    ~FmuPlant() override {
+        if (i2_) fmi2_freeInstance(i2_);
+        if (i3_) fmi3_freeInstance(i3_);
+        if (fmu_) fmi4c_freeFmu(fmu_);
+    }
+
+    bool Load(const FmuConfig& cfg, std::string& error) {
+        input_vr_ = cfg.input_vr;
+        output_vr_ = cfg.output_vr;
+        has_input_ = cfg.input_vr >= 0;
+        fmu_ = fmi4c_loadFmu(cfg.file.c_str(), "sils_fmu");
+        if (!fmu_) { error = "fmi4c_loadFmu failed for " + cfg.file; return false; }
+        const fmiVersion_t v = fmi4c_getFmiVersion(fmu_);
+        if (v == fmiVersion2) {
+            fmi_ver_ = "2.0";
+            i2_ = fmi2_instantiate(fmu_, fmi2CoSimulation, nullptr, nullptr, nullptr,
+                                   nullptr, nullptr, fmi2False, fmi2False);
+            if (!i2_) { error = "fmi2_instantiate failed"; return false; }
+            if (fmi2_setupExperiment(i2_, fmi2False, 0.0, 0.0, fmi2False, 0.0) != fmi2OK ||
+                fmi2_enterInitializationMode(i2_) != fmi2OK ||
+                fmi2_exitInitializationMode(i2_) != fmi2OK) {
+                error = "fmi2 initialization failed"; return false;
+            }
+            x_ = ReadOutput();
+        } else if (v == fmiVersion3) {
+            fmi_ver_ = "3.0";
+            i3_ = fmi3_instantiateCoSimulation(fmu_, fmi3False, fmi3False, fmi3False,
+                                               fmi3False, nullptr, 0, nullptr, nullptr, nullptr);
+            if (!i3_) { error = "fmi3_instantiateCoSimulation failed"; return false; }
+            if (fmi3_enterInitializationMode(i3_, fmi3False, 0.0, 0.0, fmi3False, 0.0) != fmi3OK ||
+                fmi3_exitInitializationMode(i3_) != fmi3OK) {
+                error = "fmi3 initialization failed"; return false;
+            }
+            x_ = ReadOutput();
+        } else {
+            error = "unsupported FMI version (need 2.0 or 3.0)"; return false;
+        }
+        return true;
+    }
+
+    void Reset(double /*initial*/) override {}  // FMU init done in Load (start from modelDescription)
+    void SetInputs(double command) override {
+        if (!has_input_) return;
+        if (i2_) {
+            fmi2ValueReference vr = static_cast<fmi2ValueReference>(input_vr_);
+            fmi2Real val = command;
+            fmi2_setReal(i2_, &vr, 1, &val);
+        } else if (i3_) {
+            fmi3ValueReference vr = static_cast<fmi3ValueReference>(input_vr_);
+            fmi3Float64 val = command;
+            fmi3_setFloat64(i3_, &vr, 1, &val, 1);
+        }
+    }
+    double Step(int64_t dt_ns) override {
+        const double dt = static_cast<double>(dt_ns) / 1e9;
+        if (i2_) {
+            if (fmi2_doStep(i2_, time_, dt, fmi2True) != fmi2OK) return Fail();
+        } else if (i3_) {
+            fmi3Boolean ev = fmi3False, term = fmi3False, er = fmi3False;
+            fmi3Float64 last = 0.0;
+            if (fmi3_doStep(i3_, time_, dt, fmi3True, &ev, &term, &er, &last) != fmi3OK) return Fail();
+        } else {
+            return Fail();
+        }
+        time_ += dt;
+        x_ = ReadOutput();
+        return x_;
+    }
+    double output() const override { return x_; }
+    const char* name() const override { return "fmu"; }
+    const char* mode() const override { return "live"; }
+    const char* fmi_version() const override { return fmi_ver_; }
+
+private:
+    double Fail() { x_ = std::numeric_limits<double>::quiet_NaN(); return x_; }  // §14 fail-fast
+    double ReadOutput() {
+        if (i2_) {
+            fmi2ValueReference vr = static_cast<fmi2ValueReference>(output_vr_);
+            fmi2Real val = 0.0;
+            fmi2_getReal(i2_, &vr, 1, &val);
+            return val;
+        }
+        if (i3_) {
+            fmi3ValueReference vr = static_cast<fmi3ValueReference>(output_vr_);
+            fmi3Float64 val = 0.0;
+            fmi3_getFloat64(i3_, &vr, 1, &val, 1);
+            return val;
+        }
+        return x_;
+    }
+
+    fmuHandle* fmu_ = nullptr;
+    fmi2InstanceHandle* i2_ = nullptr;
+    fmi3InstanceHandle* i3_ = nullptr;
+    const char* fmi_ver_ = "";
+    double time_ = 0.0;
+    double x_ = 0.0;
+    int input_vr_ = -1;
+    int output_vr_ = 0;
+    bool has_input_ = false;
+};
+#endif  // SILS_HAVE_FMU
+
+// Factory. kind "first-order" (live, drag=a), "replay" (needs replay_file), or "fmu"
+// (needs fmu config; requires -DSILS_ENABLE_FMU / fmi4c). Any other value (including
+// "none") returns nullptr -> plant coupling off (open loop).
 inline std::unique_ptr<IPlant> MakePlant(
-    const std::string& kind, double drag, const std::string& replay_file, std::string& error) {
+    const std::string& kind, double drag, const std::string& replay_file,
+    [[maybe_unused]] const FmuConfig& fmu, std::string& error) {
     if (kind == "first-order") {
         return std::make_unique<AnalyticPlant>(drag);
     }
@@ -132,6 +263,17 @@ inline std::unique_ptr<IPlant> MakePlant(
         auto p = std::make_unique<ReplayPlant>();
         if (!p->Load(replay_file, error)) return nullptr;
         return p;
+    }
+    if (kind == "fmu") {
+#ifdef SILS_HAVE_FMU
+        auto p = std::make_unique<FmuPlant>();
+        if (!p->Load(fmu, error)) return nullptr;
+        return p;
+#else
+        error = "FMU plant requested but FMU support not compiled in "
+                "(rebuild with -DSILS_ENABLE_FMU and fmi4c available)";
+        return nullptr;
+#endif
     }
     return nullptr;
 }

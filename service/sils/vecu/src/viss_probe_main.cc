@@ -368,16 +368,21 @@ int main() {
                            ctrl_kp, ctrl_setpoint);
     TraceEvent(run_id, "behavior_start", 0, "\"name\":\"" + std::string(behavior->name()) + "\"");
 
-    // Plant port (§9 L3): the physical model the controller closes the loop around.
-    // SILS_PLANT selects "first-order" (live, drag=SILS_PLANT_DRAG) or "replay"
-    // (playback from SILS_PLANT_REPLAY_FILE); unset/other = no plant (open loop, L2).
+    // Plant port (§11 L3): the physical model the controller closes the loop around.
+    // SILS_PLANT selects "first-order" (live, drag=SILS_PLANT_DRAG), "replay"
+    // (playback from SILS_PLANT_REPLAY_FILE), or "fmu" (FMI 2.0/3.0 co-sim via fmi4c,
+    // SILS_FMU_FILE + SILS_FMU_INPUT_VR/OUTPUT_VR); unset/other = no plant (open loop).
     const std::string plant_kind = GetEnvOr("SILS_PLANT", "none");
     const double plant_drag = std::stod(GetEnvOr("SILS_PLANT_DRAG", "0.5"));
     const double plant_init = std::stod(GetEnvOr("SILS_PLANT_INIT", "0.0"));
     const std::string plant_replay_file = GetEnvOr("SILS_PLANT_REPLAY_FILE", "");
+    sils::FmuConfig fmu_cfg;
+    fmu_cfg.file = GetEnvOr("SILS_FMU_FILE", "");
+    fmu_cfg.input_vr = GetEnvIntOr("SILS_FMU_INPUT_VR", -1);
+    fmu_cfg.output_vr = GetEnvIntOr("SILS_FMU_OUTPUT_VR", 0);
     std::string plant_err;
     std::unique_ptr<sils::IPlant> plant =
-        sils::MakePlant(plant_kind, plant_drag, plant_replay_file, plant_err);
+        sils::MakePlant(plant_kind, plant_drag, plant_replay_file, fmu_cfg, plant_err);
     if (plant_kind != "none" && !plant) {
         std::cerr << "probe: " << (plant_err.empty() ? "unknown plant: " + plant_kind : plant_err)
                   << std::endl;
@@ -390,6 +395,7 @@ int main() {
         std::ostringstream pr;
         pr << "\"model\":\"" << plant->name() << "\",\"mode\":\"" << plant->mode()
            << "\",\"initial\":" << plant_init;
+        if (plant->fmi_version()) pr << ",\"fmi_version\":\"" << plant->fmi_version() << "\"";
         TraceEvent(run_id, "plant_reset", 0, pr.str());
     }
 
