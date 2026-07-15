@@ -4,6 +4,9 @@ IPlant 포트의 세 번째 구현 **FmuPlant** — 외부 물리 모델(FMU)을
 결합하는 방법·현황·주의사항. 아키텍처 v3 Final **§11 L3(Plant-coupled Fidelity)**,
 IPlant 포트 **§6**, 시간 소유권 **§8**, 상태 소유권 **§4.1/§19**.
 
+> 📊 **시각 요약**: [sils-fmu-plant.html](sils-fmu-plant.html) — FMI/FMU/fmi4c 구분,
+> IPlant 드롭인, 폐루프 다이어그램, Feedthrough 수렴 궤적, 현황·주의를 한 페이지로.
+
 ---
 
 ## 1. 용어: FMI / FMU / fmi4c

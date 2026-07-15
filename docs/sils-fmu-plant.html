@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SiLS FMU Plant — FMI Co-Simulation 이해</title>
+<style>
+  :root{
+    --bg:#f1f4f5; --surface:#ffffff; --surface-2:#f7f9fa;
+    --ink:#0f1518; --muted:#566871; --faint:#8496a0;
+    --line:#d6dee1; --line-soft:#e6ecee;
+    --signal:#0b8f82; --signal-ink:#076b61;
+    --fmu:#b9761a; --fmu-soft:#f3e6d1;
+    --ok:#2f9e5f; --pending:#9aa7ad;
+    --grid:rgba(11,143,130,.05);
+    --shadow:0 1px 2px rgba(16,30,34,.04),0 8px 24px -14px rgba(16,30,34,.14);
+    --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0b0f12; --surface:#131b1f; --surface-2:#0f171b;
+      --ink:#e1e9ec; --muted:#8ea0a8; --faint:#63757d;
+      --line:#243036; --line-soft:#1a242a;
+      --signal:#34c9b8; --signal-ink:#7fe0d4;
+      --fmu:#e0a04a; --fmu-soft:#3a2c17;
+      --ok:#46c07d; --pending:#5c6a70;
+      --grid:rgba(52,201,184,.06);
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px -16px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#f1f4f5; --surface:#ffffff; --surface-2:#f7f9fa;
+    --ink:#0f1518; --muted:#566871; --faint:#8496a0;
+    --line:#d6dee1; --line-soft:#e6ecee;
+    --signal:#0b8f82; --signal-ink:#076b61; --fmu:#b9761a; --fmu-soft:#f3e6d1;
+    --ok:#2f9e5f; --pending:#9aa7ad; --grid:rgba(11,143,130,.05);
+    --shadow:0 1px 2px rgba(16,30,34,.04),0 8px 24px -14px rgba(16,30,34,.14);
+  }
+  :root[data-theme="dark"]{
+    --bg:#0b0f12; --surface:#131b1f; --surface-2:#0f171b;
+    --ink:#e1e9ec; --muted:#8ea0a8; --faint:#63757d;
+    --line:#243036; --line-soft:#1a242a;
+    --signal:#34c9b8; --signal-ink:#7fe0d4; --fmu:#e0a04a; --fmu-soft:#3a2c17;
+    --ok:#46c07d; --pending:#5c6a70; --grid:rgba(52,201,184,.06);
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px -16px rgba(0,0,0,.6);
+  }
+
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+    line-height:1.6;font-size:16px;
+    background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+    background-size:26px 26px;
+  }
+  .wrap{max-width:940px;margin:0 auto;padding:clamp(28px,5vw,64px) clamp(18px,4vw,32px) 96px}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--signal-ink);font-weight:600}
+  h1{font-size:clamp(28px,5vw,44px);line-height:1.08;letter-spacing:-.02em;font-weight:800;text-wrap:balance;margin:.5rem 0 0}
+  h2{font-size:clamp(19px,2.6vw,23px);letter-spacing:-.01em;font-weight:750;margin:0;text-wrap:balance}
+  .lede{color:var(--muted);font-size:clamp(15px,1.9vw,17px);max-width:60ch;margin:1rem 0 0}
+  section{margin-top:clamp(40px,7vw,68px)}
+  .sec-head{display:flex;align-items:baseline;gap:.7rem;margin-bottom:1.4rem;border-bottom:1px solid var(--line);padding-bottom:.7rem}
+  .sec-n{font-family:var(--mono);font-size:12px;color:var(--faint);font-weight:600;letter-spacing:.05em}
+  code,.mono{font-family:var(--mono)}
+  .mono{font-size:.92em}
+  p{margin:.6rem 0}
+  a{color:var(--signal-ink)}
+
+  /* chips */
+  .chips{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:1.4rem}
+  .chip{font-family:var(--mono);font-size:12px;padding:.32rem .6rem;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--muted);display:inline-flex;gap:.4rem;align-items:center}
+  .chip b{color:var(--ink);font-weight:600}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);flex:none}
+  .dot.p{background:var(--pending)}
+
+  /* role cards */
+  .roles{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .role{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:.5rem}
+  .role .tag{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+  .role .nm{font-family:var(--mono);font-weight:700;font-size:18px;color:var(--ink)}
+  .role .nm.sig{color:var(--signal-ink)} .role .nm.amb{color:var(--fmu)}
+  .role p{margin:0;font-size:14px;color:var(--muted)}
+  .role .foot{margin-top:auto;font-size:12.5px;font-family:var(--mono);color:var(--faint);border-top:1px dashed var(--line-soft);padding-top:.6rem}
+
+  /* port / adapters diagram */
+  .port{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px;box-shadow:var(--shadow)}
+  .port .node{border:1px solid var(--line);border-radius:9px;padding:.7rem 1rem;background:var(--surface-2);font-family:var(--mono);font-size:13.5px;text-align:center}
+  .port .ctrl{max-width:340px;margin:0 auto;border-color:var(--signal);color:var(--signal-ink);font-weight:600}
+  .arrowlbl{text-align:center;font-family:var(--mono);font-size:12px;color:var(--faint);padding:.35rem 0;position:relative}
+  .arrowlbl::before{content:"↓";display:block;color:var(--line);font-size:16px;line-height:1}
+  .iplant{max-width:200px;margin:0 auto;border:1.5px solid var(--ink);border-radius:9px;padding:.55rem 1rem;text-align:center;font-family:var(--mono);font-weight:700;background:var(--surface)}
+  .adapters{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:14px}
+  .ad{border:1px solid var(--line);border-radius:9px;padding:.8rem;background:var(--surface-2);text-align:center}
+  .ad .an{font-family:var(--mono);font-weight:700;font-size:13.5px}
+  .ad .ak{font-size:11.5px;color:var(--muted);margin-top:.2rem}
+  .ad .st{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;margin-top:.5rem;color:var(--ok)}
+  .ad.fmu{border-color:var(--fmu);background:linear-gradient(180deg,var(--surface),var(--fmu-soft))}
+  .ad.fmu .an{color:var(--fmu)}
+  .fmu-file{margin:12px auto 0;max-width:260px;border:1px dashed var(--fmu);border-radius:9px;padding:.5rem;text-align:center;font-family:var(--mono);font-size:12.5px;color:var(--fmu)}
+  .note{margin-top:14px;font-size:13px;color:var(--muted);text-align:center;font-style:italic}
+
+  figure{margin:0}
+  figcaption{font-size:12.5px;color:var(--faint);margin-top:.7rem;text-align:center;font-family:var(--mono)}
+  svg,canvas{display:block;max-width:100%}
+
+  /* mapping table */
+  .tblwrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface);box-shadow:var(--shadow)}
+  table{border-collapse:collapse;width:100%;font-size:14px;min-width:460px}
+  th,td{text-align:left;padding:.7rem 1rem;border-bottom:1px solid var(--line-soft)}
+  thead th{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);font-weight:600;background:var(--surface-2)}
+  tbody tr:last-child td{border-bottom:none}
+  td.k{font-family:var(--mono);color:var(--signal-ink);font-weight:600}
+  td .m{font-family:var(--mono);font-size:13px}
+
+  /* trajectory */
+  .chartcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px 20px 12px;box-shadow:var(--shadow)}
+  .seq{font-family:var(--mono);font-size:12.5px;color:var(--muted);margin-top:.8rem;overflow-x:auto;white-space:nowrap;padding-bottom:.3rem}
+  .seq b{color:var(--signal-ink)}
+
+  /* status grid */
+  .status{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+  .srow{display:flex;gap:.7rem;align-items:flex-start;background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:.7rem .85rem}
+  .srow .mk{flex:none;margin-top:.35rem}
+  .srow .t{font-size:14px}
+  .srow .s{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ok)}
+  .srow .s.p{color:var(--pending)}
+
+  /* caveats */
+  .cav{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+  .cv{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--fmu);border-radius:0 10px 10px 0;padding:14px 16px;box-shadow:var(--shadow)}
+  .cv h3{margin:0 0 .3rem;font-size:14.5px;font-weight:700}
+  .cv p{margin:0;font-size:13px;color:var(--muted)}
+  .cv code{font-size:12px}
+
+  footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);font-family:var(--mono);font-size:12px;color:var(--faint);display:flex;flex-wrap:wrap;gap:.4rem 1.2rem;justify-content:space-between}
+
+  @media (max-width:680px){
+    .roles,.adapters,.status,.cav{grid-template-columns:1fr}
+  }
+  @media (prefers-reduced-motion:no-preference){
+    .draw{opacity:0;transform:translateY(8px);animation:rise .6s ease forwards}
+    @keyframes rise{to{opacity:1;transform:none}}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">SiLS vECU · §11 L3 · IPlant 어댑터</div>
+    <h1>FMU Plant — 외부 물리 모델을 vECU 폐루프에</h1>
+    <p class="lede">가상 ECU가 <b>직접 만든 장난감 엔진</b> 대신 시뮬레이션 팀이 넘긴 <b>검증된 물리 모델(.fmu)</b>을 폐루프에 물리는 방법. 포트-어댑터 구조라 <b>tick 루프·판정·회귀 비교는 한 줄도 바뀌지 않는다.</b></p>
+    <div class="chips">
+      <span class="chip"><span class="dot"></span><b>FMI&nbsp;3.0 Co-Sim</b> 실 FMU 실증</span>
+      <span class="chip"><span class="dot"></span>L3 <b>closed_loop&nbsp;· deterministic</b></span>
+      <span class="chip"><span class="dot"></span>2회 재현 <b>MATCH</b></span>
+      <span class="chip"><span class="dot"></span>fmi4c <b>정적 링크</b></span>
+    </div>
+  </header>
+
+  <section class="draw">
+    <div class="sec-head"><span class="sec-n">01</span><h2>먼저 세 가지를 구분</h2></div>
+    <p style="color:var(--muted);margin-top:-.6rem">가장 흔한 혼동. 셋은 규격 · 파일 · 라이브러리로 층이 다르다.</p>
+    <div class="roles">
+      <div class="role">
+        <span class="tag">규격 · Standard</span>
+        <span class="nm sig">FMI</span>
+        <p>Functional Mock-up <b>Interface</b>. 모델을 실행하는 표준 API(1.0/2.0/3.0).</p>
+        <span class="foot">우리가 준수하는 규격</span>
+      </div>
+      <div class="role">
+        <span class="tag">파일 · Artifact</span>
+        <span class="nm amb">FMU</span>
+        <p>FMI로 포장된 실제 모델 <b>파일(.fmu, ZIP)</b>. 안에 native 바이너리 + <code>modelDescription.xml</code>.</p>
+        <span class="foot">외부 산출물 — 우리가 만들지 않음</span>
+      </div>
+      <div class="role">
+        <span class="tag">라이브러리 · Loader</span>
+        <span class="nm">fmi4c</span>
+        <p>FMU를 C/C++에서 로드·실행하는 라이브러리. "FMI <b>for</b> C" — FMI 4가 아님.</p>
+        <span class="foot">FmuPlant가 쓰는 importer</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="draw">
+    <div class="sec-head"><span class="sec-n">02</span><h2>fmi4c는 IPlant 뒤에 꽂힌다</h2></div>
+    <p style="color:var(--muted);margin-top:-.6rem">새 최상위 컴포넌트가 아니라 포트의 세 번째 <b>구현체</b>. 갈아끼워도 위·아래는 그대로.</p>
+    <div class="port">
+      <div class="node ctrl">IBehavior · 제어 알고리즘 (P-controller)</div>
+      <div class="arrowlbl">command</div>
+      <div class="iplant">IPlant 포트</div>
+      <div class="adapters">
+        <div class="ad"><div class="an">AnalyticPlant</div><div class="ak">손수 쓴 1차 모델 · live</div><div class="st">구현</div></div>
+        <div class="ad"><div class="an">ReplayPlant</div><div class="ak">녹화 재생 · playback</div><div class="st">구현</div></div>
+        <div class="ad fmu"><div class="an">FmuPlant</div><div class="ak">fmi4c → 실 .fmu · FMI 2.0/3.0</div><div class="st">실증</div></div>
+      </div>
+      <div class="fmu-file">▚ vehicle_plant.fmu</div>
+      <p class="note">tick 루프 · evaluate(L3 판정) · compare_golden(model correlation) 무변경</p>
+    </div>
+  </section>
+
+  <section class="draw">
+    <div class="sec-head"><span class="sec-n">03</span><h2>폐루프 한 tick</h2></div>
+    <p style="color:var(--muted);margin-top:-.6rem">플랜트 출력이 컨트롤러로 <b>피드백</b>돼 다음 명령을 만든다 — 이 고리가 L2(개루프)와 L3를 가른다.</p>
+    <figure class="chartcard">
+      <svg viewBox="0 0 720 210" role="img" aria-label="폐루프 데이터 흐름: 컨트롤러가 명령을 플랜트에 주고 플랜트 출력이 피드백으로 돌아온다">
+        <defs>
+          <marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="var(--signal)"/>
+          </marker>
+          <marker id="arf" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="var(--fmu)"/>
+          </marker>
+        </defs>
+        <rect x="40" y="66" width="220" height="78" rx="10" fill="var(--surface-2)" stroke="var(--signal)" stroke-width="1.5"/>
+        <text x="150" y="98" text-anchor="middle" font-family="var(--mono)" font-size="14" font-weight="700" fill="var(--signal-ink)">Controller</text>
+        <text x="150" y="120" text-anchor="middle" font-family="var(--mono)" font-size="12" fill="var(--muted)">u = Kp·(sp − fb)</text>
+        <rect x="460" y="66" width="220" height="78" rx="10" fill="var(--surface-2)" stroke="var(--fmu)" stroke-width="1.5"/>
+        <text x="570" y="94" text-anchor="middle" font-family="var(--mono)" font-size="14" font-weight="700" fill="var(--fmu)">FmuPlant (.fmu)</text>
+        <text x="570" y="114" text-anchor="middle" font-family="var(--mono)" font-size="12" fill="var(--muted)">doStep(t, dt)</text>
+        <text x="570" y="130" text-anchor="middle" font-family="var(--mono)" font-size="10.5" fill="var(--faint)">setFloat64 / getFloat64</text>
+        <line x1="262" y1="105" x2="456" y2="105" stroke="var(--signal)" stroke-width="1.6" marker-end="url(#ar)"/>
+        <text x="360" y="95" text-anchor="middle" font-family="var(--mono)" font-size="12" fill="var(--signal-ink)">command</text>
+        <path d="M570 148 C 570 196, 150 196, 150 148" fill="none" stroke="var(--fmu)" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#arf)"/>
+        <text x="360" y="190" text-anchor="middle" font-family="var(--mono)" font-size="12" fill="var(--fmu)">feedback  =  직전 output</text>
+        <text x="360" y="34" text-anchor="middle" font-family="var(--mono)" font-size="11.5" fill="var(--faint)">lockstep TickGrant(sim_time, dt)  ·  sim_time == FMU time</text>
+        <line x1="150" y1="42" x2="150" y2="62" stroke="var(--line)" stroke-width="1"/>
+        <line x1="570" y1="42" x2="570" y2="62" stroke="var(--line)" stroke-width="1"/>
+      </svg>
+      <figcaption>매 tick: feedback → command → SetInputs → Step(dt) → output → plant_step 방출 → TickComplete</figcaption>
+    </figure>
+  </section>
+
+  <section class="draw">
+    <div class="sec-head"><span class="sec-n">04</span><h2>포트 ↔ FMI API 는 1:1</h2></div>
+    <div class="tblwrap">
+      <table>
+        <thead><tr><th>IPlant 포트</th><th>FMI 2.0</th><th>FMI 3.0</th></tr></thead>
+        <tbody>
+          <tr><td class="k">SetInputs(command)</td><td><span class="m">fmi2_setReal</span></td><td><span class="m">fmi3_setFloat64</span></td></tr>
+          <tr><td class="k">Step(dt_ns)</td><td><span class="m">fmi2_doStep(t, dt)</span></td><td><span class="m">fmi3_doStep(t, dt, …)</span></td></tr>
+          <tr><td class="k">output()</td><td><span class="m">fmi2_getReal</span></td><td><span class="m">fmi3_getFloat64</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note" style="text-align:left">실행 방식은 <b>Co-Simulation</b>(solver를 FMU가 소유) 채택 — <span class="mono">Step(dt)</span>와 최적. Model Exchange · Scheduled Execution은 미지원.</p>
+  </section>
+
+  <section class="draw">
+    <div class="sec-head"><span class="sec-n">05</span><h2>실증: Feedthrough 궤적</h2></div>
+    <p style="color:var(--muted);margin-top:-.6rem">Reference-FMU <code>Feedthrough</code>(FMI 3.0)는 출력=입력 통과 → <code>uₙ = 0.8·(10 − uₙ₋₁)</code>. 감쇠 진동하며 <b>4.44</b>로 수렴. 두 번 독립 실행이 소수점까지 동일.</p>
+    <figure class="chartcard">
+      <canvas id="traj" width="880" height="300" aria-label="플랜트 출력 궤적이 4.44로 수렴하는 그래프"></canvas>
+      <div class="seq" id="seq"></div>
+    </figure>
+  </section>
+
+  <section class="draw">
+    <div class="sec-head"><span class="sec-n">06</span><h2>현황 — 검증한 것만</h2></div>
+    <p style="color:var(--muted);margin-top:-.6rem"><b>"fmi4c가 FMI 3.0 지원" ≠ "우리 필요 기능 검증됨".</b> 실제 실행·판정한 범위만.</p>
+    <div class="status">
+      <div class="srow"><span class="dot mk"></span><div><div class="t">FMI 3.0 Co-Simulation 실 FMU 실행</div><div class="s">실증 · Feedthrough</div></div></div>
+      <div class="srow"><span class="dot mk"></span><div><div class="t">L3 폐루프 판정 · 재현성</div><div class="s">PASSED · MATCH</div></div></div>
+      <div class="srow"><span class="dot mk"></span><div><div class="t">FMI 버전 자동 감지 (2.0/3.0)</div><div class="s">구현</div></div></div>
+      <div class="srow"><span class="dot mk"></span><div><div class="t">fmi4c 정적 링크 (런타임 .so 없음)</div><div class="s">구현</div></div></div>
+      <div class="srow"><span class="dot p mk"></span><div><div class="t">FMI 2.0 Co-Simulation 실 FMU</div><div class="s p">코드 경로 · 미실측</div></div></div>
+      <div class="srow"><span class="dot p mk"></span><div><div class="t">Descriptor 변수·단위 매핑</div><div class="s p">미구현 · raw VR</div></div></div>
+      <div class="srow"><span class="dot p mk"></span><div><div class="t">ARM64 실 FMU 실행</div><div class="s p">미검증</div></div></div>
+      <div class="srow"><span class="dot p mk"></span><div><div class="t">Model Exchange · Scheduled Exec</div><div class="s p">미지원</div></div></div>
+    </div>
+  </section>
+
+  <section class="draw">
+    <div class="sec-head"><span class="sec-n">07</span><h2>도입 주의</h2></div>
+    <div class="cav">
+      <div class="cv"><h3>ARM64 바이너리</h3><p>fmi4c가 ARM64로 빌드돼도 <b>FMU 안에 <code>aarch64-linux/*.so</code>가 없으면</b> 실행 불가. 대상 아키텍처 바이너리(또는 소스)를 계약으로 요구.</p></div>
+      <div class="cv"><h3>변수 매핑</h3><p>현재 raw <code>valueReference</code>(<code>SILS_FMU_INPUT_VR/OUTPUT_VR</code>)로 지정, <b>Float64만</b>. 향후 Contract↔FMU 이름·단위·causality 매핑으로 확장.</p></div>
+      <div class="cv"><h3>시간 소유권</h3><p>FMU가 임의 wall-clock을 쓰면 안 됨. <code>doStep(time_, dt)</code>로 lockstep dt 누적 → <b>sim_time == FMU time</b>. 결정론의 전제.</p></div>
+      <div class="cv"><h3>실패 정책 (fail-fast)</h3><p>load 실패 · 버전 불일치 · init 실패 → probe 종료. doStep 오류 · NaN/Inf → <b>출력 NaN → §14 fail-fast</b>.</p></div>
+      <div class="cv"><h3>MORAI와 상태 소유권</h3><p>FMU와 MORAI가 <b>동시에 같은 차량 동역학</b>을 계산 금지. MORAI가 authority면 FMU는 미사용 또는 보조 모델(타이어·브레이크)로 제한.</p></div>
+      <div class="cv"><h3>보안 — FMU=native code</h3><p><code>.fmu</code> 안 <code>.so</code>는 실제 native. 신뢰 안 되는 FMU = 임의 코드 실행. 격리 컨테이너 · hash/공급자 기록 · allowlist.</p></div>
+    </div>
+  </section>
+
+  <footer>
+    <span>docs/sils-fmu-plant.md · 아키텍처 v3 Final §11 L3</span>
+    <span>IPlant: AnalyticPlant · ReplayPlant · FmuPlant(fmi4c)</span>
+  </footer>
+</div>
+
+<script>
+  (function(){
+    var Kp=0.8, sp=10, N=20, u=[0];
+    for(var n=1;n<=N;n++){ u[n]=Kp*(sp-u[n-1]); }
+    var vals=u.slice(1);
+    var strip=vals.slice(0,6).map(function(v){return (Math.round(v*10000)/10000);});
+    document.getElementById('seq').innerHTML='tick 1‥ &nbsp; <b>'+strip.join('</b> → <b>')+'</b> → … → 4.44 수렴';
+
+    var cv=document.getElementById('traj'), ctx=cv.getContext('2d');
+    var cssv=function(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim();};
+    function resize(){
+      var ratio=Math.min(window.devicePixelRatio||1,2);
+      var wCss=cv.clientWidth||880;
+      cv.width=wCss*ratio; cv.height=300*ratio; cv.style.height='300px';
+      ctx.setTransform(ratio,0,0,ratio,0,0);
+      drawScaled(wCss);
+    }
+    function drawScaled(wCss){
+      var W=wCss,H=300, padL=44,padR=18,padT=18,padB=30;
+      ctx.clearRect(0,0,W,H);
+      var maxY=8.4,minY=0;
+      var x=function(i){return padL+(W-padL-padR)*i/(N-1);};
+      var y=function(v){return padT+(H-padT-padB)*(1-(v-minY)/(maxY-minY));};
+      var line=cssv('--line'),muted=cssv('--faint'),sig=cssv('--signal'),fmu=cssv('--fmu'),ink=cssv('--ink');
+      ctx.font='11px ui-monospace,Menlo,monospace'; ctx.textBaseline='middle';
+      [0,2,4,6,8].forEach(function(gy){
+        ctx.strokeStyle=line; ctx.globalAlpha=.6; ctx.beginPath();
+        ctx.moveTo(padL,y(gy)); ctx.lineTo(W-padR,y(gy)); ctx.stroke(); ctx.globalAlpha=1;
+        ctx.fillStyle=muted; ctx.textAlign='right'; ctx.fillText(gy.toFixed(0),padL-8,y(gy));
+      });
+      var conv=Kp*sp/(1+Kp);
+      ctx.strokeStyle=sig; ctx.globalAlpha=.45; ctx.setLineDash([5,5]); ctx.beginPath();
+      ctx.moveTo(padL,y(conv)); ctx.lineTo(W-padR,y(conv)); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha=1;
+      ctx.fillStyle=sig; ctx.textAlign='left'; ctx.fillText('≈ 4.44 수렴', padL+6, y(conv)-10);
+      ctx.strokeStyle=fmu; ctx.lineWidth=2; ctx.beginPath();
+      for(var i=0;i<N;i++){var px=x(i),py=y(vals[i]); i?ctx.lineTo(px,py):ctx.moveTo(px,py);} ctx.stroke();
+      for(var j=0;j<N;j++){ctx.fillStyle=j===N-1?sig:fmu; ctx.beginPath(); ctx.arc(x(j),y(vals[j]),j===N-1?4.5:2.6,0,7); ctx.fill();}
+      ctx.fillStyle=ink; ctx.font='700 12px ui-monospace,Menlo,monospace'; ctx.textAlign='right';
+      ctx.fillText(vals[N-1].toFixed(2), x(N-1)-8, y(vals[N-1])-10);
+      ctx.fillStyle=muted; ctx.font='11px ui-monospace,Menlo,monospace'; ctx.textAlign='center';
+      ctx.fillText('tick →',(padL+W-padR)/2,H-8);
+    }
+    resize();
+    window.addEventListener('resize',resize);
+    var mo=new MutationObserver(resize);
+    mo.observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+    if(window.matchMedia && window.matchMedia('(prefers-color-scheme:dark)').addEventListener){
+      window.matchMedia('(prefers-color-scheme:dark)').addEventListener('change',resize);
+    }
+  })();
+</script>
+</body>
+</html>
