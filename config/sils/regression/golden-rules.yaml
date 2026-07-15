@@ -41,6 +41,11 @@ ignore_fields:
   - wall_time_ms
   - backend
   - pool
+  # discovery/transport observation counts (endpoint-match/join timing, not vECU
+  # behavior) -- comparing them flags cross-run join-order jitter as a regression.
+  - matched_count
+  - received_count
+  - valid_count
 
 # Floating-point tolerance (§12.4). `default` applies to any numeric field without
 # a specific entry; add per-field entries as plant signals are introduced.

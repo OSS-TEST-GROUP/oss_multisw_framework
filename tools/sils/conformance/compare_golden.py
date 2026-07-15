@@ -68,6 +68,10 @@ DEFAULT_RULES = {
     "ignore_fields": [
         "run_id", "instance_id", "expected_instance_id", "line_index",
         "pid", "container", "wall_time_ms", "backend", "pool",
+        # discovery/transport observation counts depend on endpoint-match timing
+        # (when the verifier joins), not on deterministic vECU behavior -- comparing
+        # them would flag cross-run join-order jitter as a regression.
+        "matched_count", "received_count", "valid_count",
     ],
     "numeric_tolerance": {"default": {"abs": 0.0, "rel": 0.0}, "fields": {}},
     "latency_window_ms": None,          # None = skip latency comparison
