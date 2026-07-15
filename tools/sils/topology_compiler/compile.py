@@ -179,6 +179,7 @@ def resolve_topology(
                         "domain_env": contract.get("domain_env"),
                         "qos_profile": qos_name,
                         "ownership": contract.get("ownership"),
+                        "late_sample_policy": contract.get("late_sample_policy", "next_tick"),
                     }
                 )
 

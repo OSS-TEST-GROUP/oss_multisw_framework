@@ -433,6 +433,9 @@ int main() {
     // VissRequestTopic type on a separate input topic (no new IDL).
     const bool stage_input = GetEnvOr("SILS_STAGE_INPUT", "0") == "1";
     const std::string input_topic = GetEnvOr("SILS_INPUT_TOPIC", "sils/input/stream");
+    // §7.3 late-sample policy declared for this run (next_tick|drop|fail); surfaced in
+    // the trace so evaluate.py judges staging completeness per the contract's policy.
+    const std::string late_sample_policy = GetEnvOr("SILS_LATE_SAMPLE_POLICY", "next_tick");
     sils::TickInbox inbox;
     InputStagingListener input_listener(&inbox, run_id, input_topic);
     if (stage_input) {
@@ -444,7 +447,8 @@ int main() {
         irq.history().kind = KEEP_LAST_HISTORY_QOS;
         irq.history().depth = 256;
         input_sub->create_datareader(input_topic_obj, irq, &input_listener);
-        TraceEvent(run_id, "input_staging_on", 0, "\"input_topic\":\"" + input_topic + "\"");
+        TraceEvent(run_id, "input_staging_on", 0, "\"input_topic\":\"" + input_topic +
+                   "\",\"late_sample_policy\":\"" + late_sample_policy + "\"");
     }
 
     // Optional tick-indexed replay (§7.4): pre-recorded input count per tick, so the

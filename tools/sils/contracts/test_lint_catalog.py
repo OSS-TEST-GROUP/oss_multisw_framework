@@ -95,6 +95,15 @@ def test_invalid_enums():
     assert has(errors, "transport 'someip' invalid"), errors
 
 
+def test_late_sample_policy_enum():
+    c = good_contract(); c["late_sample_policy"] = "whenever"
+    errors, _ = run([c])
+    assert has(errors, "late_sample_policy 'whenever' invalid"), errors
+    for ok in ("next_tick", "drop", "fail"):
+        c2 = good_contract(); c2["late_sample_policy"] = ok
+        assert run([c2])[0] == [], f"{ok} should be valid"
+
+
 def test_duplicate_topic_domain():
     c2 = good_contract(); c2["id"] = "c2"  # same topic + domain_env as c1
     errors, _ = run([good_contract(), c2])

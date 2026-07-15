@@ -51,6 +51,9 @@ ROLE_DIRECTIONS = {"publish", "subscribe"}
 ENCODINGS = {"json", "cdr", "none", "raw"}
 RELIABILITY = {"RELIABLE", "BEST_EFFORT"}
 DURABILITY = {"VOLATILE", "TRANSIENT_LOCAL", "TRANSIENT", "PERSISTENT"}
+# §7.3 late-sample policy: how a staging vECU treats input arriving after its tick
+# boundary. next_tick defers, drop discards, fail rejects. (evaluate.py enforces these.)
+LATE_SAMPLE_POLICIES = {"next_tick", "drop", "fail"}
 HISTORY_KINDS = {"KEEP_LAST", "KEEP_ALL"}
 SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
 
@@ -132,6 +135,10 @@ def lint(catalog: dict, qos: dict, root: Path) -> tuple[list[str], list[str]]:
         if c.get("ownership") == "per-instance" and "{instance_id}" not in str(c.get("topic", "")):
             errors.append(f"{where}: per-instance contract topic '{c.get('topic')}' must contain "
                           "the {instance_id} placeholder (else replicas collide, §9.5/§13)")
+        lsp = c.get("late_sample_policy")
+        if lsp not in (None, "") and lsp not in LATE_SAMPLE_POLICIES:
+            errors.append(f"{where}: late_sample_policy '{lsp}' invalid "
+                          f"(expected one of {sorted(LATE_SAMPLE_POLICIES)}, §7.3)")
 
         # semantic_version format (optional field, but if present must be x.y.z)
         sv = c.get("semantic_version")

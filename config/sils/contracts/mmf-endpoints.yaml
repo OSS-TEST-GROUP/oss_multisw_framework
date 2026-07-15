@@ -24,6 +24,9 @@ contracts:
     payload:
       # VissRequestTopic { string payload; } — VISS 는 JSON 문자열을 payload 에 실음
       fields: [ { name: payload, type: string, encoding: json } ]
+    # §7.3 late-sample policy — tick 경계 이후 도착한 입력 처리(evaluate 가 강제):
+    #   next_tick(기본): 다음 tick 으로 지연 소비(드롭 안 함) · drop: 늦은 입력 폐기 허용
+    #   · fail: 늦은 입력 불허(드롭/미스테이징 시 run 실패). lint enum 검증.
     late_sample_policy: next_tick
     roles:
       # /VIN/Vehicle 은 VISS 클라이언트 → 서버 요청 토픽.
