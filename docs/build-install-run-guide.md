@@ -103,6 +103,12 @@ bash /opt/adsw/run-ext-agl.sh
 ```
 - 스크립트가 `--restart unless-stopped` 를 부여하므로 이후 재부팅 자동시작 —
   상세·주의사항·compose 대안은 [board-autostart-guide.md](board-autostart-guide.md).
+- ⚠️ **ext-ros2 는 반드시 run-mmf.sh(또는 동등 옵션)로 기동** — 특히
+  **`-v /var/run/docker.sock:/var/run/docker.sock` + `--group-add <docker-gid>`** 가 없으면
+  adsw_manager 가 컨테이너(autoware 등)를 **docker run 하지 못한다**(StartService 가 Success 로
+  보여도 실제 생성 실패). 수동 `docker run` 으로 일부 옵션을 빠뜨리면 이 문제가 재발한다.
+  ext-ros2 로 autoware 를 관리·기동하는 운영법·필수 전제조건·트러블슈팅은
+  **[ext-ros2-adsw-operation-guide.md](ext-ros2-adsw-operation-guide.md)** 참조.
 - **DDS domain**: raw Fast-DDS 서비스는 `ROS_DOMAIN_ID` 가 아닌 **`MMF_DDS_DOMAIN_ID`**
   env(기본 0)를 읽는다. 같은 보드의 컨테이너들은 반드시 동일 값. 같은 서브넷에 ROS2
   mw_type adsw 보드가 2대 이상이면 보드별로 다른 domain 을 줘야 서비스 상태
