@@ -28,6 +28,9 @@
 
 이해한 장을 ✅ 로 바꿔가며 진행한다. `↗` 는 이미 전용 문서가 있어 링크로 대체하는 장.
 
+> **OSS 확장 방향**(외부 개발자가 자기 ECU 를 추가하는 법 — libsils_vecu SDK + 개발자 ECU +
+> plant FMU/코드 세분화)은 별도 설계 문서 [sils-extension-model.md](sils-extension-model.md) 참조.
+
 > **"검증"은 한 장이 아니라 시스템 전반에 흩어진 cross-cutting 주제다.** 장을 혼동하지 않도록
 > 어디서 무엇을 검증하는지 미리 못 박는다:
 >
