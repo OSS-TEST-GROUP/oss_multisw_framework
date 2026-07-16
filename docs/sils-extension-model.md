@@ -106,8 +106,8 @@ P1 이 토대(나머지가 그 위에 얹힘). P4·P5 는 계약-레벨 경계�
 | 확장 방향 결정(본 문서) | ✅ |
 | 포트 인터페이스(IBehavior/IPlant/…) | ✅ 존재(헤더온리) |
 | FMU 경로(FmuPlant·fmu_map·fmu_gate) | ✅ 존재 |
-| **P1a `sils_vecu` 라이브러리 타깃** | 🟡 CMake INTERFACE 라이브러리 추가(포트 헤더 + fastdds/fastcdr + FMU 플래그 handle), 5개 실행파일이 링크로 dogfood. **빌드 검증 필요** |
-| P1b RunProbe/run_loop.hpp 추출(tick 루프 → 라이브러리) | ⬜ (컴파일 검증 동반) |
+| **P1a `sils_vecu` 라이브러리 타깃** | ✅ CMake INTERFACE 라이브러리(포트 헤더 + fastdds/fastcdr + FMU 플래그 handle), 5개 실행파일이 링크로 dogfood. **빌드 통과 확인** |
+| P1b RunProbe/run_loop.hpp 추출(tick 루프 → 라이브러리) | ⬜ 다음 (별도 브랜치) |
 | P2 개발자 템플릿 | ⬜ |
 | P4 wire 타입 일반화 | ⬜ |
 | P5 스키마 명세·conformance kit | ⬜ |
