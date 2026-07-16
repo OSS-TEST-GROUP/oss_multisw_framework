@@ -6,7 +6,8 @@ in [docs/sils-extension-model.md](../../../docs/sils-extension-model.md).
 
 | example | plant path | fidelity | shows |
 |---|---|---|---|
-| [brake-ecu](brake-ecu/) | code (C++ `IPlant`) | L3 | full closed-loop ECU, custom env knobs |
+| [brake-ecu](brake-ecu/) | code (C++ `IPlant`) | L3 | full closed-loop ECU, custom env knobs; code + FMU plant paths |
+| [brake-ecu-native](brake-ecu-native/) | code (reused) | L3 | native custom DDS type via `IWireCodec` + own IDL (no core change) |
 
 ## Start your own ECU
 
