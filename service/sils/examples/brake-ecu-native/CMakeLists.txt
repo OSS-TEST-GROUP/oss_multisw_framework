@@ -25,24 +25,22 @@ if(NOT BRAKE_NATIVE_SRCS)
     message(FATAL_ERROR "brake-ecu-native: no generated BrakeCmd*.cxx under ${BRAKE_NATIVE_GEN}")
 endif()
 
-# run_loop.hpp's optional response/input readers still reference VissRequestTopic, and the
-# clock uses TickControl -- so this ECU still compiles those core-generated sources (full
-# read-path decoupling from VISS is future work). It hand-authors NO VISS payload, though:
-# all publishing goes through the native BrakeCmd codec.
-set(SILS_VISS_GEN_DIR "${CMAKE_INSTALL_PREFIX}/generated/idl/vehicle_info_mgr")
+# This ECU compiles NO VISS-generated sources: the wire port (wire.hpp) names no DDS type,
+# the built-in VISS codecs live in viss_wire.hpp (not included here), and RunProbe's read
+# path decodes through the injected codec -- so publishing AND the response/input readers
+# are 100% native BrakeCmd. The only core-generated source still needed is TickControl,
+# which the clock port uses for lockstep tick control (orthogonal to the wire type).
 set(SILS_TICK_GEN_DIR "${CMAKE_INSTALL_PREFIX}/generated/idl/sils")
-file(GLOB SILS_VISS_GENERATED_SRCS "${SILS_VISS_GEN_DIR}/VissRequest*.cxx")
 file(GLOB SILS_TICK_GENERATED_SRCS "${SILS_TICK_GEN_DIR}/TickControl*.cxx")
-if(NOT SILS_VISS_GENERATED_SRCS OR NOT SILS_TICK_GENERATED_SRCS)
+if(NOT SILS_TICK_GENERATED_SRCS)
     message(FATAL_ERROR
-        "brake-ecu-native: core generated IDL not found under ${SILS_VISS_GEN_DIR} / "
+        "brake-ecu-native: core generated IDL (TickControl) not found under "
         "${SILS_TICK_GEN_DIR}; build with BUILD_SILS from the project root.")
 endif()
 
 add_executable(brake_ecu_native
     src/main.cc
     ${BRAKE_NATIVE_SRCS}
-    ${SILS_VISS_GENERATED_SRCS}
     ${SILS_TICK_GENERATED_SRCS}
 )
 target_include_directories(brake_ecu_native PRIVATE

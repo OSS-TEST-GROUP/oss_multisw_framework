@@ -7,14 +7,16 @@
 // behavior -> (scenario fault) -> publish -> plant closed loop, the JSONL trace
 // contract (docs/sils-understanding.md ch.6), and teardown.
 //
-// The two most-customized ports -- IBehavior (the control logic) and IPlant (the
-// physical model) -- are INJECTED by the caller, so a developer's ECU main() builds
-// its own and hands them in. The less-customized ports (IClockSource, IScenario) are
-// built here from ProbeConfig so the common case needs no boilerplate. This is exactly
-// the shape the default probe main (viss_probe_main.cc) and the extension-model
-// example main.cc both use:
+// The most-customized ports -- IBehavior (the control logic), IPlant (the physical
+// model), and IWireCodec (the DDS wire type/payload) -- are INJECTED by the caller, so a
+// developer's ECU main() builds its own and hands them in. The less-customized ports
+// (IClockSource, IScenario) are built here from ProbeConfig so the common case needs no
+// boilerplate. This is exactly the shape the default probe main (viss_probe_main.cc) and
+// the extension-model example main.cc both use -- the default probe builds the VISS wire
+// codec from cfg (viss_wire.hpp); a custom-type ECU injects its own codec instead:
 //     auto cfg = sils::ConfigFromEnv();
-//     return sils::RunProbe(cfg, std::move(behavior), std::move(plant));
+//     auto wire = sils::MakeWireCodec(cfg.wire_kind, cfg.response_topic_prefix);
+//     return sils::RunProbe(cfg, std::move(behavior), std::move(plant), std::move(wire));
 //
 // Header-only: globals/helpers are `inline` so this compiles into whichever single
 // executable includes it (each ECU is its own TU). Extracting RunProbe into a
@@ -46,11 +48,9 @@
 #include <fastdds/dds/subscriber/qos/DataReaderQos.hpp>
 #include <fastdds/dds/topic/TypeSupport.hpp>
 
-#include "VissRequestPubSubTypes.hpp"
 #include "behavior.hpp"
 #include "clock_source.hpp"
 #include "config.hpp"
-#include "json_min.hpp"
 #include "plant.hpp"
 #include "replay_source.hpp"
 #include "scenario.hpp"
@@ -94,8 +94,9 @@ inline void TraceEvent(const std::string& run_id, const std::string& event, int 
               << std::endl;
 }
 
-// RequestId / EscapeJsonString / WrapRequestEnvelope now live in wire.hpp (the wire
-// port owns payload encoding); RunProbe still uses RequestId for the trace contract.
+// RequestId lives in wire.hpp (the port) -- RunProbe uses it for the trace contract;
+// the VISS payload helpers (EscapeJsonString/WrapRequestEnvelope) live in viss_wire.hpp
+// with the VISS codecs, so this header names no concrete wire type.
 
 class ProbeWriterListener : public eprosima::fastdds::dds::DataWriterListener {
 public:
@@ -117,7 +118,8 @@ private:
 // response_received{request_id, status, error_code}.
 class ResponseListener : public eprosima::fastdds::dds::DataReaderListener {
 public:
-    explicit ResponseListener(std::string run_id) : run_id_(std::move(run_id)) {}
+    ResponseListener(std::string run_id, sils::IWireCodec* wire)
+        : run_id_(std::move(run_id)), wire_(wire) {}
 
     void on_subscription_matched(
         eprosima::fastdds::dds::DataReader* /*reader*/,
@@ -133,23 +135,19 @@ public:
     int matched() const { return matched_.load(); }
 
     void on_data_available(eprosima::fastdds::dds::DataReader* reader) override {
-        VissRequestTopic sample;
-        eprosima::fastdds::dds::SampleInfo info;
-        while (reader->take_next_sample(&sample, &info) == eprosima::fastdds::dds::RETCODE_OK) {
-            if (!info.valid_data) continue;
-            const std::string& p = sample.payload();
-            const std::string rid = sils::JsonFindString(p, "requestId", "");
-            const std::string status = sils::JsonFindString(p, "status", "");
-            const std::string code = sils::JsonFindString(p, "errorCode", "");
+        // The wire codec owns the typed take + field decode (read path); RunProbe only
+        // turns each decoded response into the trace event.
+        for (const sils::WireInbound& in : wire_->Take(reader)) {
             std::ostringstream extra;
-            extra << "\"request_id\":\"" << rid << "\",\"status\":\"" << status << "\"";
-            if (!code.empty()) extra << ",\"error_code\":\"" << code << "\"";
+            extra << "\"request_id\":\"" << in.request_id << "\",\"status\":\"" << in.status << "\"";
+            if (!in.error_code.empty()) extra << ",\"error_code\":\"" << in.error_code << "\"";
             TraceEvent(run_id_, "response_received", 0, extra.str());
         }
     }
 
 private:
     std::string run_id_;
+    sils::IWireCodec* wire_;
     std::atomic<int> matched_{0};
 };
 
@@ -157,14 +155,15 @@ private:
 // assigns each arrival a reception sequence and traces input_received.
 class InputStagingListener : public eprosima::fastdds::dds::DataReaderListener {
 public:
-    InputStagingListener(sils::TickInbox* inbox, std::string run_id, std::string topic)
-        : inbox_(inbox), run_id_(std::move(run_id)), topic_(std::move(topic)) {}
+    InputStagingListener(sils::TickInbox* inbox, std::string run_id, std::string topic,
+                         sils::IWireCodec* wire)
+        : inbox_(inbox), run_id_(std::move(run_id)), topic_(std::move(topic)), wire_(wire) {}
 
     void on_data_available(eprosima::fastdds::dds::DataReader* reader) override {
-        VissRequestTopic sample;
-        eprosima::fastdds::dds::SampleInfo info;
-        while (reader->take_next_sample(&sample, &info) == eprosima::fastdds::dds::RETCODE_OK) {
-            if (!info.valid_data) continue;
+        // Staging only needs the arrival count; the wire codec owns the typed take, so the
+        // read path names no concrete DDS type. One inbox reception seq per valid sample.
+        const std::vector<sils::WireInbound> arrivals = wire_->Take(reader);
+        for (std::size_t i = 0; i < arrivals.size(); ++i) {
             uint64_t rs = inbox_->OnSample();
             std::cout << "{\"run_id\":\"" << run_id_ << "\",\"instance_id\":\"" << g_instance_id
                       << "\",\"event\":\"input_received\",\"recv_seq\":" << rs
@@ -176,6 +175,7 @@ private:
     sils::TickInbox* inbox_;
     std::string run_id_;
     std::string topic_;
+    sils::IWireCodec* wire_;
 };
 
 inline std::string RecvSeqsJson(const std::vector<uint64_t>& seqs) {
@@ -189,11 +189,11 @@ inline std::string RecvSeqsJson(const std::vector<uint64_t>& seqs) {
     return os.str();
 }
 
-// Run one SiLS vECU probe to completion. `behavior` is required; `plant` may be null
-// (open loop). Clock and scenario are built from `cfg`. Returns a process exit code
-// (0 ok, 1 DDS setup failure, 2 config/scenario/replay fail-fast).
+// Run one SiLS vECU probe to completion. `behavior` and `wire` are required; `plant` may
+// be null (open loop). Clock and scenario are built from `cfg`. Returns a process exit
+// code (0 ok, 1 DDS setup failure, 2 config/scenario/replay/wire fail-fast).
 inline int RunProbe(const ProbeConfig& cfg, std::unique_ptr<IBehavior> behavior,
-                    std::unique_ptr<IPlant> plant, std::unique_ptr<IWireCodec> wire = nullptr) {
+                    std::unique_ptr<IPlant> plant, std::unique_ptr<IWireCodec> wire) {
     std::signal(SIGINT, OnSignal);
     std::signal(SIGTERM, OnSignal);
 
@@ -201,9 +201,14 @@ inline int RunProbe(const ProbeConfig& cfg, std::unique_ptr<IBehavior> behavior,
     g_topic = cfg.topic;
     const std::string& run_id = cfg.run_id;
 
-    // Wire port (§P4): what DDS type/payload goes on the wire. Injected by the caller, or
-    // built from cfg (SILS_WIRE) -- default VISS envelope preserves the Phase 1 payload.
-    if (!wire) wire = MakeWireCodec(cfg.wire_kind, cfg.response_topic_prefix);
+    // Wire port (§P4): the caller injects what DDS type/payload goes on the wire, so this
+    // loop names no concrete type. The default probe builds a VISS codec via
+    // viss_wire.hpp's MakeWireCodec(cfg.wire_kind); a custom-type ECU injects its own.
+    if (!wire) {
+        std::cerr << "RunProbe: a wire codec is required (inject one, e.g. "
+                     "sils::MakeWireCodec(cfg.wire_kind, cfg.response_topic_prefix))" << std::endl;
+        return 2;
+    }
 
     using namespace eprosima::fastdds::dds;
 
@@ -260,7 +265,7 @@ inline int RunProbe(const ProbeConfig& cfg, std::unique_ptr<IBehavior> behavior,
     // the fire-and-forget probe.
     const bool reqresp = cfg.reqresp;
     const std::string& response_topic = cfg.response_topic;
-    ResponseListener response_listener(run_id);
+    ResponseListener response_listener(run_id, wire.get());
     Topic* resp_topic_obj = nullptr;
     Subscriber* resp_sub = nullptr;
     if (reqresp) {
@@ -390,7 +395,7 @@ inline int RunProbe(const ProbeConfig& cfg, std::unique_ptr<IBehavior> behavior,
     const std::string& input_topic = cfg.input_topic;
     const std::string& late_sample_policy = cfg.late_sample_policy;
     sils::TickInbox inbox;
-    InputStagingListener input_listener(&inbox, run_id, input_topic);
+    InputStagingListener input_listener(&inbox, run_id, input_topic, wire.get());
     if (stage_input) {
         Subscriber* input_sub = participant->create_subscriber(SUBSCRIBER_QOS_DEFAULT, nullptr);
         Topic* input_topic_obj =

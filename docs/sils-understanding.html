@@ -746,8 +746,9 @@ SILS_ATTEST_ARCH=x86_64  <span class="c"># sim</span></pre>
       <div class="topics">
         <div class="t ok">포트 전부 재사용 + tick 루프 라이브러리화(libsils_vecu, P1)</div>
         <div class="t ok">네이티브 신규 IDL 타입 = IWireCodec 로 구현됨(BrakeCmd, P4b)</div>
+        <div class="t ok">읽기 경로까지 codec 화(WireInbound/Take) → wire.hpp/run_loop 가 DDS 타입 무명명, 커스텀 ECU VISS 미컴파일(T1-A)</div>
         <div class="t ok">plant 코드/FMU 경로 · trace 스키마+conformance(P3·P5)</div>
-        <div class="t">남음: 읽기 경로(reqresp/staging)가 아직 VissRequestTopic 결합</div>
+        <div class="t">남음: SDK install/export(find_package) · 생성 IDL 재-glob 제거</div>
       </div>
       <p>"DDS 타입 교체 = wire codec 한 줄". 상세: <a href="sils-extension-model.md" style="color:var(--accent)">확장 모델</a>.</p>
     </div>

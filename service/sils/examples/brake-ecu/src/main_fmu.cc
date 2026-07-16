@@ -17,6 +17,7 @@
 #include "brake_behavior.hpp"
 #include "config.hpp"     // sils::ConfigFromEnv / MakeFmuPlant / GetEnvDoubleOr
 #include "run_loop.hpp"   // sils::RunProbe
+#include "viss_wire.hpp"  // sils::MakeWireCodec (built-in VISS wire, same as main.cc)
 
 int main() {
     const sils::ProbeConfig cfg = sils::ConfigFromEnv();
@@ -31,5 +32,7 @@ int main() {
         return 2;
     }
 
-    return sils::RunProbe(cfg, std::move(behavior), std::move(plant));
+    auto wire = sils::MakeWireCodec(cfg.wire_kind, cfg.response_topic_prefix);
+
+    return sils::RunProbe(cfg, std::move(behavior), std::move(plant), std::move(wire));
 }
