@@ -30,13 +30,25 @@ brake.fmu
 └── binaries/<platform>/brake_vehicle.<so|dylib>
 ```
 
+`<platform>` is the FMI 2.0 folder for the host `build.sh` ran on: `linux64` (x86_64
+Linux), `aarch64-linux` (arm64 Linux), `darwin64` (macOS).
+
+> ⚠️ **Build the FMU on the SAME platform the ECU runs on.** `build.sh` only packages a
+> binary for its own host, and fmi4c loads the folder matching the ECU's platform — if
+> they differ (e.g. an FMU built on macOS = `darwin64`, run by a Linux vECU that wants
+> `linux64`), the loader can't find the binary and **crashes**. The vECU builds/runs in
+> a Linux container, so build the FMU there too (run this `build.sh` inside that Linux
+> environment), not on a macOS/Windows host. A portable FMU may bundle several
+> `binaries/<platform>/` folders; this example ships one (the build host's).
+
 ## Run the ECU against it
 
 Build the SDK with FMU support so `brake_ecu_fmu` exists, then point it at the file.
 The value references map straight to env (see `modelDescription.xml`):
 
 ```bash
-./build.sh --build-sils -DSILS_ENABLE_FMU=ON      # produces bin/brake_ecu_fmu + fmi4c
+SILS_ENABLE_FMU=ON ./build.sh --build-sils        # produces bin/brake_ecu_fmu + fmi4c
+# (SILS_ENABLE_FMU is an ENV var forwarded into the build container, NOT a -D arg to build.sh)
 
 SILS_FMU_FILE=$PWD/brake.fmu \
 SILS_FMU_INPUT_VR=1 \      # force  (input)
