@@ -1,0 +1,71 @@
+# =============================================================================
+# Public 릴리스 태그 → 사내 배포 브랜치 동기화 워크플로
+# 배치 위치: 사내 저장소 obigo-gov/oss_multisw_framework
+#            .github/workflows/sync-release.yml
+#
+# 역할: 공개 저장소의 최신 정식 릴리스 태그(vX.Y.Z)를 사내 deploy 브랜치로
+#       받아, 내부 배포 파이프라인이 안정 버전만 바라보게 한다.
+#       (develop 을 그대로 추종하지 않음 → 배포 안정성 확보)
+#
+# 정책 근거: 오픈소스 운영정책 §8 (릴리스 및 내부 배포)
+# =============================================================================
+
+name: Sync Release (deploy)
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'    # 6시간마다 새 태그 확인
+  workflow_dispatch:
+
+env:
+  PUBLIC_OWNER: OSS-TEST-GROUP
+  PUBLIC_REPO: oss_multisw_framework
+  DEPLOY_BRANCH: deploy
+
+concurrency:
+  group: sync-release
+  cancel-in-progress: false
+
+jobs:
+  sync-release:
+    runs-on: self-hosted
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch public tags
+        env:
+          PUBLIC_BOT_TOKEN: ${{ secrets.PUBLIC_BOT_TOKEN }}
+        run: |
+          git remote add public "https://x-access-token:${PUBLIC_BOT_TOKEN}@github.com/${PUBLIC_OWNER}/${PUBLIC_REPO}.git"
+          git fetch public --tags
+
+      - name: Resolve latest stable release
+        id: rel
+        run: |
+          # 정식 릴리스만 선택 (v1.2.0-rc1 같은 pre-release 제외)
+          LATEST=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | grep -v -- '-' | head -1)
+          if [ -z "$LATEST" ]; then
+            echo "::notice::정식 릴리스 태그가 아직 없습니다. 건너뜁니다."
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "최신 릴리스: $LATEST"
+            echo "found=true" >> "$GITHUB_OUTPUT"
+            echo "tag=$LATEST" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Update deploy branch to release tag
+        if: steps.rel.outputs.found == 'true'
+        run: |
+          TAG="${{ steps.rel.outputs.tag }}"
+          git branch -f "${DEPLOY_BRANCH}" "$TAG"
+          git push origin "${DEPLOY_BRANCH}" --force-with-lease
+          echo "deploy → $TAG 반영 완료"
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "TODO: 실패 알림 연동 (Slack/메일 등)"
