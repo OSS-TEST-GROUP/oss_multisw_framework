@@ -14,9 +14,10 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <memory>
 #include <string>
 
-#include "plant.hpp"  // FmuConfig
+#include "plant.hpp"  // FmuConfig / IPlant / MakeFmuPlant
 
 namespace sils {
 
@@ -154,6 +155,15 @@ inline ProbeConfig ConfigFromEnv() {
     c.late_sample_policy = GetEnvOr("SILS_LATE_SAMPLE_POLICY", "next_tick");
     c.replay_file = GetEnvOr("SILS_REPLAY_FILE", "");
     return c;
+}
+
+// Convenience: build the FMU plant straight from a ProbeConfig (its .fmu fields come
+// from SILS_FMU_FILE / _INPUT_VR / _OUTPUT_VR). Lets an FMU-path ECU write
+// `auto plant = sils::MakeFmuPlant(cfg, err)` -- the one-line counterpart to the code
+// path's `std::make_unique<MyPlant>(...)`. Delegates to the FmuConfig overload in
+// plant.hpp; returns nullptr on error / when built without -DSILS_ENABLE_FMU.
+inline std::unique_ptr<IPlant> MakeFmuPlant(const ProbeConfig& cfg, std::string& error) {
+    return MakeFmuPlant(cfg.fmu, error);
 }
 
 }  // namespace sils

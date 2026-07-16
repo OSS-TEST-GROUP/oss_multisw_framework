@@ -34,3 +34,18 @@ target_include_directories(brake_ecu PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(brake_ecu PRIVATE sils_vecu)
 
 install(TARGETS brake_ecu RUNTIME DESTINATION bin)
+
+# FMU-path twin (src/main_fmu.cc): identical ECU, plant from an exported .fmu via
+# sils::MakeFmuPlant. Only meaningful when the SDK carries FMU support (sils_vecu sets
+# SILS_HAVE_FMU + links fmi4c under -DSILS_ENABLE_FMU), so gate the target on the same
+# option -- otherwise it would compile but MakeFmuPlant could only ever error out.
+if(SILS_ENABLE_FMU)
+    add_executable(brake_ecu_fmu
+        src/main_fmu.cc
+        ${BRAKE_VISS_GENERATED_SRCS}
+        ${BRAKE_TICK_GENERATED_SRCS}
+    )
+    target_include_directories(brake_ecu_fmu PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(brake_ecu_fmu PRIVATE sils_vecu)
+    install(TARGETS brake_ecu_fmu RUNTIME DESTINATION bin)
+endif()

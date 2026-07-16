@@ -40,6 +40,7 @@
 
 #ifdef SILS_HAVE_FMU
 #include <cmath>
+#include <iterator>  // istreambuf_iterator (FMU platform preflight)
 #include <limits>
 #include <fmi4c.h>  // FMI 1/2/3 loader (build with -DSILS_ENABLE_FMU); FmuPlant only
 #endif
@@ -138,6 +139,52 @@ private:
 };
 
 #ifdef SILS_HAVE_FMU
+// The FMI binaries/ platform folder for THIS runtime -- must match the names the FMU
+// packagers use (service/sils/examples/brake-ecu/models/brake-fmu/build.sh). nullptr =
+// unknown host, in which case we skip the preflight and let fmi4c try.
+inline const char* FmuHostPlatform() {
+#if defined(__APPLE__)
+    return "darwin64";
+#elif defined(__linux__) && (defined(__aarch64__) || defined(__arm64__))
+    return "aarch64-linux";
+#elif defined(__linux__) && (defined(__x86_64__) || defined(__amd64__))
+    return "linux64";
+#elif defined(_WIN32) || defined(_WIN64)
+    return "win64";
+#else
+    return nullptr;
+#endif
+}
+
+// Preflight: an FMU only carries binaries for the platform(s) it was packaged on. If it
+// lacks a binary for the host the vECU runs on (e.g. a macOS-built darwin64 FMU handed
+// to a Linux vECU that needs linux64), fmi4c dlopen's a path that doesn't exist and can
+// CRASH rather than fail cleanly. So before loading, scan the .fmu (a zip -- entry names
+// appear verbatim in its headers) for "binaries/<host>/" and fail-closed with a clear,
+// actionable message if it's absent, listing the platforms that ARE present. A cheap
+// substring scan, not a full zip parse -- enough to turn a crash into an error (§14).
+inline bool FmuHasBinaryForHost(const std::string& fmu_path, std::string& error) {
+    const char* host = FmuHostPlatform();
+    if (!host) return true;  // unknown host: don't second-guess fmi4c
+    std::ifstream f(fmu_path, std::ios::binary);
+    if (!f) { error = "cannot open FMU file: " + fmu_path; return false; }
+    const std::string data((std::istreambuf_iterator<char>(f)),
+                           std::istreambuf_iterator<char>());
+    if (data.find(std::string("binaries/") + host + "/") != std::string::npos) return true;
+    std::string present;
+    for (const char* p : {"linux64", "aarch64-linux", "darwin64", "win64", "linux32", "win32"}) {
+        if (data.find(std::string("binaries/") + p + "/") != std::string::npos) {
+            if (!present.empty()) present += ", ";
+            present += p;
+        }
+    }
+    error = "FMU '" + fmu_path + "' has no binary for this platform (binaries/" + host +
+            "/). Present: " + (present.empty() ? "(none)" : present) +
+            ". Rebuild the FMU on this platform "
+            "(service/sils/examples/brake-ecu/models/brake-fmu/build.sh).";
+    return false;
+}
+
 // FMU-backed plant (FMI 2.0/3.0 co-simulation, §11 L3, third IPlant implementation).
 // The port maps 1:1 onto FMI co-sim: SetInputs->fmiX_setReal/setFloat64,
 // Step->fmiX_doStep, output->fmiX_getReal/getFloat64. So a real, validated physics
@@ -157,6 +204,8 @@ public:
         input_vr_ = cfg.input_vr;
         output_vr_ = cfg.output_vr;
         has_input_ = cfg.input_vr >= 0;
+        // Fail-closed BEFORE fmi4c so a wrong-platform FMU is a clear error, not a crash.
+        if (!FmuHasBinaryForHost(cfg.file, error)) return false;
         fmu_ = fmi4c_loadFmu(cfg.file.c_str(), "sils_fmu");
         if (!fmu_) { error = "fmi4c_loadFmu failed for " + cfg.file; return false; }
         const fmiVersion_t v = fmi4c_getFmiVersion(fmu_);
@@ -250,12 +299,31 @@ private:
 };
 #endif  // SILS_HAVE_FMU
 
+// Public convenience for the FMU plant path (extension-model §3.C). A developer ECU
+// that ships an exported .fmu writes `auto p = sils::MakeFmuPlant(cfg.fmu, err)` and
+// gets an IPlant with no IPlant subclass to author -- the symmetric counterpart of the
+// code path's `std::make_unique<MyPlant>(...)`. Returns nullptr on load/config error
+// (message in `error`), or when built without -DSILS_ENABLE_FMU. This builds the exact
+// same FmuPlant that MakePlant("fmu", ...) does; MakePlant delegates here.
+inline std::unique_ptr<IPlant> MakeFmuPlant([[maybe_unused]] const FmuConfig& fmu,
+                                            std::string& error) {
+#ifdef SILS_HAVE_FMU
+    auto p = std::make_unique<FmuPlant>();
+    if (!p->Load(fmu, error)) return nullptr;
+    return p;
+#else
+    error = "FMU plant requested but FMU support not compiled in "
+            "(rebuild with -DSILS_ENABLE_FMU and fmi4c available)";
+    return nullptr;
+#endif
+}
+
 // Factory. kind "first-order" (live, drag=a), "replay" (needs replay_file), or "fmu"
 // (needs fmu config; requires -DSILS_ENABLE_FMU / fmi4c). Any other value (including
 // "none") returns nullptr -> plant coupling off (open loop).
 inline std::unique_ptr<IPlant> MakePlant(
     const std::string& kind, double drag, const std::string& replay_file,
-    [[maybe_unused]] const FmuConfig& fmu, std::string& error) {
+    const FmuConfig& fmu, std::string& error) {
     if (kind == "first-order") {
         return std::make_unique<AnalyticPlant>(drag);
     }
@@ -265,15 +333,7 @@ inline std::unique_ptr<IPlant> MakePlant(
         return p;
     }
     if (kind == "fmu") {
-#ifdef SILS_HAVE_FMU
-        auto p = std::make_unique<FmuPlant>();
-        if (!p->Load(fmu, error)) return nullptr;
-        return p;
-#else
-        error = "FMU plant requested but FMU support not compiled in "
-                "(rebuild with -DSILS_ENABLE_FMU and fmi4c available)";
-        return nullptr;
-#endif
+        return MakeFmuPlant(fmu, error);
     }
     return nullptr;
 }
