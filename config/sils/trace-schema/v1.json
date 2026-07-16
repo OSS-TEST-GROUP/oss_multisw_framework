@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "description": "SiLS vECU trace event schema v1. The JSONL trace a run emits IS the public conformance boundary (docs/sils-extension-model.md §2): the conformance kit (evaluate.py / parity.py / validate_trace.py) consumes only this. `required` fields are grounded in real captured traces (always present); other fields are allowed (forward-compatible). Every line is one JSON object with at least `run_id` and `event`.",
+  "base_required": ["run_id", "event"],
+  "producers": {
+    "vecu": "the vECU probe itself (sils::RunProbe, run_loop.hpp) -- what a developer ECU emits for free",
+    "clock_master": "the lockstep ClockMaster (sils_clock_master.cc)",
+    "responder": "the L1 SUT stand-in responder (viss_responder_main.cc)",
+    "verifier": "the run verifier (viss_verify_main.cc)",
+    "input_source": "the async input source fixture (sils_input_source.cc)"
+  },
+  "events": {
+    "run_start":         {"producer": "vecu", "required": ["instance_id", "seq", "wall_time_ms", "topic", "domain_id"]},
+    "wire_start":        {"producer": "vecu", "required": ["instance_id", "seq", "wall_time_ms", "topic", "name", "type"], "since": 1},
+    "qos_negotiated":    {"producer": "vecu", "required": ["role", "reliability", "durability", "wall_time_ms"]},
+    "protocol_on":       {"producer": "vecu", "required": ["instance_id", "seq", "wall_time_ms", "topic", "mode", "response_topic"]},
+    "protocol_ready":    {"producer": "vecu", "required": ["instance_id", "seq", "wall_time_ms", "topic", "response_matched", "waited_ms"]},
+    "ready":             {"producer": "vecu", "required": ["instance_id", "seq", "wall_time_ms", "topic"]},
+    "clock_start":       {"producer": "clock_master", "required": ["mode", "wall_time_ms"]},
+    "behavior_start":    {"producer": "vecu", "required": ["instance_id", "seq", "wall_time_ms", "topic", "name"]},
+    "scenario_start":    {"producer": "vecu", "required": ["instance_id", "seq", "wall_time_ms", "topic", "name", "scheduled_faults"]},
+    "target_attestation":{"producer": "vecu", "required": ["instance_id", "seq", "wall_time_ms", "topic", "arch", "gateway", "protocol"]},
+    "plant_reset":       {"producer": "vecu", "required": ["instance_id", "seq", "wall_time_ms", "topic", "model", "mode", "initial"]},
+    "endpoint_matched":  {"producer": "vecu", "required": ["matched_count", "wall_time_ms"]},
+    "endpoint_unmatched":{"producer": "vecu", "required": ["instance_id", "seq", "wall_time_ms", "topic", "matched_count"]},
+    "behavior_output":   {"producer": "vecu", "required": ["instance_id", "behavior", "tick_seq", "value"]},
+    "publish_intent":    {"producer": "vecu", "required": ["instance_id", "seq", "wall_time_ms", "topic", "matched_count"]},
+    "request_sent":      {"producer": "vecu", "required": ["instance_id", "seq", "wall_time_ms", "topic", "request_id", "path", "action"]},
+    "scenario_fault":    {"producer": "vecu", "required": ["instance_id", "seq", "wall_time_ms", "topic", "fault", "request_id"]},
+    "publish_result":    {"producer": "vecu", "required": ["instance_id", "seq", "wall_time_ms", "topic"]},
+    "plant_step":        {"producer": "vecu", "required": ["instance_id", "seq", "wall_time_ms", "topic", "tick_seq", "sim_time_ns", "dt_ns", "feedback_in", "command", "output"]},
+    "response_received": {"producer": "vecu", "required": ["instance_id", "seq", "wall_time_ms", "topic", "request_id", "status"]},
+    "input_staging_on":  {"producer": "vecu", "required": ["instance_id", "seq", "wall_time_ms", "topic", "input_topic"]},
+    "input_received":    {"producer": "vecu", "required": ["instance_id", "recv_seq"]},
+    "tick_input_frozen": {"producer": "vecu", "required": ["instance_id", "tick_seq", "recv_seqs", "count"]},
+    "replay_start":      {"producer": "vecu", "required": ["instance_id", "seq", "wall_time_ms", "topic", "file", "inputs"]},
+    "tick_complete":     {"producer": "vecu", "required": ["instance_id", "tick_seq", "sim_time_ns"]},
+    "run_stopping":      {"producer": "vecu", "required": ["instance_id", "seq", "wall_time_ms", "topic"]},
+    "run_stopped":       {"producer": "vecu", "required": ["instance_id", "seq", "wall_time_ms", "topic"]},
+
+    "tick_grant":        {"producer": "clock_master", "required": ["tick_seq", "sim_time_ns", "dt_ns", "wall_time_ms"]},
+    "tick_barrier":      {"producer": "clock_master", "required": ["tick_seq", "completed", "wall_time_ms"]},
+    "clock_stop":        {"producer": "clock_master", "required": ["exit_code", "wall_time_ms"]},
+
+    "responder_start":   {"producer": "responder", "required": ["role", "domain_id", "response_topic", "wall_time_ms"]},
+    "responder_reply":   {"producer": "responder", "required": ["role", "request_id", "status", "wall_time_ms"]},
+    "responder_stop":    {"producer": "responder", "required": ["role", "handled", "wall_time_ms"]},
+
+    "verify_start":      {"producer": "verifier", "required": ["expected_instance_id", "domain_id", "topic", "wall_time_ms"]},
+    "sample_received":   {"producer": "verifier", "required": ["expected_instance_id", "received_count", "topic", "valid_envelope", "wall_time_ms"]},
+    "verify_pass":       {"producer": "verifier", "required": ["expected_instance_id", "received_count", "valid_count", "min_samples", "topic", "wall_time_ms"]},
+
+    "input_source_start":{"producer": "input_source", "required": ["count", "rate_ms", "topic"]},
+    "input_source_sent": {"producer": "input_source", "required": ["seq", "topic"]},
+    "input_source_done": {"producer": "input_source", "required": ["sent"]}
+  }
+}
