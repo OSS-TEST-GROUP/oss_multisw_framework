@@ -28,8 +28,11 @@
 
 이해한 장을 ✅ 로 바꿔가며 진행한다. `↗` 는 이미 전용 문서가 있어 링크로 대체하는 장.
 
-> **OSS 확장 방향**(외부 개발자가 자기 ECU 를 추가하는 법 — libsils_vecu SDK + 개발자 ECU +
-> plant FMU/코드 세분화)은 별도 설계 문서 [sils-extension-model.md](sils-extension-model.md) 참조.
+> **OSS 확장 모델 — 구현 완료(P1~P5).** 외부 개발자가 core 무수정으로 자기 ECU 를 추가하는 경계:
+> `libsils_vecu` SDK(P1) · 개발자 ECU 예제(P2) · plant FMU/코드 세분화(P3) · wire 타입 일반화
+> (`IWireCodec`, P4) · trace 스키마 + conformance kit(P5). 설계·상태는
+> [sils-extension-model.md](sils-extension-model.md), 이해 문서엔 5장(§5.7(e))·6장에 반영. trace
+> 계약 자체는 [sils-trace-schema.md](sils-trace-schema.md).
 
 > **"검증"은 한 장이 아니라 시스템 전반에 흩어진 cross-cutting 주제다.** 장을 혼동하지 않도록
 > 어디서 무엇을 검증하는지 미리 못 박는다:
@@ -37,6 +40,7 @@
 > | 검증 계층 | 무엇을 | 코드 | 장 |
 > |---|---|---|---|
 > | 정적 계획 검증 | 카탈로그 위생 + 토폴로지 문맥 | lint_catalog · compile | **1** |
+> | trace 스키마 검증 | trace 가 공개 스키마에 맞나 | validate_trace.py | 6 (P5) |
 > | 런타임 conformance | run trace → verdict | evaluate.py | 6 |
 > | 회귀 · 패리티 | 재현성 · 타깃 동등성 | compare_golden · parity | 8 · 10 |
 >
@@ -730,16 +734,22 @@ Coordinator 가 남긴 **trace.jsonl** 은 그 자체로 판정되지 않는다.
 
 ---
 
-# 5장. vECU 포트 — Clock / Behavior / Plant / Scenario
+# 5장. vECU 포트 — Clock / Behavior / Plant / Scenario / Wire
 
-> §4.8 ①에서 "행동 로직은 바이너리 안"이라 했다. 그 바이너리 안이 이 장이다. probe 는 **4개
+> §4.8 ①에서 "행동 로직은 바이너리 안"이라 했다. 그 바이너리 안이 이 장이다. probe 는 **5개
 > 헥사고날 포트**로 짜여 있고, tick 루프가 이들을 조립한다. env(3장)는 각 포트의 **어느 구현을
 > 쓸지 고르는 스위치**일 뿐 — 구현 자체는 여기 헤더들에 컴파일돼 있다.
+>
+> **⇢ 이 tick 루프는 이제 라이브러리(`libsils_vecu`)로 추출됐다.** 조립 코드는
+> [run_loop.hpp](../service/sils/vecu/src/run_loop.hpp) 의 `sils::RunProbe(cfg, behavior, plant, wire)`
+> 함수이고, `viss_probe_main.cc` 는 그걸 호출하는 얇은 소비자다. 외부 개발자가 같은 방식으로 자기 ECU
+> 를 만드는 확장 모델(P1~P5 구현 완료)은 [sils-extension-model.md](sils-extension-model.md) 참조.
 
 ## 5.1 한 문장
 
-vECU 내부는 **IClockSource·IBehavior·IPlant·IScenario** 네 포트로 나뉘고, [tick 루프](../service/sils/vecu/src/viss_probe_main.cc)
-가 매 tick 이들을 순서대로 호출해 하나의 vECU 동작을 만든다. 각 포트는 **≥2개 구현**을 갖고 env 로 선택된다.
+vECU 내부는 **IClockSource·IBehavior·IPlant·IScenario·IWireCodec** 다섯 포트로 나뉘고,
+[`RunProbe` tick 루프](../service/sils/vecu/src/run_loop.hpp)가 매 tick 이들을 순서대로 호출해 하나의
+vECU 동작을 만든다. 각 포트는 **≥2개 구현**을 갖고 env(또는 코드 주입)로 선택된다.
 
 ## 5.2 헥사고날 포트 + "earned abstraction"
 
@@ -748,7 +758,7 @@ vECU 내부는 **IClockSource·IBehavior·IPlant·IScenario** 네 포트로 나�
 구현이 나올 때 같은 모양을 따른다 — 미리 하지 않는다."* 그래서 probe 본체는 **포트만 알고 구현은 모른다** —
 `SILS_*` 가 `Make*()` 팩토리에서 구현을 고른다.
 
-## 5.3 네 포트 지도
+## 5.3 다섯 포트 지도
 
 | 포트 | 인터페이스 | 구현 (≥2) | env 선택 | 파일 |
 |---|---|---|---|---|
@@ -756,10 +766,16 @@ vECU 내부는 **IClockSource·IBehavior·IPlant·IScenario** 네 포트로 나�
 | **Behavior** | `IBehavior` | VissRequestBehavior · AccumulatorBehavior · PControllerBehavior | `SILS_BEHAVIOR=viss-request\|accumulate\|p-controller` | [behavior.hpp](../service/sils/vecu/src/behavior.hpp) |
 | **Plant** | `IPlant` | AnalyticPlant · ReplayPlant · FmuPlant | `SILS_PLANT=first-order\|replay\|fmu\|none` | [plant.hpp](../service/sils/vecu/src/plant.hpp) |
 | **Scenario** | `IScenario` | NominalScenario · ScheduledFaultScenario | `SILS_SCENARIO=nominal\|scheduled` | [scenario.hpp](../service/sils/vecu/src/scenario.hpp) |
+| **Wire** | `IWireCodec` | VissWireCodec · RawValueWireCodec (+ 개발자 커스텀, 예: BrakeCmdWireCodec) | `SILS_WIRE=viss\|raw` (또는 코드 주입) | [wire.hpp](../service/sils/vecu/src/wire.hpp) |
 
-## 5.4 tick 루프 — 4포트가 한 tick 에서 협력
+> **Wire 포트(P4)** 는 DDS 로 나가는 타입·페이로드를 추상화한다. `RunProbe` 는 타입 등록·인코딩·
+> corrupt/duplicate 를 codec 에 위임하므로, 개발자가 자기 IDL(예: `BrakeCmd`)을 등록하는 codec 을
+> 구현하면 **네이티브 신규 DDS 타입**을 core 무수정으로 발행할 수 있다(§5.7(e), P4b 실증).
 
-[viss_probe_main.cc](../service/sils/vecu/src/viss_probe_main.cc) 의 루프가 포트들을 조립한다:
+## 5.4 tick 루프 — 포트들이 한 tick 에서 협력
+
+[`RunProbe`(run_loop.hpp)](../service/sils/vecu/src/run_loop.hpp) 의 루프가 포트들을 조립한다
+(clock/scenario 는 cfg 에서 내부 생성, behavior/plant/wire 는 주입):
 
 ```
 while (clock->WaitForNextTick(tick)) {              # ⟨Clock⟩ 다음 tick 까지 블록 (wall: 주기 / lockstep: grant 대기)
@@ -788,6 +804,9 @@ while (clock->WaitForNextTick(tick)) {              # ⟨Clock⟩ 다음 tick �
   재생) · `FmuPlant`(fmi4c 로 실제 `.fmu` co-sim). `none` 이면 개루프. 자세히는 [FMU 문서](sils-fmu-plant.md)·9장.
 - **IScenario (§11 negative path)** — tick-indexed 결함 주입. `nominal`(무주입) · `scheduled`
   (`3:drop,7:corrupt` 스케줄). 결정론이라 결함 run 도 golden 재현. 자세히는 §11 negative path.
+- **IWireCodec (§P4)** — DDS 로 나가는 타입·페이로드. `VissWireCodec`(VISS 봉투) · `RawValueWireCodec`
+  (같은 타입, 봉투 없는 스칼라) · 개발자 커스텀(`BrakeCmdWireCodec` 등, 네이티브 IDL). trace 계약
+  (publish_intent/request_sent/…)은 `RunProbe` 가 유지하고 codec 은 write 만 담당 — 모든 wire 에 균일.
 
 ## 5.6 결정론 — 왜 포트를 이렇게 짰나
 
@@ -855,16 +874,27 @@ vecus:
 tick 루프(§5.4)는 **안 건드린다** — `MakeBehavior`/`MakePlant` 팩토리에 **분기 하나** 추가하면
 probe 본체가 그대로 새 포트를 조립한다(earned-abstraction, §5.2).
 
-### (e) 정직한 현재 경계 ★
+### (e) 경계는 어디까지 왔나 ★ (확장 모델 P1~P5 구현 반영)
 
-- **포트(로직·물리·결함·클록)는 지금 바로 재사용** — `BrakeBehavior`/`ThermalPlant` 는 위처럼 꽂힌다.
-- **하지만 현재 probe 는 wire 타입이 `VissRequestTopic` 하나로 고정**(VISS 슬라이스). 두 길:
-  - **(지금 가능)** brake/temp 가 `VissRequestTopic` 엔벨로프(JSON payload)를 **다른 topic**
-    (`/VIN/Brake`, `/VIN/Temp`)에 publish — 새 IDL 없이 2 vECU 구성 가능(입력 스테이징·fleet 예제가
-    이미 이 방식).
-  - **(확장 필요)** 네이티브 `BrakeCommand` IDL 타입으로 가려면 probe 의 transport 바인딩을 **계약 타입
-    구동**으로 일반화(또는 타입 계열별 probe 바이너리) — 아직 미구현.
-- 즉 **로직·물리·결함은 포트로 지금**, **네이티브 신규 DDS 타입은 transport 일반화가 남은 작업**.
+> 이 절은 예전엔 "정직한 현재 경계 — 아직 미구현"이었다. 확장 모델
+> [P1~P5](sils-extension-model.md)가 구현되며 그 경계가 크게 이동했다:
+
+- **포트(로직·물리·결함·클록·wire) 전부 지금 재사용** — env 스위치 또는 코드 주입으로 꽂는다.
+- **라이브러리화됨(P1)** — tick 루프가 `libsils_vecu`(`RunProbe`/`ConfigFromEnv`)로 추출돼, 개발자는
+  이걸 링크하고 자기 포트만 구현한다.
+- **워크드 예제 실재(P2/P3)** — 아래 (f)의 brake 코드는 더 이상 "예시"가 아니라
+  [`service/sils/examples/brake-ecu/`](../service/sils/examples/brake-ecu/) 의 **실제 컴파일되는 ECU**다.
+  plant 는 코드경로(`BrakePlant`)와 FMU경로(`sils::MakeFmuPlant`, `models/brake-fmu/`) 둘 다.
+- **네이티브 신규 DDS 타입 — 이제 가능(P4)** — 예전에 "미구현/transport 일반화 남음"이라 한 부분이
+  `IWireCodec` 포트로 구현됐다. `BrakeCmdWireCodec` 로 네이티브 `BrakeCmd` 타입을 core 무수정으로 발행
+  ([`examples/brake-ecu-native/`](../service/sils/examples/brake-ecu-native/), P4b). "DDS 타입 교체 = codec 한 줄".
+- **trace 경계 확정(P5)** — 발행/판정의 공개 계약이 [trace 스키마 v1](sils-trace-schema.md) + conformance
+  kit(`validate_trace.py`)으로 명세화됐다.
+
+**남은 정직한 경계 (아직):**
+- `RunProbe` 의 **읽기 경로**(reqresp 응답 · 입력 스테이징 리더)가 아직 `VissRequestTopic` 에 결합 — 커스텀
+  타입 ECU 도 VISS 생성소스를 여전히 컴파일한다(발행은 100% 네이티브). 리더까지 codec 화는 향후.
+- **SDK install/export 미완** — 예제가 생성 IDL 소스를 여전히 재-glob(P4/설치 단계에서 제거 예정).
 
 ```
 brake ECU                              temp ECU
@@ -877,8 +907,9 @@ brake ECU                              temp ECU
 
 ### (f) 실제 파일 내용 (워크드 예제)
 
-> 아래는 **예시 스니펫**이다. 실 소스(`behavior.hpp`/`plant.hpp`)엔 넣지 않는다 — VISS 슬라이스에
-> 투기적 코드를 두지 않기 위함(earned-abstraction, §5.2). 현재 IBehavior/IPlant 시그니처에 맞춘 형태.
+> 아래 스니펫은 이제 **실재하는 예제 코드**다 — [`service/sils/examples/brake-ecu/`](../service/sils/examples/brake-ecu/)
+> (P2/P3, 빌드·실행 검증 완료). core `behavior.hpp`/`plant.hpp` 엔 넣지 않고(earned-abstraction, §5.2),
+> 개발자 ECU 레포로 분리해 `libsils_vecu` 를 링크하는 형태. 현재 IBehavior/IPlant 시그니처 그대로.
 
 **① `behavior.hpp` — `BrakeBehavior`** (제어 로직 → 바이너리, §4.8①). `PControllerBehavior` 와 같은 꼴:
 

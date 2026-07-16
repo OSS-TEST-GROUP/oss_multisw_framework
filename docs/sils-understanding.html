@@ -606,14 +606,16 @@ SILS_ATTEST_ARCH=x86_64  <span class="c"># sim</span></pre>
   <b>미허용</b>(plant.hpp) — 지금은 "프로세스=인스턴스" 모델.</p>
 
   <div class="chap">5장 · vECU 포트 (헥사고날)</div>
-  <h2><span class="n">12</span> &nbsp;vECU 내부 — 4개 포트를 tick 루프가 조립</h2>
-  <p class="lede" style="margin-bottom:16px">§4.8 ①의 "바이너리 안 로직". probe 는 <b>4개 헥사고날 포트</b>로 짜이고,
-  env(3장)는 각 포트의 <b>어느 구현을 쓸지 고르는 스위치</b>. 추상화는 구현이 2개 이상일 때만(earned).</p>
+  <h2><span class="n">12</span> &nbsp;vECU 내부 — 5개 포트를 tick 루프가 조립</h2>
+  <p class="lede" style="margin-bottom:16px">§4.8 ①의 "바이너리 안 로직". probe 는 <b>5개 헥사고날 포트</b>로 짜이고,
+  env(3장)는 각 포트의 <b>어느 구현을 쓸지 고르는 스위치</b>. 추상화는 구현이 2개 이상일 때만(earned).
+  tick 루프는 이제 <code class="inl">libsils_vecu</code> 의 <code class="inl">RunProbe</code>(run_loop.hpp)로 추출됨.</p>
   <div class="whenline">
     <div class="cell"><h3>Clock · IClockSource</h3><p>WallClock · Lockstep<br><code class="inl">SILS_CLOCK_MODE</code></p></div>
     <div class="cell"><h3>Behavior · IBehavior</h3><p>viss-request · accumulate · p-controller<br><code class="inl">SILS_BEHAVIOR</code></p></div>
     <div class="cell"><h3>Plant · IPlant</h3><p>Analytic · Replay · Fmu<br><code class="inl">SILS_PLANT</code></p></div>
     <div class="cell"><h3>Scenario · IScenario</h3><p>Nominal · Scheduled<br><code class="inl">SILS_SCENARIO</code></p></div>
+    <div class="cell"><h3>Wire · IWireCodec</h3><p>Viss · RawValue · 커스텀 IDL<br><code class="inl">SILS_WIRE</code></p></div>
   </div>
   <div class="scroll" style="margin-top:16px">
     <pre class="code">while (clock-&gt;WaitForNextTick(tick)) {          <span class="c">⟨Clock⟩    다음 tick 까지 블록 (wall:주기 / lockstep:grant)</span>
@@ -631,8 +633,9 @@ SILS_ATTEST_ARCH=x86_64  <span class="c"># sim</span></pre>
   스케줄). <b>env 는 스위치, 로직은 바이너리</b>(§4.8 ①).</p>
 
   <h2><span class="n">13</span> &nbsp;실전 — brake · temp 두 ECU 를 포트로</h2>
-  <p class="lede" style="margin-bottom:16px">두 ECU = <b>두 vECU = 두 컨테이너</b>(§4.10). 각 ECU 를 4포트에 매핑하는 게
-  "실제 구현". tick 루프는 안 건드리고 <code class="inl">MakeBehavior</code>/<code class="inl">MakePlant</code> 에 분기만 추가.</p>
+  <p class="lede" style="margin-bottom:16px">두 ECU = <b>두 vECU = 두 컨테이너</b>(§4.10). 각 ECU 를 포트에 매핑하는 게
+  "실제 구현". 개발자는 <code class="inl">libsils_vecu</code> 를 링크하고 자기 포트만 구현해
+  <code class="inl">RunProbe</code> 에 주입 — <b>이제 실재하는 워크드 예제</b>(examples/brake-ecu, P2~P4).</p>
   <div class="scroll">
     <table class="ctbl">
       <thead><tr><th>포트</th><th>brake ECU</th><th>temp ECU</th></tr></thead>
@@ -657,20 +660,22 @@ SILS_ATTEST_ARCH=x86_64  <span class="c"># sim</span></pre>
       <p>고충실도면 실제 ASW 를 IBehavior 어댑터로 감쌈.</p>
     </div>
     <div class="o single">
-      <h4>정직한 현재 경계 ★</h4>
+      <h4>경계는 어디까지 왔나 ★ (P1~P5 구현)</h4>
       <div class="topics">
-        <div class="t ok">포트(로직·물리·결함·클록)는 지금 바로 재사용</div>
-        <div class="t">probe wire 타입은 VissRequestTopic 하나로 고정</div>
-        <div class="t clash">네이티브 신규 IDL 타입 = transport 일반화 필요(미구현)</div>
+        <div class="t ok">포트 전부 재사용 + tick 루프 라이브러리화(libsils_vecu, P1)</div>
+        <div class="t ok">네이티브 신규 IDL 타입 = IWireCodec 로 구현됨(BrakeCmd, P4b)</div>
+        <div class="t ok">plant 코드/FMU 경로 · trace 스키마+conformance(P3·P5)</div>
+        <div class="t">남음: 읽기 경로(reqresp/staging)가 아직 VissRequestTopic 결합</div>
       </div>
-      <p>지금 가능: VissRequestTopic 엔벨로프를 다른 topic(/VIN/Brake·/VIN/Temp)에 publish.</p>
+      <p>"DDS 타입 교체 = wire codec 한 줄". 상세: <a href="sils-extension-model.md" style="color:var(--accent)">확장 모델</a>.</p>
     </div>
   </div>
   <p class="note"><b>실제 파일 내용(워크드 예제)</b> — <code class="inl">BrakeBehavior</code>·<code class="inl">BrakePlant</code>·
-  <code class="inl">brake.fmu</code>(modelDescription)·<code class="inl">brake_probe.yaml</code> 전체 코드는
-  <a href="sils-understanding.md" style="color:var(--accent)">문서 §5.7 (f)</a>. (실 소스엔 미포함 — 예시 스니펫)</p>
+  <code class="inl">brake.fmu</code>(modelDescription)·<code class="inl">BrakeCmd.idl</code>(네이티브 타입) 은 이제
+  <b>실재</b>: <code class="inl">service/sils/examples/brake-ecu{,-native}/</code> (빌드·실행 검증). 전체 설명은
+  <a href="sils-understanding.md" style="color:var(--accent)">문서 §5.7</a>.</p>
 
-  <p class="foot">clock_source.hpp · behavior.hpp · plant.hpp · scenario.hpp · viss_probe_main.cc &nbsp;|&nbsp; 문서: docs/sils-understanding.md (1–5장) &nbsp;|&nbsp; trace → 6장 evaluate · 충실도 → 7장</p>
+  <p class="foot">run_loop.hpp(RunProbe) · clock_source · behavior · plant · scenario · wire.hpp &nbsp;|&nbsp; 문서: docs/sils-understanding.md (1–5장) &nbsp;|&nbsp; trace → 6장 evaluate · 충실도 → 7장</p>
 
   <div class="chap">6장 · Conformance 판정</div>
   <h2><span class="n">14</span> &nbsp;trace → verdict (evaluate)</h2>
