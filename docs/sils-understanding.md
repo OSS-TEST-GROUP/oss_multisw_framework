@@ -935,13 +935,19 @@ probe 본체가 그대로 새 포트를 조립한다(earned-abstraction, §5.2).
 - **네이티브 신규 DDS 타입 — 이제 가능(P4)** — 예전에 "미구현/transport 일반화 남음"이라 한 부분이
   `IWireCodec` 포트로 구현됐다. `BrakeCmdWireCodec` 로 네이티브 `BrakeCmd` 타입을 core 무수정으로 발행
   ([`examples/brake-ecu-native/`](../service/sils/examples/brake-ecu-native/), P4b). "DDS 타입 교체 = codec 한 줄".
+- **읽기 경로까지 codec 화 완료(T1-A)** — 예전엔 발행만 네이티브였고 `RunProbe` 의 읽기 경로(reqresp 응답 ·
+  입력 스테이징 리더)가 `VissRequestTopic` 에 결합돼 커스텀 타입 ECU 도 VISS 생성소스를 컴파일했다. 이제
+  포트에 읽기 대칭 [`WireInbound`/`Take()`](../service/sils/vecu/src/wire.hpp) 를 추가하고, VISS 구현을
+  [`viss_wire.hpp`](../service/sils/vecu/src/viss_wire.hpp) 로 분리해 **`wire.hpp`/`run_loop.hpp` 가 어떤 DDS
+  타입도 명명하지 않는다**. `wire` 는 이제 RunProbe 의 **필수 주입 인자**(기본 폴백 제거) — 기본 probe 는
+  `MakeWireCodec(cfg.wire_kind)` 로 VISS codec 을 조립하고, brake-ecu-native 는 **VISS 생성소스를 전혀
+  컴파일하지 않는다**(발행·응답·입력 100% 네이티브).
 - **trace 경계 확정(P5)** — 발행/판정의 공개 계약이 [trace 스키마 v1](sils-trace-schema.md) + conformance
   kit(`validate_trace.py`)으로 명세화됐다.
 
 **남은 정직한 경계 (아직):**
-- `RunProbe` 의 **읽기 경로**(reqresp 응답 · 입력 스테이징 리더)가 아직 `VissRequestTopic` 에 결합 — 커스텀
-  타입 ECU 도 VISS 생성소스를 여전히 컴파일한다(발행은 100% 네이티브). 리더까지 codec 화는 향후.
-- **SDK install/export 미완** — 예제가 생성 IDL 소스를 여전히 재-glob(P4/설치 단계에서 제거 예정).
+- **SDK install/export 미완** — 예제가 생성 IDL 소스(브레이크는 TickControl)를 여전히 재-glob(설치 단계에서
+  제거 예정). `find_package(sils_vecu)` 미지원.
 
 ```
 brake ECU                              temp ECU

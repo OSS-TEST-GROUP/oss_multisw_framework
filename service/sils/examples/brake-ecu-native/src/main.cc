@@ -6,8 +6,8 @@
 // is the whole demonstration: swapping the DDS type on the wire is one constructor, with
 // no change to control logic, plant, RunProbe, config, or trace contract.
 //
-//     ../brake-ecu:        RunProbe(cfg, behavior, plant);                      // VISS envelope (default)
-//     here (brake-native): RunProbe(cfg, behavior, plant, MakeBrakeCmdWire());  // native BrakeCmd
+//     ../brake-ecu:        RunProbe(cfg, behavior, plant, MakeWireCodec(...));        // VISS envelope
+//     here (brake-native): RunProbe(cfg, behavior, plant, BrakeCmdWireCodec{});       // native BrakeCmd
 
 #include <memory>
 

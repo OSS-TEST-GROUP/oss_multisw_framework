@@ -19,6 +19,7 @@
 #include "brake_plant.hpp"
 #include "config.hpp"     // sils::ConfigFromEnv / GetEnvDoubleOr
 #include "run_loop.hpp"   // sils::RunProbe
+#include "viss_wire.hpp"  // sils::MakeWireCodec (this ECU uses the built-in VISS wire)
 
 int main() {
     const sils::ProbeConfig cfg = sils::ConfigFromEnv();
@@ -32,5 +33,9 @@ int main() {
     // FMU path (extension-model §3.C) would replace the line above with:
     //   auto plant = sils::MakeFmuPlant(cfg);   // (public API arrives in P3)
 
-    return sils::RunProbe(cfg, std::move(behavior), std::move(plant));
+    // Wire port: this ECU publishes on the built-in VISS wire (SILS_WIRE). The native
+    // custom-type variant (examples/brake-ecu-native) injects its own BrakeCmd codec here.
+    auto wire = sils::MakeWireCodec(cfg.wire_kind, cfg.response_topic_prefix);
+
+    return sils::RunProbe(cfg, std::move(behavior), std::move(plant), std::move(wire));
 }

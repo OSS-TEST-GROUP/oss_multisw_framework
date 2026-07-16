@@ -9,10 +9,11 @@
 // the same config.
 //
 // A developer's own ECU main() looks exactly like this, except it constructs its own
-// IBehavior/IPlant directly instead of going through the factories:
+// IBehavior/IPlant/IWireCodec directly instead of going through the factories:
 //     auto cfg = sils::ConfigFromEnv();
 //     return sils::RunProbe(cfg, std::make_unique<MyBehavior>(...),
-//                                std::make_unique<MyPlant>(...));
+//                                std::make_unique<MyPlant>(...),
+//                                std::make_unique<MyWireCodec>(...));
 
 #include <iostream>
 #include <memory>
@@ -21,6 +22,7 @@
 #include "config.hpp"
 #include "plant.hpp"
 #include "run_loop.hpp"
+#include "viss_wire.hpp"  // sils::MakeWireCodec (built-in VISS/raw codecs)
 
 int main() {
     const sils::ProbeConfig cfg = sils::ConfigFromEnv();
@@ -43,5 +45,10 @@ int main() {
         return 2;
     }
 
-    return sils::RunProbe(cfg, std::move(behavior), std::move(plant));
+    // Wire port (§P4): SILS_WIRE selects the built-in codec ("viss" envelope default, or
+    // "raw" scalar). RunProbe is wire-agnostic, so the default probe owns its default wire.
+    std::unique_ptr<sils::IWireCodec> wire =
+        sils::MakeWireCodec(cfg.wire_kind, cfg.response_topic_prefix);
+
+    return sils::RunProbe(cfg, std::move(behavior), std::move(plant), std::move(wire));
 }

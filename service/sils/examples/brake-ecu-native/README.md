@@ -41,10 +41,12 @@ The `wire_start` trace shows `"name":"brake-cmd-native","type":"BrakeCmd"`; `pla
 traces are identical to the code-path brake ECU (speed 30→setpoint). A subscriber on the
 topic now receives a typed `BrakeCmd`, not a JSON string.
 
-## Known remaining coupling
+## Fully native — no VISS sources
 
-`run_loop.hpp`'s optional response/input readers (reqresp / input-staging modes) still
-reference `VissRequestTopic`, so this ECU still *compiles* the core VISS generated
-sources even though it never publishes that type. Fully decoupling the read path (a codec
-that also owns response/input decoding) is future work; the publish path — the headline
-of "custom wire type" — is fully native here.
+Both directions of the wire go through the codec. The `IWireCodec` port owns the READ
+path too (`WireInbound` + `Take()`): `run_loop.hpp`'s response/input-staging readers take
+and decode through the injected codec instead of a concrete type, and the built-in VISS
+codecs live in `viss_wire.hpp` (not included here). So `wire.hpp` / `run_loop.hpp` name no
+DDS type, and this ECU compiles **no** core VISS generated sources — publish, response, and
+input staging are 100% native `BrakeCmd`. The only core-generated source it still compiles
+is `TickControl` (the clock's lockstep tick-control type, orthogonal to the wire).
