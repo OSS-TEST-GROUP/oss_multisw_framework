@@ -20,13 +20,13 @@
 | **4** | **Run Coordinator — 도메인 임대·기동·ready·verify·teardown·reap** | ✅ 작성됨 |
 | **5** | **vECU 포트 — Clock / Behavior / Plant / Scenario (헥사고날)** | ✅ 작성됨 |
 | **6** | **Conformance 판정 — `evaluate.py` 가 trace 를 verdict 로** | ✅ 작성됨 |
-| 7 | 충실도 사다리 L0–L4 — 각 레벨의 증거 | ⬜ |
-| 8 | Golden / 회귀 — capture ↔ compare 재현성 | ⬜ |
-| 9 | FMU 트랙 — fmi4c·보안 게이트 (별도: [sils-fmu-plant.md](sils-fmu-plant.md)) | ↗ 링크 |
-| 10 | L4 Target Parity (별도: [sils-target-parity.md](sils-target-parity.md)) | ↗ 링크 |
-| 11 | Fleet / run 격리 / 재현성 | ⬜ |
+| **7** | **충실도 사다리 L0–L4 — 각 레벨의 증거** | ✅ 작성됨 |
+| **8** | **Golden / 회귀 — capture ↔ compare 재현성** | ✅ 작성됨 |
+| 9 | FMU 트랙 — fmi4c·보안 게이트 (별도: [sils-fmu-plant.md](sils-fmu-plant.md)) | ↗ 링크(9장 브리지) |
+| 10 | L4 Target Parity (별도: [sils-target-parity.md](sils-target-parity.md)) | ↗ 링크(10장 브리지) |
+| **11** | **Fleet / run 격리 / 재현성** | ✅ 작성됨 |
 
-이해한 장을 ✅ 로 바꿔가며 진행한다. `↗` 는 이미 전용 문서가 있어 링크로 대체하는 장.
+**1~11장 전부 작성 완료.** `↗` 는 전용 문서가 있어 본문은 브리지(요점+링크)로 둔 장.
 
 > **OSS 확장 모델 — 구현 완료(P1~P5).** 외부 개발자가 core 무수정으로 자기 ECU 를 추가하는 경계:
 > `libsils_vecu` SDK(P1) · 개발자 ECU 예제(P2) · plant FMU/코드 세분화(P3) · wire 타입 일반화
@@ -1117,15 +1117,154 @@ verdict 는 [to_junit.py](../tools/sils/conformance/to_junit.py) 로 **JUnit XML
 
 ---
 
-# 7장~11장 (채우는 중)
+# 7장. 충실도 사다리 L0–L4 — 각 레벨의 증거
 
-아래는 아직 stub. 이해하는 대로 각 장을 위 1~6장처럼 채운다.
+## 7.1 한 문장
 
-- **7장 충실도 사다리 L0–L4** — 각 레벨이 요구하는 증거와 판정.
-- **8장 Golden / 회귀** — capture ↔ compare, 결정론 모드 게이트.
-- **9장 FMU 트랙** → [sils-fmu-plant.md](sils-fmu-plant.md).
-- **10장 L4 Target Parity** → [sils-target-parity.md](sils-target-parity.md).
-- **11장 Fleet / run 격리 / 재현성** — 다중 vECU·도메인 격리·재현성 봉인.
+충실도(fidelity)는 "이 vECU 가 실물을 **얼마나** 대신하나"를 5단으로 매긴 사다리다. 6장의
+`fidelity_evidenced` 는 **한 run 이 실제로 보인 최고 레벨**이고, 각 레벨은 trace 안의 **구체적 증거**가
+있어야 인정된다 — 선언이 아니라 증거 기반(§6.5).
+
+## 7.2 다섯 단 — 무엇을 증명하나 · 무슨 증거로
+
+| 레벨 | 이름 | 증명하는 것 | trace 증거 | 판정 코드 |
+|---|---|---|---|---|
+| **L0** | 인터페이스 스텁 | 샘플이 계약 엔드포인트에 도착한다 | `endpoint_matched` + 수신 샘플 (pass-with-evidence) | evaluate.py 증거 게이트 |
+| **L1** | 프로토콜 | 요청/응답 대화가 성립 + QoS 계약 준수 | `request_sent`↔`response_received` 상관, 미응답·중복·유령 응답 0, `qos_negotiated` RELIABLE | [analyze_protocol](../tools/sils/conformance/evaluate.py#L464) |
+| **L2** | 행동 | 상태기계가 tick-indexed 로 결정론 재현 | `behavior_output.value` 시퀀스가 golden 과 일치 | [analyze_behavior](../tools/sils/conformance/evaluate.py#L283) + compare_golden(8장) |
+| **L3** | 플랜트 결합 | 물리 모델과 폐루프, 결정론 | `plant_step`(feedback→command→output) live·폐루프·재현 | [analyze_plant](../tools/sils/conformance/evaluate.py#L311) |
+| **L4** | 타깃 패리티 | 실 타깃과 값이 맞는다 | **교차-trace** 비교 + attestation(arch=aarch64·gateway/protocol=real) | [parity.py](../tools/sils/conformance/parity.py) (10장) |
+
+## 7.3 사다리는 "올라간다" — `_bump`
+
+[FIDELITY_RANK](../tools/sils/conformance/evaluate.py#L565) `{none:0, L0:1, …, L4:5}`. 한 run 은 L0 증거
+위에 조건이 더 충족될수록 위로 bump 된다: 프로토콜 conformant → L1, live·폐루프·결정론 plant →
+L3(= L2 를 내포). **replay/개루프/broken plant 는 L3 로 못 올린다** — 증거가 약하면 레벨이 안 오른다.
+
+## 7.4 L4 는 단일 trace 로 안 준다 ★
+
+L0~L3 은 한 run 의 trace 만으로 판정된다. **L4 만은 예외** — 실 타깃 레퍼런스 trace 와의 **교차 비교**가
+필요하다. probe 는 `target_attestation`(arch/gateway/protocol)만 **기록**하고([analyze_attestation](../tools/sils/conformance/evaluate.py#L444)),
+L4 인정 여부는 [parity.py](../tools/sils/conformance/parity.py) 가 판정한다. ARM64 실행은 L4 의 **구성요소**일 뿐
+충분조건이 아니다. 자세히는 10장·[sils-target-parity.md](sils-target-parity.md).
+
+## 7.5 env 조합이 레벨을 만든다
+
+같은 바이너리(§5.6)가 `SILS_*` 조합만 바꿔 레벨을 오른다: `SILS_PROTOCOL=reqresp`(→L1) ·
+`SILS_BEHAVIOR=p-controller`+golden(→L2) · `SILS_PLANT=fmu`+폐루프(→L3) · `SILS_ATTEST_*=real`+parity(→L4).
+
+---
+
+# 8장. Golden / 회귀 — capture ↔ compare 재현성
+
+## 8.1 한 문장
+
+Golden 은 "**믿을 수 있는 한 run 을 정답으로 박제**(capture)"하고, 이후 run 을 그 정답과
+**대조**(compare)해 회귀를 잡는 재현성 도구다. L2/L3 결정론(§5.6·7장)이 성립해야 성립한다.
+
+## 8.2 두 도구
+
+| 도구 | 하는 일 | 핵심 |
+|---|---|---|
+| [capture_golden.py](../tools/sils/conformance/capture_golden.py) | conformant run 을 정규화해 golden 으로 저장 | 비결정 필드(wall_time 등) 제거·정규화, **비-conformant run 은 저장 거부**(exit 1) |
+| [compare_golden.py](../tools/sils/conformance/compare_golden.py) | 새 run 을 golden 과 비교 | 이벤트를 키로 그룹·순서 비교, 필드 허용오차(tolerance), 결과 MATCH/REGRESSION |
+
+## 8.3 무엇을 비교하나 — 결정론 필드만
+
+`wall_time_ms` 같은 비결정 값은 정규화로 빼고, `behavior_output.value`·`plant_step`(command/output)
+처럼 **결정론이어야 하는 값**만 tick-indexed 로 비교한다. 수치는 [within_tolerance](../tools/sils/conformance/compare_golden.py#L131)
+로 허용오차 안이면 통과(부동소수 잡음 흡수).
+
+## 8.4 결정론 모드 게이트 ★
+
+Wall-clock run 은 tick 타이밍이 비결정이라 골든 대조가 무의미할 수 있다. compare 는
+[gate_input_mode](../tools/sils/conformance/compare_golden.py#L275)/[is_lockstep](../tools/sils/conformance/compare_golden.py#L161)
+로 **재현 가능한 모드(lockstep/replay)인지 먼저 확인**하고, 아니면 대조를 거부/경고한다 — "재현 안 되는 걸
+재현 비교"하는 거짓 안심을 막는다.
+
+## 8.5 Exit 코드 = CI 게이트
+
+capture: `0` 저장 / `1` 거부(비-conformant) / `2` 사용오류. compare: `0` MATCH / `1` REGRESSION /
+`2` 정책거부. 그대로 CI 게이트(§16)로 들어간다. CI 배선은 [sils-ci.sh](../tools/sils/ci/sils-ci.sh) 의
+capture-golden 스테이지.
+
+---
+
+# 9장. FMU 트랙 → [sils-fmu-plant.md](sils-fmu-plant.md)
+
+IPlant 의 세 번째 구현 `FmuPlant`(fmi4c 로 실제 `.fmu` co-sim, §5.5 L3)는 전용 문서가 있다.
+요점만:
+
+- **무엇** — Simulink/Dymola/AMESim 등이 export 한 `.fmu`(FMI 2.0/3.0 co-sim)를 IPlant 뒤에 그대로
+  꽂는다. tick 루프·evaluate·golden 무변경 — 같은 `plant_step` 계약을 낸다.
+- **선택** — `SILS_PLANT=fmu` + `SILS_FMU_FILE`/`_INPUT_VR`/`_OUTPUT_VR`. 빌드는 `SILS_ENABLE_FMU=ON`(fmi4c).
+- **개발자 API(P3)** — `sils::MakeFmuPlant(cfg, err)` 로 코드경로(`make_unique<MyPlant>`)와 **한 줄만** 다르게.
+  워크드 예제: [examples/brake-ecu](../service/sils/examples/brake-ecu/) (코드경로) ↔ FMU경로(`main_fmu.cc` +
+  `models/brake-fmu/`, 손수 짠 최소 FMI 2.0 소스·재현빌드).
+- **보안 게이트** — `.fmu` 는 신뢰 못 할 바이너리를 dlopen 하므로 [fmu_gate.py](../tools/sils/fmu/fmu_gate.py)
+  allowlist/해시로 실행 전 검증(§5.6). 플랫폼 불일치는 `FmuPlant` preflight 가 크래시 대신 에러로 막는다.
+
+상세(FMI 매핑·VR·보안·플랫폼)는 → **[sils-fmu-plant.md](sils-fmu-plant.md)**.
+
+---
+
+# 10장. L4 Target Parity → [sils-target-parity.md](sils-target-parity.md)
+
+L4(충실도 최상단, 7.4)는 SiLS run 이 **실 타깃과 값이 맞는지**를 교차-trace 로 판정한다. 전용 문서가 있다.
+요점만:
+
+- **판정자** — [parity.py](../tools/sils/conformance/parity.py): `--sils`(SiLS trace) vs `--target`(실 타깃 trace)
+  를 `--contract`(패리티 계약 YAML)의 신호·허용오차·타이밍 창으로 비교. [compare_golden.compare](../tools/sils/conformance/compare_golden.py#L174) 재사용.
+- **attestation 게이트** — 계약이 요구하는 `arch=aarch64`·`gateway=real`·`protocol=real` 을 trace 의
+  `target_attestation` 이 만족해야 한다. 값이 맞아도 attestation 미달이면 **PARITY_UNATTESTED(L3)**, 둘 다면 **PARITY(L4)**, 발산이면 **DIVERGENCE**.
+- **왜 단일 trace 로 안 되나** — L4 는 "실물과 같다"는 주장이라, 실물 레퍼런스 없이는 증명 불가(7.4). 단일 run 은
+  attestation 을 기록만 한다.
+- **계약 예** — [config/sils/parity/viss-target-parity.yaml](../config/sils/parity/viss-target-parity.yaml).
+
+상세(계약 스키마·verdict·CI)는 → **[sils-target-parity.md](sils-target-parity.md)**.
+
+---
+
+# 11장. Fleet / run 격리 / 재현성
+
+## 11.1 한 문장
+
+한 토폴로지가 여러 vECU 인스턴스를 띄우고(fleet), 여러 run 이 동시에 돌아도 서로를 오염시키지 않게
+(**격리**), 그리고 같은 입력이면 같은 결과가 나오게(**재현성**) 만드는 세 축이다. 앞 장들이 여기서 합쳐진다.
+
+## 11.2 Fleet — N 컨테이너 = N 인스턴스 (§4.10 재확인)
+
+토폴로지의 `vecus[] × replicas` 를 컴파일러가 펼쳐 **인스턴스당 컨테이너 하나**를 만든다(4장). 각 인스턴스는
+고유 `instance_id`(participant 이름·trace 메타)와 해석된 topic(예: `/VIN/WheelSpeed/<id>`)을 갖고, **한 도메인**을
+공유한다. 한 컨테이너/프로세스 = 정확히 한 인스턴스(§4.10).
+
+## 11.3 run 격리 — 도메인 임대 (§12, [domain_lease.py](../tools/sils/run_coordinator/domain_lease.py))
+
+동시에 도는 여러 run 이 같은 DDS 도메인을 쓰면 서로의 트래픽이 섞인다. Coordinator 는 run 마다
+**도메인을 임대**한다:
+
+- **원자적 할당** — `O_CREAT|O_EXCL` 파일로 경쟁 없이 pool(`LO-HI`)에서 하나 잡는다. 고갈이면 exit 3.
+- **TTL + owner_pid** — 임대에 만료·소유자를 박아, 죽은 run(고아, §14.4)의 도메인을 **reap** 으로 회수(누수 방지).
+- **pool 분리** — CI 러너별로 다른 pool 을 줘(§12.2) 러너 간 도메인 충돌 원천 차단. 이 도구는 **메커니즘**이고,
+  어느 pool 을 줄지는 CI(정책)가 정한다.
+
+## 11.4 재현성 — 어디서 봉인되나
+
+재현성은 한 곳이 아니라 사슬로 보장된다:
+
+| 봉인 지점 | 무엇을 고정 | 장 |
+|---|---|---|
+| Topology 컴파일 | `input_hashes`(sha256) 로 입력 선언의 provenance | 1 |
+| 결정론 포트 | tick·sim_time 기준, wall-clock·RNG 비의존 | 5.6 |
+| Lockstep/replay | tick↔입력 귀속을 파일/grant 로 고정 | 5.5 · §7.4 |
+| Golden 대조 | 결정론 모드에서만, 값 tick-indexed 비교 | 8 |
+| Trace 스키마 | 판정 입력(trace)의 형식 계약 고정 | 6 · [sils-trace-schema.md](sils-trace-schema.md) |
+
+## 11.5 fleet 판정 (§13, §6.8 재확인)
+
+[evaluate_fleet](../tools/sils/conformance/evaluate.py#L736) 이 인스턴스별 run 을 합쳐: 각 run **conformant** +
+**완전성**(기대한 `instance_id` 전원 출현, 누락·rogue 면 FAIL)이어야 fleet PASS. `--resolved` 로
+resolved-run.yaml 의 기대 인스턴스 집합과 대조한다.
 
 ---
 

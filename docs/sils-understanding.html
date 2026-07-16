@@ -732,6 +732,76 @@ SILS_ATTEST_ARCH=x86_64  <span class="c"># sim</span></pre>
   (기대 instance_id 다 나왔나)+전원 conformant 로 판정(§13). L4 는 단일 trace 로 안 줌(→ parity.py, 10장).</p>
 
   <p class="foot">evaluate.py (analyze_*·evaluate_run·evaluate_fleet) · to_junit.py &nbsp;|&nbsp; 문서: docs/sils-understanding.md (1–6장) &nbsp;|&nbsp; 충실도 → 7장 · golden → 8장</p>
+
+  <div class="chap">7장 · 충실도 사다리 L0–L4</div>
+  <h2><span class="n">15</span> &nbsp;얼마나 실물을 대신하나 — 증거 기반 5단</h2>
+  <p class="lede" style="margin-bottom:16px">6장의 <code class="inl">fidelity_evidenced</code> 는 한 run 이 <b>실제로 보인 최고 레벨</b>.
+  각 레벨은 trace 안의 <b>구체 증거</b>가 있어야 인정된다(선언 아님). 같은 바이너리가 <code class="inl">SILS_*</code> 조합만 바꿔 올라간다.</p>
+  <div class="whenline">
+    <div class="cell"><h3>L0 · 스텁</h3><p>샘플이 계약 엔드포인트에 도착<br><small>endpoint_matched + 수신</small></p></div>
+    <div class="cell"><h3>L1 · 프로토콜</h3><p>요청/응답 상관 + QoS 준수<br><small>request↔response, RELIABLE</small></p></div>
+    <div class="cell"><h3>L2 · 행동</h3><p>tick-indexed 결정론 재현<br><small>behavior_output = golden</small></p></div>
+    <div class="cell"><h3>L3 · 플랜트</h3><p>물리 폐루프·결정론<br><small>plant_step feedback→cmd→out</small></p></div>
+    <div class="cell"><h3>L4 · 패리티</h3><p>실 타깃과 값 일치<br><small>교차-trace + attestation</small></p></div>
+  </div>
+  <p class="note"><b>사다리는 올라간다</b>(<code class="inl">FIDELITY_RANK</code>, <code class="inl">_bump</code>): L0 증거 위에 조건이 충족될수록 위로.
+  replay/개루프/broken plant 는 L3 못 올림. <b>L4 만 단일 trace 로 안 준다 ★</b> — 실 타깃 레퍼런스와의 교차 비교가 필요(parity.py, 10장).
+  ARM64 실행은 L4 의 구성요소일 뿐 충분조건 아님. probe 는 <code class="inl">target_attestation</code> 을 기록만.</p>
+  <p class="foot">evaluate.py analyze_protocol/behavior/plant/attestation · FIDELITY_RANK &nbsp;|&nbsp; 문서 §7</p>
+
+  <div class="chap">8장 · Golden / 회귀</div>
+  <h2><span class="n">16</span> &nbsp;정답을 박제하고 → 대조해 회귀를 잡는다</h2>
+  <p class="lede" style="margin-bottom:16px">믿을 수 있는 한 run 을 <b>golden 으로 capture</b>, 이후 run 을 그 정답과 <b>compare</b>.
+  L2/L3 결정론(§5.6·7장)이 성립해야 성립한다.</p>
+  <div class="scroll">
+    <table class="ctbl">
+      <thead><tr><th>도구</th><th>하는 일</th><th>핵심</th></tr></thead>
+      <tbody>
+        <tr><td><b>capture_golden.py</b></td><td>conformant run 정규화 저장</td><td>비결정 필드 제거 · <b>비-conformant 저장 거부</b>(exit 1)</td></tr>
+        <tr class="build"><td><b>compare_golden.py</b></td><td>새 run 을 golden 과 비교</td><td>tick-indexed 값 비교 · 허용오차(tolerance) · MATCH/REGRESSION</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note"><b>결정론 모드 게이트 ★</b> — wall-clock run 은 타이밍이 비결정. compare 는 재현 가능한 모드(lockstep/replay)인지
+  먼저 확인하고 아니면 거부 — "재현 안 되는 걸 재현 비교"하는 거짓 안심 차단. <b>Exit = CI 게이트</b>: 0 MATCH / 1 REGRESSION / 2 정책거부.</p>
+  <p class="foot">capture_golden.py · compare_golden.py (within_tolerance·gate_input_mode) &nbsp;|&nbsp; 문서 §8</p>
+
+  <div class="chap">9·10장 · FMU · Target Parity (전용 문서 브리지)</div>
+  <h2><span class="n">17</span> &nbsp;FMU 트랙 · L4 패리티 — 요점 + 링크</h2>
+  <div class="own" style="margin-top:4px">
+    <div class="o per">
+      <h4>9장 · FMU 트랙</h4>
+      <div class="topics">
+        <div class="t ok">.fmu(FMI 2/3 co-sim)를 IPlant 뒤에 그대로 — plant_step 계약 동일</div>
+        <div class="t ok">MakeFmuPlant(cfg) — 코드경로와 한 줄만 다름(P3)</div>
+        <div class="t ok">fmu_gate allowlist/해시 + 플랫폼 preflight(크래시→에러)</div>
+      </div>
+      <p>상세 → <a href="sils-fmu-plant.md" style="color:var(--accent)">sils-fmu-plant.md</a></p>
+    </div>
+    <div class="o single">
+      <h4>10장 · L4 Target Parity</h4>
+      <div class="topics">
+        <div class="t ok">parity.py: SiLS trace vs 실 타깃 trace, 계약 허용오차로 비교</div>
+        <div class="t ok">attestation 게이트: arch=aarch64·gateway/protocol=real</div>
+        <div class="t">값 맞아도 attestation 미달 → PARITY_UNATTESTED(L3)</div>
+      </div>
+      <p>상세 → <a href="sils-target-parity.md" style="color:var(--accent)">sils-target-parity.md</a></p>
+    </div>
+  </div>
+  <p class="foot">parity.py · config/sils/parity/viss-target-parity.yaml &nbsp;|&nbsp; 문서 §9·§10</p>
+
+  <div class="chap">11장 · Fleet / 격리 / 재현성</div>
+  <h2><span class="n">18</span> &nbsp;다중 인스턴스 · run 격리 · 재현성 봉인</h2>
+  <p class="lede" style="margin-bottom:16px">여러 vECU 인스턴스(fleet)를 띄우고, 동시 run 이 서로를 오염 안 시키고(격리),
+  같은 입력이면 같은 결과(재현성) — 앞 장들이 여기서 합쳐진다.</p>
+  <div class="whenline">
+    <div class="cell"><h3>Fleet</h3><p>vecus[]×replicas → 인스턴스당 컨테이너 1, 한 도메인 공유<br><small>§4.10</small></p></div>
+    <div class="cell"><h3>도메인 임대</h3><p>O_CREAT&#124;O_EXCL 원자할당 · TTL+owner_pid · reap · pool 분리<br><small>domain_lease.py §12</small></p></div>
+    <div class="cell"><h3>재현성 사슬</h3><p>input_hashes · 결정론 포트 · lockstep/replay · golden · trace 스키마<br><small>§1·5.6·8</small></p></div>
+  </div>
+  <p class="note"><b>fleet 판정</b>(evaluate_fleet): 각 run conformant + <b>완전성</b>(기대 instance_id 전원 출현, 누락·rogue 면 FAIL)이어야 fleet PASS.
+  <code class="inl">--resolved</code> 로 resolved-run.yaml 의 기대 집합과 대조. 재현성은 한 곳이 아니라 컴파일→포트→클록→golden→trace 스키마 사슬로 봉인.</p>
+  <p class="foot">domain_lease.py · run_phase1.sh · evaluate.py(evaluate_fleet) &nbsp;|&nbsp; 문서 §11 &nbsp;|&nbsp; 확장 모델 → sils-extension-model.md</p>
 </div>
 </body>
 </html>
