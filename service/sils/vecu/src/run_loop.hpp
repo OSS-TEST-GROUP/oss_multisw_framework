@@ -55,6 +55,7 @@
 #include "replay_source.hpp"
 #include "scenario.hpp"
 #include "tick_inbox.hpp"
+#include "wire.hpp"
 
 namespace sils {
 
@@ -93,30 +94,8 @@ inline void TraceEvent(const std::string& run_id, const std::string& event, int 
               << std::endl;
 }
 
-inline std::string EscapeJsonString(const std::string& in) {
-    std::string out;
-    out.reserve(in.size());
-    for (char c : in) {
-        if (c == '"' || c == '\\') out += '\\';
-        out += c;
-    }
-    return out;
-}
-
-inline std::string RequestId(uint64_t seq) { return "sils-" + std::to_string(seq); }
-
-// Wraps a behavior's inner request JSON in the envelope the real VISS server's
-// RequestListener expects: {"requestId":..,"topic":<response topic>,"request":"<escaped inner>"}.
-// A bare inner JSON is rejected by the SUT ("not a valid JSON or has missing fields").
-inline std::string WrapRequestEnvelope(const std::string& inner_request, uint64_t seq,
-                                       const std::string& response_topic_prefix) {
-    std::ostringstream response_topic;
-    response_topic << response_topic_prefix << "/" << seq;
-    std::ostringstream outer;
-    outer << R"({"requestId":")" << RequestId(seq) << R"(","topic":")" << response_topic.str()
-          << R"(","request":")" << EscapeJsonString(inner_request) << R"("})";
-    return outer.str();
-}
+// RequestId / EscapeJsonString / WrapRequestEnvelope now live in wire.hpp (the wire
+// port owns payload encoding); RunProbe still uses RequestId for the trace contract.
 
 class ProbeWriterListener : public eprosima::fastdds::dds::DataWriterListener {
 public:
@@ -214,13 +193,17 @@ inline std::string RecvSeqsJson(const std::vector<uint64_t>& seqs) {
 // (open loop). Clock and scenario are built from `cfg`. Returns a process exit code
 // (0 ok, 1 DDS setup failure, 2 config/scenario/replay fail-fast).
 inline int RunProbe(const ProbeConfig& cfg, std::unique_ptr<IBehavior> behavior,
-                    std::unique_ptr<IPlant> plant) {
+                    std::unique_ptr<IPlant> plant, std::unique_ptr<IWireCodec> wire = nullptr) {
     std::signal(SIGINT, OnSignal);
     std::signal(SIGTERM, OnSignal);
 
     g_instance_id = cfg.instance_id;
     g_topic = cfg.topic;
     const std::string& run_id = cfg.run_id;
+
+    // Wire port (§P4): what DDS type/payload goes on the wire. Injected by the caller, or
+    // built from cfg (SILS_WIRE) -- default VISS envelope preserves the Phase 1 payload.
+    if (!wire) wire = MakeWireCodec(cfg.wire_kind, cfg.response_topic_prefix);
 
     using namespace eprosima::fastdds::dds;
 
@@ -238,11 +221,14 @@ inline int RunProbe(const ProbeConfig& cfg, std::unique_ptr<IBehavior> behavior,
         return 1;
     }
 
-    TypeSupport request_type(new VissRequestTopicPubSubType());
-    request_type.register_type(participant);
+    // The wire codec owns type registration; RunProbe only needs the registered name.
+    wire->RegisterType(participant);
+    const std::string wire_type_name = wire->type_name();
+    TraceEvent(run_id, "wire_start", 0,
+               "\"name\":\"" + std::string(wire->name()) + "\",\"type\":\"" + wire_type_name + "\"");
 
     Publisher* publisher = participant->create_publisher(PUBLISHER_QOS_DEFAULT, nullptr);
-    Topic* topic = participant->create_topic(g_topic, request_type.get_type_name(), TOPIC_QOS_DEFAULT);
+    Topic* topic = participant->create_topic(g_topic, wire_type_name, TOPIC_QOS_DEFAULT);
 
     DataWriterQos writer_qos = DATAWRITER_QOS_DEFAULT;
     // Matches config/sils/qos/qos-profiles.yaml "viss-default" and the SUT's own reader
@@ -279,7 +265,7 @@ inline int RunProbe(const ProbeConfig& cfg, std::unique_ptr<IBehavior> behavior,
     Subscriber* resp_sub = nullptr;
     if (reqresp) {
         resp_sub = participant->create_subscriber(SUBSCRIBER_QOS_DEFAULT, nullptr);
-        resp_topic_obj = participant->create_topic(response_topic, request_type.get_type_name(),
+        resp_topic_obj = participant->create_topic(response_topic, wire_type_name,
                                                    TOPIC_QOS_DEFAULT);
         DataReaderQos rrq = DATAREADER_QOS_DEFAULT;
         rrq.reliability().kind = RELIABLE_RELIABILITY_QOS;
@@ -351,8 +337,8 @@ inline int RunProbe(const ProbeConfig& cfg, std::unique_ptr<IBehavior> behavior,
         TraceEvent(run_id, "plant_reset", 0, pr.str());
     }
 
-    // Run one tick: ask the behavior for this tick's output, trace it, wrap the inner
-    // request in the VISS envelope, apply the scenario's fault, and publish.
+    // Run one tick: ask the behavior for this tick's output, trace it, apply the
+    // scenario's fault, and hand it to the wire codec to encode + publish.
     auto publish_one = [&](const sils::BehaviorContext& ctx,
                            const sils::ScenarioAction& act) -> sils::BehaviorOutput {
         // The behavior runs unconditionally and deterministically; a fault only perturbs
@@ -370,16 +356,8 @@ inline int RunProbe(const ProbeConfig& cfg, std::unique_ptr<IBehavior> behavior,
             return out;
         }
 
-        VissRequestTopic sample;
         const bool corrupt = act.fault == sils::Fault::Corrupt;
-        if (corrupt) {
-            // Malformed payload with no recoverable requestId: unanswered, distinct from Drop.
-            sample.payload("<<CORRUPT SILS SCENARIO PAYLOAD tick " +
-                           std::to_string(ctx.tick_seq) + ">>");
-        } else {
-            sample.payload(
-                WrapRequestEnvelope(out.request_json, ctx.tick_seq, cfg.response_topic_prefix));
-        }
+        const bool duplicate = act.fault == sils::Fault::Duplicate;
         TraceEvent(run_id, "publish_intent", static_cast<int>(ctx.tick_seq),
                    "\"matched_count\":" + std::to_string(g_matched_count.load()));
         // L1 (§11): emit request_sent so evaluate can correlate the responder's reply.
@@ -389,10 +367,13 @@ inline int RunProbe(const ProbeConfig& cfg, std::unique_ptr<IBehavior> behavior,
                            cfg.request_path + "\",\"action\":\"" + cfg.request_action + "\"" +
                            (corrupt ? ",\"corrupt\":true" : ""));
         }
-        writer->write(&sample);
-        if (act.fault == sils::Fault::Duplicate) {
-            // Same requestId on the wire twice -> the SUT replies twice -> "duplicate".
-            writer->write(&sample);
+        // The wire codec encodes out + writes on the wire, realizing the wire-level fault
+        // (corrupt = one malformed sample; duplicate = two identical writes; else one).
+        wire->Publish(writer, out, ctx.tick_seq,
+                      corrupt ? sils::WireFault::Corrupt
+                              : (duplicate ? sils::WireFault::Duplicate : sils::WireFault::Normal));
+        if (duplicate) {
+            // Same sample on the wire twice -> the SUT replies twice -> "duplicate".
             TraceEvent(run_id, "scenario_fault", static_cast<int>(ctx.tick_seq),
                        "\"fault\":\"duplicate\",\"request_id\":\"" + RequestId(ctx.tick_seq) + "\"");
         } else if (corrupt) {
@@ -413,7 +394,7 @@ inline int RunProbe(const ProbeConfig& cfg, std::unique_ptr<IBehavior> behavior,
     if (stage_input) {
         Subscriber* input_sub = participant->create_subscriber(SUBSCRIBER_QOS_DEFAULT, nullptr);
         Topic* input_topic_obj =
-            participant->create_topic(input_topic, request_type.get_type_name(), TOPIC_QOS_DEFAULT);
+            participant->create_topic(input_topic, wire_type_name, TOPIC_QOS_DEFAULT);
         DataReaderQos irq = DATAREADER_QOS_DEFAULT;
         irq.reliability().kind = RELIABLE_RELIABILITY_QOS;
         irq.history().kind = KEEP_LAST_HISTORY_QOS;

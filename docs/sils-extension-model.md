@@ -94,7 +94,7 @@ behavior(제어 로직) 작성 방식 · 공통 IDL·계약·QoS · **trace 스�
 | **P1. 라이브러리 추출** | tick 루프 → `RunProbe()`/run_loop.hpp API, `add_library(sils_vecu)` + install/export, `viss_probe_main.cc` 를 라이브러리 소비자로 축소 | `libsils_vecu` |
 | **P2. 개발자 템플릿** | `service/sils/examples/brake-ecu/`(behavior·plant·main·CMake·Dockerfile·descriptor·README) + `examples/README.md` "내 ECU 시작하기" 가이드 | 외부 개발 시작점 |
 | **P3. Plant 세분화 정리** | 코드 경로/FMU 경로 문서·예제 각각, `MakeFmuPlant(cfg)` 공개 API | plant 선택 가이드 |
-| **P4. wire 타입 일반화** | transport 를 계약 `registered_type` 구동으로 (커스텀 IDL 지원) | 네이티브 신규 타입 |
+| **P4. wire 타입 일반화** | (P4a) `IWireCodec` 포트로 transport 추상화 — 인코딩 일반화; (P4b) 계약 `registered_type` 구동 커스텀 IDL codec | 네이티브 신규 타입 |
 | **P5. 스키마 명세 + conformance kit** | trace 이벤트를 버전 있는 공개 명세로, evaluate/parity 를 "외부 컨테이너 검사기"로 패키징 | 계약+스키마 경계 확정 |
 
 P1 이 토대(나머지가 그 위에 얹힘). P4·P5 는 계약-레벨 경계로 갈 때.
@@ -110,5 +110,6 @@ P1 이 토대(나머지가 그 위에 얹힘). P4·P5 는 계약-레벨 경계�
 | **P1b RunProbe/run_loop.hpp 추출**(tick 루프 → 라이브러리) | ✅ `config.hpp`(ConfigFromEnv→ProbeConfig) + `run_loop.hpp`(RunProbe: DDS·tick 루프·trace·teardown) 추출, `viss_probe_main.cc` 626→~40줄 소비자로 축소. behavior/plant 주입, clock/scenario 는 cfg 내부 생성. **빌드 통과 확인** |
 | **P2 개발자 템플릿** | ✅ `service/sils/examples/brake-ecu/` 워크드 예제(BrakeBehavior/BrakePlant 코드경로 + main + CMake + descriptor + Dockerfile/entrypoint + README) + `examples/README.md` 가이드. `sils_vecu` 를 링크하는 첫 외부 소비자, `SILS_BUILD_EXAMPLES=ON` 로 SiLS 빌드에 포함(dogfood). **빌드 통과 확인** |
 | **P3 Plant 세분화(FMU경로)** | ✅ `MakeFmuPlant(FmuConfig&)`+`MakeFmuPlant(ProbeConfig&)` 공개 API(plant.hpp/config.hpp, MakePlant 가 위임) + brake-ecu FMU 대칭 예제(`src/main_fmu.cc`, 코드경로와 plant 한 줄만 상이) + `brake_ecu_fmu` 타깃(SILS_ENABLE_FMU) + `models/brake-fmu/`(손수 짠 FMI 2.0 co-sim 소스 `brake_vehicle.c`·modelDescription.xml·build.sh, **바이너리 미포함/재현빌드**) + 코드경로 vs FMU경로 선택 가이드. **리눅스에서 빌드+FMU 로드+폐루프 실행 확인**. 검증 중 3개 픽스: ①FmuPlant 플랫폼 preflight(wrong-arch→크래시 대신 에러) ②modelDescription 루트 앞 주석 제거(ezxml 파싱 실패→fmi4c SIGSEGV) ③build.sh Darwin ARCHFLAGS |
-| P4 wire 타입 일반화 | ⬜ |
+| **P4a IWireCodec 포트** | ✅ `wire.hpp` — `IWireCodec`(RegisterType/type_name/Publish) 포트 + `VissWireCodec`(현재 VISS 봉투, 동작 보존) + `RawValueWireCodec`(같은 타입·봉투 없는 스칼라). RunProbe 가 wire 를 주입받거나 `cfg.wire_kind`(SILS_WIRE)로 생성, 타입 등록·payload 인코딩·corrupt/duplicate 를 codec 에 위임. RequestId/봉투 헬퍼 wire.hpp 로 이동. **빌드+실행 확인**(VISS trace 불변, `SILS_WIRE=raw` 로 `wire_start` name=raw-value 전환) |
+| P4b 커스텀 IDL codec (네이티브 신규 타입) | ⬜ 다음 |
 | P5 스키마 명세·conformance kit | ⬜ |

@@ -65,6 +65,9 @@ struct ProbeConfig {
     int period_ms = 500;                   // SILS_VISS_PROBE_PERIOD_MS
     std::string clock_mode;                // SILS_CLOCK_MODE (wall|lockstep)
 
+    // wire (DDS type/payload encoding)
+    std::string wire_kind;                 // SILS_WIRE (viss|raw)
+
     // request payload (default viss-request behavior)
     std::string response_topic_prefix;     // SILS_VISS_PROBE_RESPONSE_TOPIC_PREFIX
     std::string request_action;            // SILS_VISS_PROBE_REQUEST_ACTION
@@ -119,6 +122,7 @@ inline ProbeConfig ConfigFromEnv() {
 
     c.period_ms = GetEnvIntOr("SILS_VISS_PROBE_PERIOD_MS", 500);
     c.clock_mode = GetEnvOr("SILS_CLOCK_MODE", "wall");
+    c.wire_kind = GetEnvOr("SILS_WIRE", "viss");
 
     c.response_topic_prefix =
         GetEnvOr("SILS_VISS_PROBE_RESPONSE_TOPIC_PREFIX", "sils/viss_probe/response");
