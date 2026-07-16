@@ -49,6 +49,31 @@
 
 ---
 
+## 한눈에 — SiLS 전체 파이프라인 (11개 장이 어디에 끼나)
+
+```
+ 선언(YAML 4종)        정적 변환·검증        실행 오케스트레이션            판정
+ ┌──────────┐         ┌───────────┐        ┌──────────────────┐       ┌───────────────┐
+ │ Topology │         │ Topology  │        │  Run Coordinator │       │  evaluate     │
+ │ Descriptor├── 입력 ─▶│ Compiler  ├─펼침──▶│  ├ 도메인 임대     ├─trace─▶│  (+ parity)   │
+ │ Contract │         │ 변환+검증   │resolved│  └ 컨테이너         │ JSONL │  → verdict     │
+ │ QoS      │         │ (fail-    │ -run   │     = probe(PID1) │       │  → conformant │
+ └──────────┘         │  closed)  │ .yaml  │       [5 포트]     │       │  → fidelity   │
+   2·3장                 1장                    4·5장                     6·7·8·10·11장
+                                                   │                          │
+                                          probe 내부 = 5 포트            golden 회귀(8장)
+                                    Clock·Behavior·Plant·Scenario·Wire    parity L4(10장)
+```
+
+- **왼쪽→오른쪽 = "무엇을 돌릴지 선언" → "정적으로 검증·확정" → "격리해 실행" → "trace 로 판정".**
+- 화살표 위 라벨(`resolved-run.yaml`, `trace`)이 **장 사이를 잇는 산출물**이다.
+- probe(한 컨테이너=한 인스턴스)의 속은 **5개 헥사고날 포트**(5장), 그 출력 trace 가 판정(6장)·충실도
+  (7장)·회귀(8장)·패리티(10장)·fleet(11장)의 **유일한 입력**이다 — 이게 공개 경계(§P5, [trace 스키마](sils-trace-schema.md)).
+
+> 아래 §01 다이어그램은 이 파이프라인의 **1장 관점(수명주기 위치)** 을 확대한 것이다.
+
+---
+
 # 1장. Topology Compiler — 정적 변환·검증
 
 ## 1.1 한 문장
@@ -790,8 +815,30 @@ while (clock->WaitForNextTick(tick)) {              # ⟨Clock⟩ 다음 tick �
 }
 ```
 
-한 tick = **Clock 이 깨우고 → Plant 피드백 읽고 → Scenario 가 결함 결정 → Behavior 가 명령 만들어 publish
-→ Plant 가 그 명령으로 진행 → Clock 에 완료 통보.** 이 협력이 L1~L3 을 만든다(§5.5).
+데이터플로우로 보면 **닫힌 고리**다 — Plant 출력이 다음 tick 의 Behavior 피드백으로 돌아온다:
+
+```
+        ┌──────────────────── 한 tick ────────────────────┐
+        ▼                                                  │
+   ⟨Clock⟩ 깨움                                             │
+        │                                                  │
+        ▼                                                  │
+   ⟨Scenario⟩ 결함? ──fault──┐                              │
+        │                     │                            │
+        ▼                     ▼                            │
+   ⟨Behavior⟩ 명령 계산 ──▶ ⟨Wire⟩ 인코딩 ──▶ DDS publish     │
+        ▲                                                  │
+  feedback│                                                │
+        │                                                  │
+   ⟨Plant⟩ SetInputs(명령) → Step(dt) → output ────────────┘
+                                   (다음 tick 의 feedback)
+        │
+        ▼
+   ⟨Clock⟩ TickDone (lockstep 이면 TickComplete)
+```
+
+한 tick = **Clock 이 깨우고 → Plant 피드백 읽고 → Scenario 가 결함 결정 → Behavior 가 명령 만들어
+(Wire 로 인코딩해) publish → Plant 가 그 명령으로 진행 → Clock 에 완료 통보.** 이 협력이 L1~L3 을 만든다(§5.5).
 
 ## 5.5 포트별 요약
 
@@ -904,6 +951,30 @@ brake ECU                              temp ECU
  └ Descriptor: brake_probe.yaml → SILS_*      └ Descriptor: temp_probe.yaml → SILS_*
         └────── compile → 컨테이너 2개, 각자 probe(PID1) ──────┘
 ```
+
+**경계를 그림으로 — 누가 무엇을 소유하나:**
+
+```
+┌─ 개발자가 쓰는 것 (자기 레포, core 무수정) ───────────────────────────┐
+│  IBehavior 구현 ·  IPlant(코드) 또는 .fmu ·  IWireCodec(커스텀 IDL) │
+│  main.cc (포트 조립 → RunProbe) ·  descriptor ·  Dockerfile          │
+└───────────────────────────────┬──────────────────────────────────────┘
+                                 │  target_link_libraries(my_ecu sils_vecu)
+                                 ▼
+┌─ libsils_vecu  (core 제공·버전관리, P1) ──────────────────────────────┐
+│  RunProbe(tick 루프) · ConfigFromEnv · DDS 배선 · trace 방출          │
+│  기본 포트 구현 (WallClock/Lockstep · viss-request/… · Analytic/Fmu …) │
+└───────────────────────────────┬──────────────────────────────────────┘
+                                 │  이걸 지키면 됨 (C++ ABI 아님)
+                                 ▼
+┌─ 진짜 공개 경계 (버전) ─────────────────────────────────────────────────┐
+│  ① Contract Catalog (topic·type·QoS, semver)   ② trace 스키마 v1        │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+→ 개발자는 **위 칸만** 짜고 가운데를 링크한다. 안정성 계약은 **맨 아래 칸**(계약+trace 스키마)이지
+C++ ABI 가 아니다(§2, [확장 모델](sils-extension-model.md)). P4b 의 `BrakeCmdWireCodec` 가 "위 칸에서
+네이티브 타입을 더해도 아래 경계는 그대로"의 실례.
 
 ### (f) 실제 파일 내용 (워크드 예제)
 
@@ -1134,6 +1205,24 @@ verdict 는 [to_junit.py](../tools/sils/conformance/to_junit.py) 로 **JUnit XML
 | **L2** | 행동 | 상태기계가 tick-indexed 로 결정론 재현 | `behavior_output.value` 시퀀스가 golden 과 일치 | [analyze_behavior](../tools/sils/conformance/evaluate.py#L283) + compare_golden(8장) |
 | **L3** | 플랜트 결합 | 물리 모델과 폐루프, 결정론 | `plant_step`(feedback→command→output) live·폐루프·재현 | [analyze_plant](../tools/sils/conformance/evaluate.py#L311) |
 | **L4** | 타깃 패리티 | 실 타깃과 값이 맞는다 | **교차-trace** 비교 + attestation(arch=aarch64·gateway/protocol=real) | [parity.py](../tools/sils/conformance/parity.py) (10장) |
+
+계단으로 — 각 칸은 아래 칸을 딛고, 증거가 있어야 오른다:
+
+```
+                                                    ┌─────────────┐
+                                                    │ L4 타깃패리티 │ ★ 교차-trace + attestation
+                                       ┌────────────┤  (parity.py) │   (단일 trace 로 안 줌)
+                                       │ L3 플랜트   │─────────────┘
+                          ┌────────────┤  폐루프     │  plant_step: feedback→cmd→output, 결정론
+                          │ L2 행동     │────────────┘
+             ┌────────────┤  golden    │  behavior_output 값 = golden 재현
+             │ L1 프로토콜 │────────────┘
+   ┌─────────┤  req↔resp  │  요청/응답 상관 + QoS(RELIABLE)
+   │ L0 스텁 │────────────┘
+   │ 엔드포인트 │  endpoint_matched + 수신 샘플
+───┘ +수신    │  (증거 없으면 PASS 도 무효 §6.5)
+   └──────────┘
+```
 
 ## 7.3 사다리는 "올라간다" — `_bump`
 
