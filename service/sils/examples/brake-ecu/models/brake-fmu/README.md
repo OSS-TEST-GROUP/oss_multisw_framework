@@ -11,7 +11,7 @@ No `.fmu` binary is committed — you build it from source here (reproducible, g
 | file | role |
 |---|---|
 | `brake_vehicle.c` | the model: `dv/dt = −(GAIN·force) − DRAG·speed`, in `fmi2DoStep`. Every exported `fmi2*` function is defined; co-sim ones carry logic, the rest are safe no-ops |
-| `modelDescription.xml` | declares the value references: `speed`=VR 0 (output), `force`=VR 1 (input); initial speed 30 m/s |
+| `modelDescription.xml` | declares the value references: `speed`=VR 0 (output), `force`=VR 1 (input); initial speed 30 m/s. **No comment may precede the root `<fmiModelDescription>`** — fmi4c's ezxml parser then reads the root's attributes as NULL and `fmi4c_loadFmu` segfaults on the NULL `fmiVersion`. Body comments are fine |
 | `build.sh` | fetch FMI 2.0 headers → compile → zip into `brake.fmu` with the standard layout |
 | `.gitignore` | keeps the built `brake.fmu` out of git |
 

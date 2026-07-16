@@ -1,18 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Minimal FMI 2.0 Co-Simulation model description for the brake vehicle plant.
-     Same physics as the code-path BrakePlant (dv/dt = -(gain*force) - drag*speed),
-     here exported as an FMU. The value references below are what the ECU passes to
-     the SDK as SILS_FMU_INPUT_VR / SILS_FMU_OUTPUT_VR:
-        force (input)  -> valueReference 1  -> SILS_FMU_INPUT_VR=1
-        speed (output) -> valueReference 0  -> SILS_FMU_OUTPUT_VR=0
-     Initial speed (30 m/s) is the output's start value -- FmuPlant reads it after
-     initialization (its Reset is a no-op; init comes from here), so SILS_PLANT_INIT
-     does not apply on the FMU path. -->
 <fmiModelDescription
     fmiVersion="2.0"
     modelName="BrakeVehicle"
     guid="{b1a4e0de-0000-4000-8000-6272616b6501}"
-    description="First-order longitudinal brake vehicle plant"
+    description="First-order longitudinal brake vehicle plant (SiLS example)"
     generationTool="hand-written FMI 2.0 co-sim example"
     numberOfEventIndicators="0">
 
@@ -22,6 +13,12 @@
       canGetAndSetFMUstate="false"
       canSerializeFMUstate="false"/>
 
+  <!-- Value references map to the ECU's env: force=1 -> SILS_FMU_INPUT_VR,
+       speed=0 -> SILS_FMU_OUTPUT_VR. Initial speed (30 m/s) is the output start
+       value; FmuPlant reads it after init (its Reset is a no-op), so on the FMU
+       path SILS_PLANT_INIT does not apply. NOTE: no comment may precede the root
+       element above -- fmi4c's ezxml parser fails to read the root's attributes if
+       one does (see models/brake-fmu/README.md). Body comments like this are fine. -->
   <ModelVariables>
     <!-- index 1 -->
     <ScalarVariable name="speed" valueReference="0" causality="output"
