@@ -20,16 +20,19 @@
 | **4** | **Run Coordinator — 도메인 임대·기동·ready·verify·teardown·reap** | ✅ 작성됨 |
 | **5** | **vECU 포트 — Clock / Behavior / Plant / Scenario (헥사고날)** | ✅ 작성됨 |
 | **6** | **Conformance 판정 — `evaluate.py` 가 trace 를 verdict 로** | ✅ 작성됨 |
-| 7 | 충실도 사다리 L0–L4 — 각 레벨의 증거 | ⬜ |
-| 8 | Golden / 회귀 — capture ↔ compare 재현성 | ⬜ |
-| 9 | FMU 트랙 — fmi4c·보안 게이트 (별도: [sils-fmu-plant.md](sils-fmu-plant.md)) | ↗ 링크 |
-| 10 | L4 Target Parity (별도: [sils-target-parity.md](sils-target-parity.md)) | ↗ 링크 |
-| 11 | Fleet / run 격리 / 재현성 | ⬜ |
+| **7** | **충실도 사다리 L0–L4 — 각 레벨의 증거** | ✅ 작성됨 |
+| **8** | **Golden / 회귀 — capture ↔ compare 재현성** | ✅ 작성됨 |
+| 9 | FMU 트랙 — fmi4c·보안 게이트 (별도: [sils-fmu-plant.md](sils-fmu-plant.md)) | ↗ 링크(9장 브리지) |
+| 10 | L4 Target Parity (별도: [sils-target-parity.md](sils-target-parity.md)) | ↗ 링크(10장 브리지) |
+| **11** | **Fleet / run 격리 / 재현성** | ✅ 작성됨 |
 
-이해한 장을 ✅ 로 바꿔가며 진행한다. `↗` 는 이미 전용 문서가 있어 링크로 대체하는 장.
+**1~11장 전부 작성 완료.** `↗` 는 전용 문서가 있어 본문은 브리지(요점+링크)로 둔 장.
 
-> **OSS 확장 방향**(외부 개발자가 자기 ECU 를 추가하는 법 — libsils_vecu SDK + 개발자 ECU +
-> plant FMU/코드 세분화)은 별도 설계 문서 [sils-extension-model.md](sils-extension-model.md) 참조.
+> **OSS 확장 모델 — 구현 완료(P1~P5).** 외부 개발자가 core 무수정으로 자기 ECU 를 추가하는 경계:
+> `libsils_vecu` SDK(P1) · 개발자 ECU 예제(P2) · plant FMU/코드 세분화(P3) · wire 타입 일반화
+> (`IWireCodec`, P4) · trace 스키마 + conformance kit(P5). 설계·상태는
+> [sils-extension-model.md](sils-extension-model.md), 이해 문서엔 5장(§5.7(e))·6장에 반영. trace
+> 계약 자체는 [sils-trace-schema.md](sils-trace-schema.md).
 
 > **"검증"은 한 장이 아니라 시스템 전반에 흩어진 cross-cutting 주제다.** 장을 혼동하지 않도록
 > 어디서 무엇을 검증하는지 미리 못 박는다:
@@ -37,11 +40,37 @@
 > | 검증 계층 | 무엇을 | 코드 | 장 |
 > |---|---|---|---|
 > | 정적 계획 검증 | 카탈로그 위생 + 토폴로지 문맥 | lint_catalog · compile | **1** |
+> | trace 스키마 검증 | trace 가 공개 스키마에 맞나 | validate_trace.py | 6 (P5) |
 > | 런타임 conformance | run trace → verdict | evaluate.py | 6 |
 > | 회귀 · 패리티 | 재현성 · 타깃 동등성 | compare_golden · parity | 8 · 10 |
 >
 > 따라서 **카탈로그의 *검증*(lint)은 1장 소관**이고, 2장은 카탈로그가 *무엇을 선언하는가*(계약
 > 모델)만 다룬다 — 검증을 반복하지 않는다.
+
+---
+
+## 한눈에 — SiLS 전체 파이프라인 (11개 장이 어디에 끼나)
+
+```
+ 선언(YAML 4종)        정적 변환·검증        실행 오케스트레이션            판정
+ ┌──────────┐         ┌───────────┐        ┌──────────────────┐       ┌───────────────┐
+ │ Topology │         │ Topology  │        │  Run Coordinator │       │  evaluate     │
+ │ Descriptor├── 입력 ─▶│ Compiler  ├─펼침──▶│  ├ 도메인 임대     ├─trace─▶│  (+ parity)   │
+ │ Contract │         │ 변환+검증   │resolved│  └ 컨테이너         │ JSONL │  → verdict     │
+ │ QoS      │         │ (fail-    │ -run   │     = probe(PID1) │       │  → conformant │
+ └──────────┘         │  closed)  │ .yaml  │       [5 포트]     │       │  → fidelity   │
+   2·3장                 1장                    4·5장                     6·7·8·10·11장
+                                                   │                          │
+                                          probe 내부 = 5 포트            golden 회귀(8장)
+                                    Clock·Behavior·Plant·Scenario·Wire    parity L4(10장)
+```
+
+- **왼쪽→오른쪽 = "무엇을 돌릴지 선언" → "정적으로 검증·확정" → "격리해 실행" → "trace 로 판정".**
+- 화살표 위 라벨(`resolved-run.yaml`, `trace`)이 **장 사이를 잇는 산출물**이다.
+- probe(한 컨테이너=한 인스턴스)의 속은 **5개 헥사고날 포트**(5장), 그 출력 trace 가 판정(6장)·충실도
+  (7장)·회귀(8장)·패리티(10장)·fleet(11장)의 **유일한 입력**이다 — 이게 공개 경계(§P5, [trace 스키마](sils-trace-schema.md)).
+
+> 아래 §01 다이어그램은 이 파이프라인의 **1장 관점(수명주기 위치)** 을 확대한 것이다.
 
 ---
 
@@ -730,16 +759,22 @@ Coordinator 가 남긴 **trace.jsonl** 은 그 자체로 판정되지 않는다.
 
 ---
 
-# 5장. vECU 포트 — Clock / Behavior / Plant / Scenario
+# 5장. vECU 포트 — Clock / Behavior / Plant / Scenario / Wire
 
-> §4.8 ①에서 "행동 로직은 바이너리 안"이라 했다. 그 바이너리 안이 이 장이다. probe 는 **4개
+> §4.8 ①에서 "행동 로직은 바이너리 안"이라 했다. 그 바이너리 안이 이 장이다. probe 는 **5개
 > 헥사고날 포트**로 짜여 있고, tick 루프가 이들을 조립한다. env(3장)는 각 포트의 **어느 구현을
 > 쓸지 고르는 스위치**일 뿐 — 구현 자체는 여기 헤더들에 컴파일돼 있다.
+>
+> **⇢ 이 tick 루프는 이제 라이브러리(`libsils_vecu`)로 추출됐다.** 조립 코드는
+> [run_loop.hpp](../service/sils/vecu/src/run_loop.hpp) 의 `sils::RunProbe(cfg, behavior, plant, wire)`
+> 함수이고, `viss_probe_main.cc` 는 그걸 호출하는 얇은 소비자다. 외부 개발자가 같은 방식으로 자기 ECU
+> 를 만드는 확장 모델(P1~P5 구현 완료)은 [sils-extension-model.md](sils-extension-model.md) 참조.
 
 ## 5.1 한 문장
 
-vECU 내부는 **IClockSource·IBehavior·IPlant·IScenario** 네 포트로 나뉘고, [tick 루프](../service/sils/vecu/src/viss_probe_main.cc)
-가 매 tick 이들을 순서대로 호출해 하나의 vECU 동작을 만든다. 각 포트는 **≥2개 구현**을 갖고 env 로 선택된다.
+vECU 내부는 **IClockSource·IBehavior·IPlant·IScenario·IWireCodec** 다섯 포트로 나뉘고,
+[`RunProbe` tick 루프](../service/sils/vecu/src/run_loop.hpp)가 매 tick 이들을 순서대로 호출해 하나의
+vECU 동작을 만든다. 각 포트는 **≥2개 구현**을 갖고 env(또는 코드 주입)로 선택된다.
 
 ## 5.2 헥사고날 포트 + "earned abstraction"
 
@@ -748,7 +783,7 @@ vECU 내부는 **IClockSource·IBehavior·IPlant·IScenario** 네 포트로 나�
 구현이 나올 때 같은 모양을 따른다 — 미리 하지 않는다."* 그래서 probe 본체는 **포트만 알고 구현은 모른다** —
 `SILS_*` 가 `Make*()` 팩토리에서 구현을 고른다.
 
-## 5.3 네 포트 지도
+## 5.3 다섯 포트 지도
 
 | 포트 | 인터페이스 | 구현 (≥2) | env 선택 | 파일 |
 |---|---|---|---|---|
@@ -756,10 +791,16 @@ vECU 내부는 **IClockSource·IBehavior·IPlant·IScenario** 네 포트로 나�
 | **Behavior** | `IBehavior` | VissRequestBehavior · AccumulatorBehavior · PControllerBehavior | `SILS_BEHAVIOR=viss-request\|accumulate\|p-controller` | [behavior.hpp](../service/sils/vecu/src/behavior.hpp) |
 | **Plant** | `IPlant` | AnalyticPlant · ReplayPlant · FmuPlant | `SILS_PLANT=first-order\|replay\|fmu\|none` | [plant.hpp](../service/sils/vecu/src/plant.hpp) |
 | **Scenario** | `IScenario` | NominalScenario · ScheduledFaultScenario | `SILS_SCENARIO=nominal\|scheduled` | [scenario.hpp](../service/sils/vecu/src/scenario.hpp) |
+| **Wire** | `IWireCodec` | VissWireCodec · RawValueWireCodec (+ 개발자 커스텀, 예: BrakeCmdWireCodec) | `SILS_WIRE=viss\|raw` (또는 코드 주입) | [wire.hpp](../service/sils/vecu/src/wire.hpp) |
 
-## 5.4 tick 루프 — 4포트가 한 tick 에서 협력
+> **Wire 포트(P4)** 는 DDS 로 나가는 타입·페이로드를 추상화한다. `RunProbe` 는 타입 등록·인코딩·
+> corrupt/duplicate 를 codec 에 위임하므로, 개발자가 자기 IDL(예: `BrakeCmd`)을 등록하는 codec 을
+> 구현하면 **네이티브 신규 DDS 타입**을 core 무수정으로 발행할 수 있다(§5.7(e), P4b 실증).
 
-[viss_probe_main.cc](../service/sils/vecu/src/viss_probe_main.cc) 의 루프가 포트들을 조립한다:
+## 5.4 tick 루프 — 포트들이 한 tick 에서 협력
+
+[`RunProbe`(run_loop.hpp)](../service/sils/vecu/src/run_loop.hpp) 의 루프가 포트들을 조립한다
+(clock/scenario 는 cfg 에서 내부 생성, behavior/plant/wire 는 주입):
 
 ```
 while (clock->WaitForNextTick(tick)) {              # ⟨Clock⟩ 다음 tick 까지 블록 (wall: 주기 / lockstep: grant 대기)
@@ -774,8 +815,30 @@ while (clock->WaitForNextTick(tick)) {              # ⟨Clock⟩ 다음 tick �
 }
 ```
 
-한 tick = **Clock 이 깨우고 → Plant 피드백 읽고 → Scenario 가 결함 결정 → Behavior 가 명령 만들어 publish
-→ Plant 가 그 명령으로 진행 → Clock 에 완료 통보.** 이 협력이 L1~L3 을 만든다(§5.5).
+데이터플로우로 보면 **닫힌 고리**다 — Plant 출력이 다음 tick 의 Behavior 피드백으로 돌아온다:
+
+```
+        ┌──────────────────── 한 tick ────────────────────┐
+        ▼                                                  │
+   ⟨Clock⟩ 깨움                                             │
+        │                                                  │
+        ▼                                                  │
+   ⟨Scenario⟩ 결함? ──fault──┐                              │
+        │                     │                            │
+        ▼                     ▼                            │
+   ⟨Behavior⟩ 명령 계산 ──▶ ⟨Wire⟩ 인코딩 ──▶ DDS publish     │
+        ▲                                                  │
+  feedback│                                                │
+        │                                                  │
+   ⟨Plant⟩ SetInputs(명령) → Step(dt) → output ────────────┘
+                                   (다음 tick 의 feedback)
+        │
+        ▼
+   ⟨Clock⟩ TickDone (lockstep 이면 TickComplete)
+```
+
+한 tick = **Clock 이 깨우고 → Plant 피드백 읽고 → Scenario 가 결함 결정 → Behavior 가 명령 만들어
+(Wire 로 인코딩해) publish → Plant 가 그 명령으로 진행 → Clock 에 완료 통보.** 이 협력이 L1~L3 을 만든다(§5.5).
 
 ## 5.5 포트별 요약
 
@@ -788,6 +851,9 @@ while (clock->WaitForNextTick(tick)) {              # ⟨Clock⟩ 다음 tick �
   재생) · `FmuPlant`(fmi4c 로 실제 `.fmu` co-sim). `none` 이면 개루프. 자세히는 [FMU 문서](sils-fmu-plant.md)·9장.
 - **IScenario (§11 negative path)** — tick-indexed 결함 주입. `nominal`(무주입) · `scheduled`
   (`3:drop,7:corrupt` 스케줄). 결정론이라 결함 run 도 golden 재현. 자세히는 §11 negative path.
+- **IWireCodec (§P4)** — DDS 로 나가는 타입·페이로드. `VissWireCodec`(VISS 봉투) · `RawValueWireCodec`
+  (같은 타입, 봉투 없는 스칼라) · 개발자 커스텀(`BrakeCmdWireCodec` 등, 네이티브 IDL). trace 계약
+  (publish_intent/request_sent/…)은 `RunProbe` 가 유지하고 codec 은 write 만 담당 — 모든 wire 에 균일.
 
 ## 5.6 결정론 — 왜 포트를 이렇게 짰나
 
@@ -855,16 +921,27 @@ vecus:
 tick 루프(§5.4)는 **안 건드린다** — `MakeBehavior`/`MakePlant` 팩토리에 **분기 하나** 추가하면
 probe 본체가 그대로 새 포트를 조립한다(earned-abstraction, §5.2).
 
-### (e) 정직한 현재 경계 ★
+### (e) 경계는 어디까지 왔나 ★ (확장 모델 P1~P5 구현 반영)
 
-- **포트(로직·물리·결함·클록)는 지금 바로 재사용** — `BrakeBehavior`/`ThermalPlant` 는 위처럼 꽂힌다.
-- **하지만 현재 probe 는 wire 타입이 `VissRequestTopic` 하나로 고정**(VISS 슬라이스). 두 길:
-  - **(지금 가능)** brake/temp 가 `VissRequestTopic` 엔벨로프(JSON payload)를 **다른 topic**
-    (`/VIN/Brake`, `/VIN/Temp`)에 publish — 새 IDL 없이 2 vECU 구성 가능(입력 스테이징·fleet 예제가
-    이미 이 방식).
-  - **(확장 필요)** 네이티브 `BrakeCommand` IDL 타입으로 가려면 probe 의 transport 바인딩을 **계약 타입
-    구동**으로 일반화(또는 타입 계열별 probe 바이너리) — 아직 미구현.
-- 즉 **로직·물리·결함은 포트로 지금**, **네이티브 신규 DDS 타입은 transport 일반화가 남은 작업**.
+> 이 절은 예전엔 "정직한 현재 경계 — 아직 미구현"이었다. 확장 모델
+> [P1~P5](sils-extension-model.md)가 구현되며 그 경계가 크게 이동했다:
+
+- **포트(로직·물리·결함·클록·wire) 전부 지금 재사용** — env 스위치 또는 코드 주입으로 꽂는다.
+- **라이브러리화됨(P1)** — tick 루프가 `libsils_vecu`(`RunProbe`/`ConfigFromEnv`)로 추출돼, 개발자는
+  이걸 링크하고 자기 포트만 구현한다.
+- **워크드 예제 실재(P2/P3)** — 아래 (f)의 brake 코드는 더 이상 "예시"가 아니라
+  [`service/sils/examples/brake-ecu/`](../service/sils/examples/brake-ecu/) 의 **실제 컴파일되는 ECU**다.
+  plant 는 코드경로(`BrakePlant`)와 FMU경로(`sils::MakeFmuPlant`, `models/brake-fmu/`) 둘 다.
+- **네이티브 신규 DDS 타입 — 이제 가능(P4)** — 예전에 "미구현/transport 일반화 남음"이라 한 부분이
+  `IWireCodec` 포트로 구현됐다. `BrakeCmdWireCodec` 로 네이티브 `BrakeCmd` 타입을 core 무수정으로 발행
+  ([`examples/brake-ecu-native/`](../service/sils/examples/brake-ecu-native/), P4b). "DDS 타입 교체 = codec 한 줄".
+- **trace 경계 확정(P5)** — 발행/판정의 공개 계약이 [trace 스키마 v1](sils-trace-schema.md) + conformance
+  kit(`validate_trace.py`)으로 명세화됐다.
+
+**남은 정직한 경계 (아직):**
+- `RunProbe` 의 **읽기 경로**(reqresp 응답 · 입력 스테이징 리더)가 아직 `VissRequestTopic` 에 결합 — 커스텀
+  타입 ECU 도 VISS 생성소스를 여전히 컴파일한다(발행은 100% 네이티브). 리더까지 codec 화는 향후.
+- **SDK install/export 미완** — 예제가 생성 IDL 소스를 여전히 재-glob(P4/설치 단계에서 제거 예정).
 
 ```
 brake ECU                              temp ECU
@@ -875,10 +952,35 @@ brake ECU                              temp ECU
         └────── compile → 컨테이너 2개, 각자 probe(PID1) ──────┘
 ```
 
+**경계를 그림으로 — 누가 무엇을 소유하나:**
+
+```
+┌─ 개발자가 쓰는 것 (자기 레포, core 무수정) ───────────────────────────┐
+│  IBehavior 구현 ·  IPlant(코드) 또는 .fmu ·  IWireCodec(커스텀 IDL) │
+│  main.cc (포트 조립 → RunProbe) ·  descriptor ·  Dockerfile          │
+└───────────────────────────────┬──────────────────────────────────────┘
+                                 │  target_link_libraries(my_ecu sils_vecu)
+                                 ▼
+┌─ libsils_vecu  (core 제공·버전관리, P1) ──────────────────────────────┐
+│  RunProbe(tick 루프) · ConfigFromEnv · DDS 배선 · trace 방출          │
+│  기본 포트 구현 (WallClock/Lockstep · viss-request/… · Analytic/Fmu …) │
+└───────────────────────────────┬──────────────────────────────────────┘
+                                 │  이걸 지키면 됨 (C++ ABI 아님)
+                                 ▼
+┌─ 진짜 공개 경계 (버전) ─────────────────────────────────────────────────┐
+│  ① Contract Catalog (topic·type·QoS, semver)   ② trace 스키마 v1        │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+→ 개발자는 **위 칸만** 짜고 가운데를 링크한다. 안정성 계약은 **맨 아래 칸**(계약+trace 스키마)이지
+C++ ABI 가 아니다(§2, [확장 모델](sils-extension-model.md)). P4b 의 `BrakeCmdWireCodec` 가 "위 칸에서
+네이티브 타입을 더해도 아래 경계는 그대로"의 실례.
+
 ### (f) 실제 파일 내용 (워크드 예제)
 
-> 아래는 **예시 스니펫**이다. 실 소스(`behavior.hpp`/`plant.hpp`)엔 넣지 않는다 — VISS 슬라이스에
-> 투기적 코드를 두지 않기 위함(earned-abstraction, §5.2). 현재 IBehavior/IPlant 시그니처에 맞춘 형태.
+> 아래 스니펫은 이제 **실재하는 예제 코드**다 — [`service/sils/examples/brake-ecu/`](../service/sils/examples/brake-ecu/)
+> (P2/P3, 빌드·실행 검증 완료). core `behavior.hpp`/`plant.hpp` 엔 넣지 않고(earned-abstraction, §5.2),
+> 개발자 ECU 레포로 분리해 `libsils_vecu` 를 링크하는 형태. 현재 IBehavior/IPlant 시그니처 그대로.
 
 **① `behavior.hpp` — `BrakeBehavior`** (제어 로직 → 바이너리, §4.8①). `PControllerBehavior` 와 같은 꼴:
 
@@ -1086,15 +1188,172 @@ verdict 는 [to_junit.py](../tools/sils/conformance/to_junit.py) 로 **JUnit XML
 
 ---
 
-# 7장~11장 (채우는 중)
+# 7장. 충실도 사다리 L0–L4 — 각 레벨의 증거
 
-아래는 아직 stub. 이해하는 대로 각 장을 위 1~6장처럼 채운다.
+## 7.1 한 문장
 
-- **7장 충실도 사다리 L0–L4** — 각 레벨이 요구하는 증거와 판정.
-- **8장 Golden / 회귀** — capture ↔ compare, 결정론 모드 게이트.
-- **9장 FMU 트랙** → [sils-fmu-plant.md](sils-fmu-plant.md).
-- **10장 L4 Target Parity** → [sils-target-parity.md](sils-target-parity.md).
-- **11장 Fleet / run 격리 / 재현성** — 다중 vECU·도메인 격리·재현성 봉인.
+충실도(fidelity)는 "이 vECU 가 실물을 **얼마나** 대신하나"를 5단으로 매긴 사다리다. 6장의
+`fidelity_evidenced` 는 **한 run 이 실제로 보인 최고 레벨**이고, 각 레벨은 trace 안의 **구체적 증거**가
+있어야 인정된다 — 선언이 아니라 증거 기반(§6.5).
+
+## 7.2 다섯 단 — 무엇을 증명하나 · 무슨 증거로
+
+| 레벨 | 이름 | 증명하는 것 | trace 증거 | 판정 코드 |
+|---|---|---|---|---|
+| **L0** | 인터페이스 스텁 | 샘플이 계약 엔드포인트에 도착한다 | `endpoint_matched` + 수신 샘플 (pass-with-evidence) | evaluate.py 증거 게이트 |
+| **L1** | 프로토콜 | 요청/응답 대화가 성립 + QoS 계약 준수 | `request_sent`↔`response_received` 상관, 미응답·중복·유령 응답 0, `qos_negotiated` RELIABLE | [analyze_protocol](../tools/sils/conformance/evaluate.py#L464) |
+| **L2** | 행동 | 상태기계가 tick-indexed 로 결정론 재현 | `behavior_output.value` 시퀀스가 golden 과 일치 | [analyze_behavior](../tools/sils/conformance/evaluate.py#L283) + compare_golden(8장) |
+| **L3** | 플랜트 결합 | 물리 모델과 폐루프, 결정론 | `plant_step`(feedback→command→output) live·폐루프·재현 | [analyze_plant](../tools/sils/conformance/evaluate.py#L311) |
+| **L4** | 타깃 패리티 | 실 타깃과 값이 맞는다 | **교차-trace** 비교 + attestation(arch=aarch64·gateway/protocol=real) | [parity.py](../tools/sils/conformance/parity.py) (10장) |
+
+계단으로 — 각 칸은 아래 칸을 딛고, 증거가 있어야 오른다:
+
+```
+                                                    ┌─────────────┐
+                                                    │ L4 타깃패리티 │ ★ 교차-trace + attestation
+                                       ┌────────────┤  (parity.py) │   (단일 trace 로 안 줌)
+                                       │ L3 플랜트   │─────────────┘
+                          ┌────────────┤  폐루프     │  plant_step: feedback→cmd→output, 결정론
+                          │ L2 행동     │────────────┘
+             ┌────────────┤  golden    │  behavior_output 값 = golden 재현
+             │ L1 프로토콜 │────────────┘
+   ┌─────────┤  req↔resp  │  요청/응답 상관 + QoS(RELIABLE)
+   │ L0 스텁 │────────────┘
+   │ 엔드포인트 │  endpoint_matched + 수신 샘플
+───┘ +수신    │  (증거 없으면 PASS 도 무효 §6.5)
+   └──────────┘
+```
+
+## 7.3 사다리는 "올라간다" — `_bump`
+
+[FIDELITY_RANK](../tools/sils/conformance/evaluate.py#L565) `{none:0, L0:1, …, L4:5}`. 한 run 은 L0 증거
+위에 조건이 더 충족될수록 위로 bump 된다: 프로토콜 conformant → L1, live·폐루프·결정론 plant →
+L3(= L2 를 내포). **replay/개루프/broken plant 는 L3 로 못 올린다** — 증거가 약하면 레벨이 안 오른다.
+
+## 7.4 L4 는 단일 trace 로 안 준다 ★
+
+L0~L3 은 한 run 의 trace 만으로 판정된다. **L4 만은 예외** — 실 타깃 레퍼런스 trace 와의 **교차 비교**가
+필요하다. probe 는 `target_attestation`(arch/gateway/protocol)만 **기록**하고([analyze_attestation](../tools/sils/conformance/evaluate.py#L444)),
+L4 인정 여부는 [parity.py](../tools/sils/conformance/parity.py) 가 판정한다. ARM64 실행은 L4 의 **구성요소**일 뿐
+충분조건이 아니다. 자세히는 10장·[sils-target-parity.md](sils-target-parity.md).
+
+## 7.5 env 조합이 레벨을 만든다
+
+같은 바이너리(§5.6)가 `SILS_*` 조합만 바꿔 레벨을 오른다: `SILS_PROTOCOL=reqresp`(→L1) ·
+`SILS_BEHAVIOR=p-controller`+golden(→L2) · `SILS_PLANT=fmu`+폐루프(→L3) · `SILS_ATTEST_*=real`+parity(→L4).
+
+---
+
+# 8장. Golden / 회귀 — capture ↔ compare 재현성
+
+## 8.1 한 문장
+
+Golden 은 "**믿을 수 있는 한 run 을 정답으로 박제**(capture)"하고, 이후 run 을 그 정답과
+**대조**(compare)해 회귀를 잡는 재현성 도구다. L2/L3 결정론(§5.6·7장)이 성립해야 성립한다.
+
+## 8.2 두 도구
+
+| 도구 | 하는 일 | 핵심 |
+|---|---|---|
+| [capture_golden.py](../tools/sils/conformance/capture_golden.py) | conformant run 을 정규화해 golden 으로 저장 | 비결정 필드(wall_time 등) 제거·정규화, **비-conformant run 은 저장 거부**(exit 1) |
+| [compare_golden.py](../tools/sils/conformance/compare_golden.py) | 새 run 을 golden 과 비교 | 이벤트를 키로 그룹·순서 비교, 필드 허용오차(tolerance), 결과 MATCH/REGRESSION |
+
+## 8.3 무엇을 비교하나 — 결정론 필드만
+
+`wall_time_ms` 같은 비결정 값은 정규화로 빼고, `behavior_output.value`·`plant_step`(command/output)
+처럼 **결정론이어야 하는 값**만 tick-indexed 로 비교한다. 수치는 [within_tolerance](../tools/sils/conformance/compare_golden.py#L131)
+로 허용오차 안이면 통과(부동소수 잡음 흡수).
+
+## 8.4 결정론 모드 게이트 ★
+
+Wall-clock run 은 tick 타이밍이 비결정이라 골든 대조가 무의미할 수 있다. compare 는
+[gate_input_mode](../tools/sils/conformance/compare_golden.py#L275)/[is_lockstep](../tools/sils/conformance/compare_golden.py#L161)
+로 **재현 가능한 모드(lockstep/replay)인지 먼저 확인**하고, 아니면 대조를 거부/경고한다 — "재현 안 되는 걸
+재현 비교"하는 거짓 안심을 막는다.
+
+## 8.5 Exit 코드 = CI 게이트
+
+capture: `0` 저장 / `1` 거부(비-conformant) / `2` 사용오류. compare: `0` MATCH / `1` REGRESSION /
+`2` 정책거부. 그대로 CI 게이트(§16)로 들어간다. CI 배선은 [sils-ci.sh](../tools/sils/ci/sils-ci.sh) 의
+capture-golden 스테이지.
+
+---
+
+# 9장. FMU 트랙 → [sils-fmu-plant.md](sils-fmu-plant.md)
+
+IPlant 의 세 번째 구현 `FmuPlant`(fmi4c 로 실제 `.fmu` co-sim, §5.5 L3)는 전용 문서가 있다.
+요점만:
+
+- **무엇** — Simulink/Dymola/AMESim 등이 export 한 `.fmu`(FMI 2.0/3.0 co-sim)를 IPlant 뒤에 그대로
+  꽂는다. tick 루프·evaluate·golden 무변경 — 같은 `plant_step` 계약을 낸다.
+- **선택** — `SILS_PLANT=fmu` + `SILS_FMU_FILE`/`_INPUT_VR`/`_OUTPUT_VR`. 빌드는 `SILS_ENABLE_FMU=ON`(fmi4c).
+- **개발자 API(P3)** — `sils::MakeFmuPlant(cfg, err)` 로 코드경로(`make_unique<MyPlant>`)와 **한 줄만** 다르게.
+  워크드 예제: [examples/brake-ecu](../service/sils/examples/brake-ecu/) (코드경로) ↔ FMU경로(`main_fmu.cc` +
+  `models/brake-fmu/`, 손수 짠 최소 FMI 2.0 소스·재현빌드).
+- **보안 게이트** — `.fmu` 는 신뢰 못 할 바이너리를 dlopen 하므로 [fmu_gate.py](../tools/sils/fmu/fmu_gate.py)
+  allowlist/해시로 실행 전 검증(§5.6). 플랫폼 불일치는 `FmuPlant` preflight 가 크래시 대신 에러로 막는다.
+
+상세(FMI 매핑·VR·보안·플랫폼)는 → **[sils-fmu-plant.md](sils-fmu-plant.md)**.
+
+---
+
+# 10장. L4 Target Parity → [sils-target-parity.md](sils-target-parity.md)
+
+L4(충실도 최상단, 7.4)는 SiLS run 이 **실 타깃과 값이 맞는지**를 교차-trace 로 판정한다. 전용 문서가 있다.
+요점만:
+
+- **판정자** — [parity.py](../tools/sils/conformance/parity.py): `--sils`(SiLS trace) vs `--target`(실 타깃 trace)
+  를 `--contract`(패리티 계약 YAML)의 신호·허용오차·타이밍 창으로 비교. [compare_golden.compare](../tools/sils/conformance/compare_golden.py#L174) 재사용.
+- **attestation 게이트** — 계약이 요구하는 `arch=aarch64`·`gateway=real`·`protocol=real` 을 trace 의
+  `target_attestation` 이 만족해야 한다. 값이 맞아도 attestation 미달이면 **PARITY_UNATTESTED(L3)**, 둘 다면 **PARITY(L4)**, 발산이면 **DIVERGENCE**.
+- **왜 단일 trace 로 안 되나** — L4 는 "실물과 같다"는 주장이라, 실물 레퍼런스 없이는 증명 불가(7.4). 단일 run 은
+  attestation 을 기록만 한다.
+- **계약 예** — [config/sils/parity/viss-target-parity.yaml](../config/sils/parity/viss-target-parity.yaml).
+
+상세(계약 스키마·verdict·CI)는 → **[sils-target-parity.md](sils-target-parity.md)**.
+
+---
+
+# 11장. Fleet / run 격리 / 재현성
+
+## 11.1 한 문장
+
+한 토폴로지가 여러 vECU 인스턴스를 띄우고(fleet), 여러 run 이 동시에 돌아도 서로를 오염시키지 않게
+(**격리**), 그리고 같은 입력이면 같은 결과가 나오게(**재현성**) 만드는 세 축이다. 앞 장들이 여기서 합쳐진다.
+
+## 11.2 Fleet — N 컨테이너 = N 인스턴스 (§4.10 재확인)
+
+토폴로지의 `vecus[] × replicas` 를 컴파일러가 펼쳐 **인스턴스당 컨테이너 하나**를 만든다(4장). 각 인스턴스는
+고유 `instance_id`(participant 이름·trace 메타)와 해석된 topic(예: `/VIN/WheelSpeed/<id>`)을 갖고, **한 도메인**을
+공유한다. 한 컨테이너/프로세스 = 정확히 한 인스턴스(§4.10).
+
+## 11.3 run 격리 — 도메인 임대 (§12, [domain_lease.py](../tools/sils/run_coordinator/domain_lease.py))
+
+동시에 도는 여러 run 이 같은 DDS 도메인을 쓰면 서로의 트래픽이 섞인다. Coordinator 는 run 마다
+**도메인을 임대**한다:
+
+- **원자적 할당** — `O_CREAT|O_EXCL` 파일로 경쟁 없이 pool(`LO-HI`)에서 하나 잡는다. 고갈이면 exit 3.
+- **TTL + owner_pid** — 임대에 만료·소유자를 박아, 죽은 run(고아, §14.4)의 도메인을 **reap** 으로 회수(누수 방지).
+- **pool 분리** — CI 러너별로 다른 pool 을 줘(§12.2) 러너 간 도메인 충돌 원천 차단. 이 도구는 **메커니즘**이고,
+  어느 pool 을 줄지는 CI(정책)가 정한다.
+
+## 11.4 재현성 — 어디서 봉인되나
+
+재현성은 한 곳이 아니라 사슬로 보장된다:
+
+| 봉인 지점 | 무엇을 고정 | 장 |
+|---|---|---|
+| Topology 컴파일 | `input_hashes`(sha256) 로 입력 선언의 provenance | 1 |
+| 결정론 포트 | tick·sim_time 기준, wall-clock·RNG 비의존 | 5.6 |
+| Lockstep/replay | tick↔입력 귀속을 파일/grant 로 고정 | 5.5 · §7.4 |
+| Golden 대조 | 결정론 모드에서만, 값 tick-indexed 비교 | 8 |
+| Trace 스키마 | 판정 입력(trace)의 형식 계약 고정 | 6 · [sils-trace-schema.md](sils-trace-schema.md) |
+
+## 11.5 fleet 판정 (§13, §6.8 재확인)
+
+[evaluate_fleet](../tools/sils/conformance/evaluate.py#L736) 이 인스턴스별 run 을 합쳐: 각 run **conformant** +
+**완전성**(기대한 `instance_id` 전원 출현, 누락·rogue 면 FAIL)이어야 fleet PASS. `--resolved` 로
+resolved-run.yaml 의 기대 인스턴스 집합과 대조한다.
 
 ---
 

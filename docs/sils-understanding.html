@@ -208,6 +208,39 @@
   (여기까지 <b>정적</b>) · <b>4</b> Run Coordinator(<b>실행</b>) · <b>5</b> vECU 포트(4 헥사고날 포트).
   <em>(장이 늘면 다이어그램도 여기에 추가된다.)</em></p>
 
+  <div class="chap">전체 지도</div>
+  <h2><span class="n">◇</span> &nbsp;한눈에 — SiLS 전체 파이프라인 (11개 장이 어디에)</h2>
+  <p class="lede" style="margin-bottom:18px">왼→오: <b>무엇을 돌릴지 선언 → 정적으로 검증·확정 → 격리해 실행 → trace 로 판정</b>.
+  화살표 위 라벨(resolved-run.yaml · trace)이 장 사이를 잇는 산출물. probe(한 컨테이너=한 인스턴스) 속은 5개 포트(5장),
+  그 <b>trace 가 판정·충실도·회귀·패리티·fleet 의 유일한 입력</b> = 공개 경계(P5).</p>
+  <div class="scroll">
+    <div class="rail">
+      <div class="stage">
+        <p class="who">선언 · 2·3장</p>
+        <p class="what">Topology · Descriptor<br>Contract · QoS (YAML 4종)</p>
+        <p class="sub">"무엇을 돌릴지". 아직 계획 아님.</p>
+      </div>
+      <div class="stage key">
+        <p class="who">정적 · 1장</p>
+        <p class="what">Topology Compiler<br>변환 + 검증</p>
+        <p class="sub">fail-closed → <b>resolved-run.yaml</b> (입력 sha256 봉인).</p>
+        <span class="badge gate">◆ launch 前 검증</span>
+      </div>
+      <div class="stage">
+        <p class="who">실행 · 4·5장</p>
+        <p class="what">Run Coordinator<br>도메인 임대 → 컨테이너 = probe(PID1)</p>
+        <p class="sub">probe 속 = <b>5 포트</b> Clock·Behavior·Plant·Scenario·Wire → <b>trace</b>.</p>
+      </div>
+      <div class="stage">
+        <p class="who">판정 · 6·7·8·10·11장</p>
+        <p class="what">evaluate (+ parity)</p>
+        <p class="sub">verdict · conformant · fidelity L0–L4 · golden 회귀 · fleet.</p>
+        <span class="badge trust">trace = 유일 입력 (공개 경계)</span>
+      </div>
+    </div>
+  </div>
+  <p class="note">아래 <b>§01</b> 은 이 파이프라인을 <b>1장(수명주기) 관점</b>으로 확대한 것. 이후 각 §가 한 칸씩 파고든다.</p>
+
   <div class="chap">1장 · Topology Compiler</div>
   <h2><span class="n">01</span> &nbsp;언제 — 수명주기에서의 위치</h2>
   <div class="scroll">
@@ -606,14 +639,16 @@ SILS_ATTEST_ARCH=x86_64  <span class="c"># sim</span></pre>
   <b>미허용</b>(plant.hpp) — 지금은 "프로세스=인스턴스" 모델.</p>
 
   <div class="chap">5장 · vECU 포트 (헥사고날)</div>
-  <h2><span class="n">12</span> &nbsp;vECU 내부 — 4개 포트를 tick 루프가 조립</h2>
-  <p class="lede" style="margin-bottom:16px">§4.8 ①의 "바이너리 안 로직". probe 는 <b>4개 헥사고날 포트</b>로 짜이고,
-  env(3장)는 각 포트의 <b>어느 구현을 쓸지 고르는 스위치</b>. 추상화는 구현이 2개 이상일 때만(earned).</p>
+  <h2><span class="n">12</span> &nbsp;vECU 내부 — 5개 포트를 tick 루프가 조립</h2>
+  <p class="lede" style="margin-bottom:16px">§4.8 ①의 "바이너리 안 로직". probe 는 <b>5개 헥사고날 포트</b>로 짜이고,
+  env(3장)는 각 포트의 <b>어느 구현을 쓸지 고르는 스위치</b>. 추상화는 구현이 2개 이상일 때만(earned).
+  tick 루프는 이제 <code class="inl">libsils_vecu</code> 의 <code class="inl">RunProbe</code>(run_loop.hpp)로 추출됨.</p>
   <div class="whenline">
     <div class="cell"><h3>Clock · IClockSource</h3><p>WallClock · Lockstep<br><code class="inl">SILS_CLOCK_MODE</code></p></div>
     <div class="cell"><h3>Behavior · IBehavior</h3><p>viss-request · accumulate · p-controller<br><code class="inl">SILS_BEHAVIOR</code></p></div>
     <div class="cell"><h3>Plant · IPlant</h3><p>Analytic · Replay · Fmu<br><code class="inl">SILS_PLANT</code></p></div>
     <div class="cell"><h3>Scenario · IScenario</h3><p>Nominal · Scheduled<br><code class="inl">SILS_SCENARIO</code></p></div>
+    <div class="cell"><h3>Wire · IWireCodec</h3><p>Viss · RawValue · 커스텀 IDL<br><code class="inl">SILS_WIRE</code></p></div>
   </div>
   <div class="scroll" style="margin-top:16px">
     <pre class="code">while (clock-&gt;WaitForNextTick(tick)) {          <span class="c">⟨Clock⟩    다음 tick 까지 블록 (wall:주기 / lockstep:grant)</span>
@@ -626,13 +661,63 @@ SILS_ATTEST_ARCH=x86_64  <span class="c"># sim</span></pre>
     clock-&gt;TickDone(tick)                        <span class="c">⟨Clock⟩    lockstep 이면 TickComplete</span>
 }</pre>
   </div>
+  <div class="scroll" style="margin-top:16px">
+    <svg viewBox="0 0 800 210" style="width:100%;min-width:720px;font-family:var(--sans)" role="img" aria-label="5-포트 tick 폐루프">
+      <defs>
+        <marker id="ah" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+          <path d="M0,0 L7,3 L0,6 Z" fill="var(--accent)"/>
+        </marker>
+      </defs>
+      <!-- top row boxes -->
+      <g fill="var(--surface-2)" stroke="var(--line)">
+        <rect x="8"   y="20" width="120" height="44" rx="8"/>
+        <rect x="176" y="20" width="130" height="44" rx="8"/>
+        <rect x="354" y="20" width="130" height="44" rx="8"/>
+        <rect x="532" y="20" width="120" height="44" rx="8"/>
+      </g>
+      <rect x="690" y="20" width="102" height="44" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/>
+      <rect x="354" y="132" width="130" height="44" rx="8" fill="var(--surface-2)" stroke="var(--line)"/>
+      <g font-size="12.5" fill="var(--ink)" text-anchor="middle" font-weight="600">
+        <text x="68"  y="46">⟨Clock⟩</text>
+        <text x="241" y="46">⟨Scenario⟩</text>
+        <text x="419" y="46">⟨Behavior⟩</text>
+        <text x="592" y="46">⟨Wire⟩</text>
+        <text x="741" y="46" fill="var(--accent)">DDS publish</text>
+        <text x="419" y="158">⟨Plant⟩</text>
+      </g>
+      <g font-size="10" fill="var(--muted)" text-anchor="middle">
+        <text x="68"  y="59">깨움 / TickDone</text>
+        <text x="241" y="59">결함?</text>
+        <text x="419" y="59">명령 계산</text>
+        <text x="592" y="59">인코딩</text>
+        <text x="419" y="171">Step(dt)</text>
+      </g>
+      <!-- horizontal arrows -->
+      <g stroke="var(--accent)" stroke-width="1.6" fill="none" marker-end="url(#ah)">
+        <line x1="128" y1="42" x2="174" y2="42"/>
+        <line x1="306" y1="42" x2="352" y2="42"/>
+        <line x1="484" y1="42" x2="530" y2="42"/>
+        <line x1="652" y1="42" x2="688" y2="42"/>
+        <!-- Behavior command down into Plant -->
+        <line x1="419" y1="64" x2="419" y2="130"/>
+        <!-- Plant output feeds back up to Behavior (left arc) -->
+        <path d="M354,154 C300,154 300,42 352,42"/>
+      </g>
+      <g font-size="10" fill="var(--muted)">
+        <text x="426" y="104">command / SetInputs</text>
+        <text x="150" y="98" text-anchor="middle">output → feedback</text>
+      </g>
+      <text x="770" y="132" font-size="10.5" fill="var(--muted)" text-anchor="end">닫힌 고리: Plant 출력 → 다음 tick Behavior 피드백</text>
+    </svg>
+  </div>
   <p class="note"><b>결정론이 목적</b>: 같은 (clock·behavior·plant·scenario·입력)이면 같은 tick-indexed 출력 →
   golden 재현(8장)·충실도 판정(7장) 성립. 각 구현은 tick·sim_time 기준, wall-clock·RNG 비의존(결함조차 tick
   스케줄). <b>env 는 스위치, 로직은 바이너리</b>(§4.8 ①).</p>
 
   <h2><span class="n">13</span> &nbsp;실전 — brake · temp 두 ECU 를 포트로</h2>
-  <p class="lede" style="margin-bottom:16px">두 ECU = <b>두 vECU = 두 컨테이너</b>(§4.10). 각 ECU 를 4포트에 매핑하는 게
-  "실제 구현". tick 루프는 안 건드리고 <code class="inl">MakeBehavior</code>/<code class="inl">MakePlant</code> 에 분기만 추가.</p>
+  <p class="lede" style="margin-bottom:16px">두 ECU = <b>두 vECU = 두 컨테이너</b>(§4.10). 각 ECU 를 포트에 매핑하는 게
+  "실제 구현". 개발자는 <code class="inl">libsils_vecu</code> 를 링크하고 자기 포트만 구현해
+  <code class="inl">RunProbe</code> 에 주입 — <b>이제 실재하는 워크드 예제</b>(examples/brake-ecu, P2~P4).</p>
   <div class="scroll">
     <table class="ctbl">
       <thead><tr><th>포트</th><th>brake ECU</th><th>temp ECU</th></tr></thead>
@@ -657,20 +742,42 @@ SILS_ATTEST_ARCH=x86_64  <span class="c"># sim</span></pre>
       <p>고충실도면 실제 ASW 를 IBehavior 어댑터로 감쌈.</p>
     </div>
     <div class="o single">
-      <h4>정직한 현재 경계 ★</h4>
+      <h4>경계는 어디까지 왔나 ★ (P1~P5 구현)</h4>
       <div class="topics">
-        <div class="t ok">포트(로직·물리·결함·클록)는 지금 바로 재사용</div>
-        <div class="t">probe wire 타입은 VissRequestTopic 하나로 고정</div>
-        <div class="t clash">네이티브 신규 IDL 타입 = transport 일반화 필요(미구현)</div>
+        <div class="t ok">포트 전부 재사용 + tick 루프 라이브러리화(libsils_vecu, P1)</div>
+        <div class="t ok">네이티브 신규 IDL 타입 = IWireCodec 로 구현됨(BrakeCmd, P4b)</div>
+        <div class="t ok">plant 코드/FMU 경로 · trace 스키마+conformance(P3·P5)</div>
+        <div class="t">남음: 읽기 경로(reqresp/staging)가 아직 VissRequestTopic 결합</div>
       </div>
-      <p>지금 가능: VissRequestTopic 엔벨로프를 다른 topic(/VIN/Brake·/VIN/Temp)에 publish.</p>
+      <p>"DDS 타입 교체 = wire codec 한 줄". 상세: <a href="sils-extension-model.md" style="color:var(--accent)">확장 모델</a>.</p>
     </div>
   </div>
+  <div class="scroll" style="margin-top:16px">
+    <div style="display:flex;flex-direction:column;gap:0;min-width:520px;text-align:center;font-size:12.5px">
+      <div style="background:var(--surface-2);border:1px solid var(--line);border-radius:8px 8px 0 0;padding:12px 14px">
+        <b style="color:var(--accent)">개발자가 쓰는 것</b> <span style="color:var(--muted)">(자기 레포 · core 무수정)</span><br>
+        IBehavior 구현 · IPlant(코드) 또는 .fmu · IWireCodec(커스텀 IDL) · main.cc · descriptor · Dockerfile
+      </div>
+      <div style="color:var(--muted);font-size:11px;padding:3px">▼ &nbsp;<code class="inl">target_link_libraries(my_ecu sils_vecu)</code></div>
+      <div style="background:var(--surface);border:1px solid var(--accent);border-radius:8px;padding:12px 14px;box-shadow:0 0 0 1px var(--accent-soft)">
+        <b>libsils_vecu</b> <span style="color:var(--muted)">(core 제공·버전관리, P1)</span><br>
+        RunProbe(tick 루프) · ConfigFromEnv · DDS 배선 · trace 방출 · 기본 포트 구현
+      </div>
+      <div style="color:var(--muted);font-size:11px;padding:3px">▼ &nbsp;이걸 지키면 됨 <b>(C++ ABI 아님)</b></div>
+      <div style="background:var(--surface-2);border:1px dashed var(--accent);border-radius:0 0 8px 8px;padding:12px 14px">
+        <b>진짜 공개 경계 (버전)</b><br>
+        ① Contract Catalog (topic·type·QoS, semver) &nbsp;·&nbsp; ② trace 스키마 v1
+      </div>
+    </div>
+  </div>
+  <p class="note" style="margin-top:12px">개발자는 <b>맨 위 칸만</b> 짜고 가운데를 링크. 안정성 계약은 <b>맨 아래 칸</b>(계약+trace 스키마)이지 C++ ABI 가 아니다(§2).
+  P4b <code class="inl">BrakeCmdWireCodec</code> = "위 칸에서 네이티브 타입을 더해도 아래 경계는 그대로"의 실례.</p>
   <p class="note"><b>실제 파일 내용(워크드 예제)</b> — <code class="inl">BrakeBehavior</code>·<code class="inl">BrakePlant</code>·
-  <code class="inl">brake.fmu</code>(modelDescription)·<code class="inl">brake_probe.yaml</code> 전체 코드는
-  <a href="sils-understanding.md" style="color:var(--accent)">문서 §5.7 (f)</a>. (실 소스엔 미포함 — 예시 스니펫)</p>
+  <code class="inl">brake.fmu</code>(modelDescription)·<code class="inl">BrakeCmd.idl</code>(네이티브 타입) 은 이제
+  <b>실재</b>: <code class="inl">service/sils/examples/brake-ecu{,-native}/</code> (빌드·실행 검증). 전체 설명은
+  <a href="sils-understanding.md" style="color:var(--accent)">문서 §5.7</a>.</p>
 
-  <p class="foot">clock_source.hpp · behavior.hpp · plant.hpp · scenario.hpp · viss_probe_main.cc &nbsp;|&nbsp; 문서: docs/sils-understanding.md (1–5장) &nbsp;|&nbsp; trace → 6장 evaluate · 충실도 → 7장</p>
+  <p class="foot">run_loop.hpp(RunProbe) · clock_source · behavior · plant · scenario · wire.hpp &nbsp;|&nbsp; 문서: docs/sils-understanding.md (1–5장) &nbsp;|&nbsp; trace → 6장 evaluate · 충실도 → 7장</p>
 
   <div class="chap">6장 · Conformance 판정</div>
   <h2><span class="n">14</span> &nbsp;trace → verdict (evaluate)</h2>
@@ -727,6 +834,107 @@ SILS_ATTEST_ARCH=x86_64  <span class="c"># sim</span></pre>
   (기대 instance_id 다 나왔나)+전원 conformant 로 판정(§13). L4 는 단일 trace 로 안 줌(→ parity.py, 10장).</p>
 
   <p class="foot">evaluate.py (analyze_*·evaluate_run·evaluate_fleet) · to_junit.py &nbsp;|&nbsp; 문서: docs/sils-understanding.md (1–6장) &nbsp;|&nbsp; 충실도 → 7장 · golden → 8장</p>
+
+  <div class="chap">7장 · 충실도 사다리 L0–L4</div>
+  <h2><span class="n">15</span> &nbsp;얼마나 실물을 대신하나 — 증거 기반 5단</h2>
+  <p class="lede" style="margin-bottom:16px">6장의 <code class="inl">fidelity_evidenced</code> 는 한 run 이 <b>실제로 보인 최고 레벨</b>.
+  각 레벨은 trace 안의 <b>구체 증거</b>가 있어야 인정된다(선언 아님). 같은 바이너리가 <code class="inl">SILS_*</code> 조합만 바꿔 올라간다.</p>
+  <div class="whenline">
+    <div class="cell"><h3>L0 · 스텁</h3><p>샘플이 계약 엔드포인트에 도착<br><small>endpoint_matched + 수신</small></p></div>
+    <div class="cell"><h3>L1 · 프로토콜</h3><p>요청/응답 상관 + QoS 준수<br><small>request↔response, RELIABLE</small></p></div>
+    <div class="cell"><h3>L2 · 행동</h3><p>tick-indexed 결정론 재현<br><small>behavior_output = golden</small></p></div>
+    <div class="cell"><h3>L3 · 플랜트</h3><p>물리 폐루프·결정론<br><small>plant_step feedback→cmd→out</small></p></div>
+    <div class="cell"><h3>L4 · 패리티</h3><p>실 타깃과 값 일치<br><small>교차-trace + attestation</small></p></div>
+  </div>
+  <div class="scroll" style="margin-top:18px">
+    <svg viewBox="0 0 790 250" style="width:100%;min-width:700px;font-family:var(--sans)" role="img" aria-label="충실도 사다리 계단 L0-L4">
+      <!-- step treads -->
+      <g stroke="var(--line)" stroke-width="1.4" fill="none">
+        <path d="M12,236 H152 V194 H302 V152 H452 V110 H602 V68 H752"/>
+      </g>
+      <!-- level boxes -->
+      <g stroke="var(--line)" fill="var(--surface-2)">
+        <rect x="12"  y="196" width="140" height="40" rx="7"/>
+        <rect x="162" y="154" width="140" height="40" rx="7"/>
+        <rect x="312" y="112" width="140" height="40" rx="7"/>
+        <rect x="462" y="70"  width="140" height="40" rx="7"/>
+      </g>
+      <rect x="612" y="28" width="150" height="40" rx="7" fill="var(--accent-soft)" stroke="var(--accent)"/>
+      <g font-size="13" font-weight="700" fill="var(--ink)" text-anchor="middle">
+        <text x="82"  y="221">L0 · 스텁</text>
+        <text x="232" y="179">L1 · 프로토콜</text>
+        <text x="382" y="137">L2 · 행동</text>
+        <text x="532" y="95">L3 · 플랜트</text>
+        <text x="687" y="53" fill="var(--accent)">L4 · 패리티 ★</text>
+      </g>
+      <!-- evidence labels under each step -->
+      <g font-size="10" fill="var(--muted)" text-anchor="middle">
+        <text x="82"  y="250">endpoint_matched+수신</text>
+        <text x="232" y="208">req↔resp · QoS</text>
+        <text x="382" y="166">behavior_output=golden</text>
+        <text x="532" y="124">plant_step 폐루프</text>
+        <text x="687" y="82">교차-trace+attestation</text>
+      </g>
+    </svg>
+  </div>
+  <p class="note"><b>사다리는 올라간다</b>(<code class="inl">FIDELITY_RANK</code>, <code class="inl">_bump</code>): L0 증거 위에 조건이 충족될수록 위로.
+  replay/개루프/broken plant 는 L3 못 올림. <b>L4 만 단일 trace 로 안 준다 ★</b> — 실 타깃 레퍼런스와의 교차 비교가 필요(parity.py, 10장).
+  ARM64 실행은 L4 의 구성요소일 뿐 충분조건 아님. probe 는 <code class="inl">target_attestation</code> 을 기록만.</p>
+  <p class="foot">evaluate.py analyze_protocol/behavior/plant/attestation · FIDELITY_RANK &nbsp;|&nbsp; 문서 §7</p>
+
+  <div class="chap">8장 · Golden / 회귀</div>
+  <h2><span class="n">16</span> &nbsp;정답을 박제하고 → 대조해 회귀를 잡는다</h2>
+  <p class="lede" style="margin-bottom:16px">믿을 수 있는 한 run 을 <b>golden 으로 capture</b>, 이후 run 을 그 정답과 <b>compare</b>.
+  L2/L3 결정론(§5.6·7장)이 성립해야 성립한다.</p>
+  <div class="scroll">
+    <table class="ctbl">
+      <thead><tr><th>도구</th><th>하는 일</th><th>핵심</th></tr></thead>
+      <tbody>
+        <tr><td><b>capture_golden.py</b></td><td>conformant run 정규화 저장</td><td>비결정 필드 제거 · <b>비-conformant 저장 거부</b>(exit 1)</td></tr>
+        <tr class="build"><td><b>compare_golden.py</b></td><td>새 run 을 golden 과 비교</td><td>tick-indexed 값 비교 · 허용오차(tolerance) · MATCH/REGRESSION</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note"><b>결정론 모드 게이트 ★</b> — wall-clock run 은 타이밍이 비결정. compare 는 재현 가능한 모드(lockstep/replay)인지
+  먼저 확인하고 아니면 거부 — "재현 안 되는 걸 재현 비교"하는 거짓 안심 차단. <b>Exit = CI 게이트</b>: 0 MATCH / 1 REGRESSION / 2 정책거부.</p>
+  <p class="foot">capture_golden.py · compare_golden.py (within_tolerance·gate_input_mode) &nbsp;|&nbsp; 문서 §8</p>
+
+  <div class="chap">9·10장 · FMU · Target Parity (전용 문서 브리지)</div>
+  <h2><span class="n">17</span> &nbsp;FMU 트랙 · L4 패리티 — 요점 + 링크</h2>
+  <div class="own" style="margin-top:4px">
+    <div class="o per">
+      <h4>9장 · FMU 트랙</h4>
+      <div class="topics">
+        <div class="t ok">.fmu(FMI 2/3 co-sim)를 IPlant 뒤에 그대로 — plant_step 계약 동일</div>
+        <div class="t ok">MakeFmuPlant(cfg) — 코드경로와 한 줄만 다름(P3)</div>
+        <div class="t ok">fmu_gate allowlist/해시 + 플랫폼 preflight(크래시→에러)</div>
+      </div>
+      <p>상세 → <a href="sils-fmu-plant.md" style="color:var(--accent)">sils-fmu-plant.md</a></p>
+    </div>
+    <div class="o single">
+      <h4>10장 · L4 Target Parity</h4>
+      <div class="topics">
+        <div class="t ok">parity.py: SiLS trace vs 실 타깃 trace, 계약 허용오차로 비교</div>
+        <div class="t ok">attestation 게이트: arch=aarch64·gateway/protocol=real</div>
+        <div class="t">값 맞아도 attestation 미달 → PARITY_UNATTESTED(L3)</div>
+      </div>
+      <p>상세 → <a href="sils-target-parity.md" style="color:var(--accent)">sils-target-parity.md</a></p>
+    </div>
+  </div>
+  <p class="foot">parity.py · config/sils/parity/viss-target-parity.yaml &nbsp;|&nbsp; 문서 §9·§10</p>
+
+  <div class="chap">11장 · Fleet / 격리 / 재현성</div>
+  <h2><span class="n">18</span> &nbsp;다중 인스턴스 · run 격리 · 재현성 봉인</h2>
+  <p class="lede" style="margin-bottom:16px">여러 vECU 인스턴스(fleet)를 띄우고, 동시 run 이 서로를 오염 안 시키고(격리),
+  같은 입력이면 같은 결과(재현성) — 앞 장들이 여기서 합쳐진다.</p>
+  <div class="whenline">
+    <div class="cell"><h3>Fleet</h3><p>vecus[]×replicas → 인스턴스당 컨테이너 1, 한 도메인 공유<br><small>§4.10</small></p></div>
+    <div class="cell"><h3>도메인 임대</h3><p>O_CREAT&#124;O_EXCL 원자할당 · TTL+owner_pid · reap · pool 분리<br><small>domain_lease.py §12</small></p></div>
+    <div class="cell"><h3>재현성 사슬</h3><p>input_hashes · 결정론 포트 · lockstep/replay · golden · trace 스키마<br><small>§1·5.6·8</small></p></div>
+  </div>
+  <p class="note"><b>fleet 판정</b>(evaluate_fleet): 각 run conformant + <b>완전성</b>(기대 instance_id 전원 출현, 누락·rogue 면 FAIL)이어야 fleet PASS.
+  <code class="inl">--resolved</code> 로 resolved-run.yaml 의 기대 집합과 대조. 재현성은 한 곳이 아니라 컴파일→포트→클록→golden→trace 스키마 사슬로 봉인.</p>
+  <p class="foot">domain_lease.py · run_phase1.sh · evaluate.py(evaluate_fleet) &nbsp;|&nbsp; 문서 §11 &nbsp;|&nbsp; 확장 모델 → sils-extension-model.md</p>
 </div>
 </body>
 </html>
