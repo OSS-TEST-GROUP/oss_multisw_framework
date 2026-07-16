@@ -1,0 +1,732 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SiLS 가상 ECU — 이해 다이어그램</title>
+<style>
+  * { box-sizing: border-box; }
+  :root {
+    --bg:#eef2f5; --surface:#ffffff; --surface-2:#f7fafb;
+    --ink:#16222c; --muted:#5c6f7d; --line:#cdd8e0;
+    --accent:#0d7c86; --accent-soft:#0d7c8618;
+    --pass:#2e7d5b; --fail:#b3452f; --gate:#b9791a;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --radius:10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#0d141a; --surface:#151f28; --surface-2:#111a22;
+      --ink:#dbe6ee; --muted:#8698a6; --line:#283844;
+      --accent:#39c0cb; --accent-soft:#39c0cb1f;
+      --pass:#57c48d; --fail:#e0785f; --gate:#e0a83f;
+    }
+  }
+  :root[data-theme="light"] {
+    --bg:#eef2f5; --surface:#ffffff; --surface-2:#f7fafb;
+    --ink:#16222c; --muted:#5c6f7d; --line:#cdd8e0;
+    --accent:#0d7c86; --accent-soft:#0d7c8618;
+    --pass:#2e7d5b; --fail:#b3452f; --gate:#b9791a;
+  }
+  :root[data-theme="dark"] {
+    --bg:#0d141a; --surface:#151f28; --surface-2:#111a22;
+    --ink:#dbe6ee; --muted:#8698a6; --line:#283844;
+    --accent:#39c0cb; --accent-soft:#39c0cb1f;
+    --pass:#57c48d; --fail:#e0785f; --gate:#e0a83f;
+  }
+
+  html, body { margin:0; padding:0; }
+  body { background:var(--bg); color:var(--ink); font-family:var(--sans);
+    line-height:1.55; -webkit-font-smoothing:antialiased; }
+  .wrap { max-width:1080px; margin:0 auto; padding:40px 24px 72px; }
+
+  .eyebrow { font-family:var(--mono); font-size:12px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--accent); margin:0 0 8px; }
+  h1 { font-size:29px; line-height:1.2; margin:0 0 10px; text-wrap:balance; letter-spacing:-.01em; }
+  .lede { font-size:16px; color:var(--muted); margin:0 0 4px; max-width:66ch; }
+  .lede b { color:var(--ink); font-weight:600; }
+
+  h2 { font-size:13px; font-family:var(--mono); letter-spacing:.1em; text-transform:uppercase;
+    color:var(--muted); margin:52px 0 18px; padding-bottom:9px; border-bottom:1px solid var(--line); }
+  h2 .n { color:var(--accent); }
+
+  .scroll { overflow-x:auto; padding-bottom:6px; }
+
+  .rail { display:flex; align-items:stretch; gap:0; min-width:820px; }
+  .stage { flex:1; background:var(--surface); border:1px solid var(--line);
+    border-radius:var(--radius); padding:14px 15px; position:relative; }
+  .stage + .stage { margin-left:26px; }
+  .stage + .stage::before { content:"\203A"; position:absolute; left:-22px; top:50%;
+    transform:translateY(-50%); color:var(--muted); font-size:22px; line-height:1; }
+  .stage .who { font-family:var(--mono); font-size:10.5px; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--muted); margin:0 0 6px; }
+  .stage .what { font-weight:650; font-size:14.5px; margin:0 0 4px; }
+  .stage .sub { font-size:12.5px; color:var(--muted); margin:0; }
+  .stage.key { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent), 0 6px 22px -12px var(--accent); }
+  .stage.key .who { color:var(--accent); }
+  .badge { display:inline-block; font-family:var(--mono); font-size:10px; letter-spacing:.05em;
+    padding:2px 7px; border-radius:20px; margin-top:9px; }
+  .badge.gate { background:var(--accent-soft); color:var(--accent); border:1px solid var(--accent); }
+  .badge.trust { background:transparent; color:var(--muted); border:1px dashed var(--line); }
+
+  .whenline { display:flex; gap:18px; margin-top:20px; flex-wrap:wrap; }
+  .whenline .cell { flex:1; min-width:220px; background:var(--surface-2);
+    border:1px solid var(--line); border-left:3px solid var(--accent); border-radius:8px; padding:12px 14px; }
+  .whenline .cell h3 { font-size:13px; margin:0 0 5px; }
+  .whenline .cell p { font-size:12.5px; color:var(--muted); margin:0; }
+
+  .flow { display:grid; grid-template-columns:210px 1fr 200px; gap:22px; align-items:center; min-width:860px; }
+  .col-h { font-family:var(--mono); font-size:10.5px; letter-spacing:.09em; text-transform:uppercase;
+    color:var(--muted); margin:0 0 10px; }
+  .inputs, .outputs { display:flex; flex-direction:column; gap:9px; }
+  .chip { background:var(--surface); border:1px solid var(--line); border-radius:8px;
+    padding:9px 11px; font-family:var(--mono); font-size:12px; }
+  .chip small { display:block; font-family:var(--sans); color:var(--muted); font-size:11px; margin-top:2px; }
+  .chip.out { border-left:3px solid var(--pass); }
+  .chip.hash { border-style:dashed; color:var(--muted); }
+
+  .engine { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:4px; }
+  .band { border-radius:7px; padding:11px 13px; margin:4px; }
+  .band .lbl { font-family:var(--mono); font-size:10.5px; letter-spacing:.07em; text-transform:uppercase;
+    margin:0 0 7px; display:flex; align-items:center; gap:7px; }
+  .band.t { background:var(--accent-soft); }
+  .band.t .lbl { color:var(--accent); }
+  .band.v { background:color-mix(in srgb, var(--gate) 12%, transparent); }
+  .band.v .lbl { color:var(--gate); }
+  .steps { display:flex; flex-wrap:wrap; gap:6px; }
+  .steps span { background:var(--surface); border:1px solid var(--line); border-radius:6px;
+    padding:5px 9px; font-size:12px; }
+  .steps span b { color:var(--accent); font-weight:600; }
+  .checks { list-style:none; margin:0; padding:0; display:grid; grid-template-columns:1fr 1fr; gap:5px 14px; }
+  .checks li { font-size:12px; color:var(--ink); padding-left:15px; position:relative; }
+  .checks li::before { content:"\2713"; position:absolute; left:0; color:var(--gate); font-size:11px; top:1px; }
+  .checks li b { color:var(--gate); }
+
+  .verdict { display:flex; gap:10px; margin:8px 4px 4px; }
+  .verdict div { flex:1; border-radius:7px; padding:9px 11px; font-size:12px; }
+  .verdict .ok { border:1px solid var(--pass); color:var(--pass); background:color-mix(in srgb,var(--pass) 9%,transparent); }
+  .verdict .no { border:1px solid var(--fail); color:var(--fail); background:color-mix(in srgb,var(--fail) 9%,transparent); }
+  .verdict b { font-family:var(--mono); }
+
+  .arrow-mid { text-align:center; color:var(--muted); font-size:20px; }
+
+  /* ---- two planes (where) ---- */
+  .planes { display:flex; flex-direction:column; gap:16px; min-width:640px; }
+  .plane { border:1px solid var(--line); border-radius:var(--radius); padding:15px 16px; background:var(--surface); }
+  .plane.host { border-left:3px solid var(--accent); }
+  .plane.vecu { border-left:3px solid var(--gate); }
+  .plane .ph { font-family:var(--mono); font-size:11px; letter-spacing:.06em; text-transform:uppercase;
+    margin:0 0 9px; display:flex; justify-content:space-between; align-items:center; }
+  .plane.host .ph { color:var(--accent); }
+  .plane.vecu .ph { color:var(--gate); }
+  .plane .ph .lang { font-size:10px; padding:2px 8px; border-radius:20px; border:1px solid currentColor; }
+  .plane .rows { display:flex; flex-direction:column; gap:8px; }
+  .plane .row { font-size:12.5px; display:flex; gap:9px; align-items:baseline; }
+  .plane .row code { font-family:var(--mono); font-size:11.5px; color:var(--ink);
+    background:var(--surface-2); padding:1px 6px; border-radius:4px; white-space:nowrap; }
+  .plane .row span { color:var(--muted); }
+  .planes .link { text-align:center; color:var(--muted); font-family:var(--mono); font-size:11px; margin:2px 0; }
+
+  .crosscut { font-size:12.5px; color:var(--ink); margin:20px 0 0; padding:12px 15px;
+    background:var(--accent-soft); border:1px solid var(--accent); border-left:3px solid var(--accent);
+    border-radius:8px; line-height:1.7; }
+  .crosscut b { color:var(--accent); }
+  .crosscut em { color:var(--muted); font-style:normal; }
+  .note { font-size:12.5px; color:var(--muted); margin-top:22px; padding:13px 15px;
+    background:var(--surface-2); border:1px solid var(--line); border-radius:8px; }
+  .note code, code.inl { font-family:var(--mono); font-size:.92em; color:var(--ink);
+    background:color-mix(in srgb,var(--accent) 10%,transparent); padding:1px 5px; border-radius:4px; }
+  /* ---- chapter banner + ch2 diagrams ---- */
+  .chap { font-family:var(--mono); font-size:12px; letter-spacing:.1em; text-transform:uppercase;
+    color:#fff; background:var(--accent); display:inline-block; padding:6px 13px;
+    border-radius:6px; margin:64px 0 -30px; }
+  .agree { display:grid; grid-template-columns:1fr auto 1fr; gap:18px; align-items:center; min-width:640px; }
+  .node { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:15px 16px; text-align:center; }
+  .node .r { font-family:var(--mono); font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+  .node .nm { font-weight:650; font-size:15px; margin:5px 0 3px; }
+  .node .dir { font-size:11.5px; color:var(--accent); font-family:var(--mono); }
+  .wire { text-align:center; }
+  .wire .topic { font-family:var(--mono); font-size:12px; background:var(--accent-soft); color:var(--accent);
+    border:1px solid var(--accent); border-radius:20px; padding:4px 12px; display:inline-block; white-space:nowrap; }
+  .wire .flowln { color:var(--muted); font-size:18px; margin:3px 0; }
+  .wire .must { font-size:11px; color:var(--muted); margin-top:6px; max-width:200px; }
+  .qbundle { margin-top:16px; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:14px 16px; }
+  .qbundle .qtitle { font-family:var(--mono); font-size:11px; letter-spacing:.07em; text-transform:uppercase; color:var(--accent); margin:0 0 10px; }
+  .qrows { display:flex; flex-direction:column; gap:6px; }
+  .qrow { display:flex; gap:12px; align-items:baseline; font-size:12.5px; flex-wrap:wrap; }
+  .qrow .qp { font-family:var(--mono); font-size:11.5px; min-width:150px; color:var(--ink); }
+  .qrow .qv { font-family:var(--mono); font-size:11.5px; color:var(--muted); }
+  .qrow .qv b { color:var(--gate); background:color-mix(in srgb,var(--gate) 16%,transparent); padding:0 5px; border-radius:3px; }
+  .qrow.muted .qp, .qrow.muted .qv { opacity:.65; }
+  .qnote { font-size:11.5px; color:var(--muted); margin-top:10px; padding-top:9px; border-top:1px solid var(--line); }
+  .qnego { margin-top:14px; font-size:12.5px; color:var(--ink); background:var(--accent-soft);
+    border:1px solid var(--accent); border-left:3px solid var(--accent); border-radius:8px; padding:11px 13px; line-height:1.65; }
+  .qnego b { color:var(--accent); }
+  .qnego code { font-family:var(--mono); font-size:.92em; background:var(--surface); padding:1px 5px; border-radius:4px; }
+  .rxo { display:flex; gap:10px; flex-wrap:wrap; margin-top:16px; }
+  .rxo .r { flex:1; min-width:240px; background:var(--surface-2); border:1px solid var(--line);
+    border-left:3px solid var(--pass); border-radius:8px; padding:11px 13px; font-size:12.5px; }
+  .rxo .r b { font-family:var(--mono); color:var(--pass); }
+  .rxo .r .bad { color:var(--fail); font-family:var(--mono); }
+  .own { display:flex; gap:14px; flex-wrap:wrap; margin-top:4px; min-width:620px; }
+  .own .o { flex:1; min-width:280px; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:14px 15px; }
+  .own .o h4 { margin:0 0 8px; font-size:13px; font-family:var(--mono); }
+  .own .o.single h4 { color:var(--gate); } .own .o.per h4 { color:var(--pass); }
+  .own .o .topics { display:flex; flex-direction:column; gap:6px; }
+  .own .o .t { font-family:var(--mono); font-size:11.5px; padding:5px 9px; border-radius:6px; background:var(--surface-2); border:1px solid var(--line); }
+  .own .o .t.clash { border-color:var(--fail); color:var(--fail); }
+  .own .o .t.ok { border-color:var(--pass); }
+  .own .o p { font-size:11.5px; color:var(--muted); margin:9px 0 0; }
+  /* ---- ch3 §07: two-compile table + concrete example ---- */
+  .ctbl { width:100%; border-collapse:collapse; min-width:560px; font-size:12.5px; }
+  .ctbl th, .ctbl td { text-align:left; padding:9px 12px; border-bottom:1px solid var(--line); vertical-align:top; }
+  .ctbl th { font-family:var(--mono); font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+  .ctbl td b { font-family:var(--mono); }
+  .ctbl .yes { color:var(--pass); font-family:var(--mono); } .ctbl .no { color:var(--fail); font-family:var(--mono); }
+  .ctbl tr.build td { background:color-mix(in srgb,var(--gate) 8%,transparent); }
+  .envcmp { display:flex; gap:14px; flex-wrap:wrap; margin-top:16px; }
+  .envcmp > div { flex:1; min-width:300px; }
+  .envcmp h5 { margin:0 0 7px; font-size:12px; font-family:var(--mono); color:var(--accent); }
+  .code { font-family:var(--mono); font-size:11px; background:var(--surface-2); border:1px solid var(--line);
+    border-radius:8px; padding:11px 13px; white-space:pre; overflow-x:auto; color:var(--ink); line-height:1.65; margin:0; }
+  .code .d { color:var(--gate); }
+  .code .c { color:var(--muted); }
+  .samebin { margin-top:14px; font-size:12.5px; color:var(--ink); background:var(--accent-soft);
+    border:1px solid var(--accent); border-left:3px solid var(--accent); border-radius:8px; padding:11px 13px; }
+  .samebin b { color:var(--accent); }
+  .foot { margin-top:34px; font-size:11.5px; color:var(--muted); font-family:var(--mono); }
+  @media (max-width:640px){ h1{font-size:24px;} .wrap{padding:28px 16px 56px;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="eyebrow">MMF SiLS · 이해 다이어그램 · 1–6장</p>
+  <h1>SiLS 가상 ECU를 어떻게 <em>세우고</em> <em>돌리나</em></h1>
+  <p class="lede">SiLS 가상 ECU 전체를 훑는 <a href="sils-understanding.md" style="color:var(--accent)">이해 문서</a>의
+  다이어그램 모음. <b>1</b> Topology Compiler · <b>2</b> Contract/QoS Catalog · <b>3</b> Descriptor→SILS_* env
+  (여기까지 <b>정적</b>) · <b>4</b> Run Coordinator(<b>실행</b>) · <b>5</b> vECU 포트(4 헥사고날 포트).
+  <em>(장이 늘면 다이어그램도 여기에 추가된다.)</em></p>
+
+  <div class="chap">1장 · Topology Compiler</div>
+  <h2><span class="n">01</span> &nbsp;언제 — 수명주기에서의 위치</h2>
+  <div class="scroll">
+    <div class="rail">
+      <div class="stage">
+        <p class="who">작성 · PR</p>
+        <p class="what">Topology / Descriptor / Catalog 편집</p>
+        <p class="sub">"무엇을 돌릴지" 선언. 아직 실행 계획 아님.</p>
+      </div>
+      <div class="stage key">
+        <p class="who">CI · stage 0–1</p>
+        <p class="what">lint → compile<br>= 변환 · 검증</p>
+        <p class="sub">여기서 정적 검증. 실패 시 fail-closed.</p>
+        <span class="badge gate">◆ 정적 계획 검증 (launch 前)</span>
+      </div>
+      <div class="stage">
+        <p class="who">산출물</p>
+        <p class="what">resolved-run.yaml<br>+ saved-service-list.yaml</p>
+        <p class="sub">검증 통과한 실행 계획 + 입력 sha256 봉인.</p>
+      </div>
+      <div class="stage">
+        <p class="who">실행 · Run Coordinator</p>
+        <p class="what">run_phase1.sh --from-resolved</p>
+        <p class="sub">산출물을 <b>읽기만</b> 함. 재검증 안 함.</p>
+        <span class="badge trust">신뢰 (no re-validate)</span>
+      </div>
+      <div class="stage">
+        <p class="who">판정</p>
+        <p class="what">trace → evaluate</p>
+        <p class="sub">런타임 conformance 검증(6장) · 회귀/패리티(8·10장).</p>
+      </div>
+    </div>
+  </div>
+
+  <p class="crosscut"><b>검증은 이 한 곳(compile)만이 아니다.</b> 3계층으로 흩어진 cross-cutting 주제다 —
+  ① <b>정적 계획 검증</b>(카탈로그 lint + 토폴로지 compile, <em>이 다이어그램·1장</em>) ·
+  ② <b>런타임 conformance</b>(trace→verdict, evaluate.py, 6장) ·
+  ③ <b>회귀·패리티</b>(compare_golden·parity, 8·10장). 이 다이어그램은 ①만 그린다.</p>
+
+  <div class="whenline">
+    <div class="cell"><h3>앞에서 한 번</h3><p>compile은 CI/PR/pre-commit에서 <b>launch보다 앞서</b> 실행. 문제를 실행 전으로 당겨 잡는 shift-left.</p></div>
+    <div class="cell"><h3>실행은 신뢰</h3><p>Coordinator는 <code class="inl">--from-resolved</code>로 이미 검증된 계획을 소비만. 컴파일러를 다시 호출하지 않는다.</p></div>
+    <div class="cell"><h3>순수 정적</h3><p>DDS·도커·빌드 불필요. 16개 테스트가 실런타임 없이 커버. 어느 머신·샌드박스에서든 동일.</p></div>
+  </div>
+
+  <h2><span class="n">02</span> &nbsp;어떻게 — 컴파일러 내부 (변환 + 검증)</h2>
+  <div class="scroll">
+    <div class="flow">
+      <div>
+        <p class="col-h">입력 (선언)</p>
+        <div class="inputs">
+          <div class="chip">Topology<small>어떤 vECU·replica·backend</small></div>
+          <div class="chip">Descriptor<small>포트: clock/behavior/plant/scenario</small></div>
+          <div class="chip">Contract Catalog<small>topic·domain·QoS·ownership</small></div>
+          <div class="chip">QoS Catalog<small>reliability·durability·history</small></div>
+        </div>
+      </div>
+
+      <div>
+        <p class="col-h">Topology Compiler &nbsp;·&nbsp; 정적</p>
+        <div class="engine">
+          <div class="band v">
+            <p class="lbl">◆ stage 0 · lint (사전 게이트)</p>
+            <ul class="checks">
+              <li>필수필드·<b>중복 id</b></li>
+              <li><b>IDL 파일 실존</b>(디스크)</li>
+              <li>domain_env 오타</li>
+              <li>dangling QoS 참조</li>
+              <li>enum(transport/ownership…)</li>
+              <li>per-instance ⊃ {instance_id}</li>
+            </ul>
+          </div>
+          <div class="arrow-mid">↓</div>
+          <div class="band t">
+            <p class="lbl">▶ 변환 (resolve_topology)</p>
+            <div class="steps">
+              <span><b>①</b> replica 전개 → 인스턴스 N</span>
+              <span><b>②</b> contract_id → topic·domain·QoS</span>
+              <span><b>③</b> {instance_id} 토픽 치환</span>
+              <span><b>④</b> 포트 → SILS_* env</span>
+            </div>
+          </div>
+          <div class="arrow-mid">↓</div>
+          <div class="band v">
+            <p class="lbl">◆ 문맥 검증 (토폴로지 안에서만 보임)</p>
+            <ul class="checks">
+              <li>run.domain_id 필수</li>
+              <li>미존재 contract_id</li>
+              <li>이름 중복</li>
+              <li>QoS 미존재</li>
+              <li><b>§9.5 단일소유</b>(RESOLVED 토픽)</li>
+              <li>replicas↔params 길이</li>
+            </ul>
+          </div>
+          <div class="verdict">
+            <div class="ok">errors == 0 → <b>산출물 write</b></div>
+            <div class="no">errors ≥ 1 → <b>(None,None) · exit 1 · 안 씀</b></div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <p class="col-h">출력 (실행 계획)</p>
+        <div class="outputs">
+          <div class="chip out">resolved-run.yaml<small>containers[]: endpoints·env</small></div>
+          <div class="chip out">saved-service-list.yaml<small>MMF 컨테이너 제어 -e/네트워크</small></div>
+          <div class="chip hash">input_hashes<small>topology·catalog·descriptor sha256 봉인</small></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h2><span class="n">03</span> &nbsp;어디서 — 두 개의 면(plane)</h2>
+  <div class="scroll">
+    <div class="planes">
+      <div class="plane host">
+        <p class="ph"><span>오케스트레이션 호스트 &nbsp;(CI 러너 / 개발 머신 / Coordinator)</span><span class="lang">Python 3</span></p>
+        <div class="rows">
+          <div class="row"><code>compile.py + lint_catalog.py</code><span>정적 변환·검증 (여기!). YAML→resolved-run.yaml. DDS·도커·arm64 불필요.</span></div>
+          <div class="row"><code>run_phase1.sh (start)</code><span>resolved_to_shell·domain_lease·fmu_gate — 검증된 계획 읽기 + 런타임 게이트 → 컨테이너 기동.</span></div>
+        </div>
+      </div>
+      <div class="planes"><p class="link">│ docker run -e SILS_*=… ▼</p></div>
+      <div class="plane vecu">
+        <p class="ph"><span>vECU 컨테이너 &nbsp;(arm64 또는 x86)</span><span class="lang">C++ 만</span></p>
+        <div class="rows">
+          <div class="row"><code>sils_vecu_viss_probe</code><span>SILS_* env 읽고 DDS publish. <b>Python 없음. 검증 안 함.</b></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="whenline">
+    <div class="cell"><h3>검증은 arch 중립</h3><p>x86 맥에서든 CI 러너에서든 같은 판정. arm64 불필요.</p></div>
+    <div class="cell"><h3>arm64는 런타임용</h3><p>probe C++ 바이너리를 arm64로 빌드·실행하는 것. L4 attestation(<code class="inl">arch=aarch64</code>)이 증명하려는 부분.</p></div>
+    <div class="cell"><h3>vECU엔 Python 불필요</h3><p>probe는 C++이고 <code class="inl">SILS_*</code> env만 읽는다.</p></div>
+  </div>
+
+  <p class="note"><b>Fail-closed</b>가 핵심: 에러가 하나라도 있으면 <code>compile_topology</code>는
+  <code>(None, None, errors)</code>를 반환하고 <b>아티팩트를 아예 쓰지 않는다</b> — 잘못된 실행
+  계획이 하류로 새지 않는다. <b>resolved-run.yaml 존재 = 그 순간의 입력에 대해 검증 통과</b>이며,
+  <code class="inl">input_hashes</code>로 현재 소스와의 drift를 검증할 수 있다(자동 대조는 미구현).</p>
+
+  <div class="chap">2장 · Contract / QoS Catalog</div>
+  <h2><span class="n">04</span> &nbsp;계약 = SUT ↔ vECU 합의 (+ QoS 매칭)</h2>
+  <p class="lede" style="margin-bottom:18px">IDL 은 <b>타입</b>만 정의한다. "어느 topic·domain 에서, 어떤 QoS 로,
+  누가 발행/구독하나"는 계약이 선언한다. DDS 는 양쪽이 맞아야 통신이 성립하므로, 이 합의를
+  파일로 고정하고 정적 검증한다(검증은 1장).</p>
+  <div class="scroll">
+    <div class="agree">
+      <div class="node"><p class="r">roles.vecu</p><p class="nm">vECU (probe)</p><p class="dir">publish ▶</p></div>
+      <div class="wire">
+        <div class="topic">/VIN/Vehicle · VissRequestTopic</div>
+        <div class="flowln">──▶</div>
+        <div class="must">같은 topic + type + 호환 QoS 라야 match. 하나라도 어긋나면 <b>침묵(no data)</b>.</div>
+      </div>
+      <div class="node"><p class="r">roles.sut</p><p class="nm">SUT (VISS)</p><p class="dir">◀ subscribe</p></div>
+    </div>
+  </div>
+
+  <div class="qbundle">
+    <p class="qtitle">QoS 는 "하나"가 아니라 정책(policy)의 묶음</p>
+    <div class="qrows">
+      <div class="qrow"><span class="qp">Reliability</span><span class="qv">BEST_EFFORT · RELIABLE</span></div>
+      <div class="qrow"><span class="qp">Durability</span><span class="qv">VOLATILE · <b>TRANSIENT_LOCAL</b> · TRANSIENT · PERSISTENT</span></div>
+      <div class="qrow"><span class="qp">History</span><span class="qv">KEEP_LAST(depth) · KEEP_ALL</span></div>
+      <div class="qrow muted"><span class="qp">Deadline · Liveliness · Ownership …</span><span class="qv">그 외 다수</span></div>
+    </div>
+    <p class="qnote"><code style="font-family:var(--mono)">TRANSIENT_LOCAL</code> 은 QoS 자체가 아니라 <b style="color:var(--gate)">Durability 정책의 한 값</b>.
+    카탈로그의 "프로파일"(예: <code style="font-family:var(--mono)">viss-sils-verifiable</code>)은 이 정책 값들을 묶은 세트다.</p>
+  </div>
+
+  <div class="qnego">
+    <b>QoS 는 "협상(nego)"이 아니다 — RxO 호환성 판정이다.</b> Writer 는 자기 QoS 를 독립적으로
+    <b>제공(Offered)</b>, Reader 는 독립적으로 <b>요청(Requested)</b> — 통신 <em>전에</em> 각자 미리 정한다.
+    discovery 때 DDS 는 <b>호환성만 판정</b>: 제공이 요청을 만족하면 매칭, 아니면 <code>침묵(데이터 0)</code> +
+    <code>incompatible_qos</code> 이벤트. <b>중간값 타협도, 값 변경도 없다</b> — 그래서 카탈로그로 미리
+    호환되게 고정한다.
+  </div>
+
+  <div class="rxo">
+    <div class="r">durability: Writer <b>TRANSIENT_LOCAL</b> ⊒ Reader VOLATILE → late-join reader 도 히스토리 수신 ✓ (matched-but-no-data 해결)</div>
+    <div class="r">reliability: Writer <b>RELIABLE</b> ⊒ Reader BEST_EFFORT/RELIABLE · Writer <span class="bad">BEST_EFFORT</span> 는 RELIABLE reader 못 만족 ✗</div>
+  </div>
+
+  <h2><span class="n">05</span> &nbsp;Ownership — 누가 topic 을 소유하나 (§9.5)</h2>
+  <div class="scroll">
+    <div class="own">
+      <div class="o single">
+        <h4>single</h4>
+        <div class="topics">
+          <div class="t clash">/VIN/Vehicle ◀ probe A</div>
+          <div class="t clash">/VIN/Vehicle ◀ probe B</div>
+        </div>
+        <p>같은 topic 에 producer 2개 → §9.5 위반 (compile 이 fail-closed)</p>
+      </div>
+      <div class="o per">
+        <h4>per-instance · {instance_id}</h4>
+        <div class="topics">
+          <div class="t ok">/VIN/WheelSpeed/ws-1 ◀ ws-1</div>
+          <div class="t ok">/VIN/WheelSpeed/ws-2 ◀ ws-2</div>
+        </div>
+        <p>replica 마다 고유 topic = 각 1 owner → §9.5-valid</p>
+      </div>
+    </div>
+  </div>
+  <p class="note"><b>계약(선언) vs 검증</b>은 다른 일이다. 이 장(2장)은 카탈로그가 <b>무엇을 선언하는가</b>
+  — topic·type·QoS·ownership·roles — 를 그린다. 그게 <em>올바른지</em>(필수필드·중복·dangling QoS·
+  IDL 실존·§9.5 소유권…)의 <b>검증은 1장</b>(lint + compile). QoS 는 장식이 아니라
+  <code class="inl">누가 언제 데이터를 받는지</code>를 좌우하는 계약 조항이다.</p>
+
+  <div class="chap">3장 · Descriptor → SILS_* env</div>
+  <h2><span class="n">06</span> &nbsp;선언 → 실행 env 배선 (§9.2)</h2>
+  <p class="lede" style="margin-bottom:18px">2장이 <b>wire 계약</b>(topic·QoS)이라면, 3장은 <b>vECU 내부 동작</b>
+  (clock·behavior·plant·scenario)을 Descriptor 선언에서 실행 env 로 잇는 다리. 손으로 export 하지 않고,
+  <code class="inl">plant: {type: fmu}</code> 라고 쓰면 그게 probe 까지 이어진다.</p>
+  <div class="scroll">
+    <div class="rail">
+      <div class="stage">
+        <p class="who">Descriptor</p>
+        <p class="what">포트 선언</p>
+        <p class="sub">clock · behavior · plant · scenario · attestation</p>
+      </div>
+      <div class="stage key">
+        <p class="who">compile.py</p>
+        <p class="what">resolve_runtime_env</p>
+        <p class="sub">→ SILS_* 로 변환, resolved-run 의 env 에 실음</p>
+        <span class="badge gate">◆ 변환 (정적)</span>
+      </div>
+      <div class="stage">
+        <p class="who">resolved_to_shell</p>
+        <p class="what">export SILS_* · --env-args</p>
+        <p class="sub">eval 용(따옴표) · raw KEY=VALUE 두 형태</p>
+      </div>
+      <div class="stage">
+        <p class="who">run_phase1.sh</p>
+        <p class="what">백엔드별 주입</p>
+        <p class="sub">local: 상속 · docker/fleet: -e / env</p>
+      </div>
+      <div class="stage">
+        <p class="who">probe · C++</p>
+        <p class="what">SILS_* 읽고 동작</p>
+        <p class="sub">env 만 읽음. Python·검증 없음.</p>
+        <span class="badge trust">arm64/x86 컨테이너</span>
+      </div>
+    </div>
+  </div>
+  <p class="note" style="margin-top:16px"><b>Descriptor 파일</b>은 레포에 있다 —
+  <code class="inl">service/sils/vecu/descriptors/*.yaml</code>
+  (viss_probe · viss_scenario_probe · wheelspeed_probe). Topology 의
+  <code class="inl">vecus[].descriptor</code> 가 이 경로를 참조하고 compile.py 가 읽는다.</p>
+
+  <div class="own" style="margin-top:20px">
+    <div class="o per">
+      <h4>Descriptor 가 소유 — "무엇을 하는 vECU인가"</h4>
+      <div class="topics">
+        <div class="t ok">SILS_CLOCK_MODE · SILS_BEHAVIOR · SILS_CTRL_*</div>
+        <div class="t ok">SILS_PLANT · SILS_FMU_* · SILS_SCENARIO(_FAULTS)</div>
+        <div class="t ok">SILS_ATTEST_ARCH/GATEWAY/PROTOCOL</div>
+      </div>
+      <p>포트 설정. resolve_runtime_env 가 생성.</p>
+    </div>
+    <div class="o single">
+      <h4>Coordinator 가 소유 — "이번 run 의 정체성"</h4>
+      <div class="topics">
+        <div class="t">SILS_RUN_ID · SILS_VECU_INSTANCE_ID</div>
+        <div class="t">SILS_TOPIC (per-instance 해석 topic)</div>
+        <div class="t">VISS_DDS_DOMAIN_ID (도메인 임대)</div>
+      </div>
+      <p>누가·어디서. run 마다 Coordinator 가 주입.</p>
+    </div>
+  </div>
+  <p class="note"><b>오프라인 검증</b>: 이 배선이 보장할 건 "Descriptor 가 만드는 env 문자열 = 손으로 넣던
+  문자열" 하나. 이 동등성은 DDS·빌드 없이 파이썬/셸 테스트로 단언되고, probe(C++)는 그 env 를 읽을
+  뿐이라 문자열이 같으면 런타임 동작(L1/L3/scenario 실측)은 그대로 따라온다.</p>
+
+  <h2><span class="n">07</span> &nbsp;"컴파일"은 두 개 + 실제 예</h2>
+  <p class="lede" style="margin-bottom:16px"><code class="inl">SILS_*</code> 는 vECU 를 <b>컴파일하는 입력이 아니라</b>
+  실행 때 주입되는 런타임 env. vECU 는 descriptor 무관하게 미리 빌드된 <b>범용 바이너리 하나</b>이고,
+  실행 때 <code class="inl">getenv</code> 로 포트를 고른다 — descriptor 마다 재빌드하지 않는다.</p>
+  <div class="scroll">
+    <table class="ctbl">
+      <thead><tr><th>무엇</th><th>도구</th><th>언제</th><th>산출물</th><th>SILS_*</th></tr></thead>
+      <tbody>
+        <tr class="build"><td><b>vECU 빌드</b></td><td>build.sh (CMake·C++)</td><td>한 번, 미리</td><td>probe 바이너리·이미지 (범용)</td><td class="no">✗ 모름</td></tr>
+        <tr><td><b>Topology 컴파일</b></td><td>compile.py</td><td>설정마다</td><td>resolved-run.yaml (+SILS_* env)</td><td class="yes">✓ 생성</td></tr>
+        <tr><td><b>실행</b></td><td>run_phase1.sh</td><td>run 마다</td><td>바이너리 + SILS_* → 동작</td><td class="yes">✓ 주입·읽음</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="envcmp">
+    <div>
+      <h5>A) viss_probe_smoke — behavior: stub</h5>
+      <pre class="code">SILS_CLOCK_MODE=wall
+SILS_BEHAVIOR=viss-request
+SILS_VISS_PROBE_PERIOD_MS=500
+SILS_VISS_PROBE_REQUEST_ACTION=get
+SILS_VISS_PROBE_REQUEST_PATH=Vehicle.Speed</pre>
+    </div>
+    <div>
+      <h5>B) viss_scenario — accumulate + 결함주입</h5>
+      <pre class="code">SILS_CLOCK_MODE=wall
+<span class="d">SILS_BEHAVIOR=accumulate</span>
+<span class="d">SILS_VISS_PROBE_PERIOD_MS=200</span>
+<span class="d">SILS_SCENARIO=scheduled</span>
+<span class="d">SILS_SCENARIO_FAULTS=3:drop,7:duplicate</span>
+SILS_ATTEST_ARCH=x86_64  <span class="c"># sim</span></pre>
+    </div>
+  </div>
+  <p class="samebin"><b>바이너리는 동일</b>, resolved-run 의 env 만 다르다(실측 출력). A 는
+  <code style="font-family:var(--mono)">viss-request</code> 를 500ms 마다, B 는 <code style="font-family:var(--mono)">accumulate</code>
+  + tick 3 drop·tick 7 duplicate. <b>재빌드 없음</b> — 같은 이미지에 env 만.</p>
+
+  <div class="chap">4장 · Run Coordinator</div>
+  <h2><span class="n">08</span> &nbsp;한 run 의 생명주기 (실행)</h2>
+  <p class="lede" style="margin-bottom:18px">1–3장은 <b>실행 전(정적)</b>. 여기부터 <b>실행</b>이다.
+  Coordinator(run_phase1.sh)가 검증된 계획 + SILS_* 를 받아 vECU 를 띄우고, 도메인 격리·생명주기·정리를
+  책임진다. 각 단계는 <code class="inl">trace.jsonl</code> 한 줄로 남아 6장 evaluate 의 입력이 된다.</p>
+  <div class="scroll">
+    <div class="rail" style="min-width:1000px">
+      <div class="stage"><p class="who">① domain 확보</p><p class="what">lease / inject</p><p class="sub">trace: domain_leased</p></div>
+      <div class="stage"><p class="who">② FMU 게이트</p><p class="what">fmu_preflight</p><p class="sub">§5.6 (없으면 no-op)</p></div>
+      <div class="stage key"><p class="who">③ 기동</p><p class="what">local / docker</p><p class="sub">trace: process_running</p></div>
+      <div class="stage"><p class="who">④ ready 대기</p><p class="what">probe "ready" 폴링</p><p class="sub">vecu_ready / ready_timeout</p></div>
+      <div class="stage"><p class="who">⑤ verify</p><p class="what">독립 one-shot 구독자</p><p class="sub">verify_pass · §11 L0 증거</p></div>
+      <div class="stage"><p class="who">⑥ 판정 → teardown</p><p class="what">run_pass/fail</p><p class="sub">domain_released · cleanup_done</p></div>
+    </div>
+  </div>
+
+  <h2><span class="n">09</span> &nbsp;도메인 임대 — 병렬 run 격리 (§12)</h2>
+  <p class="lede" style="margin-bottom:16px">DDS 는 <b>domain id</b> 로 통신을 격리한다. 병렬 run 이 서로
+  샘플이 안 섞이려면 다른 domain 을 써야 하는데 domain 은 유한 → 유한 pool 에서 임대.</p>
+  <div class="whenline">
+    <div class="cell"><h3>atomic 획득</h3><p><code class="inl">O_CREAT|O_EXCL</code> per-domain 파일 — 두 러너 race 를 OS 가 차단. pool 소진 시 exit 3.</p></div>
+    <div class="cell"><h3>TTL + owner_pid</h3><p>Coordinator 가 release 없이 죽어도 만료되면 <b>reap</b> 이 회수 → domain 누수 방지(§14.4).</p></div>
+    <div class="cell"><h3>pool 분리</h3><p><code class="inl">--lease-dir</code> 로 러너별 pool 분리 → CI 간섭 차단(§12.2). 도구는 메커니즘, pool 배정은 정책.</p></div>
+    <div class="cell"><h3>inject vs allocate</h3><p><code class="inl">--domain</code> 직접 주입(SUT domain 에 붙일 때, §3.4) / <code class="inl">--domain-pool</code> 임대(병렬 격리).</p></div>
+  </div>
+  <p class="note"><b>teardown 은 idempotent, reap 은 안전망</b>: state 파일(<code class="inl">CONTAINER_NAME</code>·
+  <code class="inl">PROBE_PID</code>·<code class="inl">DOMAIN_LEASED</code>)을 <code>docker run</code> 전에 먼저 적어,
+  run 도중 죽어도 컨테이너·PID·lease 를 회수할 수 있다(§14.4 crash 안전). 두 백엔드는 같은 host-side verify 를
+  쓰며, docker 는 <code class="inl">--ipc=host</code> 가 없으면 SHM 경로가 끊겨 <b>matched-but-no-data</b>(2026-07 실측).</p>
+
+  <h2><span class="n">10</span> &nbsp;컨테이너 실행 &amp; MMF 통합 (누가 띄우나)</h2>
+  <p class="lede" style="margin-bottom:16px">이미지의 엔트리포인트는 probe 를 <b>PID 1 로 exec</b> — 컨테이너 수명이
+  곧 probe 프로세스다(<code class="inl">docker stop</code>→SIGTERM 직접→graceful). vECU 를 실제로 띄우는
+  주체는 두 경로가 있다.</p>
+  <div class="scroll">
+    <pre class="code">docker run -d <span class="d">-e SILS_*=…  -e VISS_DDS_DOMAIN_ID=90</span> &lt;image&gt;
+  └─ entrypoint.sh ──exec──▶ sils_vecu_viss_probe <span class="d">(PID 1)</span>
+                               └─ getenv(SILS_*) 로 포트 선택 ──▶ DDS publish   <span class="c"># 컨테이너 수명 = probe</span></pre>
+  </div>
+  <div class="qbundle" style="margin-top:16px">
+    <p class="qtitle">entrypoint·이미지는 범용 — "실 vECU 정보"는 세 군데로 나뉜다</p>
+    <div class="qrows">
+      <div class="qrow"><span class="qp">① 로직(구현)</span><span class="qv">probe 바이너리 (컴파일 baked) — 모든 포트 구현. env 가 하나 선택</span></div>
+      <div class="qrow"><span class="qp">② 선택·파라미터·경로</span><span class="qv"><b>SILS_* env</b> (런타임 주입) — behavior·Kp·faults·FMU 경로</span></div>
+      <div class="qrow"><span class="qp">③ 모델 데이터</span><span class="qv">컨테이너 파일시스템 — 실제 .fmu·replay (env 는 PATH 만)</span></div>
+    </div>
+    <p class="qnote">entrypoint 에는 vECU 정보가 <b style="color:var(--gate)">전혀 없다</b> — 모든 인스턴스가 동일 이미지·entrypoint.
+    실행 중 정체 확인: <code style="font-family:var(--mono)">docker inspect … | grep ^SILS_</code>.</p>
+  </div>
+  <div class="own" style="margin-top:16px">
+    <div class="o single">
+      <h4>(A) Phase 1 직접 — 현재 구현</h4>
+      <div class="topics">
+        <div class="t">run_phase1.sh 가 직접 docker run / 프로세스</div>
+        <div class="t">소비: resolved-run.yaml</div>
+      </div>
+      <p>MMF 제어 우회하는 부트스트랩. 런타임·CI 검증용.</p>
+    </div>
+    <div class="o per">
+      <h4>(B) MMF 통합 — 아키텍처 목표</h4>
+      <div class="topics">
+        <div class="t ok">saved-service-list.yaml (MMF ServiceRegistry)</div>
+        <div class="t ok">adsw_manager(yaml owner) + lifecycle_mgr(DDS)</div>
+        <div class="t ok">ContainerType: DOCKER · DOCKER_COMPOSE · K3S</div>
+      </div>
+      <p>MMF 자기 서비스와 <b>동일 경로</b>로 기동·종료. extra_args 의 -e SILS_* 그대로.</p>
+    </div>
+  </div>
+  <p class="note">compile 이 <b>두 산출물</b>을 내는 이유: <code class="inl">resolved-run.yaml</code>(A용) +
+  <code class="inl">saved-service-list.yaml</code>(B용, MMF 정문).</p>
+
+  <h2><span class="n">11</span> &nbsp;멀티 인스턴스 — "N 컨테이너 = N 인스턴스"</h2>
+  <p class="lede" style="margin-bottom:16px"><code class="inl">vecus[]</code>×<code class="inl">replicas</code> 를 compile 이
+  N 컨테이너로 전개(resolved-run·saved-service-list 둘 다). 단 <b>한 컨테이너/프로세스 = 정확히 1 인스턴스</b> —
+  entrypoint 가 probe 하나만 exec 하므로.</p>
+  <div class="scroll">
+    <pre class="code">topology.vecus[]  ──expand──▶  c1 (instance_id=ws-1) → probe(PID1)   ┐
+                               c2 (instance_id=ws-2) → probe(PID1)   ├ <span class="d">fleet: 도메인 1개 공유,</span>
+                               c3 (instance_id=ws-3) → probe(PID1)   │ <span class="d">동시 기동</span>
+                               c4 (instance_id=ws-4) → probe(PID1)   ┘</pre>
+  </div>
+  <p class="note">여러 인스턴스 = <b>분리된 N 컨테이너/프로세스</b>(각자 instance_id), <code class="inl">fleet</code> 이
+  도메인 1개 공유해 동시 기동. 한 프로세스에 여러 vECU 를 넣는 in-process 다중화는 fmi4c thread-safety 시험 전
+  <b>미허용</b>(plant.hpp) — 지금은 "프로세스=인스턴스" 모델.</p>
+
+  <div class="chap">5장 · vECU 포트 (헥사고날)</div>
+  <h2><span class="n">12</span> &nbsp;vECU 내부 — 4개 포트를 tick 루프가 조립</h2>
+  <p class="lede" style="margin-bottom:16px">§4.8 ①의 "바이너리 안 로직". probe 는 <b>4개 헥사고날 포트</b>로 짜이고,
+  env(3장)는 각 포트의 <b>어느 구현을 쓸지 고르는 스위치</b>. 추상화는 구현이 2개 이상일 때만(earned).</p>
+  <div class="whenline">
+    <div class="cell"><h3>Clock · IClockSource</h3><p>WallClock · Lockstep<br><code class="inl">SILS_CLOCK_MODE</code></p></div>
+    <div class="cell"><h3>Behavior · IBehavior</h3><p>viss-request · accumulate · p-controller<br><code class="inl">SILS_BEHAVIOR</code></p></div>
+    <div class="cell"><h3>Plant · IPlant</h3><p>Analytic · Replay · Fmu<br><code class="inl">SILS_PLANT</code></p></div>
+    <div class="cell"><h3>Scenario · IScenario</h3><p>Nominal · Scheduled<br><code class="inl">SILS_SCENARIO</code></p></div>
+  </div>
+  <div class="scroll" style="margin-top:16px">
+    <pre class="code">while (clock-&gt;WaitForNextTick(tick)) {          <span class="c">⟨Clock⟩    다음 tick 까지 블록 (wall:주기 / lockstep:grant)</span>
+    staged = &lt;replay / staging 입력 확정&gt;        <span class="c">           §7.3 입력 결정론</span>
+    if (plant) ctx.plant_feedback = plant-&gt;output()  <span class="c">⟨Plant⟩    지난 tick 출력 피드백</span>
+    act = scenario-&gt;OnTick({tick.seq, …})        <span class="c">⟨Scenario⟩ 이번 tick 결함?</span>
+    out = publish_one(ctx, act)                  <span class="c">⟨Behavior⟩ 명령 계산 → (fault 적용) → publish</span>
+    if (plant) { plant-&gt;SetInputs(out.value)     <span class="c">⟨Plant⟩    그 명령으로</span>
+                 y = plant-&gt;Step(tick.dt_ns) }   <span class="c">           한 dt 적분 → 다음 피드백</span>
+    clock-&gt;TickDone(tick)                        <span class="c">⟨Clock⟩    lockstep 이면 TickComplete</span>
+}</pre>
+  </div>
+  <p class="note"><b>결정론이 목적</b>: 같은 (clock·behavior·plant·scenario·입력)이면 같은 tick-indexed 출력 →
+  golden 재현(8장)·충실도 판정(7장) 성립. 각 구현은 tick·sim_time 기준, wall-clock·RNG 비의존(결함조차 tick
+  스케줄). <b>env 는 스위치, 로직은 바이너리</b>(§4.8 ①).</p>
+
+  <h2><span class="n">13</span> &nbsp;실전 — brake · temp 두 ECU 를 포트로</h2>
+  <p class="lede" style="margin-bottom:16px">두 ECU = <b>두 vECU = 두 컨테이너</b>(§4.10). 각 ECU 를 4포트에 매핑하는 게
+  "실제 구현". tick 루프는 안 건드리고 <code class="inl">MakeBehavior</code>/<code class="inl">MakePlant</code> 에 분기만 추가.</p>
+  <div class="scroll">
+    <table class="ctbl">
+      <thead><tr><th>포트</th><th>brake ECU</th><th>temp ECU</th></tr></thead>
+      <tbody>
+        <tr><td><b>IBehavior</b> 로직</td><td>BrakeBehavior — 감속도→유압 명령</td><td>TempControlBehavior — 목표온도 PID</td></tr>
+        <tr class="build"><td><b>IPlant</b> 물리</td><td>BrakePlant / <b>brake.fmu</b></td><td>ThermalPlant / <b>thermal.fmu</b></td></tr>
+        <tr><td><b>IClockSource</b></td><td>lockstep(차량 동기)</td><td>lockstep / wall</td></tr>
+        <tr><td><b>IScenario</b></td><td>센서 드롭·명령 손실</td><td>센서 고착·지연</td></tr>
+        <tr><td><b>Contract</b> 신호</td><td>/VIN/Brake · type · QoS</td><td>/VIN/Temp · type · QoS</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="own" style="margin-top:16px">
+    <div class="o per">
+      <h4>구현부가 물리적으로 어디에</h4>
+      <div class="topics">
+        <div class="t ok">제어 로직 → IBehavior 클래스 (바이너리, §4.8①)</div>
+        <div class="t ok">물리 모델 → IPlant 클래스 / .fmu 파일 (§4.8③)</div>
+        <div class="t ok">신호·타입·QoS → IDL + Contract (2장)</div>
+        <div class="t ok">선택·파라미터 → Descriptor → SILS_* (3장)</div>
+      </div>
+      <p>고충실도면 실제 ASW 를 IBehavior 어댑터로 감쌈.</p>
+    </div>
+    <div class="o single">
+      <h4>정직한 현재 경계 ★</h4>
+      <div class="topics">
+        <div class="t ok">포트(로직·물리·결함·클록)는 지금 바로 재사용</div>
+        <div class="t">probe wire 타입은 VissRequestTopic 하나로 고정</div>
+        <div class="t clash">네이티브 신규 IDL 타입 = transport 일반화 필요(미구현)</div>
+      </div>
+      <p>지금 가능: VissRequestTopic 엔벨로프를 다른 topic(/VIN/Brake·/VIN/Temp)에 publish.</p>
+    </div>
+  </div>
+  <p class="note"><b>실제 파일 내용(워크드 예제)</b> — <code class="inl">BrakeBehavior</code>·<code class="inl">BrakePlant</code>·
+  <code class="inl">brake.fmu</code>(modelDescription)·<code class="inl">brake_probe.yaml</code> 전체 코드는
+  <a href="sils-understanding.md" style="color:var(--accent)">문서 §5.7 (f)</a>. (실 소스엔 미포함 — 예시 스니펫)</p>
+
+  <p class="foot">clock_source.hpp · behavior.hpp · plant.hpp · scenario.hpp · viss_probe_main.cc &nbsp;|&nbsp; 문서: docs/sils-understanding.md (1–5장) &nbsp;|&nbsp; trace → 6장 evaluate · 충실도 → 7장</p>
+
+  <div class="chap">6장 · Conformance 판정</div>
+  <h2><span class="n">14</span> &nbsp;trace → verdict (evaluate)</h2>
+  <p class="lede" style="margin-bottom:18px">4장이 남긴 trace 는 그 자체로 합/불이 아니다. evaluate 가 이벤트 스트림을
+  <b>상태기계·증거</b>로 읽어 verdict 로 환원(run 재실행 없이 trace 만 — 순수 정적). cross-cutting 검증의 ②.</p>
+  <div class="scroll">
+    <div class="flow">
+      <div>
+        <p class="col-h">입력 · trace 이벤트</p>
+        <div class="inputs">
+          <div class="chip">domain_leased<small>Coordinator</small></div>
+          <div class="chip">endpoint_matched · sample_received<small>verify (L0 증거)</small></div>
+          <div class="chip">behavior_output · plant_step<small>probe (L2/L3)</small></div>
+          <div class="chip">scenario_fault · response_received<small>probe/SUT (§11/L1)</small></div>
+          <div class="chip">run_pass / run_fail<small>Coordinator terminal</small></div>
+        </div>
+      </div>
+      <div>
+        <p class="col-h">evaluate · 판정 축</p>
+        <div class="engine">
+          <div class="band v">
+            <p class="lbl">◆ terminal + 증거 (§5.2 · L0)</p>
+            <ul class="checks">
+              <li>run_pass→<b>PASSED</b> · verify fallback</li>
+              <li>lifecycle 순서</li>
+              <li><b>PASS without evidence</b> 차단</li>
+              <li>lease 누수 · domain 일관성</li>
+            </ul>
+          </div>
+          <div class="arrow-mid">↓</div>
+          <div class="band t">
+            <p class="lbl">▶ analyze_* (축별 정보+위반)</p>
+            <div class="steps">
+              <span>lockstep</span><span>staging</span><span>behavior</span>
+              <span>scenario</span><span>protocol</span><span>plant</span><span>attestation</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <p class="col-h">출력 · verdict</p>
+        <div class="outputs">
+          <div class="chip out">verdict<small>PASSED/FAILED/ABORTED/INCOMPLETE</small></div>
+          <div class="chip out">conformant<small>= PASSED &amp; 위반 0</small></div>
+          <div class="chip out">fidelity_evidenced<small>none·L0·L1·L2·L3·L4 (최고)</small></div>
+          <div class="chip hash">violations[]<small>위반 목록</small></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="note"><b>terminal 만 믿지 않는다</b>: <code class="inl">run_pass</code> 여도 <code class="inl">sample_received</code>·
+  <code class="inl">endpoint_matched</code>·<code class="inl">verify_pass</code> 가 없으면 위반 — "matched-but-no-data"를
+  <b>판정 레벨</b>에서 잡는 그물. <b>verdict</b>(끝났나)와 <b>conformant</b>(제대로 끝났나)는 다르다. fleet 은 완전성
+  (기대 instance_id 다 나왔나)+전원 conformant 로 판정(§13). L4 는 단일 trace 로 안 줌(→ parity.py, 10장).</p>
+
+  <p class="foot">evaluate.py (analyze_*·evaluate_run·evaluate_fleet) · to_junit.py &nbsp;|&nbsp; 문서: docs/sils-understanding.md (1–6장) &nbsp;|&nbsp; 충실도 → 7장 · golden → 8장</p>
+</div>
+</body>
+</html>

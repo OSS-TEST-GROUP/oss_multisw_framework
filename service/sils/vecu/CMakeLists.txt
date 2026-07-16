@@ -79,29 +79,37 @@ if(SILS_ENABLE_FMU)
     endif()
 endif()
 
-# The probe now drives its tick loop through IClockSource (src/clock_source.hpp),
-# whose LockstepClockSource adapter uses the TickControl types -- so the probe
-# compiles/links both the VissRequest and TickControl generated sources.
+# ── libsils_vecu (OSS SDK 경계, P1a) ─────────────────────────────────────────
+# 헥사고날 포트(src/*.hpp: IClockSource/IBehavior/IPlant/IScenario)는 header-only 라,
+# INTERFACE 라이브러리로 그 include 경로 + DDS 사용요건을 한 handle 로 묶는다. 이러면
+# 외부 개발자(그리고 아래 실행파일들)가 `target_link_libraries(x sils_vecu)` 한 번으로
+# 포트 헤더 + fastdds/fastcdr + FMU 플래그를 얻는다(docs/sils-extension-model.md P1).
+#   - 지금은 INTERFACE(헤더+사용요건)만. tick 루프를 RunProbe() 로 뽑아 컴파일 단위로
+#     옮기는 것은 P1b(별도, 빌드 검증 필요). generated IDL 소스는 아직 소비자별로 컴파일.
+add_library(sils_vecu INTERFACE)
+target_include_directories(sils_vecu INTERFACE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src ${SILS_VISS_GEN_DIR} ${SILS_TICK_GEN_DIR})
+target_link_libraries(sils_vecu INTERFACE fastdds fastcdr)
+target_link_options(sils_vecu INTERFACE ${SILS_ALLOW_MULTIDEF})
+if(SILS_ENABLE_FMU)
+    target_compile_definitions(sils_vecu INTERFACE SILS_HAVE_FMU)
+    target_link_libraries(sils_vecu INTERFACE fmi4c)
+endif()
+
+# The probe drives its tick loop through IClockSource (src/clock_source.hpp), whose
+# LockstepClockSource uses TickControl types -- so it links both generated sets.
 add_executable(sils_vecu_viss_probe
     src/viss_probe_main.cc
     ${SILS_VISS_GENERATED_SRCS}
     ${SILS_TICK_GENERATED_SRCS}
 )
-target_include_directories(sils_vecu_viss_probe PRIVATE ${SILS_VISS_GEN_DIR} ${SILS_TICK_GEN_DIR})
-target_link_libraries(sils_vecu_viss_probe PRIVATE fastdds fastcdr)
-target_link_options(sils_vecu_viss_probe PRIVATE ${SILS_ALLOW_MULTIDEF})
-if(SILS_ENABLE_FMU)
-    target_compile_definitions(sils_vecu_viss_probe PRIVATE SILS_HAVE_FMU)
-    target_link_libraries(sils_vecu_viss_probe PRIVATE fmi4c)
-endif()
+target_link_libraries(sils_vecu_viss_probe PRIVATE sils_vecu)
 
 add_executable(sils_vecu_viss_verify
     src/viss_verify_main.cc
     ${SILS_VISS_GENERATED_SRCS}
 )
-target_include_directories(sils_vecu_viss_verify PRIVATE ${SILS_VISS_GEN_DIR})
-target_link_libraries(sils_vecu_viss_verify PRIVATE fastdds fastcdr)
-target_link_options(sils_vecu_viss_verify PRIVATE ${SILS_ALLOW_MULTIDEF})
+target_link_libraries(sils_vecu_viss_verify PRIVATE sils_vecu)
 
 # VISS responder (§11 L1) -- SUT stand-in: subscribes /VIN/Vehicle, publishes
 # correlated responses on the response topic. VissRequest type only (reused for
@@ -110,18 +118,14 @@ add_executable(sils_vecu_viss_responder
     src/viss_responder_main.cc
     ${SILS_VISS_GENERATED_SRCS}
 )
-target_include_directories(sils_vecu_viss_responder PRIVATE ${SILS_VISS_GEN_DIR})
-target_link_libraries(sils_vecu_viss_responder PRIVATE fastdds fastcdr)
-target_link_options(sils_vecu_viss_responder PRIVATE ${SILS_ALLOW_MULTIDEF})
+target_link_libraries(sils_vecu_viss_responder PRIVATE sils_vecu)
 
 # Lockstep ClockMaster (§8.2) -- independent process, TickControl only.
 add_executable(sils_clock_master
     src/sils_clock_master.cc
     ${SILS_TICK_GENERATED_SRCS}
 )
-target_include_directories(sils_clock_master PRIVATE ${SILS_TICK_GEN_DIR})
-target_link_libraries(sils_clock_master PRIVATE fastdds fastcdr)
-target_link_options(sils_clock_master PRIVATE ${SILS_ALLOW_MULTIDEF})
+target_link_libraries(sils_clock_master PRIVATE sils_vecu)
 
 # Test input source (§7.3 staging fixture) -- publishes async input on an input
 # topic; reuses VissRequestTopic (no new IDL).
@@ -129,9 +133,7 @@ add_executable(sils_input_source
     src/sils_input_source.cc
     ${SILS_VISS_GENERATED_SRCS}
 )
-target_include_directories(sils_input_source PRIVATE ${SILS_VISS_GEN_DIR})
-target_link_libraries(sils_input_source PRIVATE fastdds fastcdr)
-target_link_options(sils_input_source PRIVATE ${SILS_ALLOW_MULTIDEF})
+target_link_libraries(sils_input_source PRIVATE sils_vecu)
 
 install(TARGETS sils_vecu_viss_probe sils_vecu_viss_verify sils_vecu_viss_responder
                 sils_clock_master sils_input_source
