@@ -92,7 +92,7 @@ behavior(제어 로직) 작성 방식 · 공통 IDL·계약·QoS · **trace 스�
 | 단계 | 할 일 | 산출 |
 |---|---|---|
 | **P1. 라이브러리 추출** | tick 루프 → `RunProbe()`/run_loop.hpp API, `add_library(sils_vecu)` + install/export, `viss_probe_main.cc` 를 라이브러리 소비자로 축소 | `libsils_vecu` |
-| **P2. 개발자 템플릿** | `examples/my-ecu-template/`(main.cc·CMake·Dockerfile·descriptor) + brake 워크드 예제 | 외부 개발 시작점 |
+| **P2. 개발자 템플릿** | `service/sils/examples/brake-ecu/`(behavior·plant·main·CMake·Dockerfile·descriptor·README) + `examples/README.md` "내 ECU 시작하기" 가이드 | 외부 개발 시작점 |
 | **P3. Plant 세분화 정리** | 코드 경로/FMU 경로 문서·예제 각각, `MakeFmuPlant(cfg)` 공개 API | plant 선택 가이드 |
 | **P4. wire 타입 일반화** | transport 를 계약 `registered_type` 구동으로 (커스텀 IDL 지원) | 네이티브 신규 타입 |
 | **P5. 스키마 명세 + conformance kit** | trace 이벤트를 버전 있는 공개 명세로, evaluate/parity 를 "외부 컨테이너 검사기"로 패키징 | 계약+스키마 경계 확정 |
@@ -108,6 +108,6 @@ P1 이 토대(나머지가 그 위에 얹힘). P4·P5 는 계약-레벨 경계�
 | FMU 경로(FmuPlant·fmu_map·fmu_gate) | ✅ 존재 |
 | **P1a `sils_vecu` 라이브러리 타깃** | ✅ CMake INTERFACE 라이브러리(포트 헤더 + fastdds/fastcdr + FMU 플래그 handle), 5개 실행파일이 링크로 dogfood. **빌드 통과 확인** |
 | **P1b RunProbe/run_loop.hpp 추출**(tick 루프 → 라이브러리) | ✅ `config.hpp`(ConfigFromEnv→ProbeConfig) + `run_loop.hpp`(RunProbe: DDS·tick 루프·trace·teardown) 추출, `viss_probe_main.cc` 626→~40줄 소비자로 축소. behavior/plant 주입, clock/scenario 는 cfg 내부 생성. **빌드 통과 확인** |
-| P2 개발자 템플릿 | ⬜ |
+| **P2 개발자 템플릿** | ✅ `service/sils/examples/brake-ecu/` 워크드 예제(BrakeBehavior/BrakePlant 코드경로 + main + CMake + descriptor + Dockerfile/entrypoint + README) + `examples/README.md` 가이드. `sils_vecu` 를 링크하는 첫 외부 소비자, `SILS_BUILD_EXAMPLES=ON` 로 SiLS 빌드에 포함(dogfood). **빌드 통과 확인** |
 | P4 wire 타입 일반화 | ⬜ |
 | P5 스키마 명세·conformance kit | ⬜ |

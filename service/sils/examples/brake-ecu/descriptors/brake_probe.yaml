@@ -1,0 +1,53 @@
+# brake-ecu — example developer ECU descriptor (L3 plant-coupled, code-path plant).
+#
+# This is the run definition for the brake_ecu binary. It follows the same Descriptor
+# shape as the built-in probes (service/sils/vecu/descriptors/), but brake_ecu is a
+# CUSTOM ECU: it constructs BrakeBehavior/BrakePlant directly in its own main() rather
+# than selecting a built-in via SILS_BEHAVIOR/SILS_PLANT. So the behavior/plant `type`
+# below is documentary (it names the developer's classes); the values that actually
+# drive the binary are the parameters, which reach it as env at deploy time:
+#
+#   COMMON (SDK ProbeConfig, wired by the Topology Compiler): clock, period, endpoint,
+#     controller gains -> SILS_CTRL_KP / SILS_CTRL_SETPOINT, drag -> SILS_PLANT_DRAG,
+#     initial speed -> SILS_PLANT_INIT.
+#   ECU-SPECIFIC (this ECU's own env contract, read via GetEnvDoubleOr in main.cc):
+#     BRAKE_GAIN, BRAKE_MAX_FORCE  (see `env:` below).
+
+ecu: brake_ecu
+instance_id: brake-1
+fidelity: L3                       # Plant-Coupled Fidelity (closed loop around IPlant)
+
+clock: { mode: wall }
+
+buses:
+  - name: mmf-viss
+    type: dds
+    endpoints:
+      - contract_id: viss-request  # reuses the VISS wire type; publishes brake commands
+        direction: publish
+
+behavior:
+  type: brake-controller           # developer's BrakeBehavior (P controller, brake-only)
+  spec:
+    period_ms: 100
+    kp: 4.0                        # -> SILS_CTRL_KP    (proportional gain)
+    setpoint: 5.0                  # -> SILS_CTRL_SETPOINT (target speed, m/s)
+
+plant:
+  type: brake-vehicle              # developer's BrakePlant (code path, first-order)
+  spec:
+    drag: 0.2                      # -> SILS_PLANT_DRAG
+    initial: 30.0                  # -> SILS_PLANT_INIT (start at 30 m/s, brake to setpoint)
+
+# ECU-specific env contract (not part of the SDK ProbeConfig). main.cc reads these with
+# sils::GetEnvDoubleOr; the deployment sets them alongside the compiler-wired SILS_*.
+env:
+  BRAKE_GAIN: "0.02"               # brake force -> deceleration gain
+  BRAKE_MAX_FORCE: "100.0"         # actuator saturation
+
+# Target attestation (§11 L4): sim defaults (NOT target-like). Set arch=aarch64/
+# gateway=real for a real target-parity run (parity.py).
+attestation:
+  arch: x86_64
+  gateway: sim
+  protocol: sim
