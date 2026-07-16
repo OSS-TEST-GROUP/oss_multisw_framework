@@ -27,7 +27,7 @@ case "$(uname -s)" in
                 *) echo "unsupported arch $(uname -m)"; exit 1 ;;
             esac
             EXT=so; SOFLAGS="-shared -fPIC" ;;
-    Darwin) PLATFORM=darwin64; EXT=dylib; SOFLAGS="-dynamiclib -fPIC" ;;
+    Darwin) PLATFORM=darwin64; EXT=dylib; SOFLAGS="-dynamiclib -fPIC"; ARCHFLAGS="" ;;
     *) echo "unsupported OS $(uname -s)"; exit 1 ;;
 esac
 
