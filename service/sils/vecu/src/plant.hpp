@@ -250,12 +250,31 @@ private:
 };
 #endif  // SILS_HAVE_FMU
 
+// Public convenience for the FMU plant path (extension-model §3.C). A developer ECU
+// that ships an exported .fmu writes `auto p = sils::MakeFmuPlant(cfg.fmu, err)` and
+// gets an IPlant with no IPlant subclass to author -- the symmetric counterpart of the
+// code path's `std::make_unique<MyPlant>(...)`. Returns nullptr on load/config error
+// (message in `error`), or when built without -DSILS_ENABLE_FMU. This builds the exact
+// same FmuPlant that MakePlant("fmu", ...) does; MakePlant delegates here.
+inline std::unique_ptr<IPlant> MakeFmuPlant([[maybe_unused]] const FmuConfig& fmu,
+                                            std::string& error) {
+#ifdef SILS_HAVE_FMU
+    auto p = std::make_unique<FmuPlant>();
+    if (!p->Load(fmu, error)) return nullptr;
+    return p;
+#else
+    error = "FMU plant requested but FMU support not compiled in "
+            "(rebuild with -DSILS_ENABLE_FMU and fmi4c available)";
+    return nullptr;
+#endif
+}
+
 // Factory. kind "first-order" (live, drag=a), "replay" (needs replay_file), or "fmu"
 // (needs fmu config; requires -DSILS_ENABLE_FMU / fmi4c). Any other value (including
 // "none") returns nullptr -> plant coupling off (open loop).
 inline std::unique_ptr<IPlant> MakePlant(
     const std::string& kind, double drag, const std::string& replay_file,
-    [[maybe_unused]] const FmuConfig& fmu, std::string& error) {
+    const FmuConfig& fmu, std::string& error) {
     if (kind == "first-order") {
         return std::make_unique<AnalyticPlant>(drag);
     }
@@ -265,15 +284,7 @@ inline std::unique_ptr<IPlant> MakePlant(
         return p;
     }
     if (kind == "fmu") {
-#ifdef SILS_HAVE_FMU
-        auto p = std::make_unique<FmuPlant>();
-        if (!p->Load(fmu, error)) return nullptr;
-        return p;
-#else
-        error = "FMU plant requested but FMU support not compiled in "
-                "(rebuild with -DSILS_ENABLE_FMU and fmi4c available)";
-        return nullptr;
-#endif
+        return MakeFmuPlant(fmu, error);
     }
     return nullptr;
 }

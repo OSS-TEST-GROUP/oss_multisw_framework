@@ -68,7 +68,16 @@ probe's, only the binary name differs).
 
 ## The two plant paths
 
-`main.cc` uses the **code path** (`std::make_unique<BrakePlant>(...)`). Switching to the
-**FMU path** is one line — `auto plant = sils::MakeFmuPlant(cfg);` — with an exported
-`.fmu` instead of `brake_plant.hpp`. Everything else (behavior, lib, trace, container)
-is unchanged. See [extension-model §3.C](../../../../docs/sils-extension-model.md).
+This example ships **both**, proving "only the plant line changes":
+
+- **Code path** — `src/main.cc` + `src/brake_plant.hpp`, built as `brake_ecu`.
+  `auto plant = std::make_unique<BrakePlant>(gain, drag);`
+- **FMU path** — `src/main_fmu.cc` + [`models/brake-fmu/`](models/brake-fmu/), built as
+  `brake_ecu_fmu` (only under `-DSILS_ENABLE_FMU`).
+  `auto plant = sils::MakeFmuPlant(cfg, err);`
+
+`diff src/main.cc src/main_fmu.cc` — the plant construction is the only functional
+difference. The `.fmu` is built from source (`models/brake-fmu/build.sh`, no binary in
+git); its value references map to `SILS_FMU_INPUT_VR`/`SILS_FMU_OUTPUT_VR`. See
+[models/brake-fmu/README.md](models/brake-fmu/README.md) and
+[extension-model §3.C](../../../../docs/sils-extension-model.md).

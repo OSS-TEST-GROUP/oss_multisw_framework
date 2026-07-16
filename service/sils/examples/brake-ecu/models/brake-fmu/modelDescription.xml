@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Minimal FMI 2.0 Co-Simulation model description for the brake vehicle plant.
+     Same physics as the code-path BrakePlant (dv/dt = -(gain*force) - drag*speed),
+     here exported as an FMU. The value references below are what the ECU passes to
+     the SDK as SILS_FMU_INPUT_VR / SILS_FMU_OUTPUT_VR:
+        force (input)  -> valueReference 1  -> SILS_FMU_INPUT_VR=1
+        speed (output) -> valueReference 0  -> SILS_FMU_OUTPUT_VR=0
+     Initial speed (30 m/s) is the output's start value -- FmuPlant reads it after
+     initialization (its Reset is a no-op; init comes from here), so SILS_PLANT_INIT
+     does not apply on the FMU path. -->
+<fmiModelDescription
+    fmiVersion="2.0"
+    modelName="BrakeVehicle"
+    guid="{b1a4e0de-0000-4000-8000-6272616b6501}"
+    description="First-order longitudinal brake vehicle plant"
+    generationTool="hand-written FMI 2.0 co-sim example"
+    numberOfEventIndicators="0">
+
+  <CoSimulation
+      modelIdentifier="brake_vehicle"
+      canHandleVariableCommunicationStepSize="true"
+      canGetAndSetFMUstate="false"
+      canSerializeFMUstate="false"/>
+
+  <ModelVariables>
+    <!-- index 1 -->
+    <ScalarVariable name="speed" valueReference="0" causality="output"
+                    variability="continuous" initial="exact">
+      <Real start="30.0"/>
+    </ScalarVariable>
+    <!-- index 2 -->
+    <ScalarVariable name="force" valueReference="1" causality="input"
+                    variability="continuous">
+      <Real start="0.0"/>
+    </ScalarVariable>
+  </ModelVariables>
+
+  <ModelStructure>
+    <Outputs>
+      <Unknown index="1"/>
+    </Outputs>
+    <InitialUnknowns>
+      <Unknown index="1"/>
+    </InitialUnknowns>
+  </ModelStructure>
+
+</fmiModelDescription>
