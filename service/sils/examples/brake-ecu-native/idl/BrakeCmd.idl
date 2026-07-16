@@ -1,0 +1,11 @@
+// BrakeCmd -- a developer-owned native DDS wire type (libsils_vecu example, P4b).
+//
+// Unlike the VISS-envelope wire (a VissRequestTopic whose string payload carries JSON),
+// this is a real typed message with named fields, the kind a vECU must publish to stand
+// in faithfully for a real ECU whose contract registers this exact type. It is generated
+// by THIS example's CMake (fastddsgen), not the core idl/dds tree -- the "bring your own
+// IDL" path: no core file changes.
+struct BrakeCmd {
+    double force;              // commanded brake force (the behavior's output value)
+    unsigned long long seq;    // tick sequence (L1 correlation, replaces the JSON requestId)
+};
