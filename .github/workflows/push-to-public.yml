@@ -109,36 +109,6 @@ jobs:
           echo "dst=$DST" >> "$GITHUB_OUTPUT"
           echo "공개 대상: $SRC → $PUBLIC_OWNER/$PUBLIC_REPO:$DST"
 
-      - name: Deep debug (임시)
-        env:
-          PUBLIC_BOT_TOKEN: ${{ secrets.PUBLIC_BOT_TOKEN }}
-        run: |
-          echo "===== 1. 토큰 기본 정보 ====="
-          echo "length: ${#PUBLIC_BOT_TOKEN}"
-          echo "prefix: ${PUBLIC_BOT_TOKEN:0:11}"
-          echo "suffix: ${PUBLIC_BOT_TOKEN: -4}"
-
-          echo "===== 2. 토큰으로 인증된 계정 확인 ====="
-          # 이 토큰이 실제로 누구인지 (봇 계정이 맞는지)
-          curl -s -H "Authorization: Bearer ${PUBLIC_BOT_TOKEN}" \
-               https://api.github.com/user | grep '"login"' || echo "user 조회 실패"
-
-          echo "===== 3. 대상 저장소 접근 확인 (API) ====="
-          # 토큰으로 저장소가 보이는지 + 권한 확인
-          curl -s -o /tmp/repo.json -w "HTTP status: %{http_code}\n" \
-               -H "Authorization: Bearer ${PUBLIC_BOT_TOKEN}" \
-               https://api.github.com/repos/OSS-TEST-GROUP/oss_multisw_framework
-          echo "--- 응답에서 주요 필드 ---"
-          grep '"full_name"' /tmp/repo.json || echo "full_name 없음(접근 불가)"
-          grep '"message"' /tmp/repo.json || echo "(에러 메시지 없음)"
-          grep -A3 '"permissions"' /tmp/repo.json || echo "permissions 없음"
-
-          echo "===== 4. git ls-remote 직접 테스트 ====="
-          git ls-remote "https://x-access-token:${PUBLIC_BOT_TOKEN}@github.com/OSS-TEST-GROUP/oss_multisw_framework.git" 2>&1 | head -5 || echo "ls-remote 실패"
-
-          echo "===== 5. 현재 remote 목록 ====="
-          git remote -v
-
       - name: Push to public (feature branch only)
         env:
           # 봇 계정 PAT (공개 저장소 feature/* push 권한). Secrets 에 등록.
@@ -146,11 +116,13 @@ jobs:
         run: |
           SRC="${{ steps.src.outputs.src }}"
           DST="${{ steps.src.outputs.dst }}"
-          # 토큰을 URL 에 끼워 인증 (로그에 노출되지 않도록 origin 별칭 사용)
-          git remote add public "https://x-access-token:${PUBLIC_BOT_TOKEN}@github.com/${PUBLIC_OWNER}/${PUBLIC_REPO}.git"
           git checkout "$SRC"
           # 공개 저장소의 feature/* 로만 push (develop 직접 push 금지)
-          git push public "HEAD:${DST}"
+          # actions/checkout 이 심어둔 extraheader(사내 GITHUB_TOKEN)를 무력화하고
+          # 봇 토큰이 담긴 URL 로만 인증한다.
+          git -c http.https://github.com/.extraheader= \
+              push "https://oauth2:${PUBLIC_BOT_TOKEN}@github.com/${PUBLIC_OWNER}/${PUBLIC_REPO}.git" \
+              "HEAD:${DST}"
 
       - name: Create PR on public repo
         env:
