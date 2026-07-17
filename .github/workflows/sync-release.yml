@@ -40,8 +40,8 @@ jobs:
         env:
           PUBLIC_BOT_TOKEN: ${{ secrets.PUBLIC_BOT_TOKEN }}
         run: |
-          git remote add public "https://x-access-token:${PUBLIC_BOT_TOKEN}@github.com/${PUBLIC_OWNER}/${PUBLIC_REPO}.git"
-          git fetch public --tags
+          git remote add public "https://oauth2:${PUBLIC_BOT_TOKEN}@github.com/${PUBLIC_OWNER}/${PUBLIC_REPO}.git"
+          git -c http.https://github.com/.extraheader= fetch public --tags
 
       - name: Resolve latest stable release
         id: rel
