@@ -19,8 +19,9 @@ using namespace eprosima::fastdds::dds;
 
 ForwardListener::ForwardListener(DataWriter* writer,
                                  DynamicType::_ref_type type,
-                                 std::string tag)
-    : writer_(writer), type_(type), tag_(std::move(tag)) {}
+                                 std::string tag,
+                                 DdsBridge* bridge)
+    : writer_(writer), type_(type), tag_(std::move(tag)), bridge_(bridge) {}
 
 void ForwardListener::on_data_available(DataReader* reader) {
     DynamicData::_ref_type data = DynamicDataFactory::get_instance()->create_data(type_);
@@ -31,18 +32,33 @@ void ForwardListener::on_data_available(DataReader* reader) {
     // Trust-on-first-use: cache the first observed publisher's prefix and
     // drop samples from any other participant. See header for the why.
     // GuidPrefix is the first 12 bytes of the 16-byte InstanceHandle_t value.
+    int source_count = 0;
     {
         std::lock_guard<std::mutex> lk(trust_mutex_);
         const uint8_t* raw = reinterpret_cast<const uint8_t*>(&info.publication_handle);
+
+        // Multi-source detection (independent of the trust pin): remember every
+        // distinct publisher prefix. >1 ⇒ duplicate core/adsw on the domain.
+        std::array<uint8_t, 12> prefix{};
+        std::copy_n(raw, 12, prefix.begin());
+        if (seen_prefixes_.insert(prefix).second && seen_prefixes_.size() > 1) {
+            std::cout << "[bridge] " << tag_ << " ⚠ MULTIPLE publishers on domain (n="
+                      << seen_prefixes_.size() << ") — duplicate core/adsw?\n";
+            source_count = static_cast<int>(seen_prefixes_.size());
+        }
+
         if (!trust_set_) {
             std::copy_n(raw, 12, trusted_prefix_.begin());
             trust_set_ = true;
             std::cout << "[bridge] " << tag_ << " trust pinned\n";
         } else if (!std::equal(trusted_prefix_.begin(), trusted_prefix_.end(), raw)) {
             std::cout << "[bridge] " << tag_ << " dropped (untrusted publisher)\n";
+            // Still report the elevated source count (set updated above) before dropping.
+            if (source_count > 1 && bridge_) bridge_->ReportSourceCount(tag_, source_count);
             return;
         }
     }
+    if (source_count > 1 && bridge_) bridge_->ReportSourceCount(tag_, source_count);
 
     if (writer_->write(&data) == RETCODE_OK) {
         std::cout << "[bridge] " << tag_ << " forwarded\n";
@@ -56,18 +72,32 @@ void ForwardListener::on_subscription_matched(
     // Only react to a publisher leaving (a match removal).
     if (info.current_count_change >= 0) return;
 
-    std::lock_guard<std::mutex> lk(trust_mutex_);
-    if (!trust_set_) return;
+    int source_count = -1;
+    {
+        std::lock_guard<std::mutex> lk(trust_mutex_);
 
-    // GuidPrefix is the first 12 bytes of the 16-byte InstanceHandle_t value
-    // — same slice used when the pin was set in on_data_available.
-    const uint8_t* raw =
-        reinterpret_cast<const uint8_t*>(&info.last_publication_handle);
-    if (std::equal(trusted_prefix_.begin(), trusted_prefix_.end(), raw)) {
-        trust_set_ = false;
-        std::cout << "[bridge] " << tag_
-                  << " trusted publisher left — re-pinning on next sample\n";
+        // GuidPrefix is the first 12 bytes of the 16-byte InstanceHandle_t value
+        // — same slice used when the pin was set in on_data_available.
+        const uint8_t* raw =
+            reinterpret_cast<const uint8_t*>(&info.last_publication_handle);
+
+        // Drop the departed publisher from the multi-source set so the count
+        // (and any lfc warning) auto-clears when a duplicate goes away.
+        std::array<uint8_t, 12> prefix{};
+        std::copy_n(raw, 12, prefix.begin());
+        if (seen_prefixes_.erase(prefix) > 0) {
+            source_count = static_cast<int>(seen_prefixes_.size());
+        }
+
+        if (trust_set_ &&
+            std::equal(trusted_prefix_.begin(), trusted_prefix_.end(), raw)) {
+            trust_set_ = false;
+            std::cout << "[bridge] " << tag_
+                      << " trusted publisher left — re-pinning on next sample\n";
+        }
     }
+    // Report the new (lower) count so a stale ">1" warning clears in lfc.
+    if (source_count >= 0 && bridge_) bridge_->ReportSourceCount(tag_, source_count);
 }
 
 // ── DdsBridge ──────────────────────────────────────────────────────────
@@ -179,13 +209,13 @@ bool DdsBridge::AddPair(const PairConfig& cfg) {
     if (cfg.ros_to_raw) {
         writer = publisher_->create_datawriter(raw_topic, wqos);
         tag = cfg.struct_name + " (ros→raw)";
-        auto listener = std::make_unique<ForwardListener>(writer, dyn_type, tag);
+        auto listener = std::make_unique<ForwardListener>(writer, dyn_type, tag, this);
         reader = subscriber_->create_datareader(ros_topic, rqos, listener.get());
         listeners_.push_back(std::move(listener));
     } else {
         writer = publisher_->create_datawriter(ros_topic, wqos);
         tag = cfg.struct_name + " (raw→ros)";
-        auto listener = std::make_unique<ForwardListener>(writer, dyn_type, tag);
+        auto listener = std::make_unique<ForwardListener>(writer, dyn_type, tag, this);
         reader = subscriber_->create_datareader(raw_topic, rqos, listener.get());
         listeners_.push_back(std::move(listener));
     }
@@ -195,4 +225,65 @@ bool DdsBridge::AddPair(const PairConfig& cfg) {
     }
     std::cout << "[bridge] forward " << tag << "\n";
     return true;
+}
+
+bool DdsBridge::EnableSourceDiag(const std::string& ros_topic_no_slash) {
+    // std_msgs/String — parsed from idl_root/std_msgs/String.idl, registered
+    // under the ROS-canonical name so rosbridge resolves it as std_msgs/String.
+    auto builder = DynamicTypeBuilderFactory::get_instance()
+        ->create_type_w_uri(idl_root_ + "/std_msgs/String.idl", "String_", {idl_root_});
+    if (!builder) {
+        std::cerr << "[bridge] EnableSourceDiag: failed to parse std_msgs/String.idl\n";
+        return false;
+    }
+    diag_type_ = builder->build();
+    TypeSupport ts(new DynamicPubSubType(diag_type_));
+    ts.register_type(participant_, "std_msgs::msg::dds_::String_");
+
+    const std::string ros_topic = "rt/" + ros_topic_no_slash;
+    Topic* topic = participant_->create_topic(ros_topic, "std_msgs::msg::dds_::String_",
+                                              TOPIC_QOS_DEFAULT);
+    if (!topic) {
+        std::cerr << "[bridge] EnableSourceDiag: create_topic failed for " << ros_topic << "\n";
+        return false;
+    }
+    DataWriterQos wqos = DATAWRITER_QOS_DEFAULT;
+    wqos.reliability().kind = RELIABLE_RELIABILITY_QOS;
+    // Latch the latest warning so a late-joining lfc_monitor immediately sees
+    // the current multi-source status (KEEP_LAST(1) bounds it to one sample).
+    wqos.durability().kind = TRANSIENT_LOCAL_DURABILITY_QOS;
+    wqos.history().kind = KEEP_LAST_HISTORY_QOS;
+    wqos.history().depth = 1;
+    diag_writer_ = publisher_->create_datawriter(topic, wqos);
+    if (!diag_writer_) {
+        std::cerr << "[bridge] EnableSourceDiag: create_datawriter failed\n";
+        return false;
+    }
+    std::cout << "[bridge] source-diag enabled on " << ros_topic << "\n";
+    return true;
+}
+
+void DdsBridge::ReportSourceCount(const std::string& tag, int count) {
+    if (!diag_writer_) return;
+    std::lock_guard<std::mutex> lk(diag_mutex_);
+
+    // Only emit on state change: enter warned (>1) or clear (<=1). Avoids
+    // spamming lfc on every sample from the duplicate publisher.
+    const bool warned = count > 1;
+    const bool was_warned = diag_warned_tags_.count(tag) > 0;
+    if (warned == was_warned) return;
+    if (warned) diag_warned_tags_.insert(tag);
+    else        diag_warned_tags_.erase(tag);
+
+    // Minimal JSON (no external json dep in the bridge). tag is bridge-internal
+    // (e.g. "LifecycleDiagReport (raw→ros)") — safe ASCII, no escaping needed.
+    std::string json = "{\"topic\":\"" + tag + "\",\"publishers\":"
+                     + std::to_string(count) + ",\"multi\":"
+                     + (warned ? "true" : "false") + "}";
+
+    DynamicData::_ref_type d = DynamicDataFactory::get_instance()->create_data(diag_type_);
+    d->set_string_value(d->get_member_id_by_name("data"), json);
+    if (diag_writer_->write(&d) == RETCODE_OK) {
+        std::cout << "[bridge] source-diag: " << json << "\n";
+    }
 }

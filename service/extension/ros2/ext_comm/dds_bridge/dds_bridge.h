@@ -36,8 +36,11 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <string>
 #include <vector>
+
+class DdsBridge;  // forward decl — ForwardListener reports multi-source counts back
 
 // One bidirectional bridge configuration.
 //
@@ -68,7 +71,8 @@ class ForwardListener : public eprosima::fastdds::dds::DataReaderListener {
 public:
     ForwardListener(eprosima::fastdds::dds::DataWriter* writer,
                     eprosima::fastdds::dds::DynamicType::_ref_type type,
-                    std::string tag);
+                    std::string tag,
+                    DdsBridge* bridge = nullptr);
 
     void on_data_available(eprosima::fastdds::dds::DataReader* reader) override;
 
@@ -105,6 +109,16 @@ private:
     std::mutex              trust_mutex_;
     bool                    trust_set_ = false;
     std::array<uint8_t, 12> trusted_prefix_{};
+
+    // Multi-source detection: the SET of every distinct publisher prefix
+    // currently seen on this topic (added on first sample, removed on
+    // unmatch). >1 means multiple core/adsw instances publish the same
+    // lifecycle topic on this DDS domain — the exact condition that made
+    // lfc_monitor's autoware state flap RUNNING↔NOT_RUNNING when a stray
+    // MMF (another board / dev PC) shared the domain. On any change the
+    // count is reported to DdsBridge, which surfaces it to lfc.
+    std::set<std::array<uint8_t, 12>> seen_prefixes_;
+    DdsBridge*                        bridge_ = nullptr;
 };
 
 // Owns a single FastDDS participant + publisher/subscriber and a set of
@@ -116,12 +130,30 @@ public:
     bool Initialize(const std::string& idl_root);
     bool AddPair(const PairConfig& cfg);
 
+    // Enable a std_msgs/String diagnostic publisher on rt/<topic>. Once
+    // enabled, every bridged topic that observes more than one distinct
+    // publisher (i.e. a duplicate core/adsw on the DDS domain) causes a
+    // JSON warning to be published here so lfc_monitor can flag it. No-op
+    // to detection if not enabled. Call after Initialize(), before AddPair().
+    bool EnableSourceDiag(const std::string& ros_topic_no_slash);
+
+    // Called by ForwardListener when its distinct-publisher count changes.
+    // Publishes {"topic":<tag>,"publishers":<n>} on the diag topic (only
+    // when >1, plus one "cleared" message when it drops back to <=1).
+    void ReportSourceCount(const std::string& tag, int count);
+
 private:
     std::string idl_root_;
     eprosima::fastdds::dds::DomainParticipant* participant_ = nullptr;
     eprosima::fastdds::dds::Publisher*         publisher_   = nullptr;
     eprosima::fastdds::dds::Subscriber*        subscriber_  = nullptr;
     std::vector<std::unique_ptr<ForwardListener>> listeners_;
+
+    // Source-diagnostic publisher (std_msgs/String). Null until EnableSourceDiag.
+    eprosima::fastdds::dds::DataWriter*        diag_writer_ = nullptr;
+    eprosima::fastdds::dds::DynamicType::_ref_type diag_type_;
+    std::mutex                                 diag_mutex_;
+    std::set<std::string>                      diag_warned_tags_;  // tags currently in warned state
 };
 
 #endif  // DDS_BRIDGE_H_
