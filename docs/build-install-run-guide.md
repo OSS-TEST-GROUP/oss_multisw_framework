@@ -93,13 +93,22 @@ docker save oss-mmf-core:arm64-local oss-mmf-ext-ros2:arm64-local \
 > 해야 한다. 구/신 혼용 시 DDS 타입 불일치로 lifecycle 통신이 조용히 끊긴다.
 
 ### 2-4. 실행
-```bash
-# core+ext-ros2 보드: 기동 스크립트 1회 (컨테이너 생성 + unless-stopped 부여)
-bash ~/run-mmf.sh                        # stop/rm → SHM sweep → core → 12s → ext-ros2
-ROS_DOMAIN_ID=1 bash ~/run-mmf.sh        # 보드별 DDS domain 격리가 필요하면
 
-# ext-agl 보드(HMI):
-bash /opt/adsw/run-ext-agl.sh
+기동 스크립트는 리포에 포함되어 있다 — 보드로 복사해 실행한다:
+- [docker/run-mmf.sh](../docker/run-mmf.sh) — core + ext-ros2
+- [docker/run-ext-agl.sh](../docker/run-ext-agl.sh) — ext-agl (HMI 보드)
+
+```bash
+# core+ext-ros2 보드
+scp docker/run-mmf.sh <user>@<board>:~/
+ssh <user>@<board> 'bash ~/run-mmf.sh'          # stop/rm → SHM sweep → core → 12s → ext-ros2
+ssh <user>@<board> 'ROS_DOMAIN_ID=1 bash ~/run-mmf.sh'   # 보드별 DDS domain 격리
+# 로컬/검증 이미지로:  EXTROS2_IMG=oss-mmf-ext-ros2:diag2-local bash ~/run-mmf.sh
+# 서비스목록 오버라이드: SAVED_SERVICE_LIST=~/adsw-service-list.yaml bash ~/run-mmf.sh
+
+# ext-agl 보드(HMI)
+scp docker/run-ext-agl.sh <user>@<hmi-board>:~/
+ssh <user>@<hmi-board> 'bash ~/run-ext-agl.sh'
 ```
 - 스크립트가 `--restart unless-stopped` 를 부여하므로 이후 재부팅 자동시작 —
   상세·주의사항·compose 대안은 [board-autostart-guide.md](board-autostart-guide.md).
@@ -110,9 +119,11 @@ bash /opt/adsw/run-ext-agl.sh
   ext-ros2 로 autoware 를 관리·기동하는 운영법·필수 전제조건·트러블슈팅은
   **[ext-ros2-adsw-operation-guide.md](ext-ros2-adsw-operation-guide.md)** 참조.
 - **DDS domain**: raw Fast-DDS 서비스는 `ROS_DOMAIN_ID` 가 아닌 **`MMF_DDS_DOMAIN_ID`**
-  env(기본 0)를 읽는다. 같은 보드의 컨테이너들은 반드시 동일 값. 같은 서브넷에 ROS2
-  mw_type adsw 보드가 2대 이상이면 보드별로 다른 domain 을 줘야 서비스 상태
-  flapping 이 안 생긴다.
+  (lifecycle/diagnostics/adsw/ota) 와 **`VISS_DDS_DOMAIN_ID`**(vehicle_info) env(기본 0)를
+  읽는다. run-mmf.sh/run-ext-agl.sh 는 `ROS_DOMAIN_ID` 값을 이 셋 모두에 동일하게 주입하므로
+  `ROS_DOMAIN_ID=<n>` 하나만 지정하면 전 스택이 한 도메인에 격리된다. 같은 서브넷에 ROS2
+  mw_type adsw 보드가 2대 이상이면 보드별로 다른 domain 을 줘야 서비스 상태 flapping 이
+  안 생긴다.
 
 ### 2-5. 검증
 ```bash
