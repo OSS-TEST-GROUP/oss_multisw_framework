@@ -108,6 +108,13 @@ jobs:
           echo "src=$SRC" >> "$GITHUB_OUTPUT"
           echo "dst=$DST" >> "$GITHUB_OUTPUT"
           echo "공개 대상: $SRC → $PUBLIC_OWNER/$PUBLIC_REPO:$DST"
+          
+      - name: Debug token length (임시)
+        env:
+          PUBLIC_BOT_TOKEN: ${{ secrets.PUBLIC_BOT_TOKEN }}
+        run: |
+          echo "token length: ${#PUBLIC_BOT_TOKEN}"
+          echo "prefix: ${PUBLIC_BOT_TOKEN:0:10}"
 
       - name: Push to public (feature branch only)
         env:
