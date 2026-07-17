@@ -42,7 +42,7 @@ jobs:
   #    실제 빌드·테스트 명령은 프로젝트에 맞게 교체하세요.
   # ---------------------------------------------------------------------------
   build:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Build
@@ -51,7 +51,7 @@ jobs:
           # 예) ./gradlew build  /  make  /  npm ci && npm run build
 
   test:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Test
@@ -60,7 +60,7 @@ jobs:
           # 예) ./gradlew test  /  pytest  /  npm test
 
   security-scan:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Secret / dependency scan
@@ -77,7 +77,7 @@ jobs:
   # ---------------------------------------------------------------------------
   publish-approval:
     needs: [build, test, security-scan]
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     environment: publish-approval    # ← 승인 게이트가 걸리는 지점
     steps:
       - name: Approval recorded
@@ -88,7 +88,7 @@ jobs:
   # ---------------------------------------------------------------------------
   push-to-public:
     needs: [publish-approval]
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
