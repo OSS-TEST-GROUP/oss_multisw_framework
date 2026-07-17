@@ -33,7 +33,7 @@ concurrency:
 
 jobs:
   sync:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     permissions:
       contents: write         # 사내 tracking 브랜치에 push 하기 위함
     steps:
