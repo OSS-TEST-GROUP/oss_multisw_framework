@@ -26,7 +26,7 @@ on:
 
 # 공개 저장소 좌표
 env:
-  PUBLIC_REMOTE: git@github.com:OSS-TEST-GROUP/oss_multisw_framework.git
+  PUBLIC_REMOTE: https://github.com/OSS-TEST-GROUP/oss_multisw_framework.git
   PUBLIC_OWNER: OSS-TEST-GROUP
   PUBLIC_REPO: oss_multisw_framework
   PUBLIC_BASE: develop      # 공개 저장소 정본(기본) 브랜치
