@@ -108,13 +108,36 @@ jobs:
           echo "src=$SRC" >> "$GITHUB_OUTPUT"
           echo "dst=$DST" >> "$GITHUB_OUTPUT"
           echo "공개 대상: $SRC → $PUBLIC_OWNER/$PUBLIC_REPO:$DST"
-          
-      - name: Debug token length (임시)
+
+      - name: Deep debug (임시)
         env:
           PUBLIC_BOT_TOKEN: ${{ secrets.PUBLIC_BOT_TOKEN }}
         run: |
-          echo "token length: ${#PUBLIC_BOT_TOKEN}"
-          echo "prefix: ${PUBLIC_BOT_TOKEN:0:10}"
+          echo "===== 1. 토큰 기본 정보 ====="
+          echo "length: ${#PUBLIC_BOT_TOKEN}"
+          echo "prefix: ${PUBLIC_BOT_TOKEN:0:11}"
+          echo "suffix: ${PUBLIC_BOT_TOKEN: -4}"
+
+          echo "===== 2. 토큰으로 인증된 계정 확인 ====="
+          # 이 토큰이 실제로 누구인지 (봇 계정이 맞는지)
+          curl -s -H "Authorization: Bearer ${PUBLIC_BOT_TOKEN}" \
+               https://api.github.com/user | grep '"login"' || echo "user 조회 실패"
+
+          echo "===== 3. 대상 저장소 접근 확인 (API) ====="
+          # 토큰으로 저장소가 보이는지 + 권한 확인
+          curl -s -o /tmp/repo.json -w "HTTP status: %{http_code}\n" \
+               -H "Authorization: Bearer ${PUBLIC_BOT_TOKEN}" \
+               https://api.github.com/repos/OSS-TEST-GROUP/oss_multisw_framework
+          echo "--- 응답에서 주요 필드 ---"
+          grep '"full_name"' /tmp/repo.json || echo "full_name 없음(접근 불가)"
+          grep '"message"' /tmp/repo.json || echo "(에러 메시지 없음)"
+          grep -A3 '"permissions"' /tmp/repo.json || echo "permissions 없음"
+
+          echo "===== 4. git ls-remote 직접 테스트 ====="
+          git ls-remote "https://x-access-token:${PUBLIC_BOT_TOKEN}@github.com/OSS-TEST-GROUP/oss_multisw_framework.git" 2>&1 | head -5 || echo "ls-remote 실패"
+
+          echo "===== 5. 현재 remote 목록 ====="
+          git remote -v
 
       - name: Push to public (feature branch only)
         env:
