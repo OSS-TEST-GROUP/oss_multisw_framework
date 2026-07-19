@@ -1,0 +1,22 @@
+@PACKAGE_INIT@
+
+# find_package(sils_vecu) config for out-of-tree consumers (docs/sils-extension-model.md
+# T1-B). Provides the imported targets:
+#   sils::sils_vecu     -- port headers + FastDDS/fastcdr + TickControl (link this)
+#   sils::sils_viss_idl -- the VISS wire type (link additionally if you use viss_wire.hpp)
+#   sils::sils_tick_idl -- lockstep clock control type (pulled in by sils::sils_vecu)
+#
+# Usage:
+#   find_package(sils_vecu REQUIRED)
+#   add_executable(my_ecu main.cc)
+#   target_link_libraries(my_ecu PRIVATE sils::sils_vecu)            # custom wire type
+#   # or, for the built-in VISS wire:
+#   target_link_libraries(my_ecu PRIVATE sils::sils_vecu sils::sils_viss_idl)
+
+include(CMakeFindDependencyMacro)
+find_dependency(fastcdr 2)
+find_dependency(fastdds 3)
+
+include("${CMAKE_CURRENT_LIST_DIR}/sils_vecuTargets.cmake")
+
+check_required_components(sils_vecu)

@@ -944,10 +944,15 @@ probe 본체가 그대로 새 포트를 조립한다(earned-abstraction, §5.2).
   컴파일하지 않는다**(발행·응답·입력 100% 네이티브).
 - **trace 경계 확정(P5)** — 발행/판정의 공개 계약이 [trace 스키마 v1](sils-trace-schema.md) + conformance
   kit(`validate_trace.py`)으로 명세화됐다.
+- **SDK install/export 완료(T1-B)** — 예전엔 실행파일·예제마다 생성 IDL(`VissRequest*`/`TickControl*`)을
+  `file(GLOB)` 로 **재컴파일**했다. 이제 각 IDL 을 `sils_tick_idl`/`sils_viss_idl` **STATIC 라이브러리로 한 번만
+  컴파일**하고 소비자는 link 만 한다(`sils_vecu` 가 tick 을 전파, VISS wire 소비자만 `sils_viss_idl` 추가).
+  `find_package(sils_vecu)` 도 지원 — `install(EXPORT)` + 헤더 설치 + `sils_vecuConfig.cmake` 로 아웃오브트리
+  레포가 `sils::sils_vecu` 를 link 할 수 있다(FMU 빌드는 fmi4c 의존성으로 export 제외).
 
 **남은 정직한 경계 (아직):**
-- **SDK install/export 미완** — 예제가 생성 IDL 소스(브레이크는 TickControl)를 여전히 재-glob(설치 단계에서
-  제거 예정). `find_package(sils_vecu)` 미지원.
+- 티어1(완성도) 마감됨. 남은 큰 항목은 티어2(실수요 대기): MMF lifecycle 실기동(경로 B)·다중 엔드포인트 —
+  둘 다 [확장 모델](sils-extension-model.md) 의 트리거(실 배포/두 번째 계약)가 생길 때 착수.
 
 ```
 brake ECU                              temp ECU
