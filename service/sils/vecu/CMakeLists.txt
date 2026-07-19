@@ -22,6 +22,9 @@ if(NOT fastdds_FOUND)
     find_package(fastdds 3 REQUIRED)
 endif()
 
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+
 set(SILS_VISS_GEN_DIR "${CMAKE_INSTALL_PREFIX}/generated/idl/vehicle_info_mgr")
 set(SILS_TICK_GEN_DIR "${CMAKE_INSTALL_PREFIX}/generated/idl/sils")
 
@@ -79,62 +82,125 @@ if(SILS_ENABLE_FMU)
     endif()
 endif()
 
+# ── Generated-IDL libraries (T1-B: compile once, link many) ──────────────────
+# The fastddsgen output was previously re-globbed and re-compiled into EVERY
+# executable and every example (docs/sils-extension-model.md T1-B). Compile each IDL
+# ONCE into its own static lib; consumers just link. The include dirs are PUBLIC and
+# carry a BUILD/INSTALL split so both the in-tree build and an installed find_package
+# consumer resolve the generated headers.
+#   - sils_tick_idl : lockstep clock control plane (needed by anything using the tick
+#                     loop) -- propagated to all consumers through sils_vecu below.
+#   - sils_viss_idl : the VISS wire type -- linked only by VISS-wire consumers
+#                     (viss_wire.hpp); a custom-type ECU never links it.
+add_library(sils_tick_idl STATIC ${SILS_TICK_GENERATED_SRCS})
+target_include_directories(sils_tick_idl PUBLIC
+    $<BUILD_INTERFACE:${SILS_TICK_GEN_DIR}>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/sils_vecu/idl>)
+target_link_libraries(sils_tick_idl PUBLIC fastdds fastcdr)
+set_target_properties(sils_tick_idl PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+add_library(sils_viss_idl STATIC ${SILS_VISS_GENERATED_SRCS})
+target_include_directories(sils_viss_idl PUBLIC
+    $<BUILD_INTERFACE:${SILS_VISS_GEN_DIR}>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/sils_vecu/idl>)
+target_link_libraries(sils_viss_idl PUBLIC fastdds fastcdr)
+set_target_properties(sils_viss_idl PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 # ── libsils_vecu (OSS SDK 경계, P1a) ─────────────────────────────────────────
-# 헥사고날 포트(src/*.hpp: IClockSource/IBehavior/IPlant/IScenario)는 header-only 라,
-# INTERFACE 라이브러리로 그 include 경로 + DDS 사용요건을 한 handle 로 묶는다. 이러면
-# 외부 개발자(그리고 아래 실행파일들)가 `target_link_libraries(x sils_vecu)` 한 번으로
-# 포트 헤더 + fastdds/fastcdr + FMU 플래그를 얻는다(docs/sils-extension-model.md P1).
-#   - 지금은 INTERFACE(헤더+사용요건)만. tick 루프를 RunProbe() 로 뽑아 컴파일 단위로
-#     옮기는 것은 P1b(별도, 빌드 검증 필요). generated IDL 소스는 아직 소비자별로 컴파일.
+# 헥사고날 포트(src/*.hpp: IClockSource/IBehavior/IPlant/IScenario/IWireCodec)는
+# header-only 라, INTERFACE 라이브러리로 그 include 경로 + DDS 사용요건을 한 handle 로
+# 묶는다. 외부 개발자(그리고 아래 실행파일들)가 `target_link_libraries(x sils_vecu)`
+# 한 번으로 포트 헤더 + fastdds/fastcdr + TickControl(클록) + FMU 플래그를 얻는다
+# (docs/sils-extension-model.md P1). VISS 타입은 sils_vecu 에 없다 — VISS wire 를 쓰는
+# 소비자만 sils_viss_idl 을 추가로 link (T1-A: run_loop 는 DDS 타입 무명명).
 add_library(sils_vecu INTERFACE)
 target_include_directories(sils_vecu INTERFACE
-    ${CMAKE_CURRENT_SOURCE_DIR}/src ${SILS_VISS_GEN_DIR} ${SILS_TICK_GEN_DIR})
-target_link_libraries(sils_vecu INTERFACE fastdds fastcdr)
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/sils_vecu>)
+target_link_libraries(sils_vecu INTERFACE fastdds fastcdr sils_tick_idl)
 target_link_options(sils_vecu INTERFACE ${SILS_ALLOW_MULTIDEF})
 if(SILS_ENABLE_FMU)
     target_compile_definitions(sils_vecu INTERFACE SILS_HAVE_FMU)
     target_link_libraries(sils_vecu INTERFACE fmi4c)
 endif()
+# Namespaced alias so in-tree code and an out-of-tree find_package consumer name the
+# target identically (sils::sils_vecu).
+add_library(sils::sils_vecu ALIAS sils_vecu)
 
-# The probe drives its tick loop through IClockSource (src/clock_source.hpp), whose
-# LockstepClockSource uses TickControl types -- so it links both generated sets.
-add_executable(sils_vecu_viss_probe
-    src/viss_probe_main.cc
-    ${SILS_VISS_GENERATED_SRCS}
-    ${SILS_TICK_GENERATED_SRCS}
-)
-target_link_libraries(sils_vecu_viss_probe PRIVATE sils_vecu)
+# The probe/verify/responder/input_source use the VISS wire type (viss_wire.hpp) ->
+# link sils_viss_idl. All of them get TickControl + port headers via sils_vecu.
+add_executable(sils_vecu_viss_probe src/viss_probe_main.cc)
+target_link_libraries(sils_vecu_viss_probe PRIVATE sils_vecu sils_viss_idl)
 
-add_executable(sils_vecu_viss_verify
-    src/viss_verify_main.cc
-    ${SILS_VISS_GENERATED_SRCS}
-)
-target_link_libraries(sils_vecu_viss_verify PRIVATE sils_vecu)
+add_executable(sils_vecu_viss_verify src/viss_verify_main.cc)
+target_link_libraries(sils_vecu_viss_verify PRIVATE sils_vecu sils_viss_idl)
 
 # VISS responder (§11 L1) -- SUT stand-in: subscribes /VIN/Vehicle, publishes
 # correlated responses on the response topic. VissRequest type only (reused for
 # responses via json_min.hpp payload).
-add_executable(sils_vecu_viss_responder
-    src/viss_responder_main.cc
-    ${SILS_VISS_GENERATED_SRCS}
-)
-target_link_libraries(sils_vecu_viss_responder PRIVATE sils_vecu)
+add_executable(sils_vecu_viss_responder src/viss_responder_main.cc)
+target_link_libraries(sils_vecu_viss_responder PRIVATE sils_vecu sils_viss_idl)
 
-# Lockstep ClockMaster (§8.2) -- independent process, TickControl only.
-add_executable(sils_clock_master
-    src/sils_clock_master.cc
-    ${SILS_TICK_GENERATED_SRCS}
-)
+# Lockstep ClockMaster (§8.2) -- independent process, TickControl only (via sils_vecu).
+add_executable(sils_clock_master src/sils_clock_master.cc)
 target_link_libraries(sils_clock_master PRIVATE sils_vecu)
 
 # Test input source (§7.3 staging fixture) -- publishes async input on an input
 # topic; reuses VissRequestTopic (no new IDL).
-add_executable(sils_input_source
-    src/sils_input_source.cc
-    ${SILS_VISS_GENERATED_SRCS}
-)
-target_link_libraries(sils_input_source PRIVATE sils_vecu)
+add_executable(sils_input_source src/sils_input_source.cc)
+target_link_libraries(sils_input_source PRIVATE sils_vecu sils_viss_idl)
 
+# ── Runtime install (always) ─────────────────────────────────────────────────
 install(TARGETS sils_vecu_viss_probe sils_vecu_viss_verify sils_vecu_viss_responder
                 sils_clock_master sils_input_source
-        RUNTIME DESTINATION bin)
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+# ── SDK install/export for find_package(sils_vecu) (T1-B Part 2) ─────────────
+# An out-of-tree developer repo can `find_package(sils_vecu)` and link sils::sils_vecu
+# (+ sils::sils_viss_idl for the VISS wire) instead of vendoring the sources.
+#
+# Caveat: the FMU-enabled SDK links fmi4c, which is either FetchContent'd (a build target
+# not in any export set -> install(EXPORT) fails) or a system package that would need its
+# own find_dependency() wiring in the consumer. The base (non-FMU) SDK is the clean export
+# target, so we export only then; the FMU build still installs its runtime binaries.
+set(SILS_CAN_EXPORT TRUE)
+if(SILS_ENABLE_FMU)
+    set(SILS_CAN_EXPORT FALSE)
+    message(STATUS "sils_vecu: SILS_ENABLE_FMU set -- skipping find_package export "
+                   "(fmi4c dependency; runtime binaries still install). Base build exports.")
+endif()
+
+if(SILS_CAN_EXPORT)
+    install(TARGETS sils_vecu sils_tick_idl sils_viss_idl
+            EXPORT sils_vecuTargets
+            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+    # Port headers (src/*.hpp) -- the SDK API surface.
+    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/
+            DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/sils_vecu
+            FILES_MATCHING PATTERN "*.hpp")
+
+    # Generated IDL headers (both types) -- viss_wire.hpp's bare includes resolve here.
+    install(DIRECTORY ${SILS_VISS_GEN_DIR}/ ${SILS_TICK_GEN_DIR}/
+            DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/sils_vecu/idl
+            FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h")
+
+    install(EXPORT sils_vecuTargets
+            FILE sils_vecuTargets.cmake
+            NAMESPACE sils::
+            DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/sils_vecu)
+
+    configure_package_config_file(
+        ${CMAKE_CURRENT_SOURCE_DIR}/cmake/sils_vecuConfig.cmake.in
+        ${CMAKE_CURRENT_BINARY_DIR}/sils_vecuConfig.cmake
+        INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/sils_vecu)
+    write_basic_package_version_file(
+        ${CMAKE_CURRENT_BINARY_DIR}/sils_vecuConfigVersion.cmake
+        VERSION 0.1.0 COMPATIBILITY SameMinorVersion)
+    install(FILES
+        ${CMAKE_CURRENT_BINARY_DIR}/sils_vecuConfig.cmake
+        ${CMAKE_CURRENT_BINARY_DIR}/sils_vecuConfigVersion.cmake
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/sils_vecu)
+endif()

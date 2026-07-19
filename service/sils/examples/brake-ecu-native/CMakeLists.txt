@@ -28,20 +28,12 @@ endif()
 # This ECU compiles NO VISS-generated sources: the wire port (wire.hpp) names no DDS type,
 # the built-in VISS codecs live in viss_wire.hpp (not included here), and RunProbe's read
 # path decodes through the injected codec -- so publishing AND the response/input readers
-# are 100% native BrakeCmd. The only core-generated source still needed is TickControl,
-# which the clock port uses for lockstep tick control (orthogonal to the wire type).
-set(SILS_TICK_GEN_DIR "${CMAKE_INSTALL_PREFIX}/generated/idl/sils")
-file(GLOB SILS_TICK_GENERATED_SRCS "${SILS_TICK_GEN_DIR}/TickControl*.cxx")
-if(NOT SILS_TICK_GENERATED_SRCS)
-    message(FATAL_ERROR
-        "brake-ecu-native: core generated IDL (TickControl) not found under "
-        "${SILS_TICK_GEN_DIR}; build with BUILD_SILS from the project root.")
-endif()
-
+# are 100% native BrakeCmd. TickControl (the clock's lockstep control type, orthogonal to
+# the wire type) is now supplied by sils_vecu itself (links sils_tick_idl, T1-B) -- so this
+# example compiles ONLY its own BrakeCmd sources.
 add_executable(brake_ecu_native
     src/main.cc
     ${BRAKE_NATIVE_SRCS}
-    ${SILS_TICK_GENERATED_SRCS}
 )
 target_include_directories(brake_ecu_native PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src

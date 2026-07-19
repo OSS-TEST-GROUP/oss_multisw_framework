@@ -38,9 +38,10 @@ Built automatically by any SiLS build (`SILS_BUILD_EXAMPLES=ON` by default):
 cmake --build <build-dir> --target brake_ecu
 ```
 
-`CMakeLists.txt` links the SDK in one line — `target_link_libraries(brake_ecu PRIVATE
-sils_vecu)` — and (today) re-globs the generated IDL sources the wire type needs; see
-the file's comment for why that last step goes away in P4.
+`CMakeLists.txt` links the SDK in two lines — `target_link_libraries(brake_ecu PRIVATE
+sils_vecu sils_viss_idl)`: `sils_vecu` gives the port headers + FastDDS + the clock type,
+`sils_viss_idl` the VISS wire type this ECU publishes. The generated IDL is compiled once
+into those libraries (T1-B), so the example no longer re-globs/re-compiles it.
 
 ## Run
 
