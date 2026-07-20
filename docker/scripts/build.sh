@@ -97,7 +97,7 @@ do_prepare_build_environment()
 		fi
 		#if [[ ${TARGET_MF_NAME} = "agl" ]]; then
 		#	if [[ ! -d ${SDK_DIR}/agl-adt ]]; then
-		#		curl -v -u "builder:obigo@se" \
+		#		curl -v -u "ossdev:ossdev1234" \
 		#			-o /tmp/oss-agl-ivi-flutter-aarch64-toolchain-18.94.0.sh \
 		#			https://repo.obigo.com/repository/yocto-adt/agl/oss-agl-ivi-flutter-aarch64-toolchain-18.94.0.sh
 		#		do_error_check

@@ -246,7 +246,7 @@ do_install_agl_build_environment() {
 	fi
 
 	if [[ ! -d ${SDK_DIR}/agl-adt ]]; then
-		curl -v -u "builder:obigo@se" \
+		curl -v -u "ossdev:ossdev1234" \
 			-o /tmp/oss-agl-ivi-flutter-aarch64-toolchain-18.94.0.sh \
 			https://${REPO_ADDRESS}/repository/yocto-adt/agl/oss-agl-ivi-flutter-aarch64-toolchain-18.94.0.sh
 		do_error_check
