@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include <array>
 #include <memory>
+#include <regex>  // ExecCommand(const std::regex&) 오버로드가 사용 — 자체 include
 
 namespace ros2 {
 namespace adsw_manager {
