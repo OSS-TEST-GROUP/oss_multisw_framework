@@ -221,6 +221,21 @@ std::shared_ptr<Service> ServiceRegistry::GetService(const std::string &name) {
 std::vector<std::shared_ptr<Service>>
 ServiceRegistry::GetServicesByGroup(const std::string &group) {
   std::vector<std::shared_ptr<Service>> result;
+
+  // Empty group == "all services", matching lifecycle_mgr's ServiceRegistry
+  // convention. Container-workload services (autoware-*) live in per-container
+  // groups, not the "" group, so a literal group_.find("") would drop them —
+  // and NotifyServiceState()/UpdateServiceState() call this with "" expecting
+  // the full roster. Without this, container-workload RUNNING promotions never
+  // reach lifecycle_mgr and lfc_monitor shows them stuck at NOT_RUNNING.
+  if (group.empty()) {
+    result.reserve(services_.size());
+    for (auto &kv : services_) {
+      result.push_back(kv.second);
+    }
+    return result;
+  }
+
   auto iter = group_.find(group);
   if (iter == group_.end()) {
     return result;
