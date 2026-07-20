@@ -274,10 +274,19 @@ link_libraries(gtest gmock)
 
 ## Related documentation
 
+가이드 문서는 [`docs/guide/`](./docs/guide) 에 모아둡니다. (Docker 이미지 빌드/실행 상세는 위 각 섹션 및 `docker/README.md` 참조)
+
+### 가이드 문서 (`docs/guide/`)
 | 문서 | 설명 |
 |---|---|
-| [`docker/README.md`](./docker/README.md) | Docker 이미지 빌드·실행 상세 가이드 |
-| [`docs/sils-virtual-ecu-architecture-v3.md`](./docs/sils-virtual-ecu-architecture-v3.md) | SILS 가상 ECU 아키텍처 개요 |
-| [`docs/ota-client-autosar-integration-guide.md`](./docs/ota-client-autosar-integration-guide.md) | OTA Client AUTOSAR 통합 가이드 |
-| [`docs/adsw-manager-autosar-lifecycle-integration-guide.md`](./docs/adsw-manager-autosar-lifecycle-integration-guide.md) | ADSW Manager Lifecycle 통합 가이드 |
-| [`docs/diagnostics-integration-expansion-review.md`](./docs/diagnostics-integration-expansion-review.md) | Diagnostics 통합 확장 리뷰 |
+| [`build-install-run-guide.md`](./docs/guide/build-install-run-guide.md) | MMF 빌드·설치·실행 (x86_64 / arm64) |
+| [`board-autostart-guide.md`](./docs/guide/board-autostart-guide.md) | 보드 재부팅 자동시작 — core / ext-ros2 / ext-agl |
+| [`ext-ros2-adsw-operation-guide.md`](./docs/guide/ext-ros2-adsw-operation-guide.md) | ext-ros2 adsw_manager 운영 — autoware 관리·기동·트러블슈팅 |
+| [`adsw-manager-autosar-lifecycle-integration-guide.md`](./docs/guide/adsw-manager-autosar-lifecycle-integration-guide.md) | Adaptive AUTOSAR `adsw_manager` ↔ `lifecycle_manager` 통합 |
+| [`ota-client-autosar-integration-guide.md`](./docs/guide/ota-client-autosar-integration-guide.md) | Adaptive AUTOSAR OTA Client 구현 (OTA Manager 연동) |
+
+### 설계 · 검토 문서 (참고)
+| 문서 | 설명 |
+|---|---|
+| [`docs/sils-virtual-ecu-architecture-v3.md`](./docs/sils-virtual-ecu-architecture-v3.md) | SiLS 가상 ECU(vECU) 아키텍처 (v3) |
+| [`docs/diagnostics-integration-expansion-review.md`](./docs/diagnostics-integration-expansion-review.md) | Diagnostics 연동 확장 및 Monitor UI 분리 검토 |

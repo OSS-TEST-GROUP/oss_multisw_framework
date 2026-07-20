@@ -1,8 +1,8 @@
 # Docker 가이드
 
 > 이 문서는 **Dockerfile 구조**를 설명합니다. 소스 빌드 → 이미지 조립 → 보드 설치 →
-> 실행까지의 **단계별 절차**는 [docs/build-install-run-guide.md](../docs/build-install-run-guide.md),
-> 재부팅 자동시작 구성은 [docs/board-autostart-guide.md](../docs/board-autostart-guide.md) 를 보세요.
+> 실행까지의 **단계별 절차**는 [docs/guide/build-install-run-guide.md](../docs/guide/build-install-run-guide.md),
+> 재부팅 자동시작 구성은 [docs/guide/board-autostart-guide.md](../docs/guide/board-autostart-guide.md) 를 보세요.
 
 `oss_multisw_framework`는 빌드 라이프사이클의 단계와 사용 시점에 따라 **3개의 Dockerfile**을 분리해 관리합니다. 중복이 아니라 역할이 분리되어 있으며, 일반적으로 다음 파이프라인을 따라 사용됩니다.
 
