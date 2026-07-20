@@ -347,6 +347,10 @@ COPY --chown=ossuser:ossuser docker/entrypoint/agl_entrypoint.sh /oss/entrypoint
 COPY --chown=ossuser:ossuser output/x86_64/${BUILD_TYPE}/extension/agl/bin /oss/bin
 COPY --chown=ossuser:ossuser output/x86_64/lib /oss/lib
 
+# amd64 전용 서비스 목록(hmi_launcher GTK/X11). entrypoint 가 x86_64 에서
+# 이 파일이 있으면 ADSW_CONFIG 기본값으로 선택한다.
+COPY --chown=ossuser:ossuser service/extension/agl/adsw_manager/config/agl-service-list.x86.yaml /oss/bin/config/agl-service-list.x86.yaml
+
 # Generate unique machin_id
 RUN if [ ! -s /etc/machine-id ]; then \
     echo "$(cat /proc/sys/kernel/random/uuid | tr -d '-')" > /etc/machine-id; \
