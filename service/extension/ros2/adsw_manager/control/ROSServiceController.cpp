@@ -547,6 +547,24 @@ bool ROSServiceController::ProcessServiceStartRequest(lifecyclemgr::StartService
                                   << " already running, starting service only: " << svc_name);
                         continue;
                     }
+                    // Container not running. For a container-workload service the
+                    // service IS the container's CMD, so a service Start must NOT
+                    // silently docker-run the container behind the operator's back
+                    // — that resurrects a container the operator explicitly Stopped.
+                    // Gate it: mark the container failed so the service is skipped
+                    // and its state stays NOT_RUNNING. The operator brings the
+                    // container up via ctrl/StartContainer; ContainerHealthMonitor
+                    // then promotes the workload service to RUNNING on its own.
+                    if (svc->IsContainerWorkload()) {
+                        LOG_DEBUG("ROSServiceController: container-workload " << container_name
+                                  << " not running — service Start gated (start the container first): "
+                                  << svc_name);
+                        failed_containers.insert(container_name);
+                        continue;
+                    }
+                    // Non-container-workload (services docker-exec'd into a shared
+                    // long-running container): bring the hosting container up so the
+                    // exec can land, as before.
                     LOG_DEBUG("ROSServiceController: container " << container_name
                               << " not running, starting it for service " << svc_name);
                     if (!container_controller_->StartContainer(container_name)) {
