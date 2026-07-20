@@ -1,0 +1,99 @@
+version: 0.1
+
+# specs: ros2 adsw_manager 가 부팅 시 lifecycle_mgr 에 등록할 서비스 목록.
+#
+# 각 컨테이너는 adsw_manager 가 docker 로 직접 관리한다 (StartService →
+# docker run/start, StopService → docker stop/rm). exec_type: "container" 인
+# 서비스는 컨테이너 자신의 CMD(command_args)가 워크로드이므로 별도
+# `docker exec ros2 launch` 를 하지 않는다 (AGL adsw_manager 의 hmi_launcher
+# extra_args 모델과 동일 패턴).
+#
+# 아래는 parted Autoware (인지/판단/제어) 3 역할 — 각 이미지가 자기 역할
+# start_script 를 CMD 로 실행한다. domain 42 로 격리(ROS_DOMAIN_ID=42)하여
+# MMF(domain 0)와 분리. 맵은 보드의 /home/goasp/autoware_map 를 마운트.
+# recovery: MANUAL — 운영자가 lfc_monitor 에서 start/stop/restart 를 명시적으로
+# 제어 (ALWAYS 면 stop 직후 lifecycle_mgr 가 즉시 재기동해 "정지"가 안 됨).
+specs:
+  - containers:
+      # ── 인지 (perception) — 시뮬레이터 + rviz(:1) ──────────────────────────
+      - name: autoware-perception
+        image: "registry.obigo.com/oss/oss-adsw-perception-aarch64:field"
+        container-type: "docker"
+        extra_args:
+          - "--network"
+          - "host"
+          - "-e"
+          - "ROS_DOMAIN_ID=42"
+          - "-e"
+          - "DISPLAY=:1"
+          - "-e"
+          - "QT_X11_NO_MITSHM=1"
+          - "-e"
+          - "LIBGL_ALWAYS_SOFTWARE=1"
+          - "-v"
+          - "/dev/shm:/dev/shm"
+          - "-v"
+          - "/tmp/.X11-unix:/tmp/.X11-unix"
+          - "-v"
+          - "/home/goasp/autoware_map:/autoware_map"
+        command_args:
+          - "/autoware/start_script/adsw-perception.sh"
+        services:
+          - package: ""
+            name: "autoware-perception"
+            launchfile: ""
+            type: "NORMAL"
+            recovery: "MANUAL"
+            enabled: "true"
+            max: "0"
+            exec_type: "container"
+
+      # ── 판단 (decision) — 헤드리스 ────────────────────────────────────────
+      - name: autoware-decision
+        image: "registry.obigo.com/oss/oss-adsw-decision-aarch64:field"
+        container-type: "docker"
+        extra_args:
+          - "--network"
+          - "host"
+          - "-e"
+          - "ROS_DOMAIN_ID=42"
+          - "-v"
+          - "/dev/shm:/dev/shm"
+          - "-v"
+          - "/home/goasp/autoware_map:/autoware_map"
+        command_args:
+          - "/autoware/start_script/adsw-decision.sh"
+        services:
+          - package: ""
+            name: "autoware-decision"
+            launchfile: ""
+            type: "NORMAL"
+            recovery: "MANUAL"
+            enabled: "true"
+            max: "0"
+            exec_type: "container"
+
+      # ── 제어 (control) — 시뮬레이터, 헤드리스 ─────────────────────────────
+      - name: autoware-control
+        image: "registry.obigo.com/oss/oss-adsw-control-aarch64:field"
+        container-type: "docker"
+        extra_args:
+          - "--network"
+          - "host"
+          - "-e"
+          - "ROS_DOMAIN_ID=42"
+          - "-v"
+          - "/dev/shm:/dev/shm"
+          - "-v"
+          - "/home/goasp/autoware_map:/autoware_map"
+        command_args:
+          - "/autoware/start_script/adsw-control.sh"
+        services:
+          - package: ""
+            name: "autoware-control"
+            launchfile: ""
+            type: "NORMAL"
+            recovery: "MANUAL"
+            enabled: "true"
+            max: "0"
+            exec_type: "container"
