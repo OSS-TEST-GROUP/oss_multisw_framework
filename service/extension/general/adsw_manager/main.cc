@@ -6,7 +6,7 @@
 
 int main(int argc, char* argv[]) {
 
-	ros2::adsw_manager::ADSWManager* manager = ros2::adsw_manager::ADSWManager::Get();
+	general::adsw_manager::ADSWManager* manager = general::adsw_manager::ADSWManager::Get();
 
 	if (!manager->Initialize()) {
 		LOG_ERROR("Failed to initialize the LifecycleManager");

@@ -222,7 +222,10 @@ void ContainerHealthMonitor::PollServicesInContainer(const std::string& containe
     auto monitor    = ADSWManager::Get()->GetServiceMonitor();
     if (!registry || !monitor) return;
 
-    const bool is_native = controller && controller->IsNativeExecution();
+    // general 변형은 ros2 launch 개념이 없다 — 서비스는 항상 네이티브 바이너리로
+    // 실행되므로 프로세스 매칭 토큰도 네이티브 경로(실행 파일명)를 쓴다.
+    (void)controller;
+    const bool is_native = true;
 
     auto services = registry->GetServicesByGroup(container_name);
     LOG_DEBUG("PollServicesInContainer container=" << container_name
