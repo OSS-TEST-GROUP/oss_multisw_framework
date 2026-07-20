@@ -24,9 +24,13 @@ services:
 #   - Wayland(/run/user/1001) 대신 X11 (/tmp/.X11-unix + DISPLAY)
 #   - /root/oss/hmi_launcher_config.json 마운트 제거 → 이미지 baked launcher_config
 #     (ws://localhost:9090) 사용. 보드/원격 rosbridge 는 mounted ADSW_CONFIG 로 오버라이드.
-# 전제: 표준 단일 디스플레이 데스크톱(DISPLAY=:0, uid 1000, /dev/dri 존재) +
-#       호스트에서 `xhost +local:` (run-ext-agl.sh 가 자동 실행). 다른 환경은
-#       이 파일을 복사·수정해 ADSW_CONFIG 로 마운트하면 재빌드 없이 바꿀 수 있다.
+#   - --gpus all: x86 데스크톱 X 서버는 대개 NVIDIA GLX 를 쓰므로 nvidia GPU 접근이
+#     없으면 GLX 오류(BadValue request_code 152)로 크래시한다(DOCKER_GUIDE 참조).
+#     ⚠ nvidia-container-toolkit 필요. NVIDIA 아닌 PC(Intel/AMD mesa)는 이 파일을
+#       복사해 `--gpus all` 을 `--device /dev/dri:/dev/dri` 로 바꿔 ADSW_CONFIG 로
+#       마운트한다(재빌드 불필요).
+# 전제: 표준 단일 디스플레이 NVIDIA 데스크톱(DISPLAY=:0, uid 1000) +
+#       호스트에서 `xhost +local:` (run-ext-agl.sh 가 자동 실행).
 - name: hmi_launcher
   service_type: NORMAL
   recovery_policy: ALWAYS
@@ -44,8 +48,8 @@ services:
   - NET_RAW
   - --cap-add
   - NET_ADMIN
-  - --device
-  - /dev/dri:/dev/dri
+  - --gpus
+  - all
   - "-e"
   - DISPLAY=:0
   - "-e"
