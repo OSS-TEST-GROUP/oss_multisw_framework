@@ -20,8 +20,8 @@ pipeline {
         IMAGE_REGISTRY   = "registry.obigo.com"
         IMAGE_NAMESPACE  = "oss"
         APP_NAME         = "oss-mmf"
-        REGISTRY_ID      = "builder"
-        REGISTRY_PWD     = "Obigoam1@se"
+        REGISTRY_ID      = "ossuser"
+        REGISTRY_PWD     = "Ossuser1234"
         BUILDER_IMAGE    = "${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${APP_NAME}-builder:latest"
 
         BUILD_UNITTEST   = 'FALSE'

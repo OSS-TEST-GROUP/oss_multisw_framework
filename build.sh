@@ -11,8 +11,8 @@ export CONTAINER_IMAGE_NAME="oss-mmwf-ros2-x86_64"
 export CONTAINER_IMAGE_TAG=""
 export REGISTRY_ADDRESS="registry.obigo.com"
 export REPO_ADDRESS="repo.obigo.com"
-export REGISTRY_ID="builder"
-export REGISTRY_PWD="Obigoam1@se"
+export REGISTRY_ID="ossuser"
+export REGISTRY_PWD="Ossuser1234"
 export DOCKER_TARGET="build-stage"
 
 # Build options
