@@ -11,8 +11,8 @@ export CONTAINER_IMAGE_NAME="oss-mmwf-ros2-x86_64"
 export CONTAINER_IMAGE_TAG=""
 export REGISTRY_ADDRESS="registry.obigo.com"
 export REPO_ADDRESS="repo.obigo.com"
-export REGISTRY_ID="builder"
-export REGISTRY_PWD="Obigoam1@se"
+export REGISTRY_ID="ossuser"
+export REGISTRY_PWD="Ossuser1234"
 export DOCKER_TARGET="build-stage"
 
 # Build options
@@ -246,7 +246,7 @@ do_install_agl_build_environment() {
 	fi
 
 	if [[ ! -d ${SDK_DIR}/agl-adt ]]; then
-		curl -v -u "builder:obigo@se" \
+		curl -v -u "ossdev:ossdev1234" \
 			-o /tmp/oss-agl-ivi-flutter-aarch64-toolchain-18.94.0.sh \
 			https://${REPO_ADDRESS}/repository/yocto-adt/agl/oss-agl-ivi-flutter-aarch64-toolchain-18.94.0.sh
 		do_error_check

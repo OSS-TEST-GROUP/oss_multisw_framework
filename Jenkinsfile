@@ -11,8 +11,8 @@ pipeline {
         IMAGE_REGISTRY = "registry.obigo.com"
         IMAGE_NAMESPACE = "oss"
         APP_NAME = "oss-mmf"
-        REGISTRY_ID = "builder"
-        REGISTRY_PWD = "Obigoam1@se"
+        REGISTRY_ID = "ossuser"
+        REGISTRY_PWD = "Ossuser1234"
 
         // Dockerfile Path
         DOCKERFILE_PATH = "docker/Dockerfile" 
