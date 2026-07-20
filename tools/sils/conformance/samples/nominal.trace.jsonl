@@ -1,0 +1,15 @@
+{"run_id": "nominal", "event": "run_start", "wall_time_ms": 1000, "domain_id": 90, "backend": "local", "instance_id": "viss-probe-1"}
+{"run_id": "nominal", "event": "domain_leased", "wall_time_ms": 1001, "domain_id": 90, "pool": "90-92"}
+{"run_id": "nominal", "instance_id": "viss-probe-1", "event": "run_start", "wall_time_ms": 1002, "domain_id": 90, "seq": 0, "topic": "/VIN/Vehicle"}
+{"run_id": "nominal", "event": "process_running", "wall_time_ms": 1003, "pid": 1234}
+{"run_id": "nominal", "instance_id": "viss-probe-1", "event": "endpoint_matched", "wall_time_ms": 1004, "matched_count": 1}
+{"run_id": "nominal", "instance_id": "viss-probe-1", "event": "ready", "wall_time_ms": 1005, "seq": 0, "topic": "/VIN/Vehicle"}
+{"run_id": "nominal", "event": "vecu_ready", "wall_time_ms": 1006}
+{"run_id": "nominal", "event": "verify_invoke", "wall_time_ms": 1007}
+{"run_id": "nominal", "expected_instance_id": "viss-probe-1", "event": "verify_start", "wall_time_ms": 1008, "domain_id": 90, "topic": "/VIN/Vehicle"}
+{"run_id": "nominal", "expected_instance_id": "viss-probe-1", "event": "endpoint_matched", "wall_time_ms": 1009, "matched_count": 1}
+{"run_id": "nominal", "expected_instance_id": "viss-probe-1", "event": "sample_received", "wall_time_ms": 1010, "received_count": 1, "topic": "/VIN/Vehicle", "valid_envelope": true}
+{"run_id": "nominal", "expected_instance_id": "viss-probe-1", "event": "verify_pass", "wall_time_ms": 1011, "received_count": 5, "valid_count": 5, "min_samples": 1, "topic": "/VIN/Vehicle"}
+{"run_id": "nominal", "event": "domain_released", "wall_time_ms": 1012}
+{"run_id": "nominal", "event": "cleanup_done", "wall_time_ms": 1013}
+{"run_id": "nominal", "event": "run_pass", "wall_time_ms": 1014}

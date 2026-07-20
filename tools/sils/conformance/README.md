@@ -6,7 +6,23 @@ It consumes only the JSONL trace (`docs/sils-extension-model.md §2`), so it run
 **outside** the vECU: no build, no DDS, no source — just Python 3 and a captured
 `trace.jsonl`. A developer runs it on their own ECU's output; CI runs the same tools.
 
-## The three checkers
+## The gate (one command)
+
+**`gate.py`** is the single fail-closed entry point: it chains the checkers below in order
+(schema → fidelity → optional parity) and exits non-zero if any stage fails. Run this in
+CI or before you push; reach for the individual tools only to compose a custom flow.
+
+```bash
+python3 gate.py path/to/trace.jsonl                       # schema + fidelity
+python3 gate.py runs/my-run/ --resolved runs/my-run/resolved-run.yaml --junit out.xml
+python3 gate.py sils.jsonl --target target.jsonl --contract parity.yaml   # + L4 parity
+```
+
+A committed sample — [`samples/nominal.trace.jsonl`](samples/nominal.trace.jsonl), a full
+merged run trace — is the gate's smoke fixture (and what CI runs). `.github/workflows/
+sils-conformance.yml` runs the unit tests + this gate on every push/PR touching the kit.
+
+## The three checkers it chains
 
 | tool | question it answers | needs |
 |---|---|---|

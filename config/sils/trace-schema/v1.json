@@ -1,16 +1,17 @@
 {
   "schema_version": 1,
-  "description": "SiLS vECU trace event schema v1. The JSONL trace a run emits IS the public conformance boundary (docs/sils-extension-model.md §2): the conformance kit (evaluate.py / parity.py / validate_trace.py) consumes only this. `required` fields are grounded in real captured traces (always present); other fields are allowed (forward-compatible). Every line is one JSON object with at least `run_id` and `event`.",
+  "description": "SiLS vECU trace event schema v1. The JSONL trace a run emits IS the public conformance boundary (docs/sils-extension-model.md §2): the conformance kit (evaluate.py / parity.py / validate_trace.py) consumes only this. `required` fields are grounded in real captured traces (always present); other fields are allowed (forward-compatible). Every line is one JSON object with at least `run_id` and `event`. Events span all six producers of a merged run trace -- the vECU plus the harness (coordinator/clock/responder/verifier/input_source); use validate_trace --producer to check one producer's slice.",
   "base_required": ["run_id", "event"],
   "producers": {
     "vecu": "the vECU probe itself (sils::RunProbe, run_loop.hpp) -- what a developer ECU emits for free",
+    "coordinator": "the Run Coordinator (service/sils/run_coordinator/run_phase1.sh) -- lifecycle + terminal verdict",
     "clock_master": "the lockstep ClockMaster (sils_clock_master.cc)",
     "responder": "the L1 SUT stand-in responder (viss_responder_main.cc)",
     "verifier": "the run verifier (viss_verify_main.cc)",
     "input_source": "the async input source fixture (sils_input_source.cc)"
   },
   "events": {
-    "run_start":         {"producer": "vecu", "required": ["instance_id", "seq", "wall_time_ms", "topic", "domain_id"]},
+    "run_start":         {"producer": "vecu", "required": ["instance_id", "wall_time_ms", "domain_id"], "note": "also emitted by the coordinator (adds backend); the vECU additionally carries the seq/topic envelope -- required is the intersection always present in either"},
     "wire_start":        {"producer": "vecu", "required": ["instance_id", "seq", "wall_time_ms", "topic", "name", "type"], "since": 1},
     "qos_negotiated":    {"producer": "vecu", "required": ["role", "reliability", "durability", "wall_time_ms"]},
     "protocol_on":       {"producer": "vecu", "required": ["instance_id", "seq", "wall_time_ms", "topic", "mode", "response_topic"]},
@@ -49,9 +50,32 @@
     "verify_start":      {"producer": "verifier", "required": ["expected_instance_id", "domain_id", "topic", "wall_time_ms"]},
     "sample_received":   {"producer": "verifier", "required": ["expected_instance_id", "received_count", "topic", "valid_envelope", "wall_time_ms"]},
     "verify_pass":       {"producer": "verifier", "required": ["expected_instance_id", "received_count", "valid_count", "min_samples", "topic", "wall_time_ms"]},
+    "verify_fail":       {"producer": "verifier", "required": ["expected_instance_id", "received_count", "valid_count", "min_samples", "topic", "wall_time_ms"]},
 
     "input_source_start":{"producer": "input_source", "required": ["count", "rate_ms", "topic"]},
     "input_source_sent": {"producer": "input_source", "required": ["seq", "topic"]},
-    "input_source_done": {"producer": "input_source", "required": ["sent"]}
+    "input_source_done": {"producer": "input_source", "required": ["sent"]},
+
+    "domain_leased":     {"producer": "coordinator", "required": ["wall_time_ms", "domain_id", "pool"]},
+    "domain_released":   {"producer": "coordinator", "required": ["wall_time_ms"]},
+    "domain_pool_exhausted": {"producer": "coordinator", "required": ["wall_time_ms", "pool"]},
+    "domain_alloc_failed":{"producer": "coordinator", "required": ["wall_time_ms"]},
+    "process_running":   {"producer": "coordinator", "required": ["wall_time_ms"]},
+    "vecu_ready":        {"producer": "coordinator", "required": ["wall_time_ms"]},
+    "verify_invoke":     {"producer": "coordinator", "required": ["wall_time_ms"]},
+    "cleanup_done":      {"producer": "coordinator", "required": ["wall_time_ms"]},
+    "cleanup_noop":      {"producer": "coordinator", "required": ["wall_time_ms"]},
+    "run_pass":          {"producer": "coordinator", "required": ["wall_time_ms"]},
+    "run_fail":          {"producer": "coordinator", "required": ["wall_time_ms", "verify_exit_code"]},
+    "ready_timeout":     {"producer": "coordinator", "required": ["wall_time_ms"]},
+    "start_failed":      {"producer": "coordinator", "required": ["wall_time_ms", "reason"]},
+    "orphan_detected":   {"producer": "coordinator", "required": ["wall_time_ms", "reason"]},
+    "aborted_orphaned":  {"producer": "coordinator", "required": ["wall_time_ms", "reason"]},
+    "fmu_gate_allowed":  {"producer": "coordinator", "required": ["wall_time_ms", "fmu"]},
+    "fmu_gate_denied":   {"producer": "coordinator", "required": ["wall_time_ms", "fmu"]},
+    "fleet_start":       {"producer": "coordinator", "required": ["wall_time_ms", "domain_id", "backend", "members"]},
+    "fleet_ready":       {"producer": "coordinator", "required": ["wall_time_ms", "members"]},
+    "fleet_start_failed":{"producer": "coordinator", "required": ["wall_time_ms"]},
+    "member_start":      {"producer": "coordinator", "required": ["wall_time_ms", "instance_id", "index"]}
   }
 }
