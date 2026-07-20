@@ -2,6 +2,11 @@ cmake_minimum_required(VERSION 3.5)
 
 project ( "adsw_manager_general" )
 
+## Unittest (Docker 통합 테스트 등) — BUILD_UNITTEST 일 때만
+if (BUILD_UNITTEST)
+    add_subdirectory ( unittest )
+endif()
+
 
 set ( MISC_SRC
     logger/Logger.cpp
