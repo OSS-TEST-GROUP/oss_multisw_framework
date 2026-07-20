@@ -44,6 +44,14 @@ if [ "${PULL:-1}" = "1" ]; then
   fi
 fi
 
+# amd64(x86_64) 에선 adsw 가 띄우는 hmi_launcher 가 GTK/X11 로 호스트 X 에 붙는다
+# (entrypoint 가 agl-service-list.x86.yaml 을 자동 선택). 컨테이너 root 가 X 에
+# 접근하도록 호스트에서 xhost 를 미리 허용한다. arm64 보드(Wayland)는 불필요.
+if [ "$(uname -m)" = "x86_64" ] && command -v xhost >/dev/null 2>&1; then
+  xhost +local:root >/dev/null 2>&1 || xhost +local: >/dev/null 2>&1 || true
+  echo "[run-ext-agl] xhost +local: (amd64 hmi_launcher X 접근 허용)"
+fi
+
 # 기존 컨테이너 정리 (hook 정책상 rm -f 대신 stop+rm)
 docker stop oss-mmf-ext-agl 2>/dev/null || true
 docker rm oss-mmf-ext-agl 2>/dev/null || true

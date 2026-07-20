@@ -1,0 +1,62 @@
+services:
+- name: adsw_monitor
+  service_type: NORMAL
+  recovery_policy: ALWAYS
+  is_enabled: true
+  mw_type: AGL
+  init_state: NOT_RUNNING
+- name: ota_monitor
+  service_type: NORMAL
+  recovery_policy: R_DEFAULT
+  is_enabled: true
+  mw_type: AGL
+  init_state: NOT_RUNNING
+- name: lfc_monitor
+  service_type: NORMAL
+  recovery_policy: R_DEFAULT
+  is_enabled: true
+  mw_type: AGL
+  init_state: NOT_RUNNING
+# amd64(x86_64) 전용 hmi_launcher — GTK/X11 런타임.
+# arm64 보드용(agl-service-list.yaml)의 flutter-auto/Wayland 인자 대신 X11 을 쓴다.
+#   - flutter-auto 마운트(/usr/share/flutter) 제거 (GTK 번들은 자체 포함)
+#   - command_args 없음 (amd64 entrypoint /app/entrypoint 가 곧 hmi_launcher 바이너리)
+#   - Wayland(/run/user/1001) 대신 X11 (/tmp/.X11-unix + DISPLAY)
+#   - /root/oss/hmi_launcher_config.json 마운트 제거 → 이미지 baked launcher_config
+#     (ws://localhost:9090) 사용. 보드/원격 rosbridge 는 mounted ADSW_CONFIG 로 오버라이드.
+# 전제: 표준 단일 디스플레이 데스크톱(DISPLAY=:0, uid 1000, /dev/dri 존재) +
+#       호스트에서 `xhost +local:` (run-ext-agl.sh 가 자동 실행). 다른 환경은
+#       이 파일을 복사·수정해 ADSW_CONFIG 로 마운트하면 재빌드 없이 바꿀 수 있다.
+- name: hmi_launcher
+  service_type: NORMAL
+  recovery_policy: ALWAYS
+  is_enabled: true
+  mw_type: AGL
+  init_state: NOT_RUNNING
+  image: registry.obigo.com/oss/oss-hmi-launcher:latest
+  extra_args:
+  - "-it"
+  - --net=host
+  - --privileged
+  - --restart
+  - unless-stopped
+  - --cap-add
+  - NET_RAW
+  - --cap-add
+  - NET_ADMIN
+  - --device
+  - /dev/dri:/dev/dri
+  - "-e"
+  - DISPLAY=:0
+  - "-e"
+  - XDG_RUNTIME_DIR=/run/user/1000
+  - "-e"
+  - LAUNCHER_BOT_ENABLED=0
+  - "-v"
+  - /tmp/.X11-unix:/tmp/.X11-unix
+  - "-v"
+  - /run/user/1000:/run/user/1000
+  - "-v"
+  - /usr/share/fonts:/usr/share/fonts:ro
+  - "-v"
+  - /etc/fonts:/etc/fonts:ro
