@@ -285,6 +285,9 @@ ARG BUILD_TYPE=Release
 COPY --chown=ossuser:ossuser docker/entrypoint/ros2_entrypoint.sh /oss/entrypoint.sh
 COPY --chown=ossuser:ossuser output/x86_64/${BUILD_TYPE}/extension/ros2/bin /oss/bin
 COPY --chown=ossuser:ossuser output/x86_64/lib /oss/lib
+# adsw autoware 서비스 목록(SSOT) 을 소스에서 직접 baked — output 재컴파일 없이도
+# 이미지의 saved-service-list.yaml 이 항상 소스와 일치하게 한다.
+COPY --chown=ossuser:ossuser service/extension/ros2/adsw_manager/config/saved-service-list.yaml /oss/bin/config/saved-service-list.yaml
 
 # Generate unique machin_id
 RUN if [ ! -s /etc/machine-id ]; then \
@@ -311,6 +314,8 @@ ARG BUILD_TYPE=Release
 COPY --chown=ossuser:ossuser docker/entrypoint/ros2_entrypoint.sh /oss/entrypoint.sh
 COPY --chown=ossuser:ossuser output/aarch64/${BUILD_TYPE}/extension/ros2/bin /oss/bin
 COPY --chown=ossuser:ossuser output/aarch64/lib /oss/lib
+# adsw autoware 서비스 목록(SSOT) 을 소스에서 직접 baked (x86 스테이지 주석 참조)
+COPY --chown=ossuser:ossuser service/extension/ros2/adsw_manager/config/saved-service-list.yaml /oss/bin/config/saved-service-list.yaml
 
 # Generate unique machin_id
 RUN if [ ! -s /etc/machine-id ]; then \

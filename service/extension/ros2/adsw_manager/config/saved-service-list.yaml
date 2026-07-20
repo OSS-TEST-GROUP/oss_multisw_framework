@@ -9,7 +9,9 @@ version: 0.1
 # extra_args 모델과 동일 패턴).
 #
 # 아래는 parted Autoware (인지/판단/제어) 3 역할 — 각 이미지가 자기 역할
-# start_script 를 CMD 로 실행한다. domain 42 로 격리(ROS_DOMAIN_ID=42)하여
+# start_script(/autoware/start_script/adsw-*.sh → sample_adsw_*_run.launch.xml)
+# 를 CMD 로 실행한다. 이미지: junohb/autoware-partition:sample-adsw-* (2026-07 파티션
+# 샘플). domain 42 로 격리(ROS_DOMAIN_ID=42)하여
 # MMF(domain 0)와 분리. 맵은 보드의 /home/goasp/autoware_map 를 마운트.
 # recovery: MANUAL — 운영자가 lfc_monitor 에서 start/stop/restart 를 명시적으로
 # 제어 (ALWAYS 면 stop 직후 lifecycle_mgr 가 즉시 재기동해 "정지"가 안 됨).
@@ -17,7 +19,7 @@ specs:
   - containers:
       # ── 인지 (perception) — 시뮬레이터 + rviz(:1) ──────────────────────────
       - name: autoware-perception
-        image: "registry.obigo.com/oss/oss-adsw-perception-aarch64:field"
+        image: "junohb/autoware-partition:sample-adsw-perception"
         container-type: "docker"
         extra_args:
           - "--network"
@@ -50,7 +52,7 @@ specs:
 
       # ── 판단 (decision) — 헤드리스 ────────────────────────────────────────
       - name: autoware-decision
-        image: "registry.obigo.com/oss/oss-adsw-decision-aarch64:field"
+        image: "junohb/autoware-partition:sample-adsw-decision"
         container-type: "docker"
         extra_args:
           - "--network"
@@ -75,7 +77,7 @@ specs:
 
       # ── 제어 (control) — 시뮬레이터, 헤드리스 ─────────────────────────────
       - name: autoware-control
-        image: "registry.obigo.com/oss/oss-adsw-control-aarch64:field"
+        image: "junohb/autoware-partition:sample-adsw-control"
         container-type: "docker"
         extra_args:
           - "--network"
