@@ -18,7 +18,7 @@
 #include "lifecycle/NotifyContainerState.hpp"
 #include "endpoint/MessageTypes.hpp"
 
-namespace ros2 {
+namespace general {
 namespace adsw_manager {
 
 namespace {
@@ -350,4 +350,4 @@ void ContainerHealthMonitor::PollServicesInContainer(const std::string& containe
 }
 
 } // namespace adsw_manager
-} // namespace ros2
+} // namespace general

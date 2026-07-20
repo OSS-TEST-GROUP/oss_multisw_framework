@@ -8,7 +8,7 @@
 #include "lifecycle/StartContainerRequestPubSubTypes.hpp"
 #include "MessageTypes.hpp"
 
-namespace ros2 {
+namespace general {
 namespace adsw_manager {
 
 using namespace lifecyclemgr;
@@ -38,6 +38,6 @@ class StartContainerEndPoint : public DDSMessageEndpoint {
 };
 
 } // namespace adsw_manager
-} // namespace ros2
+} // namespace general
 
 #endif // ADSW_START_CONTAINER_ENDPOINT_HPP_

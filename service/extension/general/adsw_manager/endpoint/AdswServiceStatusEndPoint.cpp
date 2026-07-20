@@ -3,7 +3,7 @@
 #include "ros2/AdswServiceStatus.hpp"
 #include "logger/Log.hpp"
 
-namespace ros2 {
+namespace general {
 namespace adsw_manager {
 
 ADSWServiceStatusEndPoint::ADSWServiceStatusEndPoint(MessageType msgtype, std::string topic)
@@ -37,4 +37,4 @@ void ADSWServiceStatusEndPoint::OnDataAvailable(){
 
 
 } // namespace adsw_manager
-} // namespace ros2
+} // namespace general

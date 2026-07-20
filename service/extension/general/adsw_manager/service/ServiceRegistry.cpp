@@ -16,7 +16,7 @@
 
 #include "logger/Log.hpp"
 
-namespace ros2 {
+namespace general {
 namespace adsw_manager {
 
 std::optional<std::string> getEnv(const std::string &key) {
@@ -732,4 +732,4 @@ bool ServiceRegistry::LoadServiceSaved(const std::string &path) {
 }
 
 } // namespace adsw_manager
-} // namespace ros2
+} // namespace general

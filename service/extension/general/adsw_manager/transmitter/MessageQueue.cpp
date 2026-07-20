@@ -9,7 +9,7 @@
 
 using namespace eprosima::fastdds::dds;
 
-namespace ros2 {
+namespace general {
 namespace adsw_manager {
 
 MessageQueue::MessageQueue() {}
@@ -86,4 +86,4 @@ void MessageQueue::PublishingLoop()
 
 
 } // namespace adsw_manager
-} // namespace ros2
+} // namespace general

@@ -8,7 +8,7 @@
 #include "lifecycle/NotifyContainerStatePubSubTypes.hpp"
 #include "MessageTypes.hpp"
 
-namespace ros2 {
+namespace general {
 namespace adsw_manager {
 
 using namespace lifecyclemgr;
@@ -35,6 +35,6 @@ class NotifyContainerStateEndPoint : public DDSMessageEndpoint {
 };
 
 } // namespace adsw_manager
-} // namespace ros2
+} // namespace general
 
 #endif // ADSW_NOTIFY_CONTAINER_STATE_ENDPOINT_HPP_

@@ -16,7 +16,7 @@
 // F014 follow-up
 #include "SetRecoveryPolicyEndPoint.hpp"
 
-namespace ros2 {
+namespace general {
 namespace adsw_manager {
 
 EndPointFactory::EndPointFactory() {
@@ -228,4 +228,4 @@ const char* EndPointFactory::GetTopic(MessageType mtype){
 
 
 } // namespace adsw_manager
-} // namespace ros2
+} // namespace general

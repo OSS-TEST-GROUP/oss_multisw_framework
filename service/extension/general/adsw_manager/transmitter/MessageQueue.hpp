@@ -1,5 +1,5 @@
-#ifndef ROS2_ADSW_MANAGER_TRANSMITTER_MESSAGE_QUEUE_HPP_
-#define ROS2_ADSW_MANAGER_TRANSMITTER_MESSAGE_QUEUE_HPP_
+#ifndef GENERAL_ADSW_MANAGER_TRANSMITTER_MESSAGE_QUEUE_HPP_
+#define GENERAL_ADSW_MANAGER_TRANSMITTER_MESSAGE_QUEUE_HPP_
 
 #include <atomic>
 #include <string>
@@ -12,7 +12,7 @@
 
 #include "endpoint/MessageTypes.hpp"
 
-namespace ros2 {
+namespace general {
 namespace adsw_manager {
 
 using MsgType = std::pair<MessageType, void*>;
@@ -40,6 +40,6 @@ class MessageQueue {
 };
 
 } // namespace lifecycle_manager
-} // namespace ros2
+} // namespace general
 
-#endif // ROS2_ADSW_MANAGER_TRANSMITTER_MESSAGE_QUEUE_HPP_
+#endif // GENERAL_ADSW_MANAGER_TRANSMITTER_MESSAGE_QUEUE_HPP_

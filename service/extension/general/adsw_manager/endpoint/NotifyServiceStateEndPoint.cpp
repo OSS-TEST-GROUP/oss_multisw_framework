@@ -3,7 +3,7 @@
 #include "lifecycle/NotifyServiceState.hpp"
 #include "logger/Log.hpp"
 
-namespace ros2 {
+namespace general {
 namespace adsw_manager {
     
 NotifyServiceStateEndPoint::NotifyServiceStateEndPoint(MessageType msgtype, std::string topic) 
@@ -37,4 +37,4 @@ void NotifyServiceStateEndPoint::OnDataAvailable(){
 
 
 } // namespace adsw_manager
-} // namespace ros2
+} // namespace general

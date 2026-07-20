@@ -1,7 +1,7 @@
 #include "Container.hpp"
 #include "Service.hpp"
 
-namespace ros2 {
+namespace general {
 namespace adsw_manager {
 
 Container::Container(const std::string& name, const std::string& image,
@@ -55,4 +55,4 @@ const std::vector<std::string>& Container::GetCommandArgs() const {
 }
 
 } // namespace adsw_manager
-} // namespace ros2
+} // namespace general

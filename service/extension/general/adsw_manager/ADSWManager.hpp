@@ -1,5 +1,5 @@
-#ifndef ROS2_ADSW_MANAGER_ADSW_MANAGER_HPP_
-#define ROS2_ADSW_MANAGER_ADSW_MANAGER_HPP_
+#ifndef GENERAL_ADSW_MANAGER_ADSW_MANAGER_HPP_
+#define GENERAL_ADSW_MANAGER_ADSW_MANAGER_HPP_
 
 #include <array>
 #include <chrono>
@@ -16,7 +16,7 @@
 #include "control/ContainerServiceController.hpp"
 #include "endpoint/EndPointFactory.hpp"
 
-namespace ros2 {
+namespace general {
 namespace adsw_manager {
 
 enum class AdswState{
@@ -99,6 +99,6 @@ class ADSWManager {
 };
 
 } // namespace adsw_manager
-} // namespace ros2
+} // namespace general
 
 #endif

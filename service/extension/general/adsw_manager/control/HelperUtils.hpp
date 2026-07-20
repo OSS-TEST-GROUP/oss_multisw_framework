@@ -1,5 +1,5 @@
-#ifndef ROS2_ADSW_MANAGER_CONTROL_HELPER_UTILS_HPP_
-#define ROS2_ADSW_MANAGER_CONTROL_HELPER_UTILS_HPP_
+#ifndef GENERAL_ADSW_MANAGER_CONTROL_HELPER_UTILS_HPP_
+#define GENERAL_ADSW_MANAGER_CONTROL_HELPER_UTILS_HPP_
 
 #include <string>
 #include <vector>
@@ -8,7 +8,7 @@
 #include <array>
 #include <memory>
 
-namespace ros2 {
+namespace general {
 namespace adsw_manager {
 
 class HelperUtils{
@@ -81,6 +81,6 @@ class HelperUtils{
 };
 
 } // namespace adsw_manager
-} // namespace ros2
+} // namespace general
 
 #endif

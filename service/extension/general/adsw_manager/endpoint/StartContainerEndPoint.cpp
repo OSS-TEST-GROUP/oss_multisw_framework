@@ -8,7 +8,7 @@
 
 #include "logger/Log.hpp"
 
-namespace ros2 {
+namespace general {
 namespace adsw_manager {
 
 StartContainerEndPoint::StartContainerEndPoint(MessageType msgtype, std::string topic)
@@ -64,4 +64,4 @@ void StartContainerEndPoint::OnDataAvailable() {
 }
 
 } // namespace adsw_manager
-} // namespace ros2
+} // namespace general

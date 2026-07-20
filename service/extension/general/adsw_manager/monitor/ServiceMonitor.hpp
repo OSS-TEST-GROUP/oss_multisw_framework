@@ -1,5 +1,5 @@
-#ifndef ROS2_ADSW_MANAGER_MONITOR_SERVICE_MONITOR_HPP_
-#define ROS2_ADSW_MANAGER_MONITOR_SERVICE_MONITOR_HPP_
+#ifndef GENERAL_ADSW_MANAGER_MONITOR_SERVICE_MONITOR_HPP_
+#define GENERAL_ADSW_MANAGER_MONITOR_SERVICE_MONITOR_HPP_
 
 #include <iostream>
 #include <string>
@@ -9,7 +9,7 @@
 
 #include "UpdateServiceInfo.hpp"
 
-namespace ros2 {
+namespace general {
 namespace adsw_manager {
 
 class ServiceMonitor {
@@ -47,6 +47,6 @@ class ServiceMonitor {
 };
 
 } // namespace adsw_manager
-} // namespace ros2
+} // namespace general
 
 #endif

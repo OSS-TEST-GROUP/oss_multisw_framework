@@ -1,5 +1,5 @@
-#ifndef ROS2_ADSW_MANAGER_SERIVCE_SERVICE_REGISTRY_HPP_
-#define ROS2_ADSW_MANAGER_SERIVCE_SERVICE_REGISTRY_HPP_
+#ifndef GENERAL_ADSW_MANAGER_SERIVCE_SERVICE_REGISTRY_HPP_
+#define GENERAL_ADSW_MANAGER_SERIVCE_SERVICE_REGISTRY_HPP_
 
 #include <iostream>
 #include <memory>
@@ -14,7 +14,7 @@
 #include "ServiceType.hpp"
 #include "lifecycle/GetServiceStateRequest.hpp"
 
-namespace ros2 {
+namespace general {
 namespace adsw_manager {
 
 class ServiceRegistry {
@@ -75,6 +75,6 @@ private:
 };
 
 } // namespace adsw_manager
-} // namespace ros2
+} // namespace general
 
 #endif

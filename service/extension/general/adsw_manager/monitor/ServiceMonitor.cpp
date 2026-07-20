@@ -12,7 +12,7 @@
 
 #include "logger/Log.hpp"
 
-namespace ros2 {
+namespace general {
 namespace adsw_manager {
 
 ServiceMonitor::ServiceMonitor() {}
@@ -225,4 +225,4 @@ void ServiceMonitor::UpdateServiceState(){
 
 
 } // namespace adsw_manager
-} // namespace ros2
+} // namespace general

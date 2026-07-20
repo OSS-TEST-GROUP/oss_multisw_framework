@@ -5,7 +5,7 @@
 
 #include "logger/Log.hpp"
 
-namespace ros2 {
+namespace general {
 namespace adsw_manager {
     
 StartServiceEndPoint::StartServiceEndPoint(MessageType msgtype, std::string topic) 

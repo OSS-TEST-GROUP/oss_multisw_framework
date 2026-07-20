@@ -9,7 +9,7 @@
 
 #include "logger/Log.hpp"
 
-namespace ros2 {
+namespace general {
 namespace adsw_manager {
 
 SetRecoveryPolicyEndPoint::SetRecoveryPolicyEndPoint(MessageType msgtype, std::string topic)
@@ -75,4 +75,4 @@ void SetRecoveryPolicyEndPoint::OnDataAvailable() {
 }
 
 } // namespace adsw_manager
-} // namespace ros2
+} // namespace general

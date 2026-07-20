@@ -1,5 +1,5 @@
-#ifndef ROS2_ADSW_MANAGER_CONTROL_CONTAINER_SERVICE_CONTROLLER_HPP_
-#define ROS2_ADSW_MANAGER_CONTROL_CONTAINER_SERVICE_CONTROLLER_HPP_
+#ifndef GENERAL_ADSW_MANAGER_CONTROL_CONTAINER_SERVICE_CONTROLLER_HPP_
+#define GENERAL_ADSW_MANAGER_CONTROL_CONTAINER_SERVICE_CONTROLLER_HPP_
 
 #include <memory>
 #include <string>
@@ -10,7 +10,7 @@
 #include "lifecycle/StartServiceRequest.hpp"
 #include "lifecycle/StopServiceRequest.hpp"
 
-namespace ros2 {
+namespace general {
 namespace adsw_manager {
 
 class ContainerServiceController  : public ServiceController {
@@ -46,6 +46,6 @@ class ContainerServiceController  : public ServiceController {
 };
 
 } // namespace adsw_manager
-} // namespace ros2
+} // namespace general
 
 #endif

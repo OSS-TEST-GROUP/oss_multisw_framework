@@ -1,6 +1,6 @@
 #include "Service.hpp"
 
-namespace ros2 {
+namespace general {
 namespace adsw_manager {
 
 Service::Service(const std::string& name, ServiceType service_type, RecoveryPolicy recovery_policy, bool is_enable)
@@ -153,4 +153,4 @@ std::string Service::ResolveProcessMatchToken(bool is_native) const {
 }
 
 } // namespace adsw_manager
-} // namespace ros2
+} // namespace general

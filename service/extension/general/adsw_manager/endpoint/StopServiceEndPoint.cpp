@@ -4,7 +4,7 @@
 #include "ADSWManager.hpp"
 #include "logger/Log.hpp"
 
-namespace ros2 {
+namespace general {
 namespace adsw_manager {
     
 StopServiceEndPoint::StopServiceEndPoint(MessageType msgtype, std::string topic) 
@@ -63,4 +63,4 @@ void StopServiceEndPoint::OnDataAvailable(){
 
 
 } // namespace adsw_manager
-} // namespace ros2
+} // namespace general

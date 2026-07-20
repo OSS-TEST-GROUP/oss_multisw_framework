@@ -1,7 +1,7 @@
-#ifndef ROS2_ADSW_MANAGER_SERIVCE_OS_TYPE_HPP_
-#define ROS2_ADSW_MANAGER_SERIVCE_OS_TYPE_HPP_
+#ifndef GENERAL_ADSW_MANAGER_SERIVCE_OS_TYPE_HPP_
+#define GENERAL_ADSW_MANAGER_SERIVCE_OS_TYPE_HPP_
 
-namespace ros2 {
+namespace general {
 namespace adsw_manager {
     
     enum class MwType {
@@ -11,6 +11,6 @@ namespace adsw_manager {
     };
     
 } // namespace adsw_manager
-} // namespace ros2
+} // namespace general
 
-#endif // ROS2_ADSW_MANAGER_SERIVCE_OS_TYPE_HPP_
+#endif // GENERAL_ADSW_MANAGER_SERIVCE_OS_TYPE_HPP_

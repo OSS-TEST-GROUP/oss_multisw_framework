@@ -1,5 +1,5 @@
-#ifndef ROS2_ADSW_MANAGER_MONITOR_CONTAINER_HEALTH_MONITOR_HPP_
-#define ROS2_ADSW_MANAGER_MONITOR_CONTAINER_HEALTH_MONITOR_HPP_
+#ifndef GENERAL_ADSW_MANAGER_MONITOR_CONTAINER_HEALTH_MONITOR_HPP_
+#define GENERAL_ADSW_MANAGER_MONITOR_CONTAINER_HEALTH_MONITOR_HPP_
 
 #include <atomic>
 #include <map>
@@ -7,7 +7,7 @@
 #include <string>
 #include <thread>
 
-namespace ros2 {
+namespace general {
 namespace adsw_manager {
 
 class ContainerHealthMonitor {
@@ -61,6 +61,6 @@ class ContainerHealthMonitor {
 };
 
 } // namespace adsw_manager
-} // namespace ros2
+} // namespace general
 
 #endif

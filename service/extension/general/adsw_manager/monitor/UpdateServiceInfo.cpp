@@ -1,7 +1,7 @@
 #include "UpdateServiceInfo.hpp"
 
 
-namespace ros2 {
+namespace general {
 namespace adsw_manager {
 
 UpdateServiceInfo::UpdateServiceInfo(const std::string& name, const std::string& namespace_name, ServiceEvent event, ServiceState state)
@@ -12,4 +12,4 @@ UpdateServiceInfo::UpdateServiceInfo(const std::string& name, const std::string&
         }
 
 } // namespace adsw_manager
-} // namespace ros2
+} // namespace general

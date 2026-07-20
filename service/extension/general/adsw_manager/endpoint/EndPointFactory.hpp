@@ -1,5 +1,5 @@
-#ifndef ROS2_ADSW_MANAGER_ENDPOINT_ENDPOINT_FACTORY_HPP_
-#define ROS2_ADSW_MANAGER_ENDPOINT_ENDPOINT_FACTORY_HPP_
+#ifndef GENERAL_ADSW_MANAGER_ENDPOINT_ENDPOINT_FACTORY_HPP_
+#define GENERAL_ADSW_MANAGER_ENDPOINT_ENDPOINT_FACTORY_HPP_
 
 #include <iostream>
 #include <string>
@@ -9,7 +9,7 @@
 #include "transmitter/DDSTransmitter.hpp"
 #include "MessageTypes.hpp"
 
-namespace ros2 {
+namespace general {
 namespace adsw_manager {
 
 enum class PubSubType {
@@ -38,6 +38,6 @@ class EndPointFactory {
 };
 
 } // namespace adsw_manager
-} // namespace ros2
+} // namespace general
 
 #endif

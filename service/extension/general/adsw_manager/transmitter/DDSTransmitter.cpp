@@ -5,7 +5,7 @@
 
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp>
 
-namespace ros2 {
+namespace general {
 namespace adsw_manager {
 
 namespace {
@@ -143,4 +143,4 @@ bool DDSTransmitter::SendMessage(MessageType mtype, void* ptr){
 }
 
 } // namespace lifecycle_manager
-} // namespace ros2
+} // namespace general

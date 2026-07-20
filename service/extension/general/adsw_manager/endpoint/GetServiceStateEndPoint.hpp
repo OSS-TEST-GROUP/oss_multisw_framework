@@ -9,7 +9,7 @@
 #include "lifecycle/GetServiceStateRequestPubSubTypes.hpp"
 #include "MessageTypes.hpp"
 
-namespace ros2 {
+namespace general {
 namespace adsw_manager {
 
 using namespace lifecyclemgr;
@@ -35,6 +35,6 @@ class GetServiceStateEndPoint : public DDSMessageEndpoint {
 };
 
 } // namespace adsw_manager
-} // namespace ros2
+} // namespace general
 
 #endif

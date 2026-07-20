@@ -1,6 +1,6 @@
 #include "NotifyContainerStateEndPoint.hpp"
 
-namespace ros2 {
+namespace general {
 namespace adsw_manager {
 
 NotifyContainerStateEndPoint::NotifyContainerStateEndPoint(MessageType msgtype, std::string topic)
@@ -18,4 +18,4 @@ std::string NotifyContainerStateEndPoint::GetTypeName() { return type_support_->
 std::shared_ptr<TypeSupport> NotifyContainerStateEndPoint::GetTypeSupport() { return type_support_; }
 
 } // namespace adsw_manager
-} // namespace ros2
+} // namespace general

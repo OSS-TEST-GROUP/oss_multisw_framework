@@ -11,7 +11,7 @@
 #include <algorithm>
 #include <set>
 
-namespace ros2 {
+namespace general {
 namespace adsw_manager {
 
 
@@ -371,4 +371,4 @@ bool ContainerServiceController::ProcessServiceStopRequest(lifecyclemgr::StopSer
 }
 
 } // namespace adsw_manager
-} // namespace ros2
+} // namespace general

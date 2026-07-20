@@ -3,7 +3,7 @@
 #include "endpoint/MessageTypes.hpp"
 #include <cstdio>
 
-namespace ros2 {
+namespace general {
 namespace adsw_manager {
 
 static std::shared_ptr<ADSWManager> shared_instance_;
@@ -246,4 +246,4 @@ void ADSWManager::SetShared(std::shared_ptr<ADSWManager> instance) {
 }
 
 } // namespace adsw_manager
-} // namespace ros2
+} // namespace general

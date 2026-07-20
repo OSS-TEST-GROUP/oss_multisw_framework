@@ -1,12 +1,12 @@
-#ifndef ROS2_ADSW_MANAGER_SERVICE_CONTAINER_HPP_
-#define ROS2_ADSW_MANAGER_SERVICE_CONTAINER_HPP_
+#ifndef GENERAL_ADSW_MANAGER_SERVICE_CONTAINER_HPP_
+#define GENERAL_ADSW_MANAGER_SERVICE_CONTAINER_HPP_
 
 #include <string>
 #include <set>
 #include <memory>
 #include <vector>
 
-namespace ros2 {
+namespace general {
 namespace adsw_manager {
 
 enum class ContainerType {
@@ -55,6 +55,6 @@ class Container {
 };
 
 } // namespace adsw_manager
-} // namespace ros2
+} // namespace general
 
 #endif

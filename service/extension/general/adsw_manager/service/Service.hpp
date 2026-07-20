@@ -1,5 +1,5 @@
-#ifndef ROS2_ADSW_MANAGER_SERIVCE_SERVICE_HPP_
-#define ROS2_ADSW_MANAGER_SERIVCE_SERVICE_HPP_
+#ifndef GENERAL_ADSW_MANAGER_SERIVCE_SERVICE_HPP_
+#define GENERAL_ADSW_MANAGER_SERIVCE_SERVICE_HPP_
 
 #include <iostream>
 #include <string>
@@ -9,7 +9,7 @@
 #include "RecoveryPolicy.hpp"
 #include "MwType.hpp"
 
-namespace ros2 {
+namespace general {
 namespace adsw_manager {
 
 class Service {
@@ -108,6 +108,6 @@ class Service {
 };
 
 } // namespace adsw_manager
-} // namespace ros2
+} // namespace general
 
 #endif

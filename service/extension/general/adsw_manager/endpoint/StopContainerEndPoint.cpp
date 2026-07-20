@@ -8,7 +8,7 @@
 
 #include "logger/Log.hpp"
 
-namespace ros2 {
+namespace general {
 namespace adsw_manager {
 
 StopContainerEndPoint::StopContainerEndPoint(MessageType msgtype, std::string topic)
@@ -61,4 +61,4 @@ void StopContainerEndPoint::OnDataAvailable() {
 }
 
 } // namespace adsw_manager
-} // namespace ros2
+} // namespace general

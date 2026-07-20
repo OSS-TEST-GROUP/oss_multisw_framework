@@ -1,5 +1,5 @@
-#ifndef ROS2_ADSW_MANAGER_TRANSMITTER_DDS_TRANSMITTER_HPP_
-#define ROS2_ADSW_MANAGER_TRANSMITTER_DDS_TRANSMITTER_HPP_
+#ifndef GENERAL_ADSW_MANAGER_TRANSMITTER_DDS_TRANSMITTER_HPP_
+#define GENERAL_ADSW_MANAGER_TRANSMITTER_DDS_TRANSMITTER_HPP_
 
 #include <string>
 #include <map>
@@ -14,7 +14,7 @@
 
 using namespace eprosima::fastdds::dds;
 
-namespace ros2 {
+namespace general {
 namespace adsw_manager {
 
 class DDSTransmitter {
@@ -48,6 +48,6 @@ class DDSTransmitter {
 };
 
 } // namespace lifecycle_manager
-} // namespace ros2
+} // namespace general
 
-#endif // ROS2_ADSW_MANAGER_TRANSMITTER_DDS_TRANSMITTER_HPP_
+#endif // GENERAL_ADSW_MANAGER_TRANSMITTER_DDS_TRANSMITTER_HPP_

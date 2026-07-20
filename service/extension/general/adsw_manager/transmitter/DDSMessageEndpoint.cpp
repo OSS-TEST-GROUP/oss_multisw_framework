@@ -1,7 +1,7 @@
 #include "DDSMessageEndpoint.hpp"
 #include "logger/Log.hpp"
 
-namespace ros2 {
+namespace general {
 namespace adsw_manager {
 
 DDSMessageEndpoint::DDSMessageEndpoint() : participant_(nullptr), publisher_(nullptr), subscriber_(nullptr), dds_topic_(nullptr),
@@ -151,4 +151,4 @@ void DDSMessageEndpoint::on_data_available(DataReader* reader)
 
 
 } // namespace adsw_manager
-} // namespace ros2
+} // namespace general

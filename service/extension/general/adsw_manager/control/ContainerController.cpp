@@ -1,7 +1,7 @@
 #include "ContainerController.hpp"
 #include "logger/Log.hpp"
 
-namespace ros2 {
+namespace general {
 namespace adsw_manager {
 
 const std::string ADSW_ROS2_CONTAINER_NAME = "oss-mmf-ext-ros2";
@@ -402,4 +402,4 @@ int ContainerController::RunCommand(const std::string& cmd) {
 }
 
 } // namespace adsw_manager
-} // namespace ros2
+} // namespace general
