@@ -21,7 +21,7 @@ pip install -e .
 
 ```
 1순위: $SAVED_REGISTRY_BACKUP/saved-service-list.yaml
-2순위: $SAVED_REGISTRY_BACKUP/ros2-sample-speclist.yaml (fallback)
+2순위: $SAVED_REGISTRY_BACKUP/sils-sample-speclist.yaml (fallback, k3s Pod)
 환경변수 미설정 시: ./config/saved-service-list.yaml
 ```
 

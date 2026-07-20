@@ -42,7 +42,7 @@ bool ServiceRegistry::LoadServiceList() {
 
   if (ready_service_list_ == false) {
     std::string list_path = getEnv("SAVED_REGISTRY_BACKUP").value_or("config");
-    list_path.append("/ros2-sample-speclist.yaml");
+    list_path.append("/sils-sample-speclist.yaml");
     ready_service_list_ = LoadServiceList(list_path);
   }
 
@@ -518,7 +518,7 @@ bool ServiceRegistry::Save() {
   // Emit the structure LoadServiceSaved expects: specs -> [ {containers: [...]} ].
   // (The previous version wrote config["spec"]["containers"] — singular "spec"
   // and no sequence wrapper — which LoadServiceSaved could not read back,
-  // silently falling through to the ros2-sample-speclist.yaml fallback.)
+  // silently falling through to the sils-sample-speclist.yaml fallback.)
   YAML::Node ndspec;
   ndspec["containers"] = ndcontainers;
   YAML::Node ndspecs;
