@@ -32,8 +32,6 @@ class ContainerController {
 
     std::vector<std::shared_ptr<Container>> GetAllContainers();
 
-    std::string BaseCommand(const std::string& container_name);
-    std::string BaseRos2Command(const std::string& container_name);
 
     bool ContainerSupported();
 

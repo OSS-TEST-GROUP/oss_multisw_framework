@@ -4,8 +4,6 @@
 namespace general {
 namespace adsw_manager {
 
-const std::string ADSW_ROS2_CONTAINER_NAME = "oss-mmf-ext-ros2";
-
 ContainerController::ContainerController() {
     LOG_DEBUG("ContainerController create");
 }
@@ -236,46 +234,6 @@ bool ContainerController::RestartDockerComposeContainer(std::shared_ptr<Containe
     }
     LOG_ERROR("ContainerController::RestartDockerComposeContainer failed " << container->GetName());
     return false;
-}
-
-// ─────────────────────────────────────────────────────────────
-// BaseCommand helpers (for exec into container)
-// ─────────────────────────────────────────────────────────────
-
-std::string ContainerController::BaseCommand(const std::string& container_name) {
-    if (container_name == ADSW_ROS2_CONTAINER_NAME) return "";
-
-    std::shared_ptr<Container> container = GetContainer(container_name);
-    if (!container) return "";
-
-    switch (container->GetContainerType()) {
-        case ContainerType::K3S:
-            return "kubectl exec -n " + container->GetNamespace()
-                 + " " + container->GetPodName() + " -- ";
-        case ContainerType::DOCKER:
-        case ContainerType::DOCKER_COMPOSE:
-            return "docker exec " + container_name + " ";
-        default:
-            return "";
-    }
-}
-
-std::string ContainerController::BaseRos2Command(const std::string& container_name) {
-    if (container_name == ADSW_ROS2_CONTAINER_NAME) return "";
-
-    std::string base = BaseCommand(container_name);
-    if (base.empty()) return "";
-
-    std::shared_ptr<Container> container = GetContainer(container_name);
-    switch (container->GetContainerType()) {
-        case ContainerType::K3S:
-            return base + "bash -c \"source /opt/ros/humble/setup.bash && ";
-        case ContainerType::DOCKER:
-        case ContainerType::DOCKER_COMPOSE:
-            return base + "bash -c \"source /opt/ros/humble/setup.bash && ";
-        default:
-            return "";
-    }
 }
 
 // ─────────────────────────────────────────────────────────────
