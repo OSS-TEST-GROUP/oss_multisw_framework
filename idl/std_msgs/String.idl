@@ -1,0 +1,16 @@
+// std_msgs/String — ROS-canonical layout (rmw_fastrtps: type name
+// "std_msgs::msg::dds_::String_", single member "data").
+//
+// Used by dds_bridge to publish a plain-string diagnostic on
+// rt/mmf/lifecyclemgr/bridge_source_diag. std_msgs/String is a standard
+// ROS type that rosbridge_server resolves natively, so lfc_monitor can
+// subscribe without any mmf_interfaces overlay regeneration.
+module std_msgs {
+    module msg {
+        module dds_ {
+            struct String_ {
+                string data;
+            };
+        };
+    };
+};

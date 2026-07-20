@@ -29,6 +29,12 @@ int main(int argc, char** argv) {
     DdsBridge bridge;
     if (!bridge.Initialize(idl_root)) return 1;
 
+    // Multi-source safety net: publish a std_msgs/String diagnostic when any
+    // bridged lifecycle topic sees >1 distinct publisher (duplicate core/adsw
+    // on the DDS domain). lfc_monitor subscribes and flags it — the condition
+    // that previously made autoware state flap without any visible cause.
+    bridge.EnableSourceDiag("mmf/lifecyclemgr/bridge_source_diag");
+
     // ros_to_raw=true  → subscribe rt/<topic> (ROS-canonical type) +
     //                    publish raw <topic> (IDL type).  Used for
     //                    ros_monitor → OtaManager (request/registration).
