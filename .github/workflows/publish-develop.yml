@@ -1,0 +1,103 @@
+# =============================================================================
+# 사내 develop → Public develop 전달 워크플로 (develop 통째 방식)
+# 배치 위치: 사내 저장소 obigo-gov/oss_multisw_framework
+#            .github/workflows/publish-develop.yml
+#
+# 흐름: 담당자가 수동 실행 (또는 사내 develop push 시)
+#        → build / test / security-scan (내부 CI)
+#        → publish-approval (공개 승인 게이트)
+#        → 봇이 사내 develop 을 공개 저장소의 publish/YYYYMMDD-xxxx 브랜치로 push
+#        → 공개 저장소에 PR 자동 생성 (publish/... → develop)
+#
+# tracking 브랜치 없이 사내 develop 을 그대로 기준선으로 사용한다.
+# 공개 develop 직접 push 는 금지(정책 §6)이므로, develop 로 바로 밀지 않고
+# 임시 브랜치로 push 후 PR 을 만들어 사람이 머지한다.
+# =============================================================================
+
+name: Publish develop to Public
+
+on:
+  workflow_dispatch:          # 담당자 수동 실행 (권장)
+  # push:                     # 사내 develop 이 갱신될 때마다 자동 공개하려면 주석 해제
+  #   branches: [develop]
+
+env:
+  PUBLIC_OWNER: OSS-TEST-GROUP
+  PUBLIC_REPO: oss_multisw_framework
+  PUBLIC_BASE: develop        # 공개 정본 브랜치
+
+concurrency:
+  group: publish-develop
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: echo "TODO: 프로젝트 빌드 명령"
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test
+        run: echo "TODO: 테스트 명령"
+
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Secret / dependency scan
+        run: echo "TODO: 시크릿·의존성 취약점 스캔"
+
+  publish-approval:
+    needs: [build, test, security-scan]
+    runs-on: ubuntu-latest
+    environment: publish-approval    # ← 공개 승인 게이트
+    steps:
+      - name: Approval recorded
+        run: echo "공개 승인 완료 — Public 전달로 진행합니다."
+
+  publish:
+    needs: [publish-approval]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop           # 사내 develop 을 공개 대상으로
+          fetch-depth: 0
+
+      - name: Compute publish branch name
+        id: name
+        run: |
+          # 공개 저장소로 보낼 임시 브랜치명 (날짜+커밋 short SHA)
+          SHORT=$(git rev-parse --short HEAD)
+          PB="publish/$(date +%Y%m%d)-${SHORT}"
+          echo "branch=$PB" >> "$GITHUB_OUTPUT"
+          echo "공개 브랜치: $PB"
+
+      - name: Push develop to public (temp branch)
+        env:
+          PUBLIC_BOT_TOKEN: ${{ secrets.PUBLIC_BOT_TOKEN }}
+        run: |
+          PB="${{ steps.name.outputs.branch }}"
+          # checkout 이 심은 extraheader(사내 GITHUB_TOKEN)를 무력화하고 봇 토큰으로 push
+          git -c http.https://github.com/.extraheader= \
+              push "https://oauth2:${PUBLIC_BOT_TOKEN}@github.com/${PUBLIC_OWNER}/${PUBLIC_REPO}.git" \
+              "HEAD:${PB}"
+
+      - name: Create PR on public repo
+        env:
+          GH_TOKEN: ${{ secrets.PUBLIC_BOT_TOKEN }}
+        run: |
+          PB="${{ steps.name.outputs.branch }}"
+          gh pr create \
+            --repo "${PUBLIC_OWNER}/${PUBLIC_REPO}" \
+            --base "${PUBLIC_BASE}" \
+            --head "${PB}" \
+            --title "[publish] 사내 develop 반영 (${PB})" \
+            --body "사내(obigo-gov) develop 의 공개 승인된 상태를 전달합니다. 리뷰 후 develop 로 머지 바랍니다." \
+            || echo "PR 이 이미 존재하거나 생성을 건너뜁니다."
+          # 머지는 자동화하지 않음. CODEOWNERS 리뷰 후 담당자가 수동 머지.
