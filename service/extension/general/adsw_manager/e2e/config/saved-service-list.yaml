@@ -1,0 +1,44 @@
+version: 0.1
+
+# ==========================================================================
+# 경로 B e2e 스모크용 speclist (recovery: ALWAYS).
+#
+# 기본 config/saved-service-list.yaml 은 recovery: MANUAL 이라 lifecycle_mgr 가
+# 자동 기동하지 않는다(운영자 ctrl 명령 필요). 이 e2e 변형은 recovery: ALWAYS 로
+# 두어, adsw_manager 가 이 컨테이너를 등록(UpdateServiceList)하는 순간
+# lifecycle_mgr 의 PolicyAlways 가 NOT_RUNNING → START 로 평가해 **인젝터 없이
+# 자동으로** StartServiceRequest → docker run 을 유발한다.
+#
+# 즉 이 파일 + 두 바이너리(lifecycle_mgr, adsw_manager_general)를 같은 DDS
+# 도메인에 띄우기만 하면 경로 B 전체(등록 핸드셰이크 → 정책 자동기동 → 컨테이너
+# 제어 → 상태 보고)가 라이브로 검증된다. run_lifecycle_e2e.sh 참고.
+#
+# 주의: ALWAYS 이므로 컨테이너가 죽으면 lifecycle_mgr 가 자동 재시작한다 —
+# "정지" 를 깔끔히 보려면 MANUAL + ctrl 퍼블리셔가 필요(이 스모크 범위 밖).
+# ==========================================================================
+specs:
+  - containers:
+      - name: sils-vecu-viss-probe
+        image: "registry.obigo.com/oss/oss-mmf-sils-vecu:latest"
+        container-type: "docker"
+        extra_args:
+          - "--network"
+          - "host"
+          - "-e"
+          - "VISS_DDS_DOMAIN_ID=0"                 # SUT viss-server 도메인과 동일해야 함
+          - "-e"
+          - "SILS_RUN_ID=sils-e2e-run"
+          - "-e"
+          - "SILS_VECU_INSTANCE_ID=viss-probe-1"
+          - "-e"
+          - "SILS_VISS_PROBE_PERIOD_MS=500"
+        command_args: []
+        services:
+          - package: ""
+            name: "sils-vecu-viss-probe"
+            launchfile: ""
+            type: "NORMAL"
+            recovery: "ALWAYS"                      # ← e2e 자동 기동 트리거
+            enabled: "true"
+            max: "0"
+            exec_type: "container"
