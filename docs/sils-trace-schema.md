@@ -32,6 +32,7 @@ producers (clock master, responder) omit `instance_id`. The schema encodes the e
 | producer | source | role |
 |---|---|---|
 | `vecu` | `sils::RunProbe` (`run_loop.hpp`) | the vECU itself — **what a developer ECU emits for free** |
+| `coordinator` | `run_coordinator/run_phase1.sh` | run lifecycle + terminal verdict |
 | `clock_master` | `sils_clock_master.cc` | lockstep tick control plane |
 | `responder` | `viss_responder_main.cc` | L1 SUT stand-in |
 | `verifier` | `viss_verify_main.cc` | run verifier |
@@ -45,7 +46,7 @@ Required fields beyond the base `run_id`. All also carry the standard envelope
 ### Lifecycle
 | event | required (beyond base + envelope) | when |
 |---|---|---|
-| `run_start` | `domain_id` | participant created |
+| `run_start` | `domain_id` (envelope `seq`/`topic` vECU-only) | participant created — **also emitted by the coordinator** (adds `backend`, no `seq`/`topic`); required is the intersection `instance_id`/`wall_time_ms`/`domain_id` |
 | `wire_start` | `name`, `type` | wire codec registered (§P4) |
 | `qos_negotiated` | `role`, `reliability`, `durability` | writer/reader QoS set |
 | `behavior_start` | `name` | behavior port selected |
@@ -88,8 +89,27 @@ Required fields beyond the base `run_id`. All also carry the standard envelope
 | `tick_barrier` | clock_master | `tick_seq`, `completed`, `wall_time_ms` |
 | `clock_stop` | clock_master | `exit_code`, `wall_time_ms` |
 | `responder_start` / `responder_reply` / `responder_stop` | responder | `role` + `domain_id`/`response_topic` · `request_id`/`status` · `handled` |
-| `verify_start` / `sample_received` / `verify_pass` | verifier | `expected_instance_id`, `topic`, … |
+| `verify_start` / `sample_received` / `verify_pass` / `verify_fail` | verifier | `expected_instance_id`, `topic`, … (`verify_pass`/`verify_fail` share `received_count`/`valid_count`/`min_samples`) |
 | `input_source_start` / `input_source_sent` / `input_source_done` | input_source | `count`/`rate_ms`/`topic` · `seq`/`topic` · `sent` |
+
+## Coordinator events (run lifecycle + terminal verdict)
+
+The Run Coordinator (`run_phase1.sh`) merges these into the run trace; `evaluate.py`
+derives the §5.2 terminal verdict from them. All carry base + `wall_time_ms`.
+
+| event | required (beyond base + `wall_time_ms`) | role |
+|---|---|---|
+| `domain_leased` / `domain_released` | `domain_id`,`pool` · — | §12.2 lease |
+| `domain_pool_exhausted` / `domain_alloc_failed` | `pool` · — | lease failure |
+| `process_running` | — (`pid`/`container`) | backend launched |
+| `vecu_ready` / `verify_invoke` | — | lifecycle mirror |
+| `cleanup_done` / `cleanup_noop` | — | teardown |
+| `run_pass` | — | **terminal → PASSED** |
+| `run_fail` | `verify_exit_code` | **terminal → FAILED** |
+| `ready_timeout` / `start_failed` / `aborted_orphaned` | — · `reason` · `reason` | **terminal → ABORTED** |
+| `orphan_detected` | `reason` | reap |
+| `fmu_gate_allowed` / `fmu_gate_denied` | `fmu` | §5.6 FMU preflight |
+| `fleet_start` / `fleet_ready` / `fleet_start_failed` / `member_start` | `domain_id`/`backend`/`members` · `members` · — · `instance_id`/`index` | fleet (§4.10) |
 
 ## Validate a trace
 
