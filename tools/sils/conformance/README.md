@@ -19,8 +19,9 @@ python3 gate.py sils.jsonl --target target.jsonl --contract parity.yaml   # + L4
 ```
 
 A committed sample — [`samples/nominal.trace.jsonl`](samples/nominal.trace.jsonl), a full
-merged run trace — is the gate's smoke fixture (and what CI runs). `.github/workflows/
-sils-conformance.yml` runs the unit tests + this gate on every push/PR touching the kit.
+merged run trace — is the gate's smoke fixture. Wire the kit into whatever CI you use by
+running `pytest tools/sils/conformance/` + `gate.py samples/nominal.trace.jsonl` (a ready
+GitHub Actions workflow is kept as a reference; enable it if the team runs Actions CI).
 
 ## The three checkers it chains
 
