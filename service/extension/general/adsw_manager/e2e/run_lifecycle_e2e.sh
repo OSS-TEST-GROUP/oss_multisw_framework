@@ -66,7 +66,13 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 # ── 사전 점검 ────────────────────────────────────────────────────────────
-[ -n "${FASTDDS_SETUP:-}" ] && [ -f "${FASTDDS_SETUP}" ] && source "${FASTDDS_SETUP}"
+# colcon 이 생성한 setup.bash 는 nounset(set -u) 비안전(COLCON_TRACE 등 미정의
+# 참조) 이므로 source 구간만 nounset 을 잠깐 해제한다.
+if [ -n "${FASTDDS_SETUP:-}" ] && [ -f "${FASTDDS_SETUP}" ]; then
+    set +u
+    source "${FASTDDS_SETUP}"
+    set -u
+fi
 
 if ! docker info >/dev/null 2>&1; then
     fail "docker 데몬을 사용할 수 없습니다."
