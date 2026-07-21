@@ -36,12 +36,14 @@ REPO_ROOT="$( cd "${SCRIPT_DIR}/../../../../.." && pwd )"
 
 OUTPUT_ROOT="${OUTPUT_ROOT:-${REPO_ROOT}/output/x86_64/Debug}"
 export MMF_DDS_DOMAIN_ID="${MMF_DDS_DOMAIN_ID:-0}"
-CONTAINER_NAME="sils-vecu-viss-probe"
+# 기본은 viss-probe 변형. brake 등 다른 vECU 는 E2E_CONFIG_DIR + E2E_CONTAINER_NAME
+# 로 speclist/컨테이너명을 바꿔 재사용한다(run_brake_e2e.sh 참고).
+CONTAINER_NAME="${E2E_CONTAINER_NAME:-sils-vecu-viss-probe}"
 TIMEOUT_SEC="${TIMEOUT_SEC:-60}"
 
 LCM_BIN="${OUTPUT_ROOT}/core/bin/lifecycle_mgr"
 ADSW_BIN="${OUTPUT_ROOT}/extension/general/bin/adsw_manager_general"
-ADSW_CONFIG_DIR="${SCRIPT_DIR}/config"
+ADSW_CONFIG_DIR="${E2E_CONFIG_DIR:-${SCRIPT_DIR}/config}"
 
 LOG_DIR="$(mktemp -d 2>/dev/null || echo /tmp/sils-e2e-$$)"
 mkdir -p "${LOG_DIR}"

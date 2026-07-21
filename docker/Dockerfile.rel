@@ -193,6 +193,61 @@ ENTRYPOINT ["/oss/entrypoint.sh"]
 FROM runtime-mmf-sils-vecu-${TARGETARCH} AS runtime-mmf-sils-vecu
 
 ###################################################################################
+# brake-ecu 예제 vECU - x86_64
+#
+# runtime-mmf-sils-vecu 와 완전히 같은 형태다. 유일한 차이는 실행 바이너리가
+# 기본 probe(sils_vecu_viss_probe) 대신 개발자 ECU(brake_ecu)이고, entrypoint 가
+# 그 바이너리를 exec 한다는 것. brake_ecu 는 BUILD_SILS + SILS_BUILD_EXAMPLES(기본
+# ON)로 core/bin 에 함께 빌드된다(service/sils/examples/brake-ecu). plant/behavior
+# 만 커스텀이고 wire 는 내장 VISS 라 DDS 계약은 기본 probe 와 동일하다.
+###################################################################################
+FROM runtime AS runtime-mmf-brake-ecu-x86_64
+
+ARG BUILD_TYPE=Release
+
+COPY --chown=ossuser:ossuser output/x86_64/${BUILD_TYPE}/core/bin/brake_ecu /oss/bin/brake_ecu
+COPY --chown=ossuser:ossuser output/x86_64/lib /oss/lib
+COPY --chown=ossuser:ossuser output/x86_64/${BUILD_TYPE}/core/lib /tmp/lib
+COPY --chown=ossuser:ossuser service/sils/examples/brake-ecu/entrypoint.sh /oss/entrypoint.sh
+
+WORKDIR /oss
+USER ossuser
+
+RUN cp -rpa /tmp/lib/*.so* /oss/lib/ \
+    && rm -rf /tmp/lib
+
+ENV LD_LIBRARY_PATH=/oss/lib
+
+ENTRYPOINT ["/oss/entrypoint.sh"]
+
+###################################################################################
+# brake-ecu 예제 vECU - aarch64
+###################################################################################
+FROM runtime AS runtime-mmf-brake-ecu-aarch64
+
+ARG BUILD_TYPE=Release
+
+COPY --chown=ossuser:ossuser output/aarch64/${BUILD_TYPE}/core/bin/brake_ecu /oss/bin/brake_ecu
+COPY --chown=ossuser:ossuser output/aarch64/lib /oss/lib
+COPY --chown=ossuser:ossuser output/aarch64/${BUILD_TYPE}/core/lib /tmp/lib
+COPY --chown=ossuser:ossuser service/sils/examples/brake-ecu/entrypoint.sh /oss/entrypoint.sh
+
+WORKDIR /oss
+USER ossuser
+
+RUN cp -rpa /tmp/lib/*.so* /oss/lib/ \
+    && rm -rf /tmp/lib
+
+ENV LD_LIBRARY_PATH=/oss/lib
+
+ENTRYPOINT ["/oss/entrypoint.sh"]
+
+###################################################################################
+# brake-ecu - Multi-arch selector
+###################################################################################
+FROM runtime-mmf-brake-ecu-${TARGETARCH} AS runtime-mmf-brake-ecu
+
+###################################################################################
 # ROS-mmf base (formerly Dockerfile.ros)
 #
 # Shared base for the ext-ros2 runtime stages. Installs ROS 2 Humble +

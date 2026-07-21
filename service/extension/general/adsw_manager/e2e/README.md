@@ -57,6 +57,22 @@ service/extension/general/adsw_manager/e2e/run_lifecycle_e2e.sh
 | `FASTDDS_SETUP` | (없음) | source 할 setup.bash |
 | `TIMEOUT_SEC` | `60` | 컨테이너 기동 대기 상한 |
 
+## brake-ecu 예제 변형
+
+기본 probe 대신 개발자 ECU(brake-ecu)를 같은 경로 B로 태우는 변형. plant/behavior
+만 커스텀이고 wire 는 내장 VISS 라 **lifecycle_mgr·adsw·DDS 계약은 무변경** — 바뀌는
+건 이미지·컨테이너명·주입 env(`BRAKE_GAIN`/`BRAKE_MAX_FORCE`)뿐이다.
+
+```bash
+./build.sh --build-sils                    # brake_ecu → core/bin (SILS_BUILD_EXAMPLES 기본 ON)
+./docker/build_local.sh --brake-ecu-only    # → oss-mmf-brake-ecu:local
+service/extension/general/adsw_manager/e2e/run_brake_e2e.sh
+```
+
+`run_brake_e2e.sh` 는 `run_lifecycle_e2e.sh` 를 `E2E_CONFIG_DIR=config-brake` +
+`E2E_CONTAINER_NAME=brake-ecu` 로 재사용한다(스크립트 중복 없음). speclist 는
+`config-brake/saved-service-list.yaml`.
+
 ## 범위 밖
 
 - **정지 검증**: ALWAYS 는 컨테이너가 죽으면 자동 재시작하므로 깔끔한 stop 검증이
