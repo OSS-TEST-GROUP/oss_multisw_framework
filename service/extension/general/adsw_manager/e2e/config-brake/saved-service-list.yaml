@@ -1,0 +1,53 @@
+version: 0.1
+
+# ==========================================================================
+# 경로 B e2e — brake-ecu 예제 vECU 변형 (recovery: ALWAYS).
+#
+# viss-probe 변형(../config/saved-service-list.yaml)과 구조가 동일하다. 차이는
+# 오직 (1) 이미지가 개발자 ECU(oss-mmf-brake-ecu:local), (2) 컨테이너/서비스명이
+# brake-ecu, (3) 주입 env 에 이 ECU 고유 knob(BRAKE_GAIN/BRAKE_MAX_FORCE)이
+# 추가된다는 것뿐. wire 는 내장 VISS 라 DDS 계약·lifecycle_mgr·adsw 무변경.
+#
+# 실행:
+#   ./build.sh --build-sils                       # brake_ecu → core/bin (예제 기본 ON)
+#   ./docker/build_local.sh --brake-ecu-only       # → oss-mmf-brake-ecu:local
+#   e2e/run_brake_e2e.sh                            # 이 speclist 로 경로 B 자동 기동
+# ==========================================================================
+specs:
+  - containers:
+      - name: brake-ecu
+        image: "oss-mmf-brake-ecu:local"           # docker/build_local.sh --brake-ecu-only
+        container-type: "docker"
+        extra_args:
+          - "--network"
+          - "host"
+          - "-e"
+          - "VISS_DDS_DOMAIN_ID=0"                  # SUT 도메인과 동일
+          - "-e"
+          - "SILS_RUN_ID=sils-e2e-brake-run"
+          - "-e"
+          - "SILS_VECU_INSTANCE_ID=brake-ecu-1"
+          - "-e"
+          - "SILS_VISS_PROBE_PERIOD_MS=500"
+          # ── 컨트롤러/플랜트 (SDK 공통 필드 재사용) ──
+          - "-e"
+          - "SILS_CTRL_KP=0.5"
+          - "-e"
+          - "SILS_CTRL_SETPOINT=0.0"
+          - "-e"
+          - "SILS_PLANT_DRAG=0.01"
+          # ── brake-ecu 고유 knob ──
+          - "-e"
+          - "BRAKE_GAIN=0.02"
+          - "-e"
+          - "BRAKE_MAX_FORCE=100"
+        command_args: []
+        services:
+          - package: ""
+            name: "brake-ecu"
+            launchfile: ""
+            type: "NORMAL"
+            recovery: "ALWAYS"
+            enabled: "true"
+            max: "0"
+            exec_type: "container"
