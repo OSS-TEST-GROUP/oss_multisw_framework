@@ -1,0 +1,48 @@
+version: 0.1
+
+# ==========================================================================
+# general adsw_manager 용 SiLS speclist (primary registry backup).
+#
+# general 변형은 ROS2-free 컨테이너 서비스 매니저다. 각 컨테이너는 adsw_manager
+# 가 docker 로 직접 관리한다 (StartService → docker run/start, StopService →
+# docker stop/rm). exec_type: "container" 서비스는 이미지 자신의 CMD 가
+# 워크로드이므로 별도 `docker exec` launch 를 하지 않는다.
+#
+# 아래는 SiLS 가상 ECU(vECU) — viss_probe 컨테이너(oss-mmf-sils-vecu 이미지)의
+# 등록 예다. Autoware 예제(ROS_DOMAIN_ID=42, MMF 로부터 격리)와 달리 vECU 는
+# SUT 의 도메인을 **공유**해야 한다(아키텍처 v3 §3.4/§18-B, P5) — 여기
+# VISS_DDS_DOMAIN_ID 는 실제 viss-server 컨테이너와 **동일한 값**이어야 한다.
+#
+# recovery: MANUAL — SiLS 런의 Run Coordinator 가 start/stop 을 명시 제어한다.
+# ALWAYS 면 stop 직후 lifecycle_mgr 가 즉시 재기동해 "정지"가 성립하지 않는다.
+#
+# vECU 를 여러 개 띄우려면 containers: 아래에 항목을 추가하고 각기 다른
+# SILS_VECU_INSTANCE_ID 를 준다.
+# ==========================================================================
+specs:
+  - containers:
+      # ── SiLS vECU: VISS probe ───────────────────────────────────────────
+      - name: sils-vecu-viss-probe
+        image: "registry.obigo.com/oss/oss-mmf-sils-vecu:latest"
+        container-type: "docker"
+        extra_args:
+          - "--network"
+          - "host"
+          - "-e"
+          - "VISS_DDS_DOMAIN_ID=0"                 # SUT viss-server 도메인과 동일해야 함
+          - "-e"
+          - "SILS_RUN_ID=sils-example-run"         # 이 런의 식별자 (vECU 자체가 아님)
+          - "-e"
+          - "SILS_VECU_INSTANCE_ID=viss-probe-1"   # vECU 고유 identity (participant 이름 + trace)
+          - "-e"
+          - "SILS_VISS_PROBE_PERIOD_MS=500"
+        command_args: []                            # 이미지 CMD 가 워크로드
+        services:
+          - package: ""
+            name: "sils-vecu-viss-probe"
+            launchfile: ""
+            type: "NORMAL"
+            recovery: "MANUAL"
+            enabled: "true"
+            max: "0"
+            exec_type: "container"
