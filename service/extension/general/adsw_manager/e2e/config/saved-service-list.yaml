@@ -19,7 +19,7 @@ version: 0.1
 specs:
   - containers:
       - name: sils-vecu-viss-probe
-        image: "registry.obigo.com/oss/oss-mmf-sils-vecu:latest"
+        image: "oss-mmf-sils-vecu:local"          # docker/build_local.sh --sils-vecu-only 로 로컬 빌드
         container-type: "docker"
         extra_args:
           - "--network"

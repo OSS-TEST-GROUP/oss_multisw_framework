@@ -31,32 +31,37 @@ TARGETARCH="x86_64"
 
 BUILD_CORE=1
 BUILD_EXT_ROS2=1
+BUILD_SILS_VECU=0
 
 usage() {
   cat >&2 <<'USAGE'
 Usage: docker/build_local.sh [options]
 
 Build the SUT's runtime docker images for local x86_64 verification.
-Tags: oss-mmf-core:local, oss-mmf-ext-ros2:local
+Tags: oss-mmf-core:local, oss-mmf-ext-ros2:local, oss-mmf-sils-vecu:local
 
 Options:
-  --core-only       Build only oss-mmf-core:local
-  --ext-ros2-only   Build only oss-mmf-ext-ros2:local
-  -h, --help        Show this message
+  --core-only         Build only oss-mmf-core:local
+  --ext-ros2-only     Build only oss-mmf-ext-ros2:local
+  --sils-vecu-only    Build only oss-mmf-sils-vecu:local (SiLS vECU 이미지)
+  -h, --help          Show this message
 
 Environment:
   BUILD_TYPE        Debug | Release (default: Debug)
 
 Pre-requisite:
   ./build.sh must have populated output/x86_64/${BUILD_TYPE}/{core,extension/ros2}/{bin,lib}
+  sils-vecu 이미지는 ./build.sh --build-sils 로 sils_vecu_* 바이너리가
+  output/x86_64/${BUILD_TYPE}/core/bin 에 있어야 한다.
 USAGE
 }
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --core-only)     BUILD_EXT_ROS2=0; shift;;
-    --ext-ros2-only) BUILD_CORE=0; shift;;
-    -h|--help)       usage; exit 0;;
+    --core-only)      BUILD_EXT_ROS2=0; BUILD_SILS_VECU=0; shift;;
+    --ext-ros2-only)  BUILD_CORE=0; BUILD_SILS_VECU=0; shift;;
+    --sils-vecu-only) BUILD_CORE=0; BUILD_EXT_ROS2=0; BUILD_SILS_VECU=1; shift;;
+    -h|--help)        usage; exit 0;;
     *) echo "ERR: unknown option: $1" >&2; usage; exit 2;;
   esac
 done
@@ -87,8 +92,9 @@ build_target() {
     .
 }
 
-[ "$BUILD_CORE" -eq 1 ]     && build_target core
-[ "$BUILD_EXT_ROS2" -eq 1 ] && build_target ext-ros2
+[ "$BUILD_CORE" -eq 1 ]      && build_target core
+[ "$BUILD_EXT_ROS2" -eq 1 ]  && build_target ext-ros2
+[ "$BUILD_SILS_VECU" -eq 1 ] && build_target sils-vecu
 
 echo ""
 echo "✓ Done. Local images:"

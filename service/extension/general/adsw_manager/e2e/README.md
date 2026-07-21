@@ -28,7 +28,12 @@ adsw_manager (ContainerServiceController.ProcessServiceStartRequest)
 2. **general 빌드**(adsw_manager_general): `EXTENSION_PLATFORM=GENERAL`. → `output/<arch>/<build>/extension/general/bin/adsw_manager_general`
 3. **docker 데몬** 접근 가능
 4. **FastDDS 런타임(.so)** 로드 가능 (`FASTDDS_SETUP` 로 setup.bash 지정 가능)
-5. `oss-mmf-sils-vecu` 이미지 (speclist 참조; 없으면 `SILS_VECU_IMAGE` 로 override + pull)
+5. `oss-mmf-sils-vecu:local` 이미지 — 로컬 빌드:
+   ```bash
+   ./build.sh --build-sils                     # sils_vecu_* 바이너리 → core/bin
+   ./docker/build_local.sh --sils-vecu-only     # → oss-mmf-sils-vecu:local
+   ```
+   (레지스트리 push 불필요 — docker run 이 로컬 태그를 그대로 찾음)
 
 ## 실행
 
