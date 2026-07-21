@@ -1,0 +1,29 @@
+# ==========================================================================
+# general adsw_manager 용 speclist fallback (k8s/k3s Pod 포맷).
+#
+# primary(config/saved-service-list.yaml) 로드가 실패했을 때만 사용된다
+# (ServiceRegistry::LoadServiceList). container-type: "k3s" 워크로드를 위한
+# kubectl(apply) 경로용 샘플이며, docker 기반 SiLS 는 primary 를 쓴다.
+#
+# 아래는 SiLS vECU 를 k3s Pod 로 띄우는 최소 예다. docker 백엔드를 쓰면 이
+# 파일은 참조되지 않는다.
+# ==========================================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sils-vecu-sample
+spec:
+  containers:
+    - name: sils-vecu-viss-probe
+      image: registry.obigo.com/oss/oss-mmf-sils-vecu:latest
+      imagePullPolicy: IfNotPresent
+      env:
+        - name: VISS_DDS_DOMAIN_ID          # SUT viss-server 도메인과 동일해야 함
+          value: "0"
+        - name: SILS_RUN_ID
+          value: "sils-example-run"
+        - name: SILS_VECU_INSTANCE_ID
+          value: "viss-probe-1"
+        - name: SILS_VISS_PROBE_PERIOD_MS
+          value: "500"
+  restartPolicy: Never
