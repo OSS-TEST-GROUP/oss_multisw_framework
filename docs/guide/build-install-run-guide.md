@@ -74,6 +74,24 @@ done
 > 멀티아키(amd64+arm64) 매니페스트 + registry push 를 한 번에 하려면
 > `BUILD_TYPE=Release ./docker/build_multiarch.sh` 사용.
 
+> **⚠️ 레지스트리 계정 — push 는 push 권한 계정 필요 (중요)**
+> registry.obigo.com(Harbor)은 최소권한 정책이다. **pull 계정으로는 push 가 안 된다**
+> (`unauthorized to access repository ... action: push`).
+> - **pull**: `ossuser`(pull 전용) — build.sh/Jenkins 기본 로그인 계정.
+> - **push**: **push 권한 계정**이 별도로 필요하다. `docker/registry-auth.sh` 의
+>   push 루틴이 push 시점에만 그 계정으로 전환하고, 끝나면 ossuser 로 복귀한다.
+>   자격증명은 **리포에 하드코딩하지 말고 env 로 주입**한다:
+>   ```bash
+>   export REGISTRY_PUSH_ID=<push계정>  REGISTRY_PUSH_PWD='<비번/토큰>'
+>   BUILD_TYPE=Release ./docker/build_multiarch.sh   # push 시 자동 로그인→push→복귀
+>   ```
+>   env 미설정이면 push 는 가드로 스킵/실패한다(pull 은 ossuser 로 정상).
+> - **push 계정 만들기(권장)**: Harbor 웹UI → 프로젝트 `oss` → **Robot Accounts** →
+>   Push+Pull 권한으로 생성(`robot$oss+...` + 토큰), 또는 유저 + **Developer** 롤.
+>   관리자(builder)가 아닌 최소권한 계정을 쓴다. (임시로 builder 사용은 가능하나 지양)
+> - **Jenkins**: `REGISTRY_PUSH_ID`/`REGISTRY_PUSH_PWD` 를 Jenkins 자격증명(credentials
+>   /withCredentials)으로 주입한다 — Jenkinsfile 에 평문 금지.
+
 ### 2-3. 설치 (보드로 전달 — 둘 중 하나)
 ```bash
 # (a) registry 경유 — 배포 표준

@@ -28,6 +28,10 @@ set -e
 REGISTRY="registry.obigo.com"
 BUILD_TYPE="${BUILD_TYPE:-Release}"
 
+# push 전용 로그인 루틴 (별도 계정). REGISTRY_ADDRESS 를 REGISTRY 와 맞춰 source.
+REGISTRY_ADDRESS="${REGISTRY}"
+source "$(dirname "$0")/registry-auth.sh"
+
 # Maps Docker auto-fill arch (amd64/arm64) → SUT kernel-arch stage suffix.
 declare -A ARCH_MAP=( [amd64]=x86_64 [arm64]=aarch64 )
 ARCHS=(amd64 arm64)
@@ -73,6 +77,10 @@ build_target() {
     -t "${manifest_tag}" \
     "${platform_tags[@]}"
 }
+
+# push 계정으로 전환 (env REGISTRY_PUSH_ID/PWD 필요). 실패 시 중단.
+registry_push_login || { echo "push 로그인 실패 — 중단"; exit 1; }
+trap 'registry_pull_login >/dev/null 2>&1 || true' EXIT   # 종료 시 pull 계정 복귀
 
 for tgt in "${TARGETS[@]}"; do
   build_target "$tgt"

@@ -11,8 +11,12 @@ pipeline {
         IMAGE_REGISTRY = "registry.obigo.com"
         IMAGE_NAMESPACE = "oss"
         APP_NAME = "oss-mmf"
-        REGISTRY_ID = "ossuser"
+        REGISTRY_ID = "ossuser"      // pull 전용(최소권한)
         REGISTRY_PWD = "Ossuser1234"
+        // push 계정: Jenkins 자격증명으로 주입(하드코딩 금지). 임시로 builder 사용 가능.
+        //   예) credentials('registry-oss-push') → REGISTRY_PUSH_ID/REGISTRY_PUSH_PWD 로 매핑
+        REGISTRY_PUSH_ID = ""
+        REGISTRY_PUSH_PWD = ""
 
         // Dockerfile Path
         DOCKERFILE_PATH = "docker/Dockerfile" 
@@ -130,7 +134,15 @@ pipeline {
                             | grep -q "${APP_NAME}-builder"; then
                             docker build -t ${BUILDER_IMAGE} \
                                 -f ${PWD}/docker/Dockerfile .
-                            docker push ${BUILDER_IMAGE}
+                            # push 는 별도 push 계정으로. REGISTRY_PUSH_ID/PWD 는
+                            # Jenkins 자격증명(withCredentials/credentials)으로 주입.
+                            if [ -n "${REGISTRY_PUSH_ID}" ] && [ -n "${REGISTRY_PUSH_PWD}" ]; then
+                                echo "${REGISTRY_PUSH_PWD}" | docker login ${IMAGE_REGISTRY} -u "${REGISTRY_PUSH_ID}" --password-stdin
+                                docker push ${BUILDER_IMAGE}
+                                echo "${REGISTRY_PWD}" | docker login ${IMAGE_REGISTRY} -u "${REGISTRY_ID}" --password-stdin
+                            else
+                                echo "REGISTRY_PUSH_* 미설정 — 빌더 이미지 push 스킵" >&2
+                            fi
                         else
                             if [ -z $(docker images -q "${BUILDER_IMAGE}") ]; then
                                 docker pull ${BUILDER_IMAGE}
