@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SiLS vECU 개발 가이드 — libsils_vecu SDK</title>
+<style>
+  :root{
+    --bg:#f1f4f5; --surface:#ffffff; --surface-2:#f7f9fa;
+    --ink:#0f1518; --muted:#566871; --faint:#8496a0;
+    --line:#d6dee1; --line-soft:#e6ecee;
+    --signal:#0b8f82; --signal-ink:#076b61; --signal-soft:#d8efec;
+    --fmu:#b9761a; --fmu-soft:#f3e6d1;
+    --orch:#4f5bc4; --orch-ink:#3d47a3; --orch-soft:#e4e6f7;
+    --ok:#2f9e5f; --pending:#9aa7ad;
+    --grid:rgba(11,143,130,.05);
+    --shadow:0 1px 2px rgba(16,30,34,.04),0 8px 24px -14px rgba(16,30,34,.14);
+    --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0b0f12; --surface:#131b1f; --surface-2:#0f171b;
+      --ink:#e1e9ec; --muted:#8ea0a8; --faint:#63757d;
+      --line:#243036; --line-soft:#1a242a;
+      --signal:#34c9b8; --signal-ink:#7fe0d4; --signal-soft:#12312e;
+      --fmu:#e0a04a; --fmu-soft:#3a2c17;
+      --orch:#8b9be8; --orch-ink:#aab5f0; --orch-soft:#1e2340;
+      --ok:#46c07d; --pending:#5c6a70;
+      --grid:rgba(52,201,184,.06);
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px -16px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#f1f4f5; --surface:#ffffff; --surface-2:#f7f9fa;
+    --ink:#0f1518; --muted:#566871; --faint:#8496a0;
+    --line:#d6dee1; --line-soft:#e6ecee;
+    --signal:#0b8f82; --signal-ink:#076b61; --signal-soft:#d8efec;
+    --fmu:#b9761a; --fmu-soft:#f3e6d1;
+    --orch:#4f5bc4; --orch-ink:#3d47a3; --orch-soft:#e4e6f7;
+    --ok:#2f9e5f; --pending:#9aa7ad; --grid:rgba(11,143,130,.05);
+    --shadow:0 1px 2px rgba(16,30,34,.04),0 8px 24px -14px rgba(16,30,34,.14);
+  }
+  :root[data-theme="dark"]{
+    --bg:#0b0f12; --surface:#131b1f; --surface-2:#0f171b;
+    --ink:#e1e9ec; --muted:#8ea0a8; --faint:#63757d;
+    --line:#243036; --line-soft:#1a242a;
+    --signal:#34c9b8; --signal-ink:#7fe0d4; --signal-soft:#12312e;
+    --fmu:#e0a04a; --fmu-soft:#3a2c17;
+    --orch:#8b9be8; --orch-ink:#aab5f0; --orch-soft:#1e2340;
+    --ok:#46c07d; --pending:#5c6a70; --grid:rgba(52,201,184,.06);
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px -16px rgba(0,0,0,.6);
+  }
+
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+    line-height:1.6;font-size:16px;
+    background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+    background-size:26px 26px;
+  }
+  .wrap{max-width:980px;margin:0 auto;padding:clamp(28px,5vw,64px) clamp(18px,4vw,32px) 96px}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--signal-ink);font-weight:600}
+  h1{font-size:clamp(28px,5vw,44px);line-height:1.08;letter-spacing:-.02em;font-weight:800;text-wrap:balance;margin:.5rem 0 0}
+  h2{font-size:clamp(19px,2.6vw,23px);letter-spacing:-.01em;font-weight:750;margin:0;text-wrap:balance}
+  h3{font-size:15px;font-weight:700;margin:0 0 .3rem}
+  .lede{color:var(--muted);font-size:clamp(15px,1.9vw,17px);max-width:64ch;margin:1rem 0 0}
+  section{margin-top:clamp(40px,7vw,68px)}
+  .sec-head{display:flex;align-items:baseline;gap:.7rem;margin-bottom:1.4rem;border-bottom:1px solid var(--line);padding-bottom:.7rem}
+  .sec-n{font-family:var(--mono);font-size:12px;color:var(--faint);font-weight:600;letter-spacing:.05em}
+  code,.mono{font-family:var(--mono)}
+  .mono{font-size:.92em}
+  p{margin:.6rem 0}
+  a{color:var(--signal-ink)}
+  .sub{color:var(--muted);margin-top:-.6rem}
+
+  .chips{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:1.4rem}
+  .chip{font-family:var(--mono);font-size:12px;padding:.32rem .6rem;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--muted);display:inline-flex;gap:.4rem;align-items:center}
+  .chip b{color:var(--ink);font-weight:600}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);flex:none}
+  .dot.s{background:var(--signal)} .dot.o{background:var(--orch)} .dot.a{background:var(--fmu)}
+
+  figure{margin:0}
+  figcaption{font-size:12.5px;color:var(--faint);margin-top:.7rem;text-align:center;font-family:var(--mono)}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;box-shadow:var(--shadow)}
+  svg{display:block;max-width:100%;height:auto}
+
+  /* SVG semantic classes (theme-aware via CSS vars) */
+  .s-fill{fill:var(--surface)} .s2-fill{fill:var(--surface-2)}
+  .edge{stroke:var(--line);stroke-width:1.4;fill:none}
+  .edge-d{stroke:var(--line);stroke-width:1.4;fill:none;stroke-dasharray:4 4}
+  .flowln{stroke:var(--signal);stroke-width:1.8;fill:none}
+  .orchln{stroke:var(--orch);stroke-width:1.8;fill:none}
+  .lbl{fill:var(--ink);font-family:var(--mono);font-size:13px}
+  .lbl-sm{fill:var(--muted);font-family:var(--mono);font-size:11px}
+  .lbl-t{fill:var(--faint);font-family:var(--mono);font-size:10.5px;letter-spacing:.08em}
+  .box-sig{fill:var(--signal-soft);stroke:var(--signal);stroke-width:1.5}
+  .box-orch{fill:var(--orch-soft);stroke:var(--orch);stroke-width:1.5}
+  .box-amb{fill:var(--fmu-soft);stroke:var(--fmu);stroke-width:1.5}
+  .box-n{fill:var(--surface-2);stroke:var(--line);stroke-width:1.3}
+  .t-sig{fill:var(--signal-ink)} .t-orch{fill:var(--orch-ink)} .t-amb{fill:var(--fmu)}
+  .bus{fill:none;stroke:var(--signal);stroke-width:3}
+
+  .tblwrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface);box-shadow:var(--shadow)}
+  table{border-collapse:collapse;width:100%;font-size:14px;min-width:520px}
+  th,td{text-align:left;padding:.6rem .9rem;border-bottom:1px solid var(--line-soft);vertical-align:top}
+  thead th{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);font-weight:600;background:var(--surface-2)}
+  tbody tr:last-child td{border-bottom:none}
+  td.k{font-family:var(--mono);color:var(--signal-ink);font-weight:600;white-space:nowrap}
+  td .m{font-family:var(--mono);font-size:13px}
+
+  pre{margin:0;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:13px;line-height:1.5;color:var(--ink)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .roles{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:1rem}
+  .role{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:.4rem}
+  .role .nm{font-family:var(--mono);font-weight:700;font-size:14px;color:var(--signal-ink)}
+  .role .nm.o{color:var(--orch-ink)}
+  .role p{margin:0;font-size:13px;color:var(--muted)}
+  ol.steps{counter-reset:s;list-style:none;padding:0;margin:1rem 0 0}
+  ol.steps>li{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px 14px 52px;box-shadow:var(--shadow);position:relative;margin-bottom:12px}
+  ol.steps>li::before{counter-increment:s;content:counter(s);position:absolute;left:14px;top:14px;width:26px;height:26px;border-radius:8px;background:var(--signal-soft);color:var(--signal-ink);font-family:var(--mono);font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center}
+  ol.steps h3{margin:.1rem 0 .35rem}
+  ol.steps p{margin:0;font-size:13.5px;color:var(--muted)}
+  .callout{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--signal);border-radius:0 12px 12px 0;padding:14px 18px;color:var(--muted);box-shadow:var(--shadow);margin-top:14px}
+  .callout.o{border-left-color:var(--orch)}
+  .callout.a{border-left-color:var(--fmu)}
+  .callout strong{color:var(--ink)}
+  ul.chk{list-style:none;padding:0;margin:.5rem 0 0}
+  ul.chk li{padding:.4rem 0 .4rem 1.7rem;position:relative;border-bottom:1px dashed var(--line-soft);font-size:14px;color:var(--muted)}
+  ul.chk li:last-child{border-bottom:none}
+  ul.chk li::before{content:"✓";position:absolute;left:.2rem;color:var(--signal);font-weight:700}
+  ul.chk b{color:var(--ink)}
+  .refs{display:flex;flex-wrap:wrap;gap:.55rem;margin-top:.4rem}
+  .refs a{font-family:var(--mono);font-size:12px;text-decoration:none;border:1px solid var(--line);border-radius:999px;background:var(--surface);padding:.35rem .65rem}
+  footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);font-family:var(--mono);font-size:12px;color:var(--faint);display:flex;flex-wrap:wrap;gap:.4rem 1.2rem;justify-content:space-between}
+  @media (max-width:720px){ .grid2,.roles{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">SiLS vECU · libsils_vecu SDK · 개발 가이드</div>
+    <h1>SDK로 나만의 가상 ECU 만들기</h1>
+    <p class="lede">core 를 한 줄도 건드리지 않고 vECU 하나를 <b>작성 → 패키징 → 실 lifecycle_mgr 로 배포</b>하는 전체 흐름. 개발자는 포트 몇 개만 쓰고, DDS·틱 루프·trace·오케스트레이션은 SDK와 MMF 가 소유한다.</p>
+    <div class="chips">
+      <span class="chip"><span class="dot s"></span>포트 <b>5개</b> · RunProbe</span>
+      <span class="chip"><span class="dot"></span><b>ROS2 없음</b> — FastDDS</span>
+      <span class="chip"><span class="dot o"></span>경로 B <b>lifecycle_mgr 자동기동</b></span>
+      <span class="chip"><span class="dot a"></span>plant: code · FMU · open-loop</span>
+    </div>
+    <p class="sub" style="margin-top:1rem;font-size:13px">전체 텍스트 절차는 <a href="sils-vecu-development-guide.md">sils-vecu-development-guide.md</a> · 설계 근거는 <a href="sils-extension-model.md">sils-extension-model.md</a> · 아키텍처는 <a href="sils-virtual-ecu-architecture-v3.md">v3</a></p>
+  </header>
+
+  <!-- ============ 01 큰 그림 ============ -->
+  <section>
+    <div class="sec-head"><span class="sec-n">01</span><h2>큰 그림 — SiLS 런 생태계</h2></div>
+    <p class="sub">한 번의 SiLS 런은 여러 프로세스가 같은 DDS 도메인에 모여 돈다. 내가 만드는 건 <b>vECU 하나</b>뿐 — 나머지는 SDK 가 함께 제공하는 fixture/도구이고, 컨테이너 기동은 MMF 오케스트레이션이 맡는다.</p>
+    <figure class="card">
+      <svg viewBox="0 0 900 470" role="img" aria-label="SiLS 런 생태계 다이어그램">
+        <!-- 상단: DDS 참가자들 -->
+        <text x="30" y="34" class="lbl-t">SILS RUN · DDS DOMAIN N (VISS_DDS_DOMAIN_ID)</text>
+
+        <!-- vECU under test -->
+        <rect x="30" y="48" width="210" height="92" rx="12" class="box-sig"/>
+        <text x="46" y="72" class="lbl t-sig" style="font-weight:700">vECU (내가 만든 것)</text>
+        <text x="46" y="92" class="lbl-sm">sils_vecu_viss_probe</text>
+        <text x="46" y="108" class="lbl-sm">· 또는 brake_ecu 등</text>
+        <text x="46" y="128" class="lbl-sm t-sig">behavior·plant·wire → RunProbe</text>
+
+        <!-- SUT / responder -->
+        <rect x="262" y="48" width="180" height="92" rx="12" class="box-n"/>
+        <text x="278" y="72" class="lbl" style="font-weight:700">SUT / responder</text>
+        <text x="278" y="92" class="lbl-sm">viss-server (실물)</text>
+        <text x="278" y="108" class="lbl-sm">또는 sils_vecu_viss_responder</text>
+        <text x="278" y="128" class="lbl-sm">req/resp 상대 (§L1)</text>
+
+        <!-- clock master -->
+        <rect x="464" y="48" width="190" height="92" rx="12" class="box-n"/>
+        <text x="480" y="72" class="lbl" style="font-weight:700">clock_master</text>
+        <text x="480" y="92" class="lbl-sm">sils_clock_master</text>
+        <text x="480" y="108" class="lbl-sm">TickGrant/Complete</text>
+        <text x="480" y="128" class="lbl-sm">lockstep 시간(§8.2)</text>
+
+        <!-- input source -->
+        <rect x="676" y="48" width="194" height="92" rx="12" class="box-n"/>
+        <text x="692" y="72" class="lbl" style="font-weight:700">input_source</text>
+        <text x="692" y="92" class="lbl-sm">sils_input_source</text>
+        <text x="692" y="108" class="lbl-sm">async 입력 fixture</text>
+        <text x="692" y="128" class="lbl-sm">TickInbox 스테이징(§7.3)</text>
+
+        <!-- 연결선 to bus -->
+        <line x1="135" y1="140" x2="135" y2="196" class="flowln"/>
+        <line x1="352" y1="140" x2="352" y2="196" class="edge"/>
+        <line x1="559" y1="140" x2="559" y2="196" class="edge"/>
+        <line x1="773" y1="140" x2="773" y2="196" class="edge"/>
+
+        <!-- DDS bus -->
+        <line x1="30" y1="198" x2="870" y2="198" class="bus"/>
+        <text x="30" y="190" class="lbl-sm t-sig">DDS bus — /VIN/Vehicle · response · sils/tick/* · sils/input/stream</text>
+
+        <!-- verifier reads trace -->
+        <line x1="135" y1="200" x2="135" y2="236" class="edge-d"/>
+        <rect x="30" y="238" width="210" height="58" rx="10" class="box-n"/>
+        <text x="46" y="262" class="lbl" style="font-weight:700">verifier</text>
+        <text x="46" y="282" class="lbl-sm">sils_vecu_viss_verify · gate.py</text>
+
+        <!-- trace out -->
+        <line x1="240" y1="267" x2="300" y2="267" class="edge"/>
+        <rect x="302" y="238" width="150" height="58" rx="10" class="s2-fill" stroke="var(--line)" stroke-width="1.3"/>
+        <text x="318" y="262" class="lbl-sm">JSONL trace</text>
+        <text x="318" y="282" class="lbl-sm">schema v1 계약</text>
+
+        <!-- 하단: 오케스트레이션 lane -->
+        <rect x="470" y="228" width="400" height="120" rx="12" class="box-orch" fill-opacity="0.35"/>
+        <text x="486" y="252" class="lbl-t" style="fill:var(--orch-ink)">ORCHESTRATION (ROS2-free) — 경로 B</text>
+
+        <rect x="486" y="264" width="168" height="68" rx="10" class="box-orch"/>
+        <text x="500" y="290" class="lbl t-orch" style="font-weight:700">lifecycle_mgr</text>
+        <text x="500" y="310" class="lbl-sm">정책·상태 (core)</text>
+        <text x="500" y="326" class="lbl-sm">PolicyAlways → START</text>
+
+        <rect x="672" y="264" width="182" height="68" rx="10" class="box-orch"/>
+        <text x="686" y="290" class="lbl t-orch" style="font-weight:700">adsw_manager</text>
+        <text x="686" y="310" class="lbl-sm">general (컨테이너 제어)</text>
+        <text x="686" y="326" class="lbl-sm">docker run/stop</text>
+
+        <line x1="654" y1="298" x2="672" y2="298" class="orchln"/>
+
+        <!-- adsw manages the containers (up) -->
+        <path d="M763 264 C 763 180, 135 180, 135 142" class="orchln" stroke-dasharray="5 4"/>
+        <text x="470" y="172" class="lbl-sm t-orch">docker run — vECU 컨테이너 기동/감시</text>
+
+        <!-- 화살표 헤드 -->
+        <defs>
+          <marker id="ar" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--orch)"/></marker>
+        </defs>
+      </svg>
+      <figcaption>내가 만드는 건 vECU 1개. clock_master·input_source·responder·verifier 는 SDK 동봉 fixture. lifecycle_mgr+adsw_manager 가 컨테이너를 기동한다.</figcaption>
+    </figure>
+
+    <div class="roles">
+      <div class="role"><span class="nm">vECU (probe)</span><p>내가 개발. 매 틱 emit. behavior/plant/wire → RunProbe. 컨테이너 1개 = 인스턴스 1개.</p></div>
+      <div class="role"><span class="nm">responder</span><p>SUT 대역(§L1). 요청 토픽 구독→상관 응답 발행. 실물 viss-server 로 대체 가능.</p></div>
+      <div class="role"><span class="nm">verifier</span><p>독립 구독자. 샘플 수신·trace 적합성 증명. gate.py 로 판정.</p></div>
+      <div class="role"><span class="nm">clock_master</span><p>lockstep 시간 마스터. TickGrant 발행→모든 참가자 TickComplete 대기(§8.2).</p></div>
+      <div class="role"><span class="nm">input_source</span><p>async 입력 fixture. TickInbox 스테이징(§7.3) 관측용. 프로덕션 아님.</p></div>
+      <div class="role"><span class="nm o">lifecycle_mgr + adsw</span><p>경로 B 오케스트레이션. 등록→정책 자동기동→docker run. ROS2 불필요.</p></div>
+    </div>
+  </section>
+
+  <!-- ============ 02 vECU 내부 ============ -->
+  <section>
+    <div class="sec-head"><span class="sec-n">02</span><h2>vECU 내부 — 포트 5개 + RunProbe</h2></div>
+    <p class="sub">vECU 는 <code>ConfigFromEnv</code> 로 env 를 읽고, 포트를 조립해 <code>RunProbe</code> 에 넘기는 ~25줄 실행파일이다. 굵은 3개가 주입(개발자 작성), 나머지 2개는 RunProbe 가 config 로 내부 생성.</p>
+    <figure class="card">
+      <svg viewBox="0 0 900 340" role="img" aria-label="vECU 내부 포트 다이어그램">
+        <!-- env in -->
+        <rect x="24" y="130" width="150" height="70" rx="10" class="s2-fill" stroke="var(--line)" stroke-width="1.3"/>
+        <text x="40" y="158" class="lbl" style="font-weight:700">SILS_* env</text>
+        <text x="40" y="178" class="lbl-sm">ConfigFromEnv()</text>
+        <text x="40" y="193" class="lbl-sm">→ ProbeConfig</text>
+        <line x1="174" y1="165" x2="214" y2="165" class="flowln" marker-end="url(#ars)"/>
+
+        <!-- RunProbe container -->
+        <rect x="216" y="40" width="470" height="256" rx="14" class="s-fill" stroke="var(--signal)" stroke-width="1.6"/>
+        <text x="236" y="66" class="lbl t-sig" style="font-weight:700">sils::RunProbe (SDK 소유)</text>
+        <text x="236" y="84" class="lbl-sm">DDS participant/topic/writer · QoS · 시그널·teardown</text>
+
+        <!-- injected ports (bold) -->
+        <rect x="236" y="100" width="200" height="46" rx="9" class="box-sig"/>
+        <text x="250" y="122" class="lbl t-sig" style="font-weight:700">IBehavior</text>
+        <text x="250" y="138" class="lbl-sm">behavior.hpp · 제어 로직</text>
+
+        <rect x="236" y="154" width="200" height="46" rx="9" class="box-sig"/>
+        <text x="250" y="176" class="lbl t-sig" style="font-weight:700">IPlant</text>
+        <text x="250" y="192" class="lbl-sm">plant.hpp · code/FMU/none</text>
+
+        <rect x="236" y="208" width="200" height="46" rx="9" class="box-sig"/>
+        <text x="250" y="230" class="lbl t-sig" style="font-weight:700">IWireCodec</text>
+        <text x="250" y="246" class="lbl-sm">wire.hpp · 내장 VISS/커스텀</text>
+
+        <text x="452" y="118" class="lbl-t">주입 — 개발자 작성</text>
+
+        <!-- internal ports -->
+        <rect x="456" y="127" width="210" height="46" rx="9" class="box-n"/>
+        <text x="470" y="149" class="lbl" style="font-weight:700">IClockSource</text>
+        <text x="470" y="165" class="lbl-sm">wall / lockstep (SILS_CLOCK_MODE)</text>
+
+        <rect x="456" y="181" width="210" height="46" rx="9" class="box-n"/>
+        <text x="470" y="203" class="lbl" style="font-weight:700">IScenario</text>
+        <text x="470" y="219" class="lbl-sm">결함 주입 (SILS_SCENARIO)</text>
+        <text x="490" y="245" class="lbl-t">내부 생성 — config 로</text>
+
+        <!-- outputs -->
+        <line x1="686" y1="120" x2="726" y2="120" class="flowln" marker-end="url(#ars)"/>
+        <rect x="728" y="96" width="150" height="48" rx="9" class="box-n"/>
+        <text x="744" y="118" class="lbl" style="font-weight:700">DDS publish</text>
+        <text x="744" y="134" class="lbl-sm">VISS envelope</text>
+
+        <line x1="686" y1="215" x2="726" y2="215" class="flowln" marker-end="url(#ars)"/>
+        <rect x="728" y="191" width="150" height="48" rx="9" class="box-n"/>
+        <text x="744" y="213" class="lbl" style="font-weight:700">JSONL trace</text>
+        <text x="744" y="229" class="lbl-sm">schema v1</text>
+
+        <defs>
+          <marker id="ars" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--signal)"/></marker>
+        </defs>
+      </svg>
+      <figcaption>주입 3개(IBehavior·IPlant·IWireCodec)만 개발자 몫. IClockSource·IScenario 는 RunProbe 가 env 로 만든다.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ============ 03 틱 루프 ============ -->
+  <section>
+    <div class="sec-head"><span class="sec-n">03</span><h2>틱 루프 — RunProbe 가 도는 방식</h2></div>
+    <p class="sub">매 틱마다 clock 이 시간을 주고, behavior 가 출력을 계산하고, wire 가 DDS 에 싣고, plant 가 물리를 한 스텝 전진시켜 <b>다음 틱 behavior 로 피드백</b>된다(폐루프 §9 L3).</p>
+    <figure class="card">
+      <svg viewBox="0 0 900 220" role="img" aria-label="틱 루프 다이어그램">
+        <rect x="24"  y="80" width="150" height="60" rx="10" class="box-n"/>
+        <text x="99" y="106" text-anchor="middle" class="lbl" style="font-weight:700">IClockSource</text>
+        <text x="99" y="124" text-anchor="middle" class="lbl-sm">tick_seq, sim_time</text>
+
+        <rect x="214" y="80" width="150" height="60" rx="10" class="box-sig"/>
+        <text x="289" y="106" text-anchor="middle" class="lbl t-sig" style="font-weight:700">IBehavior</text>
+        <text x="289" y="124" text-anchor="middle" class="lbl-sm">OnTick → {req, value}</text>
+
+        <rect x="404" y="80" width="150" height="60" rx="10" class="box-sig"/>
+        <text x="479" y="106" text-anchor="middle" class="lbl t-sig" style="font-weight:700">IWireCodec</text>
+        <text x="479" y="124" text-anchor="middle" class="lbl-sm">Publish → DDS</text>
+
+        <rect x="594" y="80" width="150" height="60" rx="10" class="box-sig"/>
+        <text x="669" y="106" text-anchor="middle" class="lbl t-sig" style="font-weight:700">IPlant</text>
+        <text x="669" y="124" text-anchor="middle" class="lbl-sm">SetInputs·Step</text>
+
+        <rect x="784" y="80" width="92" height="60" rx="10" class="s2-fill" stroke="var(--line)" stroke-width="1.3"/>
+        <text x="830" y="106" text-anchor="middle" class="lbl-sm">trace</text>
+        <text x="830" y="124" text-anchor="middle" class="lbl-sm">event</text>
+
+        <line x1="174" y1="110" x2="212" y2="110" class="flowln" marker-end="url(#arl)"/>
+        <line x1="364" y1="110" x2="402" y2="110" class="flowln" marker-end="url(#arl)"/>
+        <line x1="554" y1="110" x2="592" y2="110" class="flowln" marker-end="url(#arl)"/>
+        <line x1="744" y1="110" x2="782" y2="110" class="flowln" marker-end="url(#arl)"/>
+
+        <!-- feedback loop plant → behavior -->
+        <path d="M669 140 C 669 190, 289 190, 289 142" class="flowln" stroke-dasharray="5 4" marker-end="url(#arl)"/>
+        <text x="479" y="184" text-anchor="middle" class="lbl-sm t-sig">plant_feedback (다음 틱)</text>
+        <defs>
+          <marker id="arl" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--signal)"/></marker>
+        </defs>
+      </svg>
+      <figcaption>clock → behavior → wire.Publish → plant → (feedback). 결정성이 golden(§L2)·회귀 비교의 근거.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ============ 04 개발 절차 ============ -->
+  <section>
+    <div class="sec-head"><span class="sec-n">04</span><h2>개발 절차 (요약)</h2></div>
+    <p class="sub">전체 코드/CMake 스니펫은 <a href="sils-vecu-development-guide.md">.md 가이드</a>에. 여기선 흐름만.</p>
+    <ol class="steps">
+      <li><h3>뼈대</h3><p><code>examples/brake-ecu/</code> 복사. in-tree 는 <code>examples/CMakeLists.txt</code> 에 등록, out-of-tree 는 <code>find_package(sils_vecu)</code>.</p></li>
+      <li><h3>IBehavior 구현 (필수)</h3><p><code>OnTick(ctx)</code> 가 <code>{request_json, value}</code> 반환. <b>결정적</b>이어야 golden 재현.</p></li>
+      <li><h3>IPlant (선택)</h3><p>폐루프면 code 구현 / <code>MakeFmuPlant</code> / open-loop 는 <code>nullptr</code>.</p></li>
+      <li><h3>IWireCodec 선택</h3><p>내장 VISS 재사용(계약 무변경) 또는 커스텀 타입(상대편도 그 타입 알아야 함).</p></li>
+      <li><h3>main.cc</h3><p><code>ConfigFromEnv</code> → 포트 조립 → <code>RunProbe(cfg, behavior, plant, wire)</code>.</p></li>
+      <li><h3>CMake · descriptor · 패키징</h3><p><code>target_link_libraries(... sils_vecu)</code>; env 계약 descriptor; entrypoint 는 바이너리를 <b>PID 1 로 exec</b>.</p></li>
+    </ol>
+  </section>
+
+  <!-- ============ 05 env 매핑 ============ -->
+  <section>
+    <div class="sec-head"><span class="sec-n">05</span><h2>env 계약 (ProbeConfig ↔ SILS_*)</h2></div>
+    <p class="sub">런타임 동작은 전부 env 구동. 핵심 발췌 — 전체는 <a href="../service/sils/vecu/src/config.hpp">config.hpp</a>.</p>
+    <div class="tblwrap">
+      <table>
+        <thead><tr><th>env</th><th>필드</th><th>기본</th><th>의미</th></tr></thead>
+        <tbody>
+          <tr><td class="k">VISS_DDS_DOMAIN_ID</td><td class="m">domain_id</td><td class="m">0</td><td>SUT 와 동일해야 함</td></tr>
+          <tr><td class="k">SILS_RUN_ID</td><td class="m">run_id</td><td class="m">local</td><td>런 식별자(trace)</td></tr>
+          <tr><td class="k">SILS_VECU_INSTANCE_ID</td><td class="m">instance_id</td><td class="m">viss-probe-1</td><td>vECU 고유 id</td></tr>
+          <tr><td class="k">SILS_TOPIC</td><td class="m">topic</td><td class="m">/VIN/Vehicle</td><td>계약 토픽</td></tr>
+          <tr><td class="k">SILS_VISS_PROBE_PERIOD_MS</td><td class="m">period_ms</td><td class="m">500</td><td>틱 주기</td></tr>
+          <tr><td class="k">SILS_CLOCK_MODE</td><td class="m">clock_mode</td><td class="m">wall</td><td>wall · lockstep</td></tr>
+          <tr><td class="k">SILS_WIRE</td><td class="m">wire_kind</td><td class="m">viss</td><td>viss · raw</td></tr>
+          <tr><td class="k">SILS_CTRL_KP / _SETPOINT</td><td class="m">ctrl_*</td><td class="m">0.8 / 10.0</td><td>컨트롤러</td></tr>
+          <tr><td class="k">SILS_PLANT / _DRAG / _INIT</td><td class="m">plant_*</td><td class="m">—</td><td>플랜트</td></tr>
+          <tr><td class="k">SILS_SCENARIO / _FAULTS</td><td class="m">scenario_*</td><td class="m">—</td><td>결함 주입</td></tr>
+          <tr><td class="k">(내 ECU 고유)</td><td class="m">—</td><td class="m">—</td><td>예: MY_GAIN — GetEnv*Or 로 직접</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout"><strong>경계 원칙:</strong> SDK 는 COMMON 계약(타이밍·QoS·토픽·attestation)만 소유한다. 내 모델의 knob(gain, max-force 등)은 <code>sils::GetEnvDoubleOr(...)</code> 로 <b>내가 직접</b> 읽는다.</div>
+  </section>
+
+  <!-- ============ 06 경로 B 배포 ============ -->
+  <section>
+    <div class="sec-head"><span class="sec-n">06</span><h2>경로 B — 실 lifecycle_mgr 로 배포</h2></div>
+    <p class="sub">이미지를 speclist 에 등록하고 두 프로세스를 같은 도메인에 띄우면, <code>recovery: ALWAYS</code> 일 때 <b>트리거 없이 자동 기동</b>된다. (검증된 흐름)</p>
+    <figure class="card">
+      <svg viewBox="0 0 900 210" role="img" aria-label="경로 B 흐름">
+        <rect x="16"  y="70" width="150" height="70" rx="10" class="box-sig"/>
+        <text x="91" y="96" text-anchor="middle" class="lbl t-sig" style="font-weight:700">adsw_manager</text>
+        <text x="91" y="114" text-anchor="middle" class="lbl-sm">UpdateServiceList</text>
+        <text x="91" y="130" text-anchor="middle" class="lbl-sm">(container 등록)</text>
+
+        <rect x="216" y="70" width="160" height="70" rx="10" class="box-orch"/>
+        <text x="296" y="94" text-anchor="middle" class="lbl t-orch" style="font-weight:700">lifecycle_mgr</text>
+        <text x="296" y="112" text-anchor="middle" class="lbl-sm">registry 등록</text>
+        <text x="296" y="128" text-anchor="middle" class="lbl-sm">PolicyAlways→START</text>
+
+        <rect x="426" y="70" width="170" height="70" rx="10" class="box-orch"/>
+        <text x="511" y="94" text-anchor="middle" class="lbl t-orch" style="font-weight:700">StartServiceRequest</text>
+        <text x="511" y="112" text-anchor="middle" class="lbl-sm">→ adsw</text>
+        <text x="511" y="128" text-anchor="middle" class="lbl-sm">ContainerController</text>
+
+        <rect x="646" y="70" width="150" height="70" rx="10" class="box-sig"/>
+        <text x="721" y="96" text-anchor="middle" class="lbl t-sig" style="font-weight:700">docker run</text>
+        <text x="721" y="114" text-anchor="middle" class="lbl-sm">my-ecu:local</text>
+        <text x="721" y="130" text-anchor="middle" class="lbl-sm">컨테이너 기동</text>
+
+        <line x1="166" y1="105" x2="214" y2="105" class="orchln" marker-end="url(#aro)"/>
+        <line x1="376" y1="105" x2="424" y2="105" class="orchln" marker-end="url(#aro)"/>
+        <line x1="596" y1="105" x2="644" y2="105" class="orchln" marker-end="url(#aro)"/>
+
+        <rect x="810" y="82" width="74" height="46" rx="9" class="box-n"/>
+        <text x="847" y="108" text-anchor="middle" class="lbl-sm">running</text>
+        <line x1="796" y1="105" x2="808" y2="105" class="edge"/>
+        <text x="16" y="176" class="lbl-sm">recovery: ALWAYS → 자동 · MANUAL → CtrlStartContainer(운영자) 필요</text>
+        <defs>
+          <marker id="aro" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--orch)"/></marker>
+        </defs>
+      </svg>
+      <figcaption>참조 e2e: e2e/run_lifecycle_e2e.sh (probe) · run_brake_e2e.sh (brake). 이미지·env 만 다르고 나머지는 무변경.</figcaption>
+    </figure>
+    <div class="callout o"><strong>실행:</strong> <code>./build.sh --build-sils</code> → <code>./docker/build_local.sh --sils-vecu-only</code>(또는 <code>--brake-ecu-only</code>) → <code>e2e/run_lifecycle_e2e.sh</code>. 같은 <code>MMF_DDS_DOMAIN_ID</code> 로 lifecycle_mgr 와 adsw 를 띄운다.</div>
+  </section>
+
+  <!-- ============ 07 검증 + 체크리스트 ============ -->
+  <section>
+    <div class="sec-head"><span class="sec-n">07</span><h2>검증 &amp; 체크리스트</h2></div>
+    <div class="grid2">
+      <div class="card">
+        <h3>충실도 레벨</h3>
+        <div class="tblwrap" style="border:none;box-shadow:none">
+          <table style="min-width:0">
+            <tbody>
+              <tr><td class="k">빌드</td><td>컴파일·링크·DDS 타입 — <span class="m">build.sh --build-sils</span></td></tr>
+              <tr><td class="k">L0/L1</td><td>trace 스키마 적합 — <a href="../tools/sils/conformance/gate.py">gate.py</a> (fail-closed)</td></tr>
+              <tr><td class="k">L2</td><td>behavior 결정성 — golden 재현</td></tr>
+              <tr><td class="k">L3</td><td>폐루프 물리 — plant trace 비교</td></tr>
+              <tr><td class="k">타깃</td><td>ARM64 동등성 — <a href="sils-target-parity.md">target-parity</a></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <h3>개발 체크리스트</h3>
+        <ul class="chk">
+          <li><b>OnTick 결정성</b> — 같은 ctx → 같은 출력</li>
+          <li><b>plant 경로</b> — code / FMU / none 택1</li>
+          <li><b>wire</b> — 내장 VISS 유지? 커스텀이면 상대 타입 계약도</li>
+          <li><b>main</b> — ConfigFromEnv → 조립 → RunProbe</li>
+          <li><b>고유 knob</b> — GetEnv*Or 로 직접</li>
+          <li><b>entrypoint</b> — 바이너리 PID 1 exec</li>
+          <li><b>gate</b> 통과 · <b>recovery</b> 정책 결정</li>
+        </ul>
+      </div>
+    </div>
+    <div class="callout a"><strong>core 를 바꾸고 싶어지면 멈춰라.</strong> 대부분 포트 주입으로 해결된다 — core 무변경이 이 SDK 의 목적이다. 근거: <a href="sils-extension-model.md">sils-extension-model.md</a>.</div>
+    <div class="refs" style="margin-top:1.4rem">
+      <a href="sils-vecu-development-guide.md">전체 절차 (.md)</a>
+      <a href="sils-extension-model.md">extension-model</a>
+      <a href="sils-virtual-ecu-architecture-v3.md">architecture v3</a>
+      <a href="sils-fmu-plant.md">FMU plant</a>
+      <a href="sils-trace-schema.md">trace schema</a>
+      <a href="../service/sils/examples/README.md">examples</a>
+    </div>
+  </section>
+
+  <footer>
+    <span>libsils_vecu · SiLS vECU 개발 가이드</span>
+    <span>core 무변경 · ROS2 없음 · FastDDS</span>
+  </footer>
+
+</div>
+</body>
+</html>
