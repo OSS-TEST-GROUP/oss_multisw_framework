@@ -12,16 +12,27 @@ MORAI/AWSIM 토폴로지에서 plant는 in-process `IPlant`가 아니라 **DDS �
 | `in`  | STATE (시뮬레이터가 broadcast) | **구독** (staged 입력) |
 | `out` | ACTUATION (vECU가 되돌림)      | **발행** |
 
+## 계약 타입 — 정규(canonical) 구조체 (Option b)
+
+버스는 **평탄화 스칼라가 아니라 SI-정규 구조체**를 실어나른다. 시뮬레이터(MORAI/AWSIM/rosbag)가 자신의 네이티브 메시지를 이 정규 타입으로 **번역**(anti-corruption layer)하므로, 시뮬레이터가 바뀌어도 버스 계약은 불변이고 P1/P2(IMU·PointCloud2…)로 확장되며 Autoware 브리지와 타입을 공유한다.
+
+| `type` | IDL | 방향 | 내용 (SI) |
+|--------|-----|------|-----------|
+| `canonical/ego-state` | [EgoState.idl](../../../idl/dds/sils/EgoState.idl) | in (STATE) | position(m)·orientation(rad)·velocity(m/s)·accel(m/s²)·yaw_rate(rad/s)·steering(rad)·gear |
+| `canonical/vehicle-control` | [VehicleControl.idl](../../../idl/dds/sils/VehicleControl.idl) | out (ACTUATION) | steering(rad)·acceleration(m/s², signed)·gear |
+
+> ⚠️ MORAI 어댑터는 `front_steer` deg→rad, angular vel deg/s→rad/s, velocity km/h→m/s 변환 필수(빠뜨리면 57.3× 오차). 변환은 어댑터에만 존재, 소비자는 정규만 읽는다.
+
 ## 스키마 (제약된 YAML 서브셋)
 
 `channel_map.hpp`의 `ChannelMap::Load`가 파싱한다. yaml-cpp 의존성 없이 손으로 파싱하므로(SDK는 header-only + Fast-DDS 전용, `json_min.hpp`와 같은 이유) **문법이 좁고 고정**이다. 벗어나면 `file:line`과 함께 fail-closed(§14).
 
 ```yaml
 channels:
-  - name: Vehicle.Speed        # VSS path (필수) — vehicle_info_mgr VSS 어휘 재사용
-    dir: in                    # in | out (필수, 기본값 없음)
-    topic: morai/ego/speed     # DDS 토픽 (필수)
-    type: vss-scalar           # 코덱이 해석할 wire-type 키 (필수, 여기선 불투명)
+  - name: Vehicle.EgoState        # VSS 브랜치(필수) — 필드↔VSS sub-path 매핑은 코덱 측(S2)
+    dir: in                       # in | out (필수, 기본값 없음)
+    topic: sils/ego/state         # DDS 토픽 (필수)
+    type: canonical/ego-state     # 코덱이 (de)serialize 할 정규 struct 키 (필수, 여기선 불투명)
 ```
 
 규칙:
@@ -29,6 +40,7 @@ channels:
 - `#`는 주석. 값의 감싸는 따옴표(`"`/`'`)는 벗겨진다.
 - 필수 4개 키: `name` · `dir` · `topic` · `type`. 누락/오타/`dir` 오값은 에러.
 - `(name, dir)` 쌍 중복은 에러.
+- `type`은 파서에게 **불투명**하다 — 스칼라든 구조체든 코덱이 해석. 그래서 스키마 변경 없이 새 타입을 연다.
 
 ## 사용
 

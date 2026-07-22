@@ -1,0 +1,26 @@
+// Canonical vehicle CONTROL / actuation -- SiLS sim-agnostic plant-coupling contract
+// (Option 2). The vECU publishes this back to the sim; a sim adapter translates it into
+// the native command (MORAI morai_msgs/CtrlCmd). docs/sils-morai-plant-adapter-design.md,
+// sils-morai-simulator-integration-review.md (§3.2 P0, control-mode note).
+//
+// Longitudinal command is a SINGLE fixed mode -- signed acceleration (m/s^2). The
+// integration-review is explicit that MORAI's longl_cmd_type (throttle/velocity/accel)
+// must be pinned to ONE in the contract; canonical SI picks acceleration. The adapter
+// maps `acceleration` onto MORAI CtrlCmd with longl_cmd_type=acceleration(3) and converts
+// steering rad->(MORAI rad, already) etc. Normalized throttle/brake (0..1) can be added
+// as a later variant if an actuator-level ECU needs pedal semantics -- not P0.
+//
+// Generated into ${CMAKE_INSTALL_PREFIX}/generated/idl/sils/. gear uses the same octet
+// encoding as EgoState (kept as a plain octet rather than a shared enum type so the two
+// IDLs share no named type -- avoids duplicate TypeObject registration, see
+// service/sils/vecu/CMakeLists.txt).
+
+struct VehicleControl
+{
+    string             run_id;         // correlate to the Coordinator run
+    unsigned long long seq;            // command sequence, monotonic
+    long long          stamp_ns;       // command timestamp, ns
+    double             steering_angle; // front road-wheel angle, rad
+    double             acceleration;   // m/s^2, signed (+ accelerate / - brake); fixed long. mode
+    octet              gear;           // 0=PARK 1=REVERSE 2=NEUTRAL 3=DRIVE
+};
