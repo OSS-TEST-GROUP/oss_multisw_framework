@@ -24,6 +24,13 @@ MORAI 연동은 가능하다. 다만 이를 단순 ROS/UDP 브리지 추가로 �
 
 > 가장 먼저 확정할 것은 통신 프로토콜이 아니라 **차량 상태의 단일 권위자(authority)**와 **시간 진행 방식**이다.
 
+> **후속(2026-07): 이 검토의 canonical + adapter 방향이 구현으로 이어졌다.** 정규 계약을
+> [`EgoState.idl`](../idl/dds/sils/EgoState.idl)·[`VehicleControl.idl`](../idl/dds/sils/VehicleControl.idl)
+> (SI 단위)로 확정하고, 채널맵 구동 vECU(`sils_vecu_vehicle_probe`)로 버스 결합 폐루프를
+> 실증했다(S1 free-run). 여기서 말하는 **MoraiContractAdapter(외부 어댑터)**는 그 정규 타입으로
+> 번역하는 anti-corruption layer로 유지된다(단위변환 deg→rad·km/h→m/s 소유). 설계·3안 비교:
+> [sils-morai-plant-adapter-design.md](sils-morai-plant-adapter-design.md).
+
 ### 1.1 권장 구조
 
 ```text

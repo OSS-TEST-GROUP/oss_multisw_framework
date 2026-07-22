@@ -8,6 +8,13 @@
 >
 > Machine-readable source of truth: [`config/sils/trace-schema/v1.json`](../config/sils/trace-schema/v1.json).
 > This document is its human companion.
+>
+> **Scope note (2026-07):** the MORAI/AWSIM bus-coupling probe (`sils_vecu_vehicle_probe`,
+> Option 2) emits its own events (`channelmap_start`, `channel_bound`, `state_received`,
+> `control_published`). These are **S1 bring-up events, NOT yet part of v1** — bus-coupled
+> conformance is deferred to S4 (see
+> [sils-morai-plant-adapter-design.md](sils-morai-plant-adapter-design.md) §5). The tables
+> below cover the VISS request model.
 
 ## Format
 

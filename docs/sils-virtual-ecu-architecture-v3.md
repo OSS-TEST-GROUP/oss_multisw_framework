@@ -276,7 +276,7 @@ Fidelity별 기본 구성은 다음과 같다.
 | L0 Interface Stub | 고정 응답 또는 echo | 최소 runtime | endpoint와 lifecycle 중심 |
 | L1 Behavior Model | 상태 머신/규칙 모델 | scheduler·통신 최소본 | simulated I/O와 clock 연결 |
 | L2 Production ASW | 실제 제어 코드 | 필요한 RTE/BSW 가상화 | ECU hardware API 치환 |
-| L3 Plant Coupled | L2 또는 고급 behavior | L2 범위 | FMU/MORAI plant 연결 추가 |
+| L3 Plant Coupled | L2 또는 고급 behavior | L2 범위 | plant 결합: FMU/코드(in-process `IPlant`) 또는 MORAI/AWSIM(버스 결합) 추가 |
 | L4 Target-like | 실제 ASW | 실제 BSW/OS 동작에 최대한 근접 | target timing/interface 검증 강화 |
 
 ### 6.2 포트-어댑터 런타임 구현
@@ -305,6 +305,8 @@ Fidelity별 기본 구성은 다음과 같다.
 | `IScenario` | fault와 sequence 평가 | `evaluate(t,ctx)` |
 
 FMU step ownership은 `IPlant`에 둔다. FMI 자체가 ECU behavior인 특수 사례만 별도 behavior adapter로 허용한다.
+
+> **plant 결합의 두 형태 (중요).** in-process `IPlant`(FMU/코드)는 vECU tick 루프가 직접 step 하는 폐루프다. 반면 **MORAI/AWSIM은 `IPlant`가 아니라 버스 결합**(authority=sim, 공유 세계)이다 — vECU가 STATE를 구독하고 ACTUATION을 발행하며, 폐루프는 시뮬레이터가 버스 너머에서 닫는다(`IBus`/채널맵 경로, 정규 `EgoState`/`VehicleControl` 계약). 시뮬레이터를 in-process IPlant로 step 하지 않는다. 위 L3 행의 "MORAI 연결"과 §5(External Component)의 MORAI는 이 버스 결합을 뜻한다. 결정·근거·3안 비교: [sils-morai-plant-adapter-design.md](sils-morai-plant-adapter-design.md)(권장 Option 2).
 
 위 포트 구조는 6.1의 계층을 대체하는 별도 구조가 아니라 구현 방식이다. 예를 들어 `IBehavior`는 ASW/Behavior, `ExecutionKernel`은 Virtual BSW, `IBus`와 `IPlant`는 V-HAL, `IClockSource`와 trace/lifecycle adapter는 Host Adapter에 대응한다.
 
