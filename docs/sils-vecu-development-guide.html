@@ -248,6 +248,7 @@
       <div class="role"><span class="nm">input_source</span><p>async 입력 fixture. TickInbox 스테이징(§7.3) 관측용. 프로덕션 아님.</p></div>
       <div class="role"><span class="nm o">lifecycle_mgr + adsw</span><p>경로 B 오케스트레이션. 등록→정책 자동기동→docker run. ROS2 불필요.</p></div>
     </div>
+    <div class="callout a"><strong>결합 모드 2가지.</strong> 위는 <b>VISS 요청 모델</b>(요청/응답, <code>RunProbe</code>). 시뮬레이터(MORAI/AWSIM)와 폐루프로 붙는 vECU 는 <b>플랜트 결합 모드</b>(§07)를 쓴다 — 버스에서 STATE 구독·ACTUATION 발행. §02~§06 은 VISS 모델 기준.</div>
   </section>
 
   <!-- ============ 02 vECU 내부 ============ -->
@@ -436,9 +437,74 @@
     <div class="callout o"><strong>실행:</strong> <code>./build.sh --build-sils</code> → <code>./docker/build_local.sh --sils-vecu-only</code>(또는 <code>--brake-ecu-only</code>) → <code>e2e/run_lifecycle_e2e.sh</code>. 같은 <code>MMF_DDS_DOMAIN_ID</code> 로 lifecycle_mgr 와 adsw 를 띄운다.</div>
   </section>
 
-  <!-- ============ 07 검증 + 체크리스트 ============ -->
+  <!-- ============ 07 플랜트 결합 모드 ============ -->
   <section>
-    <div class="sec-head"><span class="sec-n">07</span><h2>검증 &amp; 체크리스트</h2></div>
+    <div class="sec-head"><span class="sec-n">07</span><h2>플랜트 결합 모드 — MORAI/AWSIM (Option 2)</h2></div>
+    <p class="sub">시뮬레이터(MORAI/AWSIM)와 폐루프로 붙는 vECU 는 VISS 요청 모델과 달리 <b>버스 위 공유 세계</b>(authority=sim)에서 <b>STATE 를 구독하고 ACTUATION 을 발행</b>한다. plant 가 in-process <code>IPlant</code> 가 아니라 <b>DDS 버스 너머</b>에 있고, 폐루프는 시뮬레이터가 버스에서 닫는다. 설계: <a href="sils-morai-plant-adapter-design.md">plant-adapter-design</a>.</p>
+    <figure class="card">
+      <svg viewBox="0 0 900 210" role="img" aria-label="플랜트 결합 모드 다이어그램">
+        <rect x="30" y="52" width="220" height="96" rx="12" class="box-n"/>
+        <text x="46" y="78" class="lbl" style="font-weight:700">MORAI / AWSIM</text>
+        <text x="46" y="98" class="lbl-sm">외부 시뮬레이터 (공유 세계)</text>
+        <text x="46" y="116" class="lbl-sm">Ego 동역학·센서 소유</text>
+        <text x="46" y="134" class="lbl-sm t-amb">어댑터(외부): morai_msgs→canonical</text>
+
+        <rect x="650" y="52" width="220" height="96" rx="12" class="box-sig"/>
+        <text x="666" y="78" class="lbl t-sig" style="font-weight:700">vECU (vehicle_probe)</text>
+        <text x="666" y="98" class="lbl-sm">채널맵으로 구독/발행</text>
+        <text x="666" y="116" class="lbl-sm">VehicleWireCodec</text>
+        <text x="666" y="134" class="lbl-sm t-sig">state → behavior → control</text>
+
+        <!-- STATE arrow sim -> vECU -->
+        <line x1="250" y1="86" x2="646" y2="86" class="flowln" marker-end="url(#arv)"/>
+        <text x="360" y="78" class="lbl-sm t-sig">STATE ▶ canonical EgoState</text>
+
+        <!-- CONTROL arrow vECU -> sim -->
+        <line x1="650" y1="120" x2="254" y2="120" class="orchln" marker-end="url(#arv2)"/>
+        <text x="360" y="140" class="lbl-sm t-orch">◀ ACTUATION · VehicleControl</text>
+
+        <text x="300" y="180" class="lbl-t">DDS 버스 · 채널맵(SILS_CHANNELMAP) · 정규(SI) 계약 · 폐루프는 sim 이 버스 너머에서 닫음 ↺</text>
+        <defs>
+          <marker id="arv" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--signal)"/></marker>
+          <marker id="arv2" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--orch)"/></marker>
+        </defs>
+      </svg>
+      <figcaption>sim 이 STATE 를 broadcast, vECU 가 구독해 제어를 계산·발행. MORAI→DDS 어댑터는 <b>외부 컴포넌트</b>(SiLS 밖).</figcaption>
+    </figure>
+
+    <div class="tblwrap">
+      <table>
+        <thead><tr><th></th><th>VISS 요청 (§02~§06)</th><th>플랜트 결합 (이 절)</th></tr></thead>
+        <tbody>
+          <tr><td class="k">진입점</td><td class="m">RunProbe (run_loop.hpp)</td><td class="m">sils_vecu_vehicle_probe</td></tr>
+          <tr><td class="k">방향</td><td>요청 발행 → 응답</td><td><b>STATE in → CONTROL out</b></td></tr>
+          <tr><td class="k">DDS 타입</td><td class="m">VissRequestTopic</td><td class="m">EgoState / VehicleControl (구조체)</td></tr>
+          <tr><td class="k">코덱</td><td class="m">IWireCodec (viss_wire)</td><td class="m">VehicleWireCodec (vehicle_wire)</td></tr>
+          <tr><td class="k">토픽 선언</td><td>단일 토픽 (SILS_TOPIC)</td><td><b>채널맵</b> (SILS_CHANNELMAP, N채널 MIMO)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="roles">
+      <div class="role"><span class="nm">정규 계약</span><p>EgoState.idl(STATE in)·VehicleControl.idl(ACTUATION out). SI 단위. 시뮬이 자기 메시지를 이 타입으로 번역(anti-corruption).</p></div>
+      <div class="role"><span class="nm">채널맵</span><p>config/sils/channelmap/*.yaml — name(VSS)·dir·topic·type. 채널 추가로 MIMO 확장(예: Autoware 제어 입력).</p></div>
+      <div class="role"><span class="nm">코덱 + fixture</span><p>vehicle_wire.hpp(구조체↔POD). sils_ego_source 로 MORAI 없이 왕복 실증.</p></div>
+    </div>
+
+    <p class="sub" style="margin-top:1.2rem">로컬 왕복 확인 (MORAI 없이):</p>
+    <pre>export VISS_DDS_DOMAIN_ID=0 SILS_RUN_ID=rt
+# A — vECU 프로브 (먼저 띄워 구독 준비)
+SILS_CHANNELMAP=config/sils/channelmap/ego-min.yaml  bin/sils_vecu_vehicle_probe
+# B — EgoState 소스 (fixture)
+bin/sils_ego_source --count 20 --rate-ms 100
+# → 프로브에 state_received(vx↑) → control_published(제어 반응) 가 흐르면 왕복 성립</pre>
+
+    <div class="callout a"><strong>성숙도 (2026-07):</strong> <b>S1 free-run 완료·머지</b>(채널맵·정규계약·코덱·프로브·fixture, 폐루프 왕복 검증). 예정 — S2 tick 경계 staging(결정론), S3 lockstep, Autoware 제어 입력(스키마 확인 후 채널 추가). 제어는 <b>stand-in P</b>; 전용 behavior 포트는 2번째 소비자 전 미도입. <b>MORAI→DDS 어댑터는 외부</b>(SiLS 밖).</div>
+  </section>
+
+  <!-- ============ 08 검증 + 체크리스트 ============ -->
+  <section>
+    <div class="sec-head"><span class="sec-n">08</span><h2>검증 &amp; 체크리스트</h2></div>
     <div class="grid2">
       <div class="card">
         <h3>충실도 레벨</h3>
@@ -472,6 +538,7 @@
       <a href="sils-vecu-development-guide.md">전체 절차 (.md)</a>
       <a href="sils-extension-model.md">extension-model</a>
       <a href="sils-virtual-ecu-architecture-v3.md">architecture v3</a>
+      <a href="sils-morai-plant-adapter-design.md">plant coupling (MORAI)</a>
       <a href="sils-fmu-plant.md">FMU plant</a>
       <a href="sils-trace-schema.md">trace schema</a>
       <a href="../service/sils/examples/README.md">examples</a>

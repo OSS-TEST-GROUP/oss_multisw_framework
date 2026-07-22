@@ -228,7 +228,7 @@ VecuReport.READY:      IDL load, endpoint 생성, 필수 peer match, behavior/pl
 <tr><td>L0 Interface Stub</td><td>고정 응답 또는 echo</td><td>최소 runtime</td><td>endpoint와 lifecycle 중심</td></tr>
 <tr><td>L1 Behavior Model</td><td>상태 머신/규칙 모델</td><td>scheduler·통신 최소본</td><td>simulated I/O와 clock 연결</td></tr>
 <tr><td>L2 Production ASW</td><td>실제 제어 코드</td><td>필요한 RTE/BSW 가상화</td><td>ECU hardware API 치환</td></tr>
-<tr><td>L3 Plant Coupled</td><td>L2 또는 고급 behavior</td><td>L2 범위</td><td>FMU/MORAI plant 연결 추가</td></tr>
+<tr><td>L3 Plant Coupled</td><td>L2 또는 고급 behavior</td><td>L2 범위</td><td>plant 결합: FMU/코드(in-process <code>IPlant</code>) 또는 MORAI/AWSIM(버스 결합) 추가</td></tr>
 <tr><td>L4 Target-like</td><td>실제 ASW</td><td>실제 BSW/OS 동작에 최대한 근접</td><td>target timing/interface 검증 강화</td></tr>
 </tbody></table></div>
 <h3 id="6-2-포트-어댑터-런타임-구현">6.2 포트-어댑터 런타임 구현</h3>
@@ -252,6 +252,7 @@ VecuReport.READY:      IDL load, endpoint 생성, 필수 peer match, behavior/pl
 <tr><td><code>IScenario</code></td><td>fault와 sequence 평가</td><td><code>evaluate(t,ctx)</code></td></tr>
 </tbody></table></div>
 <p>FMU step ownership은 <code>IPlant</code>에 둔다. FMI 자체가 ECU behavior인 특수 사례만 별도 behavior adapter로 허용한다.</p>
+<blockquote><p><strong>plant 결합의 두 형태 (중요).</strong> in-process <code>IPlant</code>(FMU/코드)는 vECU tick 루프가 직접 step 하는 폐루프다. 반면 <strong>MORAI/AWSIM은 <code>IPlant</code>가 아니라 버스 결합</strong>(authority=sim, 공유 세계)이다 — vECU가 STATE를 구독하고 ACTUATION을 발행하며, 폐루프는 시뮬레이터가 버스 너머에서 닫는다(<code>IBus</code>/채널맵 경로, 정규 <code>EgoState</code>/<code>VehicleControl</code> 계약). 시뮬레이터를 in-process IPlant로 step 하지 않는다. 위 L3 행의 &quot;MORAI 연결&quot;과 §5(External Component)의 MORAI는 이 버스 결합을 뜻한다. 결정·근거·3안 비교: <a href="sils-morai-plant-adapter-design.md">sils-morai-plant-adapter-design.md</a>(권장 Option 2).</p></blockquote>
 <p>위 포트 구조는 6.1의 계층을 대체하는 별도 구조가 아니라 구현 방식이다. 예를 들어 <code>IBehavior</code>는 ASW/Behavior, <code>ExecutionKernel</code>은 Virtual BSW, <code>IBus</code>와 <code>IPlant</code>는 V-HAL, <code>IClockSource</code>와 trace/lifecycle adapter는 Host Adapter에 대응한다.</p>
 <hr>
 <h2 class="sec" id="s7">7. Tick 처리와 입력 귀속</h2>

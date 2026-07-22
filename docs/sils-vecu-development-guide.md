@@ -42,6 +42,11 @@ int RunProbe(const ProbeConfig& cfg,
              std::unique_ptr<IWireCodec> wire);
 ```
 
+> **결합 모드 2가지.** 위는 **VISS 요청 모델**(요청 발행/응답, `RunProbe`). 시뮬레이터
+> (MORAI/AWSIM)와 폐루프로 붙는 vECU는 **플랜트 결합 모드**를 쓴다 — 버스에서 STATE를
+> 구독하고 ACTUATION을 발행(§7). **아래 §2~§6은 VISS 모델 기준**이고, 플랜트 결합은
+> §7을 참조. 둘 다 같은 SDK·같은 결정론 원칙을 공유한다.
+
 ---
 
 ## 2. 개발 절차
@@ -232,3 +237,57 @@ trace 스키마: [sils-trace-schema.md](sils-trace-schema.md) / `config/sils/tra
 - **recovery: 스모크는 ALWAYS**(자동 기동), **정밀 start/stop 제어는 MANUAL**.
 - **core를 바꾸고 싶어지면** 멈추고 [sils-extension-model.md](sils-extension-model.md)를
   다시 볼 것 — 대부분 포트 주입으로 해결된다(core 변경 불필요가 이 SDK의 목적).
+
+---
+
+## 7. 플랜트 결합 모드 — MORAI/AWSIM 연동 (Option 2)
+
+§2~§6의 **VISS 요청 모델**과 달리, 시뮬레이터(MORAI/AWSIM)와 폐루프로 붙는 vECU는
+**버스 위 공유 세계**(authority=sim)에서 **STATE를 구독하고 ACTUATION을 발행**한다.
+플랜트가 in-process `IPlant`가 아니라 **DDS 버스 너머**에 있고, 폐루프는 시뮬레이터가
+버스에서 닫는다. 설계 근거·3안 비교: [sils-morai-plant-adapter-design.md](sils-morai-plant-adapter-design.md),
+토폴로지: [sils-morai-autoware-topology.html](sils-morai-autoware-topology.html) ①/④.
+
+### 두 모드 비교
+
+| | VISS 요청 (§2~§6) | 플랜트 결합 (이 절) |
+|---|---|---|
+| 진입점 | `RunProbe` (`run_loop.hpp`) | `sils_vecu_vehicle_probe` (`vehicle_probe_main.cc`, 독립) |
+| 방향 | 요청 발행 → 응답 | **STATE in → CONTROL out** |
+| DDS 타입 | `VissRequestTopic` | 정규 `EgoState` / `VehicleControl` (구조체) |
+| 코덱 | `IWireCodec` (`viss_wire.hpp`) | `VehicleWireCodec` (`vehicle_wire.hpp`) |
+| 토픽 선언 | 단일 토픽(`SILS_TOPIC`) | **채널맵**(`SILS_CHANNELMAP`, N채널 MIMO) |
+
+### 핵심 조각
+
+- **정규 계약** — [EgoState.idl](../idl/dds/sils/EgoState.idl)(STATE in)·[VehicleControl.idl](../idl/dds/sils/VehicleControl.idl)(ACTUATION out).
+  **SI 단위 고정**(m·rad·m/s·m/s²). 시뮬레이터가 자기 메시지를 이 정규 타입으로 **번역**한다
+  (anti-corruption layer). **MORAI→DDS 어댑터는 외부 컴포넌트**(SiLS가 만들지 않음); 그 어댑터가
+  deg→rad·km/h→m/s 변환을 소유한다. → vECU는 시뮬 종류와 무관하게 정규 타입만 본다.
+- **채널맵** — [config/sils/channelmap/*.yaml](../config/sils/channelmap/). 채널마다
+  `name`(VSS path)·`dir`(in/out)·`topic`·`type`. `SILS_CHANNELMAP`로 지정, 비면 비활성.
+  **채널을 추가하면 MIMO 확장**(예: Autoware 제어 입력 채널 추가). 파서: `channel_map.hpp`.
+- **코덱** — `vehicle_wire.hpp`의 `VehicleWireCodec`: 생성 DDS 구조체 ↔ SDK POD
+  (`EgoStateSample`/`VehicleControlSample`) 변환. behavior/런타임은 POD만 보고 생성 타입 무의존.
+- **레퍼런스 실행파일** — `sils_vecu_vehicle_probe`(채널맵 구동 free-run 프로브),
+  `sils_ego_source`(테스트용 EgoState 발행 fixture, MORAI 없이 왕복 실증용).
+
+### 로컬 왕복 확인 (MORAI 없이)
+
+```bash
+export VISS_DDS_DOMAIN_ID=0 SILS_RUN_ID=rt
+# 터미널 A — vECU 프로브 (먼저 띄워 구독 준비)
+SILS_CHANNELMAP=config/sils/channelmap/ego-min.yaml <bin>/sils_vecu_vehicle_probe
+# 터미널 B — EgoState 소스 (1초 뒤 발행)
+<bin>/sils_ego_source --count 20 --rate-ms 100
+```
+프로브에 `state_received`(vx가 오름) → `control_published`(제어가 반응)가 흐르면 왕복 성립.
+
+### 성숙도 (2026-07 현재)
+
+- **S1 free-run 완료·머지** — 채널맵·정규 계약·코덱·프로브·fixture, 폐루프 왕복 검증.
+- **예정**: S2 tick 경계 staging(결정론 — free-run은 최신 샘플만 채택), S3 lockstep(시뮬 tick 동기),
+  Autoware 제어 입력(스키마 확인 후 채널 추가).
+- 현재 제어 로직은 **stand-in P-controller** — 전용 behavior 포트(`IVehicleBehavior`)는
+  두 번째 실소비자가 생기기 전엔 도입하지 않는다(earned-abstraction). 실제 ECU는
+  `vehicle_probe_main.cc`의 `ComputeControl` 자리에 제어 로직을 넣는다.

@@ -1293,6 +1293,13 @@ capture-golden 스테이지.
 # 9장. FMU 트랙 → [sils-fmu-plant.md](sils-fmu-plant.md)
 
 IPlant 의 세 번째 구현 `FmuPlant`(fmi4c 로 실제 `.fmu` co-sim, §5.5 L3)는 전용 문서가 있다.
+
+> **주의 — FMU(in-process)와 MORAI/AWSIM(버스 결합)은 다른 plant 결합이다.** FmuPlant 는
+> tick 루프가 직접 step 하는 in-process 폐루프(`plant_step` 계약). MORAI/AWSIM 은 IPlant 가
+> 아니라 버스 결합(Option 2)이라 다른 이벤트(`state_received`/`control_published` 등, S1)를 내며,
+> 이 버스 결합 trace 의 conformance 편입은 **S4 예정**이라 아직 v1 스키마에 없다. 설계:
+> [sils-morai-plant-adapter-design.md](sils-morai-plant-adapter-design.md).
+
 요점만:
 
 - **무엇** — Simulink/Dymola/AMESim 등이 export 한 `.fmu`(FMI 2.0/3.0 co-sim)를 IPlant 뒤에 그대로

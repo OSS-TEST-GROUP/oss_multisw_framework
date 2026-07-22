@@ -19,6 +19,13 @@
 3. **Plant 세분화 — FMU vs 코드** — 물리 모델(IPlant)은 개발자 선택: `.fmu` 파일(FMU 경로) 또는
    직접 C++ IPlant 구현(코드 경로). 둘 중 무엇이든 **나머지는 동일**.
 
+> **결합 모드 2가지.** 위 3의 in-process `IPlant`(FMU/코드)는 vECU가 직접 step 하는 폐루프다.
+> 이와 별개로 **MORAI/AWSIM 연동은 버스 결합 모드**(Option 2) — 시뮬레이터가 버스에 STATE를
+> broadcast, vECU는 채널맵으로 구독하고 ACTUATION을 발행한다(정규 `EgoState`/`VehicleControl`
+> 계약, `vehicle_wire.hpp` 코덱, `sils_vecu_vehicle_probe` 진입점). 설계:
+> [sils-morai-plant-adapter-design.md](sils-morai-plant-adapter-design.md), 개발 절차:
+> [sils-vecu-development-guide.md](sils-vecu-development-guide.md) §7.
+
 ## 2. 진짜 공개 경계 = 계약 + trace 스키마 (버전)
 
 C++ ABI 가 아니라 **① DDS Contract Catalog(topic·type·QoS, `semantic_version` 보유) + ② trace
