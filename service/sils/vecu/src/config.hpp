@@ -107,6 +107,13 @@ struct ProbeConfig {
     std::string late_sample_policy;        // SILS_LATE_SAMPLE_POLICY
     std::string replay_file;               // SILS_REPLAY_FILE
 
+    // MORAI/AWSIM plant coupling (Option 2 bus-coupled world; channel_map.hpp). Empty
+    // = inactive (single-endpoint behavior unchanged). Points at a channel-map YAML
+    // (config/sils/channelmap/*.yaml) listing the VSS-path MIMO signals this vECU
+    // subscribes to (STATE in) / publishes (ACTUATION out). See
+    // docs/sils-morai-plant-adapter-design.md.
+    std::string channelmap_file;           // SILS_CHANNELMAP
+
     const char* durability_name() const {
         return durability_transient_local ? "TRANSIENT_LOCAL" : "VOLATILE";
     }
@@ -158,6 +165,8 @@ inline ProbeConfig ConfigFromEnv() {
     c.input_topic = GetEnvOr("SILS_INPUT_TOPIC", "sils/input/stream");
     c.late_sample_policy = GetEnvOr("SILS_LATE_SAMPLE_POLICY", "next_tick");
     c.replay_file = GetEnvOr("SILS_REPLAY_FILE", "");
+
+    c.channelmap_file = GetEnvOr("SILS_CHANNELMAP", "");
     return c;
 }
 

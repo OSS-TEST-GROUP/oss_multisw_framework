@@ -1,0 +1,26 @@
+# SiLS channel map -- MORAI/AWSIM plant coupling (Option 2, bus-coupled external world).
+# See docs/sils-morai-plant-adapter-design.md and service/sils/vecu/src/channel_map.hpp.
+#
+# Minimal S1 (free-run bring-up) example, canonical STRUCTURED contract (Option b):
+# one STATE message the sim broadcasts, one ACTUATION message the vECU publishes back.
+# The bus carries SI-canonical structs (idl/dds/sils/{EgoState,VehicleControl}.idl), not
+# flattened scalars -- so the same types scale to P1/P2 (IMU, PointCloud2...) and are
+# shared with the Autoware bridge. A sim adapter (MORAI/AWSIM/rosbag) translates its
+# native message into these canonical types (anti-corruption layer).
+#
+# `name` is the VSS branch the message populates (leaf field <-> VSS sub-path mapping is
+# codec-side, arriving in S2). `type` names the canonical DDS struct the codec (de)serializes.
+#
+# Point a vECU at this file with:  SILS_CHANNELMAP=config/sils/channelmap/ego-min.yaml
+channels:
+  # --- STATE in (MORAI/AWSIM -> vECU): EgoState struct ---
+  - name: Vehicle.EgoState
+    dir: in
+    topic: sils/ego/state
+    type: canonical/ego-state
+
+  # --- ACTUATION out (vECU -> MORAI/AWSIM): VehicleControl struct ---
+  - name: Vehicle.Control
+    dir: out
+    topic: sils/ego/control
+    type: canonical/vehicle-control
