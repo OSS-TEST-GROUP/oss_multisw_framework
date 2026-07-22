@@ -1,0 +1,24 @@
+# SiLS channel map -- MORAI/AWSIM plant coupling (Option 2, bus-coupled external world).
+# See docs/sils-morai-plant-adapter-design.md and service/sils/vecu/src/channel_map.hpp.
+#
+# Minimal S1 (free-run bring-up) example: one STATE input the sim broadcasts, one
+# ACTUATION output the vECU publishes back. Signals are named by VSS path so they share
+# the vocabulary of the in-repo VISS server (service/core/vehicle_info_mgr).
+#
+# Point a vECU at this file with:  SILS_CHANNELMAP=config/sils/channelmap/ego-min.yaml
+#
+# Grammar (parsed by ChannelMap::Load; a narrow YAML subset, 2-space indent):
+#   dir: in  -> the vECU SUBSCRIBES (STATE from the sim)
+#   dir: out -> the vECU PUBLISHES  (ACTUATION to the sim)
+channels:
+  # --- STATE in (MORAI/AWSIM -> vECU) ---
+  - name: Vehicle.Speed
+    dir: in
+    topic: morai/ego/speed
+    type: vss-scalar
+
+  # --- ACTUATION out (vECU -> MORAI/AWSIM) ---
+  - name: Vehicle.Chassis.Brake.PedalPosition
+    dir: out
+    topic: morai/ego/brake_cmd
+    type: vss-scalar
