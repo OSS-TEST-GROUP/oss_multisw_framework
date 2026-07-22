@@ -178,9 +178,15 @@ target_link_libraries(sils_input_source PRIVATE sils_vecu sils_viss_idl)
 add_executable(sils_vecu_vehicle_probe src/vehicle_probe_main.cc)
 target_link_libraries(sils_vecu_vehicle_probe PRIVATE sils_vecu sils_vehicle_idl)
 
+# EgoState source (test fixture) -- publishes canonical EgoState on the `in` topic so the
+# vehicle probe's round trip (state_received -> control_published) can be seen WITHOUT
+# MORAI. Stand-in for the sim adapter's STATE broadcast; links sils_vehicle_idl.
+add_executable(sils_ego_source src/sils_ego_source.cc)
+target_link_libraries(sils_ego_source PRIVATE sils_vecu sils_vehicle_idl)
+
 # ── Runtime install (always) ─────────────────────────────────────────────────
 install(TARGETS sils_vecu_viss_probe sils_vecu_viss_verify sils_vecu_viss_responder
-                sils_clock_master sils_input_source sils_vecu_vehicle_probe
+                sils_clock_master sils_input_source sils_vecu_vehicle_probe sils_ego_source
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 # ── SDK install/export for find_package(sils_vecu) (T1-B Part 2) ─────────────
