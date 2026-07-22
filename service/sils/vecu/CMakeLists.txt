@@ -171,9 +171,16 @@ target_link_libraries(sils_clock_master PRIVATE sils_vecu)
 add_executable(sils_input_source src/sils_input_source.cc)
 target_link_libraries(sils_input_source PRIVATE sils_vecu sils_viss_idl)
 
+# MORAI/AWSIM plant-coupling probe (Option 2 S1, docs/sils-morai-plant-adapter-design.md).
+# Channel-map driven: reads canonical EgoState off the bus, publishes VehicleControl back
+# (free-run). Links sils_vehicle_idl for the canonical types (vehicle_wire.hpp); a separate
+# entry point from the VISS probe so that path is untouched.
+add_executable(sils_vecu_vehicle_probe src/vehicle_probe_main.cc)
+target_link_libraries(sils_vecu_vehicle_probe PRIVATE sils_vecu sils_vehicle_idl)
+
 # ── Runtime install (always) ─────────────────────────────────────────────────
 install(TARGETS sils_vecu_viss_probe sils_vecu_viss_verify sils_vecu_viss_responder
-                sils_clock_master sils_input_source
+                sils_clock_master sils_input_source sils_vecu_vehicle_probe
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 # ── SDK install/export for find_package(sils_vecu) (T1-B Part 2) ─────────────
