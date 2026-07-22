@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>vECU 개발용 SiLS 환경 — 전체 그림</title>
+<style>
+  :root{
+    --bg:#f1f4f5; --surface:#ffffff; --surface-2:#f7f9fa;
+    --ink:#0f1518; --muted:#566871; --faint:#8496a0;
+    --line:#d6dee1; --line-soft:#e6ecee;
+    --state:#0b8f82; --state-ink:#076b61; --state-soft:#d8efec;
+    --ctrl:#b9761a;  --ctrl-ink:#8a5712; --ctrl-soft:#f3e6d1;
+    --act:#4f5bc4;   --act-ink:#3d47a3;  --act-soft:#e4e6f7;
+    --dev:#c0392b;   --dev-ink:#a5281b;  --dev-soft:#f7e0dc;
+    --grid:rgba(11,143,130,.05);
+    --shadow:0 1px 2px rgba(16,30,34,.04),0 8px 24px -14px rgba(16,30,34,.14);
+    --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0b0f12; --surface:#131b1f; --surface-2:#0f171b;
+      --ink:#e1e9ec; --muted:#8ea0a8; --faint:#63757d; --line:#243036; --line-soft:#1a242a;
+      --state:#34c9b8; --state-ink:#7fe0d4; --state-soft:#12312e;
+      --ctrl:#e0a04a; --ctrl-ink:#eec079; --ctrl-soft:#3a2c17;
+      --act:#8b9be8; --act-ink:#aab5f0; --act-soft:#1e2340;
+      --dev:#e8705f; --dev-ink:#f0968a; --dev-soft:#3a1f1a;
+      --grid:rgba(52,201,184,.06);
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px -16px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#f1f4f5; --surface:#ffffff; --surface-2:#f7f9fa; --ink:#0f1518; --muted:#566871; --faint:#8496a0; --line:#d6dee1; --line-soft:#e6ecee;
+    --state:#0b8f82; --state-ink:#076b61; --state-soft:#d8efec; --ctrl:#b9761a; --ctrl-ink:#8a5712; --ctrl-soft:#f3e6d1;
+    --act:#4f5bc4; --act-ink:#3d47a3; --act-soft:#e4e6f7; --dev:#c0392b; --dev-ink:#a5281b; --dev-soft:#f7e0dc;
+    --grid:rgba(11,143,130,.05); --shadow:0 1px 2px rgba(16,30,34,.04),0 8px 24px -14px rgba(16,30,34,.14);
+  }
+  :root[data-theme="dark"]{
+    --bg:#0b0f12; --surface:#131b1f; --surface-2:#0f171b; --ink:#e1e9ec; --muted:#8ea0a8; --faint:#63757d; --line:#243036; --line-soft:#1a242a;
+    --state:#34c9b8; --state-ink:#7fe0d4; --state-soft:#12312e; --ctrl:#e0a04a; --ctrl-ink:#eec079; --ctrl-soft:#3a2c17;
+    --act:#8b9be8; --act-ink:#aab5f0; --act-soft:#1e2340; --dev:#e8705f; --dev-ink:#f0968a; --dev-soft:#3a1f1a;
+    --grid:rgba(52,201,184,.06); --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px -16px rgba(0,0,0,.6);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6;font-size:16px;
+    background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:26px 26px}
+  .wrap{max-width:1040px;margin:0 auto;padding:clamp(28px,5vw,60px) clamp(16px,4vw,32px) 90px}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--state-ink);font-weight:600}
+  h1{font-size:clamp(26px,4.5vw,40px);line-height:1.1;letter-spacing:-.02em;font-weight:800;margin:.5rem 0 0;text-wrap:balance}
+  .lede{color:var(--muted);font-size:clamp(15px,1.9vw,17px);max-width:70ch;margin:1rem 0 0}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:var(--shadow);margin-top:1.4rem}
+  svg{display:block;max-width:100%;height:auto}
+  figcaption{font-size:12.5px;color:var(--faint);margin-top:.7rem;text-align:center;font-family:var(--mono)}
+  .legend{display:flex;flex-wrap:wrap;gap:.9rem;margin-top:1rem;font-family:var(--mono);font-size:12px}
+  .lg{display:inline-flex;align-items:center;gap:.4rem}
+  .sw{width:20px;height:4px;border-radius:2px;flex:none}
+  .sw.d{border-top:2px dashed var(--faint);height:0;background:none}
+  /* svg text */
+  .zt{fill:var(--faint);font-family:var(--mono);font-size:11px;letter-spacing:.06em;font-weight:600}
+  .t{fill:var(--ink);font-family:var(--mono);font-size:13px;font-weight:700}
+  .ts{fill:var(--muted);font-family:var(--mono);font-size:10.5px}
+  .cs{fill:var(--state-ink);font-family:var(--mono);font-size:10px;font-weight:700}
+  .cc{fill:var(--ctrl-ink);font-family:var(--mono);font-size:10px;font-weight:700}
+  .ca{fill:var(--act-ink);font-family:var(--mono);font-size:10px;font-weight:700}
+  .cg{fill:var(--faint);font-family:var(--mono);font-size:10px}
+  .zone{fill:var(--surface-2);stroke:var(--line);stroke-width:1.2;stroke-dasharray:3 4}
+  .box{fill:var(--surface);stroke:var(--line);stroke-width:1.3}
+  .b-state{fill:var(--state-soft);stroke:var(--state);stroke-width:1.5}
+  .b-ctrl{fill:var(--ctrl-soft);stroke:var(--ctrl);stroke-width:1.5}
+  .b-dev{fill:var(--dev-soft);stroke:var(--dev);stroke-width:2.4}
+  .b-act{fill:var(--act-soft);stroke:var(--act);stroke-width:1.4}
+  .bus{fill:var(--surface);stroke:var(--faint);stroke-width:1.5;stroke-dasharray:2 3}
+  .ln-s{stroke:var(--state);stroke-width:2.2;fill:none}
+  .ln-c{stroke:var(--ctrl);stroke-width:2.2;fill:none}
+  .ln-a{stroke:var(--act);stroke-width:2.2;fill:none}
+  .ln-g{stroke:var(--faint);stroke-width:1.6;fill:none;stroke-dasharray:5 4}
+  footer{margin-top:48px;padding-top:18px;border-top:1px solid var(--line);font-family:var(--mono);font-size:12px;color:var(--faint)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">SiLS · vECU 개발 환경 · 전체 그림</div>
+    <h1>vECU 를 개발하기 위한 SiLS 환경</h1>
+    <p class="lede">개발자는 <b>MMF SDK(libsils_vecu)</b>로 vECU 하나를 만들고(왼쪽), 그것을 <b>MORAI/rosbag(세계) · Autoware(두뇌) · VISS 허브 · 다른 ECU</b>와 같은 DDS 버스에 올려 실행·검증한다(오른쪽). 컨테이너 기동은 <b>lifecycle_mgr+adsw_manager</b>, 판정은 <b>conformance gate</b>. 같은 이미지가 그대로 실보드로 간다(shift-left).</p>
+    <div class="legend">
+      <span class="lg"><span class="sw" style="background:var(--state)"></span>STATE/SENSOR</span>
+      <span class="lg"><span class="sw" style="background:var(--ctrl)"></span>CONTROL/SETPOINT</span>
+      <span class="lg"><span class="sw" style="background:var(--act)"></span>ACTUATION</span>
+      <span class="lg"><span class="sw d"></span>빌드 · 배포 · 기동 · trace</span>
+      <span class="lg"><span class="sw" style="background:var(--dev)"></span>★ 개발 대상 vECU</span>
+    </div>
+  </header>
+
+  <figure class="card">
+    <svg viewBox="0 0 1010 700" role="img" aria-label="vECU 개발용 SiLS 환경 전체 그림">
+      <defs>
+        <marker id="as" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--state)"/></marker>
+        <marker id="ac" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--ctrl)"/></marker>
+        <marker id="aa" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--act)"/></marker>
+        <marker id="ag" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--faint)"/></marker>
+      </defs>
+
+      <!-- ===================== E · SDK 빌드 레인 (왼쪽) ===================== -->
+      <rect x="16" y="44" width="228" height="566" rx="12" class="zone"/>
+      <text x="32" y="66" class="zt">E · MMF SDK (libsils_vecu)</text>
+      <text x="32" y="82" class="ts">개발자가 vECU 를 만든다</text>
+
+      <rect x="34" y="98" width="192" height="80" rx="10" class="box"/>
+      <text x="48" y="122" class="t">포트 (개발자 작성)</text>
+      <text x="48" y="140" class="ts">IBehavior · IPlant</text>
+      <text x="48" y="156" class="ts">IWireCodec</text>
+      <text x="48" y="172" class="ts">(IPlant = MORAI/FMU/code/replay)</text>
+
+      <rect x="34" y="202" width="192" height="62" rx="10" class="box"/>
+      <text x="48" y="226" class="t">RunProbe (SDK 소유)</text>
+      <text x="48" y="244" class="ts">DDS · 틱루프 · trace · teardown</text>
+
+      <rect x="34" y="288" width="192" height="62" rx="10" class="box"/>
+      <text x="48" y="312" class="t">컨테이너 이미지</text>
+      <text x="48" y="330" class="ts">ARM64 · 배포 단위</text>
+
+      <line x1="130" y1="178" x2="130" y2="201" class="ln-g" marker-end="url(#ag)"/>
+      <line x1="130" y1="264" x2="130" y2="287" class="ln-g" marker-end="url(#ag)"/>
+      <text x="150" y="378" class="cg">↓ 같은 이미지가 SiLS 와</text>
+      <text x="150" y="392" class="cg">   실보드로 (shift-left)</text>
+
+      <!-- 배포 arrow: 이미지 → ★vECU (하단 gap 경유) -->
+      <path d="M130 350 L130 476 L556 476 L556 452" class="ln-g" marker-end="url(#ag)"/>
+      <text x="250" y="470" class="cg">adsw 가 이미지로 컨테이너 기동 (배포)</text>
+
+      <!-- ===================== A · 세계 (상단) ===================== -->
+      <rect x="260" y="44" width="734" height="116" rx="12" class="zone"/>
+      <text x="276" y="66" class="zt">A · 세계 (Plant / Sensor 원천) — 택1 · 같은 DDS 토픽</text>
+      <rect x="278" y="80" width="344" height="66" rx="10" class="b-state"/>
+      <text x="296" y="106" class="t">MORAI (live · 폐루프)</text>
+      <text x="296" y="126" class="ts">동역학·환경·센서 · ACTUATION 반응 → 새 STATE ↺</text>
+      <rect x="638" y="80" width="338" height="66" rx="10" class="box"/>
+      <text x="656" y="106" class="t">rosbag (replay · 개루프)</text>
+      <text x="656" y="126" class="ts">녹화 STATE 재생 · 제어 무시</text>
+
+      <!-- STATE → bus -->
+      <line x1="450" y1="146" x2="450" y2="197" class="ln-s" marker-end="url(#as)"/>
+      <text x="456" y="176" class="cs">STATE ▼</text>
+
+      <!-- ===================== B · DDS/VSS 버스 ===================== -->
+      <rect x="260" y="198" width="734" height="46" rx="10" class="bus"/>
+      <text x="276" y="226" class="t" style="fill:var(--faint)">B · DDS 공유 버스 · vehicle_info_mgr (VISS / VSS 신호 허브)</text>
+
+      <!-- ===================== C · 실행 (소비자 & 제어) ===================== -->
+      <rect x="260" y="266" width="734" height="196" rx="12" class="zone"/>
+      <text x="276" y="288" class="zt">C · 실행 — 소비자 &amp; 제어 (컨테이너, 같은 도메인)</text>
+
+      <rect x="278" y="300" width="196" height="108" rx="10" class="b-ctrl"/>
+      <text x="294" y="326" class="t">Autoware</text>
+      <text x="294" y="344" class="ts">인지·판단·제어 (두뇌)</text>
+      <text x="294" y="364" class="cs">STATE(subset) 구독</text>
+      <text x="294" y="380" class="cc">→ CONTROL 생산</text>
+
+      <rect x="494" y="300" width="224" height="108" rx="10" class="b-dev"/>
+      <text x="510" y="326" class="t" style="fill:var(--dev-ink)">★ 개발 대상 vECU</text>
+      <text x="510" y="344" class="ts">예: Vehicle Interface / brake ECU</text>
+      <text x="510" y="362" class="ts">SDK 로 빌드 · adsw 가 기동</text>
+      <text x="510" y="380" class="cc">CONTROL·STATE 구독</text>
+      <text x="510" y="396" class="ca">→ ACTUATION / setpoint</text>
+
+      <rect x="738" y="300" width="238" height="108" rx="10" class="b-act"/>
+      <text x="754" y="326" class="t">기타 vECU / 실 ECU</text>
+      <text x="754" y="344" class="ts">steer · powertrain …</text>
+      <text x="754" y="364" class="cs">각자 관심 STATE 만</text>
+      <text x="754" y="380" class="ts">선택 구독 (전부 X)</text>
+
+      <!-- bus → 소비자 (STATE, 선택) -->
+      <line x1="360" y1="244" x2="360" y2="299" class="ln-s" marker-end="url(#as)"/>
+      <line x1="660" y1="244" x2="660" y2="299" class="ln-s" marker-end="url(#as)"/>
+      <line x1="856" y1="244" x2="856" y2="299" class="ln-s" marker-end="url(#as)"/>
+
+      <!-- Autoware → vECU (CONTROL) -->
+      <line x1="474" y1="352" x2="493" y2="352" class="ln-c" marker-end="url(#ac)"/>
+
+      <!-- vECU → ACTUATION → bus (→ 세계, 폐루프) -->
+      <line x1="560" y1="299" x2="560" y2="245" class="ln-a" marker-end="url(#aa)"/>
+      <text x="566" y="285" class="ca">ACTUATION ▲ → MORAI ↺</text>
+
+      <!-- ===================== D · 오케스트레이션 ===================== -->
+      <rect x="260" y="486" width="360" height="124" rx="12" class="zone"/>
+      <text x="276" y="508" class="zt">D · MMF 오케스트레이션 (경로 B · ROS2 없음)</text>
+      <rect x="278" y="522" width="156" height="72" rx="10" class="box"/>
+      <text x="292" y="548" class="t">lifecycle_mgr</text>
+      <text x="292" y="566" class="ts">정책 (PolicyAlways)</text>
+      <text x="292" y="582" class="ts">등록·상태 관리</text>
+      <rect x="450" y="522" width="152" height="72" rx="10" class="box"/>
+      <text x="464" y="548" class="t">adsw_manager</text>
+      <text x="464" y="566" class="ts">general 변형</text>
+      <text x="464" y="582" class="ts">docker run/stop</text>
+      <line x1="434" y1="558" x2="449" y2="558" class="ln-g" marker-end="url(#ag)"/>
+      <!-- docker run 위로 -->
+      <line x1="526" y1="522" x2="526" y2="463" class="ln-g" marker-end="url(#ag)"/>
+      <text x="360" y="480" class="cg">docker run (컨테이너 기동)</text>
+
+      <!-- ===================== F · 검증 ===================== -->
+      <rect x="636" y="486" width="358" height="124" rx="12" class="zone"/>
+      <text x="652" y="508" class="zt">F · 검증</text>
+      <rect x="654" y="522" width="150" height="72" rx="10" class="box"/>
+      <text x="668" y="548" class="t">JSONL trace</text>
+      <text x="668" y="566" class="ts">schema v1 계약</text>
+      <text x="668" y="582" class="ts">결정적 이벤트</text>
+      <rect x="820" y="522" width="156" height="72" rx="10" class="box"/>
+      <text x="834" y="548" class="t">conformance gate</text>
+      <text x="834" y="566" class="ts">schema→fidelity</text>
+      <text x="834" y="582" class="ts">→ PASS / FAIL</text>
+      <line x1="804" y1="558" x2="819" y2="558" class="ln-g" marker-end="url(#ag)"/>
+      <!-- vECU → trace -->
+      <line x1="700" y1="408" x2="700" y2="521" class="ln-g" marker-end="url(#ag)"/>
+      <text x="706" y="475" class="cg">trace 기록</text>
+    </svg>
+    <figcaption>왼쪽 = 만든다(SDK→이미지). 오른쪽 = 올려서 돌린다(세계↔버스↔소비자). 아래 = 기동(adsw)·검증(gate). ★ 가 개발 대상 vECU.</figcaption>
+  </figure>
+
+  <h2 style="font-size:19px;font-weight:750;margin:44px 0 .6rem;border-bottom:1px solid var(--line);padding-bottom:.6rem">경계 &amp; 구현 상태 — "어디까지 SiLS"</h2>
+  <p class="lede" style="margin-top:0">SiLS는 <b>링 1만 소유</b>한다. 링 2는 계약(DDS/VSS·trace)으로 붙는 외부, 링 3은 범위 밖. 아래는 각 요소가 <b>이미 구현됨(teal)</b>인지 <b>설계만(amber)</b>인지 표시 — MORAI 빼고 대부분 이미 구현돼 있다.</p>
+  <div class="legend" style="margin:.6rem 0 0">
+    <span class="lg"><span class="sw" style="background:var(--state)"></span>구현됨</span>
+    <span class="lg"><span class="sw" style="background:var(--ctrl)"></span>설계만 (MORAI)</span>
+    <span class="lg"><span class="sw" style="background:var(--faint)"></span>범위 밖 (외부/HW)</span>
+    <span class="lg"><span class="sw" style="background:var(--dev)"></span>★ 개발 대상</span>
+  </div>
+  <figure class="card">
+    <svg viewBox="0 0 1000 406" role="img" aria-label="SiLS 중첩 경계 및 구현 상태">
+      <!-- ===== 링 3 (전체 / 범위 밖) — 최외곽 ===== -->
+      <rect x="8" y="8" width="984" height="388" rx="14" fill="none" stroke="var(--faint)" stroke-width="1.3" stroke-dasharray="2 3"/>
+      <text x="24" y="30" class="zt">전체 환경 · 범위 밖 (남이 운영 · HW)</text>
+      <rect x="20"  y="40" width="228" height="30" rx="7" fill="var(--surface-2)" stroke="var(--faint)" stroke-width="1.2" stroke-dasharray="2 3"/><text x="32" y="60" class="ts">실 Autoware 내부 알고리즘</text>
+      <rect x="256" y="40" width="170" height="30" rx="7" fill="var(--surface-2)" stroke="var(--faint)" stroke-width="1.2" stroke-dasharray="2 3"/><text x="268" y="60" class="ts">실 AGL 앱</text>
+      <rect x="434" y="40" width="228" height="30" rx="7" fill="var(--surface-2)" stroke="var(--faint)" stroke-width="1.2" stroke-dasharray="2 3"/><text x="446" y="60" class="ts">실차 (HW) · HIL 보드</text>
+      <rect x="670" y="40" width="238" height="30" rx="7" fill="var(--surface-2)" stroke="var(--faint)" stroke-width="1.2" stroke-dasharray="2 3"/><text x="682" y="60" class="ts">MORAI 런타임 · 라이선스</text>
+
+      <!-- ===== 링 2 (연동) — 중간 ===== -->
+      <rect x="30" y="82" width="940" height="300" rx="12" fill="none" stroke="var(--state)" stroke-width="1.4" stroke-dasharray="5 4" opacity="0.55"/>
+      <text x="46" y="102" class="zt">연동 (계약으로 붙음 · SiLS 소유 아님) — MORAI 빼고 구현됨</text>
+      <rect x="44"  y="112" width="176" height="30" rx="7" class="b-state"/><text x="56" y="132" class="ts" style="fill:var(--ink)">vehicle_info_mgr (VISS)</text>
+      <rect x="228" y="112" width="176" height="30" rx="7" class="b-state"/><text x="240" y="132" class="ts" style="fill:var(--ink)">lifecycle_mgr</text>
+      <rect x="412" y="112" width="176" height="30" rx="7" class="b-state"/><text x="424" y="132" class="ts" style="fill:var(--ink)">adsw: ros2</text>
+      <rect x="596" y="112" width="176" height="30" rx="7" class="b-state"/><text x="608" y="132" class="ts" style="fill:var(--ink)">adsw: agl</text>
+      <rect x="780" y="112" width="176" height="30" rx="7" class="b-state"/><text x="792" y="132" class="ts" style="fill:var(--ink)">adsw: general</text>
+      <rect x="44"  y="148" width="176" height="30" rx="7" class="b-state"/><text x="56" y="168" class="ts" style="fill:var(--ink)">Autoware (ros2 기동)</text>
+      <rect x="228" y="148" width="176" height="30" rx="7" class="b-state"/><text x="240" y="168" class="ts" style="fill:var(--ink)">rosbag (replay 원천)</text>
+      <rect x="412" y="148" width="176" height="30" rx="7" fill="var(--ctrl-soft)" stroke="var(--ctrl)" stroke-width="1.5" stroke-dasharray="4 3"/><text x="424" y="168" class="ts" style="fill:var(--ctrl-ink)">MORAI (설계만 ◻)</text>
+      <rect x="596" y="148" width="360" height="30" rx="7" fill="var(--surface-2)" stroke="var(--faint)" stroke-width="1.2"/><text x="608" y="168" class="ts">compose 하네스 · docker/compose/*</text>
+
+      <!-- ===== 링 1 (SiLS 소유) — 최내곽 ===== -->
+      <rect x="54" y="196" width="892" height="176" rx="10" fill="var(--state-soft)" stroke="var(--state)" stroke-width="2" opacity="0.9"/>
+      <text x="70" y="218" class="zt" style="fill:var(--state-ink)">SiLS 소유 = 이게 SiLS (전부 구현됨)</text>
+      <rect x="68"  y="228" width="168" height="30" rx="7" class="b-dev"/><text x="80" y="248" class="ts" style="fill:var(--ink)">★ 개발 대상 vECU</text>
+      <rect x="244" y="228" width="168" height="30" rx="7" class="box"/><text x="256" y="248" class="ts" style="fill:var(--ink)">MMF SDK</text>
+      <rect x="420" y="228" width="168" height="30" rx="7" class="box"/><text x="432" y="248" class="ts" style="fill:var(--ink)">clock_master</text>
+      <rect x="596" y="228" width="168" height="30" rx="7" class="box"/><text x="608" y="248" class="ts" style="fill:var(--ink)">input_source</text>
+      <rect x="772" y="228" width="168" height="30" rx="7" class="box"/><text x="784" y="248" class="ts" style="fill:var(--ink)">replay</text>
+      <rect x="68"  y="266" width="168" height="30" rx="7" class="box"/><text x="80" y="286" class="ts" style="fill:var(--ink)">trace + schema v1</text>
+      <rect x="244" y="266" width="168" height="30" rx="7" class="box"/><text x="256" y="286" class="ts" style="fill:var(--ink)">conformance gate</text>
+      <rect x="420" y="266" width="168" height="30" rx="7" class="box"/><text x="432" y="286" class="ts" style="fill:var(--ink)">verifier</text>
+      <rect x="596" y="266" width="168" height="30" rx="7" class="box"/><text x="608" y="286" class="ts" style="fill:var(--ink)">responder</text>
+      <text x="70" y="322" class="ts" style="fill:var(--state-ink)">← SDK + vECU + 결정적 하네스 + 계약. 개발환경은 여기만 만들고,</text>
+      <text x="70" y="340" class="ts" style="fill:var(--state-ink)">   바깥 링은 필요할 때 프로파일(S1~S4)로 물린다.</text>
+    </svg>
+    <figcaption>MORAI(설계만) 외에는 링 1·2 대부분 이미 구현. "MMF가 ros2+agl 구동" = ros2·agl·general adsw 를 함께 배포하는 조합(신규 코드 아님).</figcaption>
+  </figure>
+
+  <h2 style="font-size:19px;font-weight:750;margin:44px 0 .6rem;border-bottom:1px solid var(--line);padding-bottom:.6rem">컨테이너 컴포넌트 구성 (배포 관점)</h2>
+  <p class="lede" style="margin-top:0">각 요소는 <b>컨테이너 하나</b>다. SDK로 빌드한 <b>vECU 는 멀티 인스턴스</b>(각자 컨테이너), MMF 오케스트레이션·VISS 허브도 컨테이너. 바깥에 <b>MORAI/rosbag · Autoware · AGL 연동 컨테이너</b>. 전부 <b>아래 DDS pipeline</b>에 물린다(같은 도메인).</p>
+  <figure class="card">
+    <svg viewBox="0 0 980 486" role="img" aria-label="SiLS 3계층 컴포넌트 · Autoware 파티션">
+      <defs>
+        <marker id="ks" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--state)"/></marker>
+        <marker id="kc" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--ctrl)"/></marker>
+        <marker id="kg" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--faint)"/></marker>
+      </defs>
+
+      <!-- ===== 계층 1: core (중립 제어평면) ===== -->
+      <rect x="20" y="30" width="940" height="58" rx="12" class="box"/>
+      <text x="34" y="48" class="zt">① core · 중립 제어평면 (모든 스택 공유)</text>
+      <rect x="320" y="52" width="150" height="30" rx="8" class="box"/><text x="332" y="72" class="ts" style="fill:var(--ink)">lifecycle_mgr</text>
+      <rect x="490" y="52" width="180" height="30" rx="8" class="b-state"/><text x="502" y="72" class="ts" style="fill:var(--ink)">VISS · vehicle_info_mgr</text>
+
+      <!-- core → adsw 제어 rail -->
+      <path d="M395 88 L395 104 M172 104 L723 104 M172 104 L172 149 M488 104 L488 149 M723 104 L723 149" class="ln-g"/>
+      <text x="250" y="100" class="cg">제어 (StartServiceRequest · DDS)</text>
+
+      <!-- ===== 계층 2+3: 스택 프레임 (adsw 형제 + 워크로드) ===== -->
+      <rect x="22"  y="122" width="300" height="250" rx="12" class="zone"/>
+      <text x="34" y="140" class="zt" style="fill:var(--state-ink)">general 스택 (SiLS 배포)</text>
+      <rect x="330" y="122" width="316" height="250" rx="12" class="zone"/>
+      <text x="342" y="140" class="zt" style="fill:var(--ctrl-ink)">ros2 스택 · Autoware 파티션 (ROS_DOMAIN 42 ↔ VISS 브리지)</text>
+      <rect x="654" y="122" width="138" height="250" rx="12" class="zone"/>
+      <text x="666" y="140" class="zt">agl 스택</text>
+      <rect x="800" y="122" width="158" height="250" rx="12" fill="none" stroke="var(--faint)" stroke-width="1.3" stroke-dasharray="2 3"/>
+      <text x="812" y="140" class="zt">외부 (plant/센서)</text>
+
+      <!-- 계층 2: adsw 3형제 (같은 행 = extension 계층) -->
+      <rect x="34"  y="150" width="276" height="46" rx="9" class="b-state"/>
+      <text x="46" y="170" class="t" style="fill:var(--state-ink)">adsw: general</text><text x="46" y="188" class="ts">→ vECU 들 기동 (docker)</text>
+      <rect x="342" y="150" width="292" height="46" rx="9" class="box"/>
+      <text x="354" y="170" class="t" style="fill:var(--ctrl-ink)">adsw: ros2</text><text x="354" y="188" class="ts">→ Autoware 파티션 기동</text>
+      <rect x="666" y="150" width="114" height="46" rx="9" class="box"/>
+      <text x="678" y="170" class="t">adsw: agl</text><text x="678" y="188" class="ts">→ AGL 기동</text>
+      <text x="812" y="176" class="ts">adsw 없음</text><text x="812" y="192" class="tt">(외부 실행)</text>
+      <text x="34" y="216" class="tt">② extension · adsw 3형제 (EXTENSION_PLATFORM 택1 배포)</text>
+
+      <!-- 계층 3: 워크로드 컨테이너 -->
+      <!-- general → vECU ×N -->
+      <rect x="34"  y="250" width="88" height="100" rx="9" class="b-dev"/>
+      <rect x="98" y="260" width="12" height="9" class="box"/><rect x="94" y="262" width="6" height="2.4" class="box"/><rect x="94" y="266" width="6" height="2.4" class="box"/>
+      <text x="44" y="278" class="t" style="fill:var(--dev-ink)">vECU-1★</text><text x="44" y="296" class="ts">개발 대상</text><text x="44" y="342" class="tt">container</text>
+      <rect x="128" y="250" width="88" height="100" rx="9" class="b-state"/>
+      <rect x="192" y="260" width="12" height="9" class="box"/><rect x="188" y="262" width="6" height="2.4" class="box"/><rect x="188" y="266" width="6" height="2.4" class="box"/>
+      <text x="138" y="278" class="t">vECU-2</text><text x="138" y="296" class="ts">brake 등</text><text x="138" y="342" class="tt">container</text>
+      <rect x="222" y="250" width="88" height="100" rx="9" class="b-state"/>
+      <rect x="286" y="260" width="12" height="9" class="box"/><rect x="282" y="262" width="6" height="2.4" class="box"/><rect x="282" y="266" width="6" height="2.4" class="box"/>
+      <text x="232" y="278" class="t">vECU-3</text><text x="232" y="296" class="ts">…N개</text><text x="232" y="342" class="tt">container</text>
+      <!-- ros2 → Autoware 3파티션 (인지/판단/제어) -->
+      <rect x="342" y="250" width="94" height="100" rx="9" class="box"/>
+      <rect x="412" y="260" width="12" height="9" class="box"/><rect x="408" y="262" width="6" height="2.4" class="box"/><rect x="408" y="266" width="6" height="2.4" class="box"/>
+      <text x="352" y="278" class="t" style="fill:var(--ctrl-ink)">인지</text><text x="352" y="296" class="ts">perception</text><text x="352" y="342" class="tt">container</text>
+      <rect x="442" y="250" width="94" height="100" rx="9" class="box"/>
+      <rect x="512" y="260" width="12" height="9" class="box"/><rect x="508" y="262" width="6" height="2.4" class="box"/><rect x="508" y="266" width="6" height="2.4" class="box"/>
+      <text x="452" y="278" class="t" style="fill:var(--ctrl-ink)">판단</text><text x="452" y="296" class="ts">planning</text><text x="452" y="342" class="tt">container</text>
+      <rect x="542" y="250" width="94" height="100" rx="9" class="box"/>
+      <rect x="612" y="260" width="12" height="9" class="box"/><rect x="608" y="262" width="6" height="2.4" class="box"/><rect x="608" y="266" width="6" height="2.4" class="box"/>
+      <text x="552" y="278" class="t" style="fill:var(--ctrl-ink)">제어</text><text x="552" y="296" class="ts">control</text><text x="552" y="342" class="tt">container</text>
+      <!-- agl → AGL -->
+      <rect x="660" y="250" width="124" height="100" rx="9" class="box"/>
+      <rect x="758" y="260" width="12" height="9" class="box"/><rect x="754" y="262" width="6" height="2.4" class="box"/><rect x="754" y="266" width="6" height="2.4" class="box"/>
+      <text x="670" y="278" class="t">AGL</text><text x="670" y="296" class="ts">HMI 등</text><text x="670" y="342" class="tt">container</text>
+      <!-- 외부 → MORAI/rosbag -->
+      <rect x="812" y="250" width="134" height="100" rx="9" class="box"/>
+      <rect x="924" y="260" width="12" height="9" class="box"/><rect x="920" y="262" width="6" height="2.4" class="box"/><rect x="920" y="266" width="6" height="2.4" class="box"/>
+      <text x="822" y="278" class="t" style="fill:var(--state-ink)">MORAI|rosbag</text><text x="822" y="296" class="ts">plant/센서 (택1)</text><text x="822" y="342" class="tt">container</text>
+
+      <!-- 기동 arrows -->
+      <path d="M150 196 L78 249" class="ln-g" stroke="var(--state)" marker-end="url(#ks)"/>
+      <path d="M172 196 L172 249" class="ln-g" stroke="var(--state)" marker-end="url(#ks)"/>
+      <path d="M194 196 L266 249" class="ln-g" stroke="var(--state)" marker-end="url(#ks)"/>
+      <text x="52" y="234" class="cs">기동 ×N (docker run)</text>
+      <path d="M470 196 L389 249" class="ln-g" stroke="var(--ctrl)" marker-end="url(#kc)"/>
+      <path d="M488 196 L489 249" class="ln-g" stroke="var(--ctrl)" marker-end="url(#kc)"/>
+      <path d="M506 196 L589 249" class="ln-g" stroke="var(--ctrl)" marker-end="url(#kc)"/>
+      <text x="392" y="234" class="cc">파티션 3개 기동</text>
+      <path d="M723 196 L722 249" class="ln-g" stroke="var(--faint)" marker-end="url(#kg)"/>
+
+      <!-- 워크로드 → DDS pipeline -->
+      <line x1="78"  y1="350" x2="78"  y2="409" class="ln-g"/><circle cx="78" cy="350" r="3.5" fill="var(--dev)"/>
+      <line x1="172" y1="350" x2="172" y2="409" class="ln-g"/><circle cx="172" cy="350" r="3.5" fill="var(--state)"/>
+      <line x1="266" y1="350" x2="266" y2="409" class="ln-g"/><circle cx="266" cy="350" r="3.5" fill="var(--state)"/>
+      <line x1="389" y1="350" x2="389" y2="409" class="ln-g"/><circle cx="389" cy="350" r="3.5" fill="var(--ctrl)"/>
+      <line x1="489" y1="350" x2="489" y2="409" class="ln-g"/><circle cx="489" cy="350" r="3.5" fill="var(--ctrl)"/>
+      <line x1="589" y1="350" x2="589" y2="409" class="ln-g"/><circle cx="589" cy="350" r="3.5" fill="var(--ctrl)"/>
+      <line x1="722" y1="350" x2="722" y2="409" class="ln-g"/><circle cx="722" cy="350" r="3.5" fill="var(--faint)"/>
+      <line x1="879" y1="350" x2="879" y2="409" class="ln-g"/><circle cx="879" cy="350" r="3.5" fill="var(--state)"/>
+
+      <!-- ===== DDS pipeline ===== -->
+      <rect x="20" y="410" width="940" height="56" rx="12" fill="var(--state-soft)" stroke="var(--state)" stroke-width="1.8"/>
+      <text x="40" y="436" class="t" style="fill:var(--state-ink)">③ DDS pipeline</text>
+      <text x="180" y="436" class="ts">VSS(/VIN/Vehicle) · req/resp · sils/tick/* · StartServiceRequest — 같은 MMF_DDS_DOMAIN_ID</text>
+      <text x="40" y="455" class="ts">각 adsw 는 같은 토픽 구독, registry membership 으로 자기 컨테이너만 기동 · lifecycle_mgr 가 조율</text>
+    </svg>
+    <figcaption>스택별 그룹: MMF(lifecycle_mgr·VISS·adsw:general·vECU들) · ros2(adsw:ros2·Autoware) · agl(adsw:agl·AGL) · 외부(MORAI/rosbag). 각 adsw 는 자기 스택 안. 전부 하단 DDS pipeline 에 물린다.</figcaption>
+  </figure>
+
+  <footer>vECU 개발용 SiLS 환경 · 전체 그림 (MORAI 연동은 설계 단계) · 동반: sils-vecu-development-guide · sils-morai-autoware-topology</footer>
+</div>
+</body>
+</html>
