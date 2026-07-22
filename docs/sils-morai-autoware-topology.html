@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SiLS · MORAI · Autoware 연동 토폴로지 — 데이터 흐름</title>
+<style>
+  :root{
+    --bg:#f1f4f5; --surface:#ffffff; --surface-2:#f7f9fa;
+    --ink:#0f1518; --muted:#566871; --faint:#8496a0;
+    --line:#d6dee1; --line-soft:#e6ecee;
+    --state:#0b8f82; --state-ink:#076b61; --state-soft:#d8efec;   /* MORAI STATE/SENSOR */
+    --ctrl:#b9761a;  --ctrl-ink:#8a5712; --ctrl-soft:#f3e6d1;      /* Autoware/VI 명령 */
+    --act:#4f5bc4;   --act-ink:#3d47a3;  --act-soft:#e4e6f7;       /* ACTUATION */
+    --grid:rgba(11,143,130,.05);
+    --shadow:0 1px 2px rgba(16,30,34,.04),0 8px 24px -14px rgba(16,30,34,.14);
+    --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0b0f12; --surface:#131b1f; --surface-2:#0f171b;
+      --ink:#e1e9ec; --muted:#8ea0a8; --faint:#63757d;
+      --line:#243036; --line-soft:#1a242a;
+      --state:#34c9b8; --state-ink:#7fe0d4; --state-soft:#12312e;
+      --ctrl:#e0a04a;  --ctrl-ink:#eec079; --ctrl-soft:#3a2c17;
+      --act:#8b9be8;   --act-ink:#aab5f0;  --act-soft:#1e2340;
+      --grid:rgba(52,201,184,.06);
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px -16px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#f1f4f5; --surface:#ffffff; --surface-2:#f7f9fa;
+    --ink:#0f1518; --muted:#566871; --faint:#8496a0; --line:#d6dee1; --line-soft:#e6ecee;
+    --state:#0b8f82; --state-ink:#076b61; --state-soft:#d8efec;
+    --ctrl:#b9761a; --ctrl-ink:#8a5712; --ctrl-soft:#f3e6d1;
+    --act:#4f5bc4; --act-ink:#3d47a3; --act-soft:#e4e6f7;
+    --grid:rgba(11,143,130,.05);
+    --shadow:0 1px 2px rgba(16,30,34,.04),0 8px 24px -14px rgba(16,30,34,.14);
+  }
+  :root[data-theme="dark"]{
+    --bg:#0b0f12; --surface:#131b1f; --surface-2:#0f171b;
+    --ink:#e1e9ec; --muted:#8ea0a8; --faint:#63757d; --line:#243036; --line-soft:#1a242a;
+    --state:#34c9b8; --state-ink:#7fe0d4; --state-soft:#12312e;
+    --ctrl:#e0a04a; --ctrl-ink:#eec079; --ctrl-soft:#3a2c17;
+    --act:#8b9be8; --act-ink:#aab5f0; --act-soft:#1e2340;
+    --grid:rgba(52,201,184,.06);
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px -16px rgba(0,0,0,.6);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6;font-size:16px;
+    background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:26px 26px}
+  .wrap{max-width:1000px;margin:0 auto;padding:clamp(28px,5vw,60px) clamp(18px,4vw,32px) 90px}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--state-ink);font-weight:600}
+  h1{font-size:clamp(26px,4.5vw,40px);line-height:1.1;letter-spacing:-.02em;font-weight:800;margin:.5rem 0 0;text-wrap:balance}
+  .lede{color:var(--muted);font-size:clamp(15px,1.9vw,17px);max-width:66ch;margin:1rem 0 0}
+  h2{font-size:19px;font-weight:750;margin:0 0 1rem;border-bottom:1px solid var(--line);padding-bottom:.6rem}
+  section{margin-top:44px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;box-shadow:var(--shadow)}
+  svg{display:block;max-width:100%;height:auto}
+  figcaption{font-size:12.5px;color:var(--faint);margin-top:.7rem;text-align:center;font-family:var(--mono)}
+  code{font-family:var(--mono);font-size:.92em}
+  .box{fill:var(--surface-2);stroke:var(--line);stroke-width:1.4}
+  .box-morai{fill:var(--state-soft);stroke:var(--state);stroke-width:1.6}
+  .box-auto{fill:var(--ctrl-soft);stroke:var(--ctrl);stroke-width:1.6}
+  .box-vi{fill:var(--ctrl-soft);stroke:var(--ctrl);stroke-width:1.6}
+  .box-ecu{fill:var(--act-soft);stroke:var(--act);stroke-width:1.5}
+  .bus{fill:var(--surface);stroke:var(--faint);stroke-width:1.5;stroke-dasharray:2 3}
+  .t{fill:var(--ink);font-family:var(--mono);font-size:13.5px;font-weight:700}
+  .ts{fill:var(--muted);font-family:var(--mono);font-size:11px}
+  .tt{fill:var(--faint);font-family:var(--mono);font-size:10.5px;letter-spacing:.06em}
+  .ln-state{stroke:var(--state);stroke-width:2.4;fill:none}
+  .ln-ctrl{stroke:var(--ctrl);stroke-width:2.4;fill:none}
+  .ln-act{stroke:var(--act);stroke-width:2.6;fill:none}
+  .cap-state{fill:var(--state-ink);font-family:var(--mono);font-size:10.5px;font-weight:700}
+  .cap-ctrl{fill:var(--ctrl-ink);font-family:var(--mono);font-size:10.5px;font-weight:700}
+  .cap-act{fill:var(--act-ink);font-family:var(--mono);font-size:10.5px;font-weight:700}
+  .legend{display:flex;flex-wrap:wrap;gap:1rem;margin-top:1rem;font-family:var(--mono);font-size:12.5px}
+  .lg{display:inline-flex;align-items:center;gap:.45rem}
+  .sw{width:22px;height:4px;border-radius:2px;flex:none}
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:16px}
+  .cx{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--state);border-radius:0 12px 12px 0;padding:14px 16px;box-shadow:var(--shadow)}
+  .cx.two{border-left-color:var(--ctrl)} .cx.three{border-left-color:var(--act)}
+  .cx .n{font-family:var(--mono);font-size:11px;color:var(--faint);letter-spacing:.08em}
+  .cx h3{margin:.2rem 0 .35rem;font-size:14.5px}
+  .cx p{margin:0;font-size:13px;color:var(--muted)}
+  .cx b{color:var(--ink)}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th{text-align:left;padding:.5rem .8rem;font-family:var(--mono);font-size:11px;color:var(--faint);text-transform:uppercase;border-bottom:1px solid var(--line)}
+  td{padding:.5rem .8rem;border-bottom:1px solid var(--line-soft)}
+  tr:last-child td{border-bottom:none}
+  .mono{font-family:var(--mono);font-size:12.5px}
+  footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-family:var(--mono);font-size:12px;color:var(--faint)}
+  @media (max-width:760px){ .cards{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">SiLS · MORAI · Autoware · 데이터 흐름 정리</div>
+    <h1>제어 계층과 DDS 버스</h1>
+    <p class="lede">제어는 위→아래로 내려간다: <b>Autoware</b>(목표) → <b>Vehicle Interface</b>(아비트·안전·변환) → <b>brake · steer · powertrain ECU</b>(액추에이터별 구동) → <b>MORAI</b>(동역학). 모든 링크는 DDS 버스 토픽 — 데이터가 누굴 "거치지" 않고 각자 필요한 것만 구독한다. 폐루프는 MORAI에서 닫힌다.</p>
+    <div class="legend">
+      <span class="lg"><span class="sw" style="background:var(--state)"></span>STATE / SENSOR — MORAI 생산</span>
+      <span class="lg"><span class="sw" style="background:var(--ctrl)"></span>명령 (CONTROL target · setpoint)</span>
+      <span class="lg"><span class="sw" style="background:var(--act)"></span>ACTUATION — ECU → MORAI</span>
+    </div>
+  </header>
+
+  <section>
+    <h2>① 전체 토폴로지 — MORAI (폐루프)</h2>
+    <p style="color:var(--muted);margin:-.4rem 0 1rem;font-size:14px">MORAI가 <b>DDS 토픽(VSS 신호)</b>으로 STATE를 실시간 broadcast → 소비자들이 각자 구독. 제어는 Autoware→VI→ECU로 내려가고, ACTUATION이 <b>MORAI로 되돌아가 새 STATE를 만든다(폐루프 ↺)</b>.</p>
+    <figure class="card">
+      <svg viewBox="0 0 960 680" role="img" aria-label="SiLS MORAI Autoware 제어 계층 데이터 흐름">
+        <defs>
+          <marker id="ms" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--state)"/></marker>
+          <marker id="mc" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--ctrl)"/></marker>
+          <marker id="ma" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--act)"/></marker>
+        </defs>
+
+        <!-- ACTUATION 폐루프 레일 (맨 뒤에 깔아 다른 요소 밑으로) -->
+        <path d="M195 585 L195 630 L720 630 M760 585 L760 630 M477 585 L477 630
+                 M720 630 L24 630 L24 60 L38 60" class="ln-act" marker-end="url(#ma)"/>
+        <text x="250" y="650" class="cap-act">ACTUATION → MORAI (동역학 적용) ↺  · Autoware 로 안 돌아감</text>
+
+        <!-- MORAI -->
+        <rect x="40" y="34" width="880" height="82" rx="12" class="box-morai"/>
+        <text x="60" y="62" class="t">MORAI SIM  —  동역학 · 환경 · 센서  (통합 plant / 세계)</text>
+        <text x="60" y="84" class="ts">STATE 생산 (센서 · 차량상태 broadcast)   ·   ACTUATION 소비 (동역학 적용)</text>
+        <text x="60" y="104" class="tt">authority = morai  ·  vECU/Autoware 는 각자 관심 신호만 구독</text>
+
+        <!-- STATE: MORAI → bus -->
+        <line x1="240" y1="116" x2="240" y2="139" class="ln-state" marker-end="url(#ms)"/>
+        <line x1="480" y1="116" x2="480" y2="139" class="ln-state" marker-end="url(#ms)"/>
+        <line x1="720" y1="116" x2="720" y2="139" class="ln-state" marker-end="url(#ms)"/>
+        <text x="500" y="132" class="cap-state">STATE ▼ broadcast</text>
+
+        <!-- DDS bus -->
+        <rect x="40" y="140" width="880" height="32" rx="10" class="bus"/>
+        <text x="58" y="161" class="t" style="fill:var(--faint)">DDS 공유 버스</text>
+        <text x="228" y="161" class="ts">모든 화살표 = 토픽 pub/sub (릴레이 없음, 각자 직접 구독)</text>
+
+        <!-- Autoware -->
+        <rect x="545" y="200" width="255" height="72" rx="12" class="box-auto"/>
+        <text x="563" y="228" class="t">Autoware  (두뇌)</text>
+        <text x="563" y="248" class="ts">인지 · 판단 · 제어</text>
+        <text x="563" y="265" class="cap-ctrl">STATE(AD subset) 구독 → CONTROL 생산</text>
+
+        <!-- Vehicle Interface -->
+        <rect x="545" y="320" width="255" height="78" rx="12" class="box-vi"/>
+        <text x="563" y="348" class="t">Vehicle Interface</text>
+        <text x="563" y="366" class="ts">= Autoware vehicle_interface</text>
+        <text x="563" y="384" class="cap-ctrl">아비트·안전·변환 → 액추에이터 setpoint</text>
+
+        <!-- STATE → Autoware -->
+        <line x1="610" y1="172" x2="610" y2="199" class="ln-state" marker-end="url(#ms)"/>
+        <text x="616" y="190" class="cap-state">STATE▲</text>
+        <!-- STATE → Vehicle Interface (right-side feed, avoid crossing Autoware) -->
+        <path d="M835 172 L835 358 L801 358" class="ln-state" marker-end="url(#ms)"/>
+        <text x="842" y="270" class="cap-state">STATE▲(피드백)</text>
+
+        <!-- CONTROL: Autoware → Vehicle Interface -->
+        <line x1="672" y1="272" x2="672" y2="319" class="ln-ctrl" marker-end="url(#mc)"/>
+        <text x="680" y="300" class="cap-ctrl">CONTROL (target)</text>
+
+        <!-- 액추에이터 ECU 행 -->
+        <rect x="90"  y="470" width="212" height="104" rx="12" class="box-ecu"/>
+        <text x="108" y="498" class="t">brake ECU</text>
+        <text x="108" y="518" class="ts">제동 제어 로직</text>
+        <text x="108" y="540" class="cap-ctrl">◂ setpoint(제동)</text>
+        <text x="108" y="558" class="cap-state">⊂ Wheel.Speed·Brake.Pedal</text>
+
+        <rect x="374" y="470" width="212" height="104" rx="12" class="box-ecu"/>
+        <text x="392" y="498" class="t">steer ECU</text>
+        <text x="392" y="518" class="ts">조향 제어 로직</text>
+        <text x="392" y="540" class="cap-ctrl">◂ setpoint(조향)</text>
+        <text x="392" y="558" class="cap-state">⊂ Steering.Angle</text>
+
+        <rect x="658" y="470" width="212" height="104" rx="12" class="box-ecu"/>
+        <text x="676" y="498" class="t">powertrain ECU</text>
+        <text x="676" y="518" class="ts">구동/기어 로직</text>
+        <text x="676" y="540" class="cap-ctrl">◂ setpoint(구동)</text>
+        <text x="676" y="558" class="cap-state">⊂ Vehicle.Speed·Engine.*</text>
+
+        <!-- setpoint: Vehicle Interface → 각 ECU (fan-out) -->
+        <path d="M600 398 L196 469" class="ln-ctrl" marker-end="url(#mc)"/>
+        <path d="M672 398 L480 469" class="ln-ctrl" marker-end="url(#mc)"/>
+        <path d="M744 398 L764 469" class="ln-ctrl" marker-end="url(#mc)"/>
+        <text x="300" y="440" class="cap-ctrl">setpoint (액추에이터별)</text>
+
+        <!-- STATE → 각 ECU (선택 구독) -->
+        <line x1="150" y1="172" x2="150" y2="469" class="ln-state" marker-end="url(#ms)"/>
+        <line x1="430" y1="172" x2="430" y2="469" class="ln-state" marker-end="url(#ms)"/>
+        <path d="M892 172 L892 508 L872 508" class="ln-state" marker-end="url(#ms)"/>
+      </svg>
+      <figcaption>Autoware(target) → Vehicle Interface(setpoint) → brake/steer/powertrain ECU(actuation) → MORAI ↺.  STATE 는 버스에서 각 소비자가 직접·선택 구독.</figcaption>
+    </figure>
+
+    <div class="cards">
+      <div class="cx two">
+        <div class="n">계층 ①</div>
+        <h3>Vehicle Interface = 조정자</h3>
+        <p>Autoware의 <b>차량-무관 목표</b>(가속·조향)를 받아 <b>아비트레이션·안전제한·변환</b> 후 액추에이터별 <b>setpoint</b>로 분배. Autoware의 <code>vehicle_interface</code>.</p>
+      </div>
+      <div class="cx three">
+        <div class="n">계층 ②</div>
+        <h3>brake / steer / powertrain = 손발</h3>
+        <p>각자 <b>자기 setpoint + 관심 STATE</b>만 구독해 단일 액추에이터를 구동, <b>ACTUATION</b>을 MORAI로. 도메인이 좁고 명확한 vECU.</p>
+      </div>
+      <div class="cx">
+        <div class="n">계층 ③</div>
+        <h3>폐루프는 MORAI에서</h3>
+        <p>ACTUATION → MORAI 동역학 → <b>새 STATE</b> → (모두 다시 구독). Autoware/VI 로 되돌아가지 않고 <b>다음 STATE</b>로 결과가 관측된다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>② 전체 토폴로지 — rosbag (개루프 재생)</h2>
+    <p style="color:var(--muted);margin:-.4rem 0 1rem;font-size:14px">rosbag은 <b>MORAI와 동일한 DDS 토픽/타입</b>으로 녹화된 STATE를 재생한다. 그래서 소비자(Autoware·VI·ECU)와 제어 체인은 <b>① 그림과 완전히 동일</b>하게 동작한다. 유일한 차이는 <b>ACTUATION이 rosbag으로 돌아가지 않는다</b>(로그/폐기) — 폐루프가 열린다(개루프).</p>
+    <figure class="card">
+      <svg viewBox="0 0 960 700" role="img" aria-label="rosbag 개루프 전체 토폴로지">
+        <defs>
+          <marker id="ms3" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--state)"/></marker>
+          <marker id="mc3" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--ctrl)"/></marker>
+          <marker id="ma3" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--act)"/></marker>
+        </defs>
+
+        <!-- 끊긴 되돌림 레일 (MORAI 폐루프가 있던 자리 — 여기선 열림) -->
+        <path d="M196 630 L24 630 L24 60 L38 60" fill="none" stroke="var(--faint)" stroke-width="1.6" stroke-dasharray="5 4"/>
+        <line x1="16" y1="334" x2="32" y2="350" stroke="var(--ctrl)" stroke-width="3"/>
+        <line x1="32" y1="334" x2="16" y2="350" stroke="var(--ctrl)" stroke-width="3"/>
+        <text x="42" y="336" class="cap-ctrl">✗ 제어 무시</text>
+        <text x="42" y="352" class="cap-ctrl">rosbag 으로 안 감</text>
+
+        <!-- 실제 ACTUATION → 폐기 sink -->
+        <line x1="196" y1="574" x2="196" y2="624" class="ln-act"/>
+        <line x1="480" y1="574" x2="480" y2="624" class="ln-act"/>
+        <line x1="764" y1="574" x2="764" y2="624" class="ln-act"/>
+        <line x1="196" y1="624" x2="764" y2="624" class="ln-act"/>
+        <line x1="480" y1="624" x2="480" y2="641" class="ln-act" marker-end="url(#ma3)"/>
+        <rect x="380" y="643" width="200" height="34" rx="8" fill="var(--surface-2)" stroke="var(--faint)" stroke-width="1.3" stroke-dasharray="4 4"/>
+        <text x="404" y="665" class="ts">→ 로그 / 폐기 (개루프)</text>
+
+        <!-- rosbag source -->
+        <rect x="40" y="34" width="880" height="82" rx="12" class="box"/>
+        <text x="60" y="62" class="t">rosbag  —  녹화 데이터 재생 (고정 순서)</text>
+        <text x="60" y="84" class="ts">MORAI와 <tspan class="cap-state">동일한 DDS 토픽/타입</tspan>으로 STATE 재생   ·   소비자·제어 체인은 ① 그림과 동일</text>
+        <text x="60" y="104" class="tt">replay (ReplaySource §7.4) · 제어(ACTUATION)에 반응하지 않음</text>
+
+        <!-- STATE: rosbag → bus -->
+        <line x1="240" y1="116" x2="240" y2="139" class="ln-state" marker-end="url(#ms3)"/>
+        <line x1="480" y1="116" x2="480" y2="139" class="ln-state" marker-end="url(#ms3)"/>
+        <line x1="720" y1="116" x2="720" y2="139" class="ln-state" marker-end="url(#ms3)"/>
+        <text x="500" y="132" class="cap-state">STATE ▼ (녹화 재생)</text>
+
+        <!-- DDS bus -->
+        <rect x="40" y="140" width="880" height="32" rx="10" class="bus"/>
+        <text x="58" y="161" class="t" style="fill:var(--faint)">DDS 공유 버스</text>
+        <text x="228" y="161" class="ts">MORAI와 동일한 토픽 — 소비자는 원천이 rosbag인지 모른다 (반응만 없음)</text>
+
+        <!-- Autoware -->
+        <rect x="545" y="200" width="255" height="72" rx="12" class="box-auto"/>
+        <text x="563" y="228" class="t">Autoware  (두뇌)</text>
+        <text x="563" y="248" class="ts">인지 · 판단 · 제어</text>
+        <text x="563" y="265" class="cap-ctrl">STATE(AD subset) 구독 → CONTROL 생산</text>
+
+        <!-- Vehicle Interface -->
+        <rect x="545" y="320" width="255" height="78" rx="12" class="box-vi"/>
+        <text x="563" y="348" class="t">Vehicle Interface</text>
+        <text x="563" y="366" class="ts">= Autoware vehicle_interface</text>
+        <text x="563" y="384" class="cap-ctrl">아비트·안전·변환 → 액추에이터 setpoint</text>
+
+        <!-- STATE → Autoware / VI -->
+        <line x1="610" y1="172" x2="610" y2="199" class="ln-state" marker-end="url(#ms3)"/>
+        <text x="616" y="190" class="cap-state">STATE▲</text>
+        <path d="M835 172 L835 358 L801 358" class="ln-state" marker-end="url(#ms3)"/>
+        <text x="842" y="270" class="cap-state">STATE▲(녹화)</text>
+
+        <!-- CONTROL Autoware → VI -->
+        <line x1="672" y1="272" x2="672" y2="319" class="ln-ctrl" marker-end="url(#mc3)"/>
+        <text x="680" y="300" class="cap-ctrl">CONTROL (target)</text>
+
+        <!-- 액추에이터 ECU 행 -->
+        <rect x="90"  y="470" width="212" height="104" rx="12" class="box-ecu"/>
+        <text x="108" y="498" class="t">brake ECU</text>
+        <text x="108" y="518" class="ts">제동 제어 로직</text>
+        <text x="108" y="540" class="cap-ctrl">◂ setpoint(제동)</text>
+        <text x="108" y="558" class="cap-state">⊂ Wheel.Speed·Brake.Pedal</text>
+
+        <rect x="374" y="470" width="212" height="104" rx="12" class="box-ecu"/>
+        <text x="392" y="498" class="t">steer ECU</text>
+        <text x="392" y="518" class="ts">조향 제어 로직</text>
+        <text x="392" y="540" class="cap-ctrl">◂ setpoint(조향)</text>
+        <text x="392" y="558" class="cap-state">⊂ Steering.Angle</text>
+
+        <rect x="658" y="470" width="212" height="104" rx="12" class="box-ecu"/>
+        <text x="676" y="498" class="t">powertrain ECU</text>
+        <text x="676" y="518" class="ts">구동/기어 로직</text>
+        <text x="676" y="540" class="cap-ctrl">◂ setpoint(구동)</text>
+        <text x="676" y="558" class="cap-state">⊂ Vehicle.Speed·Engine.*</text>
+
+        <!-- setpoint fan-out -->
+        <path d="M600 398 L196 469" class="ln-ctrl" marker-end="url(#mc3)"/>
+        <path d="M672 398 L480 469" class="ln-ctrl" marker-end="url(#mc3)"/>
+        <path d="M744 398 L764 469" class="ln-ctrl" marker-end="url(#mc3)"/>
+        <text x="300" y="440" class="cap-ctrl">setpoint (액추에이터별)</text>
+
+        <!-- STATE → 각 ECU -->
+        <line x1="150" y1="172" x2="150" y2="469" class="ln-state" marker-end="url(#ms3)"/>
+        <line x1="430" y1="172" x2="430" y2="469" class="ln-state" marker-end="url(#ms3)"/>
+        <path d="M892 172 L892 508 L872 508" class="ln-state" marker-end="url(#ms3)"/>
+      </svg>
+      <figcaption>① 과 레이아웃·소비자·제어 체인 동일 — 원천만 rosbag(같은 DDS 토픽 재생). ACTUATION 은 폐기(✗ rosbag 으로 안 돌아감) → 개루프.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>③ 요약 비교 — MORAI vs rosbag</h2>
+    <p style="color:var(--muted);margin:-.4rem 0 1rem;font-size:14px">소비자(Autoware·VI·ECU)는 <b>양쪽에서 똑같이</b> 동작한다. 차이는 딱 하나 — <b>제어(ACTUATION)가 세계로 되돌아가느냐</b>. MORAI는 반응해 루프가 닫히고, rosbag은 무시해 루프가 열린다.</p>
+    <figure class="card">
+      <svg viewBox="0 0 960 400" role="img" aria-label="rosbag 개루프 vs MORAI 폐루프 대비">
+        <defs>
+          <marker id="ms2" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--state)"/></marker>
+          <marker id="ma2" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--act)"/></marker>
+        </defs>
+
+        <!-- 구분선 -->
+        <line x1="480" y1="16" x2="480" y2="384" stroke="var(--line)" stroke-width="1.2" stroke-dasharray="3 4"/>
+
+        <!-- ===== 왼쪽: MORAI 폐루프 ===== -->
+        <text x="52" y="34" class="t" style="fill:var(--state-ink)">MORAI — 폐루프 · 반응형</text>
+
+        <rect x="150" y="54" width="180" height="58" rx="10" class="box-morai"/>
+        <text x="170" y="80" class="t">MORAI SIM</text>
+        <text x="170" y="98" class="ts">동역학·센서 실시간 계산</text>
+
+        <rect x="150" y="176" width="180" height="66" rx="10" class="box"/>
+        <text x="170" y="202" class="t">Autoware→VI→ECU</text>
+        <text x="170" y="220" class="ts">(제어 체인 동일)</text>
+
+        <line x1="240" y1="112" x2="240" y2="175" class="ln-state" marker-end="url(#ms2)"/>
+        <text x="246" y="150" class="cap-state">STATE▼</text>
+
+        <path d="M240 242 L240 300 L64 300 L64 83 L149 83" class="ln-act" marker-end="url(#ma2)"/>
+        <text x="80" y="322" class="cap-act">ACTUATION ↺ (세계를 바꿈)</text>
+
+        <text x="52" y="358" class="ts">폐루프: 제어 → 세계 변화 → 새 STATE</text>
+        <text x="52" y="376" class="tt">SDK: plant mode = "live"</text>
+
+        <!-- ===== 오른쪽: rosbag 개루프 ===== -->
+        <text x="520" y="34" class="t" style="fill:var(--act-ink)">rosbag — 개루프 · 재생</text>
+
+        <rect x="628" y="54" width="180" height="58" rx="10" class="box"/>
+        <text x="648" y="80" class="t">rosbag</text>
+        <text x="648" y="98" class="ts">녹화 데이터 재생 (고정)</text>
+
+        <rect x="628" y="176" width="180" height="66" rx="10" class="box"/>
+        <text x="648" y="202" class="t">Autoware→VI→ECU</text>
+        <text x="648" y="220" class="ts">(동일하게 동작)</text>
+
+        <line x1="718" y1="112" x2="718" y2="175" class="ln-state" marker-end="url(#ms2)"/>
+        <text x="664" y="150" class="cap-state">STATE▼ 고정재생</text>
+
+        <line x1="718" y1="242" x2="718" y2="291" class="ln-act" marker-end="url(#ma2)"/>
+        <rect x="628" y="293" width="180" height="40" rx="8" fill="var(--surface-2)" stroke="var(--faint)" stroke-width="1.3" stroke-dasharray="4 4"/>
+        <text x="648" y="318" class="ts">→ 로그 / 폐기</text>
+
+        <!-- 끊긴 피드백 + ✗ -->
+        <path d="M628 313 L560 313 L560 84 L626 84" fill="none" stroke="var(--faint)" stroke-width="1.6" stroke-dasharray="5 4"/>
+        <line x1="551" y1="190" x2="569" y2="208" stroke="var(--ctrl)" stroke-width="3"/>
+        <line x1="569" y1="190" x2="551" y2="208" stroke="var(--ctrl)" stroke-width="3"/>
+        <text x="500" y="235" class="cap-ctrl">제어 무시</text>
+        <text x="500" y="251" class="cap-ctrl">(루프 열림)</text>
+
+        <text x="520" y="358" class="ts">개루프: 제어가 재생에 영향 없음</text>
+        <text x="520" y="376" class="tt">SDK: replay (ReplaySource §7.4)</text>
+      </svg>
+      <figcaption>같은 소비자, 다른 원천. MORAI는 ACTUATION을 받아 새 STATE를 만들고(↺), rosbag은 제어를 무시하고 녹화분만 그대로 재생한다(✗).</figcaption>
+    </figure>
+
+    <div class="card" style="margin-top:16px">
+      <table>
+        <thead><tr><th></th><th style="color:var(--state-ink)">MORAI</th><th style="color:var(--act-ink)">rosbag</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">성격</td><td>폐루프 · 반응형</td><td>개루프 · 재생</td></tr>
+          <tr><td class="mono">STATE 원천</td><td>실시간 시뮬 계산</td><td>녹화 파일 (고정 순서)</td></tr>
+          <tr><td class="mono">제어(ACTUATION) 영향</td><td><b>세계를 바꿈 → 새 STATE</b></td><td><b>무시 (재생 불변)</b></td></tr>
+          <tr><td class="mono">시간</td><td>외부 스텝 동기 가능(lockstep)</td><td>재생 타임스탬프 고정</td></tr>
+          <tr><td class="mono">SDK 대응</td><td class="mono">plant mode "live"</td><td class="mono">replay (ReplaySource §7.4)</td></tr>
+          <tr><td class="mono">용도</td><td>폐루프 제어·동역학 검증</td><td>인지/vECU 회귀·고정 시나리오 재생</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>신호 클래스 — 방향과 주인</h2>
+    <div class="card">
+      <table>
+        <thead><tr><th>클래스</th><th>생산</th><th>소비</th><th>예시</th></tr></thead>
+        <tbody>
+          <tr><td><b style="color:var(--state-ink)">STATE/SENSOR</b></td><td>MORAI</td><td>Autoware · VI · 각 ECU (각자 subset)</td><td class="mono">pose·velocity·wheel_speed·steer·gps·imu·cam·lidar</td></tr>
+          <tr><td><b style="color:var(--ctrl-ink)">CONTROL(target)</b></td><td>Autoware</td><td>Vehicle Interface</td><td class="mono">target accel · target steering</td></tr>
+          <tr><td><b style="color:var(--ctrl-ink)">SETPOINT</b></td><td>Vehicle Interface</td><td>brake · steer · powertrain ECU</td><td class="mono">제동압 · 조향 torque/angle · throttle</td></tr>
+          <tr><td><b style="color:var(--act-ink)">ACTUATION</b></td><td>각 액추에이터 ECU</td><td>MORAI (동역학)</td><td class="mono">applied brake · steer · drive force</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>SiLS–MORAI–Autoware 데이터 흐름 · 설계 이해 정리 (MORAI 연동은 검토 단계 — sils-morai-simulator-integration-review 동반)</footer>
+</div>
+</body>
+</html>
