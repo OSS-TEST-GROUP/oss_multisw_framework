@@ -395,6 +395,94 @@
   </section>
 
   <section>
+    <h2>④ Web.Auto 활용 — 관리 플레인은 폐루프 "위"에 얹힌다</h2>
+    <p style="color:var(--muted);margin:-.4rem 0 1rem;font-size:14px">실제 시뮬레이션 폐루프(MORAI/AWSIM ⇄ DDS ⇄ vECU·Autoware)는 <b>로컬/엣지에서 실시간</b>으로 돈다 — 고대역 센서 버스라 클라우드로 올리지 않는다. <b>Web.Auto</b>는 이 루프 <b>안</b>이 아니라 <b>위</b>에 얹히는 <b>클라우드 관리 플레인</b>으로, 매 tick 센서값이 아니라 <b>런의 "결과·기록"</b>(rosbag·평가 메트릭·텔레메트리)을 다룬다. MORAI의 대체재가 아니라 <b>다른 계층</b>이다 (MORAI 등가물은 TIER IV의 <b>AWSIM</b>).</p>
+    <figure class="card">
+      <svg viewBox="0 0 960 470" role="img" aria-label="Web.Auto 관리 플레인과 로컬 SiLS 데이터 플레인 2계층">
+        <defs>
+          <marker id="mu4" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--state)"/></marker>
+          <marker id="md4" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--ctrl)"/></marker>
+          <marker id="ms4" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--state)"/></marker>
+          <marker id="ma4" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--act)"/></marker>
+        </defs>
+
+        <!-- ===== 클라우드: Web.Auto (관리 플레인) ===== -->
+        <rect x="60" y="26" width="840" height="112" rx="14" fill="var(--surface-2)" stroke="var(--faint)" stroke-width="1.6" stroke-dasharray="6 4"/>
+        <text x="84" y="56" class="t">☁  Web.Auto — 클라우드 운영·평가 플랫폼 (관리 플레인)</text>
+        <text x="84" y="78" class="ts">rosbag 카탈로그 · logsim/시나리오 평가 · fleet 모니터링 · 배포/환경 관리</text>
+        <text x="84" y="99" class="tt">실시간 센서 버스가 아니라 "결과·기록"을 다룸  ·  SiLS 폐루프 밖(위)에 위치</text>
+        <text x="84" y="120" class="cap-ctrl">(A) 클라우드에서 Autoware 상대로 replay·평가 자기완결    ·    (B) rosbag만 공급 → 로컬에서 replay·verify</text>
+
+        <!-- ===== 계층 간 화살표 ===== -->
+        <!-- 업로드 (로컬 → 클라우드) -->
+        <path d="M255 248 L255 140" class="ln-state" marker-end="url(#mu4)"/>
+        <text x="150" y="185" class="cap-state">▲ 업로드 (런 종료 후)</text>
+        <text x="150" y="201" class="tt">rosbag · 평가 메트릭 · 저율 텔레메트리</text>
+
+        <!-- 배포/트리거/rosbag 공급 (클라우드 → 로컬) -->
+        <path d="M705 140 L705 248" class="ln-ctrl" marker-end="url(#md4)"/>
+        <text x="560" y="185" class="cap-ctrl">배포 · 시나리오 트리거 ▼</text>
+        <text x="560" y="201" class="tt">rosbag 공급 (B) → 로컬 개루프 재생 소스</text>
+
+        <!-- ===== 로컬/엣지: 실시간 폐루프 (데이터 플레인) ===== -->
+        <rect x="60" y="250" width="840" height="196" rx="14" class="box"/>
+        <text x="84" y="278" class="t">로컬 / 엣지 — 실시간 폐루프 (데이터 플레인)</text>
+        <text x="640" y="278" class="cap-state">← 여기가 SiLS 루프</text>
+
+        <rect x="96" y="300" width="204" height="104" rx="12" class="box-morai"/>
+        <text x="114" y="330" class="t">MORAI / AWSIM</text>
+        <text x="114" y="350" class="ts">동역학·센서 실시간 계산</text>
+        <text x="114" y="372" class="tt">STATE 생산 · ACTUATION 소비</text>
+
+        <rect x="380" y="334" width="200" height="36" rx="10" class="bus"/>
+        <text x="400" y="357" class="t" style="fill:var(--faint)">DDS 공유 버스</text>
+
+        <rect x="660" y="300" width="204" height="104" rx="12" class="box"/>
+        <text x="678" y="330" class="t">vECU · Autoware</text>
+        <text x="678" y="350" class="ts">인지·판단·제어 / 각 ECU</text>
+        <text x="678" y="372" class="tt">STATE 구독 · ACTUATION 생산</text>
+
+        <!-- STATE 흐름 -->
+        <line x1="300" y1="352" x2="379" y2="352" class="ln-state" marker-end="url(#ms4)"/>
+        <line x1="580" y1="352" x2="659" y2="352" class="ln-state" marker-end="url(#ms4)"/>
+        <text x="356" y="326" class="cap-state">STATE ▶</text>
+
+        <!-- ACTUATION 폐루프 (하단 되돌림) -->
+        <path d="M762 404 L762 426 L198 426 L198 404" class="ln-act" marker-end="url(#ma4)"/>
+        <text x="360" y="420" class="cap-act">ACTUATION ↺ (폐루프는 로컬에서 닫힘)</text>
+      </svg>
+      <figcaption>Web.Auto는 폐루프 <b>위</b>의 관리 플레인 — 실시간 센서 버스가 아니라 rosbag·메트릭·텔레메트리를 업로드로 받고, 배포·시나리오·rosbag을 아래로 내린다. 폐루프 자체는 로컬 MORAI/AWSIM에서 닫힌다.</figcaption>
+    </figure>
+
+    <div class="cards" style="grid-template-columns:1fr 1fr">
+      <div class="cx">
+        <div class="n">활용 A — 클라우드 자기완결</div>
+        <h3>Autoware 스택 회귀 (logsim)</h3>
+        <p>Web.Auto가 <b>클라우드 안에서</b> rosbag → Autoware 인스턴스 → 평가까지 다 돌린다. 로컬 vECU는 관여하지 않음. <b>Autoware 스택 자체</b>의 회귀·시나리오 검증에 적합.</p>
+      </div>
+      <div class="cx two">
+        <div class="n">활용 B — 데이터 소스</div>
+        <h3>vECU 회귀 (로컬 replay+verify)</h3>
+        <p>Web.Auto는 <b>rosbag 공급자</b> 역할만. 내려받은 rosbag을 <b>로컬 SiLS 개루프</b>(② 그림)로 재생 → trace 기반 결정론 판정. <b>vECU 로직</b> 회귀는 이쪽. verify 주체·위치가 로컬이다.</p>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <table>
+        <thead><tr><th>Web.Auto가 받는 데이터</th><th>구체적으로</th><th>언제</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">rosbag / 로그</td><td>주행·시뮬 기록 (센서+제어 전체)</td><td>런 종료 후 배치 업로드</td></tr>
+          <tr><td class="mono">평가 메트릭 / 결과</td><td>시나리오 pass/fail · 안전지표 · 회귀 점수</td><td>런 종료 후</td></tr>
+          <tr><td class="mono">운영 텔레메트리</td><td>차량 상태·위치·미션 진행 (저대역)</td><td>저율 실시간</td></tr>
+          <tr><td class="mono">원격 모니터링</td><td>teleoperation 다운샘플 영상·상태</td><td>필요 시 저대역</td></tr>
+          <tr><td class="mono">배포 아티팩트</td><td>컨테이너 이미지·설정·맵 버전</td><td>배포 시</td></tr>
+        </tbody>
+      </table>
+      <p style="margin:.9rem 0 0;font-size:13px;color:var(--muted)">핵심: <b>받는 건 "결과·기록"(관리 플레인)</b>이지 <b>"매 tick 센서값"(데이터 플레인)이 아니다.</b> 매 tick 고대역 센서 스트림은 대역폭·지연 때문에 반드시 로컬에 있어야 한다.</p>
+    </div>
+  </section>
+
+  <section>
     <h2>신호 클래스 — 방향과 주인</h2>
     <div class="card">
       <table>
@@ -409,7 +497,7 @@
     </div>
   </section>
 
-  <footer>SiLS–MORAI–Autoware 데이터 흐름 · 설계 이해 정리 (MORAI 연동은 검토 단계 — sils-morai-simulator-integration-review 동반)</footer>
+  <footer>SiLS–MORAI–Autoware 데이터 흐름 · 설계 이해 정리 (MORAI 연동은 검토 단계 — sils-morai-simulator-integration-review 동반) · ④ Web.Auto = 폐루프 위의 클라우드 관리 플레인(AWSIM=MORAI 등가 시뮬레이터)</footer>
 </div>
 </body>
 </html>
