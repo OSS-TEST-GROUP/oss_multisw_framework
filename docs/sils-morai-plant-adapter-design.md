@@ -1,0 +1,160 @@
+# SiLS — MORAI / AWSIM Plant 어댑터 설계안 (3안 비교)
+
+> 상태: **설계 검토 단계 (구현 전)**
+> 대상: `service/sils/vecu` (libsils_vecu SDK)
+> 관련: [sils-morai-autoware-topology.html](sils-morai-autoware-topology.html) ①/④, [sils-morai-simulator-integration-review.md](sils-morai-simulator-integration-review.md), 아키텍처 v3 §11 (L3 plant coupling)
+> 작성: 2026-07-22
+
+---
+
+## 0. 이 문서의 목적
+
+MORAI(또는 TIER IV **AWSIM**)를 SiLS vECU의 plant로 붙일 때, **어느 포트로 어떻게 결합할지**를 확정하기 위한 설계 비교. 코드부터 짜지 않고 **프레이밍 결정**을 먼저 내리는 게 목적 — 이 결정이 이후 구현 전체를 가른다. earned-abstraction 원칙상, "MORAI라는 두 번째 실소비자"가 생겼으므로 지금이 추상화를 확정할 시점이다.
+
+---
+
+## 1. 갭 — 두 축으로 정확히
+
+현재 SDK의 plant 결합(`IPlant`, `BehaviorContext`, `BehaviorOutput`)은 **스칼라(SISO) + in-process**를 전제한다. MORAI/AWSIM은 두 축 모두에서 다르다.
+
+| 축 | 현재 계약 | MORAI / AWSIM |
+|---|---|---|
+| **채널 수** | **SISO** — `IPlant::SetInputs(double)`, `Step(dt)→double`, `output()→double`; `BehaviorContext.plant_feedback` 1개; `BehaviorOutput.value` 1개 | **MIMO** — 입력: 조향·가감속·브레이크·기어…; 출력: pose·velocity·wheel_speed·gps·imu·camera·lidar… |
+| **결합 위치** | **in-process** — vECU tick 루프가 `plant->Step(dt)`로 직접 적분 (동기) | **out-of-process** — 별도 시뮬레이터, DDS 버스(또는 자체 프로토콜→어댑터) 너머 |
+| **소유권** | 그 vECU 전용 (1:1) | **공유 세계, authority=morai** — N개 vECU + Autoware가 동시에 STATE 소비 |
+| **시간 전진** | tick 루프가 dt 부여 | MORAI 자체 물리엔진이 전진 (외부 클럭) |
+
+### 현재 코드의 결합점 (변경 영향 범위)
+
+- [plant.hpp](../service/sils/vecu/src/plant.hpp): `IPlant` 포트 + `AnalyticPlant`/`ReplayPlant`/`FmuPlant`.
+- [behavior.hpp](../service/sils/vecu/src/behavior.hpp): `BehaviorContext.plant_feedback`(double), `BehaviorOutput.value`(double).
+- [run_loop.hpp](../service/sils/vecu/src/run_loop.hpp): tick 루프가 폐루프를 닫는 곳 —
+  `plant->SetInputs(out.value); double y = plant->Step(tick.dt_ns); ctx.plant_feedback = plant->output();`
+  그리고 `plant_step` trace `{feedback_in, command, output}` 방출.
+- **conformance**: `evaluate.py analyze_plant`이 trace에서 `feedback_in[N] == output[N-1]`(폐루프 연속성), 상수 dt, 유한값을 판정. `plant_step`은 golden 비교 이벤트.
+
+> 핵심: 세 곳(포트·컨텍스트·루프)이 모두 스칼라를 가정한다. MIMO는 이 셋을 동시에 건드린다.
+
+---
+
+## 2. 세 가지 안
+
+### Option 1 — `IPlant`를 MIMO in-process 코시뮬로 확장
+
+`IPlant`를 벡터화(`SetInputs(span<double>)`, `Step(dt)→span<double>`)하고, MORAI 어댑터(`MoraiPlant : IPlant`)가 매 tick DDS 요청/응답으로 MORAI를 한 스텝 구동. 폐루프는 여전히 tick 루프의 `plant->Step()`에서 닫힌다.
+
+```
+vECU tick 루프
+  ├ behavior->OnTick()  → 명령 벡터
+  ├ plant->SetInputs(cmd_vec)      ─DDS→ MORAI (step 요청)
+  ├ plant->Step(dt)     ←DDS─ MORAI 출력 벡터
+  └ ctx.plant_feedback = plant->output_vec()
+```
+
+**장점**
+- "plant는 IPlant 뒤에 있다"는 기존 정신 모델·conformance(`analyze_plant`) 그대로 재사용.
+- Analytic/FMU와 대칭 — factory `MakePlant("morai", …)` 한 줄로 스위치.
+- 폐루프 연속성 판정(`feedback_in[N]==output[N-1]`)이 그대로 성립.
+
+**단점 (치명적)**
+- **공유 세계를 한 vECU가 구동**하게 된다 → N개 vECU + Autoware가 MORAI를 공유하는 실제 토폴로지(①/④)와 **모순**. 두 번째 vECU를 붙이는 순간 "누가 MORAI를 step 하나?" 충돌.
+- MIMO를 `BehaviorContext`/`BehaviorOutput`에 강제 → behavior 포트까지 스칼라 전제 붕괴.
+- MORAI가 vECU tick당 정확히 1 step 하도록 요청/응답을 동기화해야 함(사실상 lockstep을 IPlant 안에 숨김) — 실패/타임아웃 처리가 포트 뒤로 감춰져 §14 fail-fast가 흐려짐.
+
+**구현 규모**: 중~대. `IPlant`/`behavior.hpp`/`run_loop.hpp` 세 곳 시그니처 변경(파급 큼) + MORAI DDS 어댑터 + conformance 벡터화.
+
+---
+
+### Option 2 — MORAI는 IPlant가 아니라 "버스 결합 외부 세계" 모드 (권장)
+
+MORAI 모드에서 vECU는 **로컬 plant를 돌리지 않는다.** MORAI가 STATE를 DDS 버스에 pub → vECU는 그것을 **staged 입력**(기존 input-staging / `IWireCodec::Take` 경로)으로 소비하고, ACTUATION을 **pub**(기존 wire write 경로). **폐루프는 버스에서 닫힌다** — 토폴로지 ① 그대로.
+
+```
+MORAI ──STATE(N토픽)──► DDS 버스 ──► vECU (staged 입력, MIMO 읽기)
+                                         │ behavior
+  MORAI ◄──ACTUATION──── DDS 버스 ◄────── vECU (pub, MIMO 쓰기)
+  (폐루프는 MORAI가 버스 너머에서 닫음)
+```
+
+"plant 결합"을 **기존 wire + input-staging 포트의 MIMO 확장(채널맵)** + MORAI와의 **lockstep 시간계약**으로 실현한다. in-process `IPlant`(Analytic/FMU/Replay)는 **외부 시뮬 없는 standalone L3용으로 그대로 유지** — 삭제·변경 없음.
+
+새로 필요한 것:
+- **채널맵(ChannelMap)**: 이름있는 신호 ↔ (DDS 토픽, VSS path, 타입) 매핑. 입력(MORAI→vECU STATE) N개, 출력(vECU→MORAI ACTUATION) M개. 선언적 설정(yaml/env)으로.
+- **MIMO staged 입력**: 여러 타입 토픽을 tick 경계에서 얼려 behavior에 전달 → **다중 엔드포인트 작업과 동일 문제**.
+- **lockstep 시간계약**: MORAI가 vECU tick당 dt 한 번 전진하도록 tick-control 동기(기존 `LockstepClock`/`TickComplete` 프로토콜 확장).
+
+**장점**
+- 실제 토폴로지(공유 세계, authority=morai, N consumer)와 **정합** — 두 번째 vECU를 붙여도 각자 버스에서 구독만 하면 됨. 구동 충돌 없음.
+- **"MORAI 어댑터"와 "다중 엔드포인트"라는 두 티어2 항목이 하나로 합쳐진다** — 둘 다 MIMO-over-DDS. MIMO의 두 번째 실소비자가 곧 MORAI라 earned-abstraction에 정직.
+- in-process `IPlant`·`analyze_plant` 손대지 않음 → 기존 L3 회귀 무손상.
+- fail-fast가 포트 뒤에 숨지 않고 wire/clock 경계에 그대로 노출.
+
+**단점**
+- 폐루프 연속성 판정(`feedback_in[N]==output[N-1]`)이 **더 이상 성립하지 않음** — 루프가 버스 너머라 새 conformance 관점(버스 왕복 지연·lockstep 정합) 필요.
+- `BehaviorContext`/`BehaviorOutput`에 **다중 채널 접근자**가 필요(스칼라 유지 + 채널맵 확장). 다만 이건 plant 전용이 아니라 MIMO 공통 수요.
+- 채널맵/VSS 매핑이라는 **새 설정 표면**이 생김.
+
+**구현 규모**: 대(범위 넓음)이나 **기존 포트 재사용** — 시그니처 파괴적 변경 최소. 새 축은 "채널맵 + MIMO staged 읽기 + lockstep 확장".
+
+---
+
+### Option 3 — 하이브리드: `IExternalPlant` 얇은 포트로 Option 2를 "plant 모드"로 노출
+
+Option 2의 채널맵+lockstep을 **새 포트 `IExternalPlant`** 뒤에 두고, 개념적으로는 여전히 "plant"로 부른다. `MakePlant("morai", …)`가 in-process 대신 external을 반환. RunProbe는 external plant면 `Step()`을 in-process로 호출하지 않고 "버스가 닫는다"를 안다.
+
+**장점**
+- 개발자 API 표면에서 "plant를 고른다"는 일관성 유지(Analytic ↔ FMU ↔ MORAI 한 축).
+- Option 2의 토폴로지 정합성 + Option 1의 "plant 뒤에 있다" 멘탈모델을 절충.
+
+**단점**
+- 포트가 하나 더 늘어남(`IPlant` + `IExternalPlant`) — earned-abstraction 위반 소지(실소비자 1개뿐인데 새 포트). Option 2가 기존 포트로 충분하면 과잉.
+- in-process vs external 분기가 RunProbe에 노출 → "plant 뒤에 숨긴다"는 이점이 반쯤 무너짐.
+
+**구현 규모**: 중. Option 2 + 포트 래핑 1겹.
+
+---
+
+## 3. 부차 결정 — 시간 동기 (모든 안에 공통)
+
+| 방식 | 내용 | SiLS 적합성 |
+|---|---|---|
+| **lockstep** | MORAI가 vECU tick당 dt 한 번 전진. 기존 `LockstepClock`/`TickComplete` 확장 | **결정론 보장 → 목표.** 단 MORAI/AWSIM이 외부 스텝 제어(step API/동기 모드)를 지원해야 함 |
+| **free-run** | MORAI 실시간 자유주행, vECU는 최신 샘플 채택 | 비결정론(재현성↓). S1 초기 브링업/데모용 |
+
+> AWSIM은 ROS2 네이티브라 lockstep 제어 훅(`/simulation/*`)이 상대적으로 접근 용이. MORAI는 시뮬레이터 스텝 제어 API 지원 여부 확인 필요(→ integration-review 후속).
+
+---
+
+## 4. 권장안과 근거
+
+**권장: Option 2 (버스 결합 외부 세계).** 필요시 API 일관성이 중요하다고 판단되면 Option 3로 얇게 감싼다.
+
+근거:
+1. **토폴로지 정합** — 방금 확정한 ①/④ 그림이 이미 MORAI를 "버스 위 공유 세계, authority=morai"로 규정. Option 1은 이와 정면 모순.
+2. **티어2 통합** — MORAI 어댑터 = 다중 엔드포인트 = MIMO-over-DDS. 한 번에 해결하면 중복 설계 없음.
+3. **회귀 무손상** — in-process `IPlant`/`analyze_plant`를 안 건드림.
+4. **earned-abstraction** — MIMO의 실소비자(MORAI)가 실제로 등장했으므로 지금 MIMO 채널맵을 확정하는 게 정당. 반면 새 포트(Option 3)는 실수요가 더 쌓이기 전엔 보류 가능.
+
+---
+
+## 5. 단계화 (권장안 기준, S-레벨)
+
+- **S0 (설계 확정)** — 이 문서 리뷰 + 프레이밍 결정. 채널맵 스키마 초안.
+- **S1 (브링업, free-run)** — 채널맵 1~2채널로 MORAI/AWSIM STATE 1종 구독 → behavior → ACTUATION 1종 pub. 비결정론 허용. 버스 왕복 실증.
+- **S2 (MIMO staged 읽기)** — 다중 타입 토픽 tick 경계 freeze + `BehaviorContext` 다중 채널 접근자. 다중 엔드포인트 작업 흡수.
+- **S3 (lockstep)** — MORAI/AWSIM 스텝 제어 연동, `TickComplete` 확장. 결정론 회복.
+- **S4 (conformance)** — 버스 결합 폐루프용 새 판정(왕복 지연·lockstep 정합·채널 완전성). `analyze_plant`와 별도 관점.
+
+---
+
+## 6. 열린 질문 (리뷰에서 결정)
+
+1. **프레이밍**: Option 2 단독 vs Option 3(포트 래핑)?
+2. **채널맵 위치**: 새 yaml(예 `config/sils/channelmap/*.yaml`) vs 기존 speclist/env 확장?
+3. **VSS 정합**: 채널 신호명을 VISS/VSS path에 직접 바인딩할지(vehicle_info_mgr 계약 재사용) vs 독립 이름공간?
+4. **lockstep 대상**: AWSIM 우선(ROS2 훅 용이) vs MORAI 우선(원 요구)?
+5. **BehaviorOutput MIMO**: 스칼라 `value` 유지 + 채널 사이드채널 vs 구조 교체?
+
+---
+
+*리뷰 후 프레이밍이 확정되면 S1 스캐폴딩(채널맵 스키마 + free-run 브링업)부터 착수.*
