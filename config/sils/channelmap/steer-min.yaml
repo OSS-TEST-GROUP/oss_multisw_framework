@@ -1,0 +1,23 @@
+# SiLS channel map -- Steering ECU (MORAI/AWSIM plant coupling, Option 2).
+# See docs/sils-morai-plant-adapter-design.md and service/sils/vecu/src/channel_map.hpp.
+#
+# Same shape as ego-min.yaml (EgoState in, VehicleControl out) -- a steering ECU differs
+# from a longitudinal one by its BEHAVIOR, not its wire. Run it with:
+#   SILS_CHANNELMAP=config/sils/channelmap/steer-min.yaml \
+#   SILS_VEHICLE_BEHAVIOR=steering  SILS_STEER_SETPOINT=0.1 \
+#   bin/sils_vecu_vehicle_probe
+#
+# The ACTUATION topic is distinct (sils/ego/steer_cmd) so a steering ECU and a longitudinal
+# ECU can coexist on the bus, each publishing its own actuation channel.
+channels:
+  # --- STATE in (MORAI/AWSIM -> vECU): EgoState struct ---
+  - name: Vehicle.EgoState
+    dir: in
+    topic: sils/ego/state
+    type: canonical/ego-state
+
+  # --- ACTUATION out (vECU -> MORAI/AWSIM): VehicleControl struct (steering) ---
+  - name: Vehicle.Chassis.Steering
+    dir: out
+    topic: sils/ego/steer_cmd
+    type: canonical/vehicle-control

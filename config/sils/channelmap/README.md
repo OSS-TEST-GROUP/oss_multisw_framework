@@ -44,16 +44,31 @@ channels:
 
 ## 사용
 
+`sils_vecu_vehicle_probe`가 채널맵을 읽어 `in`→EgoState reader, `out`→VehicleControl writer를
+바인딩하고, `SILS_VEHICLE_BEHAVIOR`가 고른 제어 behavior로 free-run tick 루프를 돈다.
+
 ```bash
-export SILS_CHANNELMAP=config/sils/channelmap/ego-min.yaml
-# (S1: 로드+검증+trace. 각 채널의 DDS reader/writer 바인딩은 후속 — VSS 신호 DDS 타입 확정 후)
+# longitudinal ECU (기본): 목표 속도로 가감속
+SILS_CHANNELMAP=config/sils/channelmap/ego-min.yaml \
+SILS_VEHICLE_BEHAVIOR=longitudinal SILS_CTRL_SETPOINT=10 \
+  bin/sils_vecu_vehicle_probe
+
+# steering ECU: 목표 조향각 추종
+SILS_CHANNELMAP=config/sils/channelmap/steer-min.yaml \
+SILS_VEHICLE_BEHAVIOR=steering SILS_STEER_SETPOINT=0.1 \
+  bin/sils_vecu_vehicle_probe
 ```
 
 `SILS_CHANNELMAP`이 비어 있으면(기본) 채널맵은 비활성 — 기존 단일 엔드포인트 동작 그대로다(비침습, 가산).
 
 ## 예제
 
-- [ego-min.yaml](ego-min.yaml) — 최소 2채널(STATE in 1 + ACTUATION out 1). S1 브링업용.
+- [ego-min.yaml](ego-min.yaml) — longitudinal ECU용 최소 2채널(STATE in 1 + ACTUATION out 1).
+- [steer-min.yaml](steer-min.yaml) — steering ECU용(같은 shape, ACTUATION 토픽만 `sils/ego/steer_cmd`).
+
+behavior 는 `SILS_VEHICLE_BEHAVIOR`(longitudinal|steering) 로 고른다 — 둘 다 같은 wire(EgoState/
+VehicleControl)를 쓰고 제어 로직만 다르다. 커스텀 제어는 `IVehicleBehavior`(vehicle_behavior.hpp)
+구현 + `RunVehicleProbe` 로 주입.
 
 ## 단계 (설계 문서 §5)
 
