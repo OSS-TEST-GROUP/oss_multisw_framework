@@ -153,7 +153,9 @@ inline int RunVehicleProbe(const ProbeConfig& cfg, std::unique_ptr<IVehicleBehav
     }
 
     VehicleTrace(run_id, id, "run_start",
-                 "\"domain_id\":" + std::to_string(cfg.domain_id) + ",\"mode\":\"vehicle-coupling\"");
+                 "\"domain_id\":" + std::to_string(cfg.domain_id) +
+                     ",\"mode\":\"vehicle-coupling\",\"stage_input\":" +
+                     (cfg.stage_input ? "true" : "false"));
 
     DomainParticipantQos pqos;
     pqos.name("sils_vecu_vehicle_probe:" + id);
