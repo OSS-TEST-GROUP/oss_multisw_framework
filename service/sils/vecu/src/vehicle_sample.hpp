@@ -31,6 +31,17 @@ struct VehicleControlSample {
     uint8_t gear = 0;                           // 0=P 1=R 2=N 3=D
 };
 
+// Autoware control target (mirror of ControlTarget.idl) -- the "what Autoware wants" input
+// to the Vehicle Interface (VCU). Same fields as VehicleControlSample, different meaning
+// (target vs commanded); see docs/sils-vehicle-interface-autoware.md.
+struct ControlTargetSample {
+    uint64_t seq = 0;
+    int64_t stamp_ns = 0;
+    double steering_angle = 0;                  // rad
+    double acceleration = 0;                    // m/s^2
+    uint8_t gear = 0;                           // 0=P 1=R 2=N 3=D
+};
+
 }  // namespace sils
 
 #endif  // SILS_VECU_VEHICLE_SAMPLE_HPP

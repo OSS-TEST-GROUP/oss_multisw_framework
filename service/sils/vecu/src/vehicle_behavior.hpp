@@ -23,8 +23,13 @@ namespace sils {
 struct VehicleBehaviorContext {
     uint64_t tick_seq = 0;
     int64_t sim_time_ns = 0;
-    EgoStateSample state;   // latest ego state seen this tick (zero-initialized before any arrives)
+    EgoStateSample state;      // latest ego state this tick (zero-init before any arrives)
     bool have_state = false;
+    // Profile B (docs/sils-vehicle-interface-autoware.md): upstream control target this
+    // tick (Autoware, via the VCU). Additive -- state-only behaviors (longitudinal/steering)
+    // simply ignore these; a Vehicle Interface reads them.
+    ControlTargetSample target;
+    bool have_target = false;
 };
 
 class IVehicleBehavior {

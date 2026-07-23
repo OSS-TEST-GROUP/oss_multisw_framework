@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SiLS · Vehicle Interface(VCU) ↔ Autoware 연동 설계</title>
+<style>
+  :root{
+    --bg:#f1f4f5; --surface:#ffffff; --surface-2:#f7f9fa;
+    --ink:#0f1518; --muted:#566871; --faint:#8496a0; --line:#d6dee1; --line-soft:#e6ecee;
+    --state:#0b8f82; --state-ink:#076b61; --state-soft:#d8efec;   /* MORAI STATE */
+    --ctrl:#b9761a;  --ctrl-ink:#8a5712; --ctrl-soft:#f3e6d1;      /* Autoware 제어 */
+    --act:#4f5bc4;   --act-ink:#3d47a3;  --act-soft:#e4e6f7;       /* VCU→plant ACTUATION */
+    --warn:#c23b3b;  --warn-ink:#992d2d; --warn-soft:#f6dede;      /* 안전/주의 */
+    --grid:rgba(11,143,130,.05);
+    --shadow:0 1px 2px rgba(16,30,34,.04),0 8px 24px -14px rgba(16,30,34,.14);
+    --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0b0f12; --surface:#131b1f; --surface-2:#0f171b;
+      --ink:#e1e9ec; --muted:#8ea0a8; --faint:#63757d; --line:#243036; --line-soft:#1a242a;
+      --state:#34c9b8; --state-ink:#7fe0d4; --state-soft:#12312e;
+      --ctrl:#e0a04a; --ctrl-ink:#eec079; --ctrl-soft:#3a2c17;
+      --act:#8b9be8; --act-ink:#aab5f0; --act-soft:#1e2340;
+      --warn:#e26d6d; --warn-ink:#f0a6a6; --warn-soft:#3a1c1c;
+      --grid:rgba(52,201,184,.06);
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px -16px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#f1f4f5; --surface:#ffffff; --surface-2:#f7f9fa; --ink:#0f1518; --muted:#566871;
+    --faint:#8496a0; --line:#d6dee1; --line-soft:#e6ecee;
+    --state:#0b8f82; --state-ink:#076b61; --state-soft:#d8efec;
+    --ctrl:#b9761a; --ctrl-ink:#8a5712; --ctrl-soft:#f3e6d1;
+    --act:#4f5bc4; --act-ink:#3d47a3; --act-soft:#e4e6f7;
+    --warn:#c23b3b; --warn-ink:#992d2d; --warn-soft:#f6dede;
+    --grid:rgba(11,143,130,.05); --shadow:0 1px 2px rgba(16,30,34,.04),0 8px 24px -14px rgba(16,30,34,.14);
+  }
+  :root[data-theme="dark"]{
+    --bg:#0b0f12; --surface:#131b1f; --surface-2:#0f171b; --ink:#e1e9ec; --muted:#8ea0a8;
+    --faint:#63757d; --line:#243036; --line-soft:#1a242a;
+    --state:#34c9b8; --state-ink:#7fe0d4; --state-soft:#12312e;
+    --ctrl:#e0a04a; --ctrl-ink:#eec079; --ctrl-soft:#3a2c17;
+    --act:#8b9be8; --act-ink:#aab5f0; --act-soft:#1e2340;
+    --warn:#e26d6d; --warn-ink:#f0a6a6; --warn-soft:#3a1c1c;
+    --grid:rgba(52,201,184,.06); --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px -16px rgba(0,0,0,.6);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6;font-size:16px;
+    background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:26px 26px}
+  .wrap{max-width:1000px;margin:0 auto;padding:clamp(28px,5vw,60px) clamp(18px,4vw,32px) 90px}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ctrl-ink);font-weight:600}
+  h1{font-size:clamp(26px,4.5vw,40px);line-height:1.1;letter-spacing:-.02em;font-weight:800;margin:.5rem 0 0;text-wrap:balance}
+  .lede{color:var(--muted);font-size:clamp(15px,1.9vw,17px);max-width:68ch;margin:1rem 0 0}
+  h2{font-size:19px;font-weight:750;margin:0 0 1rem;border-bottom:1px solid var(--line);padding-bottom:.6rem}
+  section{margin-top:44px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;box-shadow:var(--shadow)}
+  svg{display:block;max-width:100%;height:auto;margin:0 auto}
+  figcaption{font-size:12.5px;color:var(--faint);margin-top:.7rem;text-align:center;font-family:var(--mono)}
+  code{font-family:var(--mono);font-size:.9em;background:var(--surface-2);border:1px solid var(--line-soft);border-radius:5px;padding:.05em .35em}
+  .box-mor{fill:var(--state-soft);stroke:var(--state);stroke-width:1.6}
+  .box-aw{fill:var(--ctrl-soft);stroke:var(--ctrl);stroke-width:1.6}
+  .box-vcu{fill:var(--act-soft);stroke:var(--act);stroke-width:1.8}
+  .t{fill:var(--ink);font-family:var(--mono);font-size:13px;font-weight:700}
+  .ts{fill:var(--muted);font-family:var(--mono);font-size:11px}
+  .tt{fill:var(--faint);font-family:var(--mono);font-size:10.5px}
+  .ln-state{stroke:var(--state);stroke-width:2.4;fill:none}
+  .ln-ctrl{stroke:var(--ctrl);stroke-width:2.4;fill:none}
+  .ln-act{stroke:var(--act);stroke-width:2.6;fill:none}
+  .cap-state{fill:var(--state-ink);font-family:var(--mono);font-size:10.5px;font-weight:700}
+  .cap-ctrl{fill:var(--ctrl-ink);font-family:var(--mono);font-size:10.5px;font-weight:700}
+  .cap-act{fill:var(--act-ink);font-family:var(--mono);font-size:10.5px;font-weight:700}
+  .legend{display:flex;flex-wrap:wrap;gap:1rem;margin-top:1rem;font-family:var(--mono);font-size:12.5px}
+  .lg{display:inline-flex;align-items:center;gap:.45rem}
+  .sw{width:22px;height:4px;border-radius:2px;flex:none}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th{text-align:left;padding:.5rem .7rem;font-family:var(--mono);font-size:11px;color:var(--faint);text-transform:uppercase;border-bottom:1px solid var(--line)}
+  td{padding:.5rem .7rem;border-bottom:1px solid var(--line-soft);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  .mono{font-family:var(--mono);font-size:12.5px}
+  .k{font-family:var(--mono);color:var(--ctrl-ink);font-weight:600;white-space:nowrap}
+  pre{margin:.6rem 0 0;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:12.5px;line-height:1.5}
+  .rec{margin:.6rem 0 0;padding:.7rem .9rem;background:var(--act-soft);border:1px solid var(--act);border-radius:10px;font-size:14px}
+  .stages{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:6px}
+  .stage{background:var(--surface);border:1px solid var(--line);border-top:3px solid var(--act);border-radius:0 0 10px 10px;padding:12px;box-shadow:var(--shadow)}
+  .stage .s{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--act-ink)}
+  .stage p{margin:.3rem 0 0;font-size:12px;color:var(--muted)}
+  ol.q{margin:0;padding-left:1.3rem} ol.q li{margin:.4rem 0;font-size:14px}
+  footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-family:var(--mono);font-size:12px;color:var(--faint)}
+  @media (max-width:760px){ .stages{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">SiLS · Vehicle Interface(VCU) · Autoware 연동 — 검토 단계</div>
+    <h1>Autoware → VCU → MORAI</h1>
+    <p class="lede">MORAI는 <b>단일 통합 명령</b>(<code>CtrlCmd</code>)만 받는다. Autoware의 제어를 MORAI에 넣으려면 그 사이에서 <b>받아 아비트·안전·통합·변환</b>하는 <b>Vehicle Interface(VCU)</b>가 필요하다 — 개별 액추에이터 ECU가 MORAI로 직행하는 게 아니다. Autoware 실소스(<code>/Volumes/DATAPart/AUTOWARE</code>) 기준.</p>
+    <div class="legend">
+      <span class="lg"><span class="sw" style="background:var(--ctrl)"></span>Autoware 제어 (Control · Gear)</span>
+      <span class="lg"><span class="sw" style="background:var(--act)"></span>VCU → plant (통합 VehicleControl)</span>
+      <span class="lg"><span class="sw" style="background:var(--state)"></span>STATE / report (EgoState · status)</span>
+    </div>
+  </header>
+
+  <section>
+    <h2>① 토폴로지 — 전체 AD 폐루프</h2>
+    <figure class="card">
+      <svg viewBox="0 0 900 300" role="img" aria-label="Autoware VCU MORAI 폐루프">
+        <defs>
+          <marker id="mc" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--ctrl)"/></marker>
+          <marker id="ma" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--act)"/></marker>
+          <marker id="ms" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--state)"/></marker>
+        </defs>
+        <!-- Autoware -->
+        <rect x="24" y="70" width="200" height="96" rx="12" class="box-aw"/>
+        <text x="42" y="98" class="t">Autoware</text>
+        <text x="42" y="118" class="ts">인지·판단·제어</text>
+        <text x="42" y="136" class="tt">/control/command/control_cmd</text>
+        <text x="42" y="150" class="tt">/control/command/gear_cmd</text>
+        <!-- VCU -->
+        <rect x="350" y="60" width="200" height="120" rx="12" class="box-vcu"/>
+        <text x="368" y="88" class="t" style="fill:var(--act-ink)">Vehicle Interface (VCU)</text>
+        <text x="368" y="108" class="ts">매핑·아비트·안전</text>
+        <text x="368" y="124" class="ts">타임아웃 → safe stop</text>
+        <text x="368" y="144" class="tt">ControlTarget + EgoState</text>
+        <text x="368" y="160" class="tt">→ 통합 VehicleControl</text>
+        <!-- MORAI -->
+        <rect x="676" y="70" width="200" height="96" rx="12" class="box-mor"/>
+        <text x="694" y="98" class="t">MORAI (plant)</text>
+        <text x="694" y="118" class="ts">동역학·센서</text>
+        <text x="694" y="136" class="tt">morai_msgs/CtrlCmd (통합)</text>
+        <text x="694" y="150" class="tt">↺ EgoState 생산</text>
+        <!-- Autoware -> VCU (control) -->
+        <path d="M224 100 L348 100" class="ln-ctrl" marker-end="url(#mc)"/>
+        <text x="238" y="92" class="cap-ctrl">Control + Gear ▶</text>
+        <text x="232" y="140" class="tt">[브리지: ROS2→DDS 정규]</text>
+        <!-- VCU -> MORAI (actuation, via adapter) -->
+        <path d="M550 100 L674 100" class="ln-act" marker-end="url(#ma)"/>
+        <text x="560" y="92" class="cap-act">통합 명령 ▶</text>
+        <text x="556" y="140" class="tt">[MORAI 어댑터]</text>
+        <!-- MORAI -> VCU (EgoState) -->
+        <path d="M676 150 L552 150" class="ln-state" marker-end="url(#ms)"/>
+        <text x="566" y="166" class="cap-state">◀ EgoState (STATE)</text>
+        <!-- VCU -> Autoware (reports) -->
+        <path d="M350 165 L300 165 L300 230 L120 230 L120 168" class="ln-state" marker-end="url(#ms)"/>
+        <text x="150" y="252" class="cap-state">Steering/VelocityReport ↺ (/vehicle/status/*)</text>
+        <text x="24" y="285" class="tt">개별 액추에이터 ECU(brake/steer)는 이 루프의 일부가 아니라 단독 시험 시나리오 · 전체 루프는 Autoware→VCU→MORAI</text>
+      </svg>
+      <figcaption>Autoware Control → VCU(아비트·안전·통합) → MORAI. EgoState/report로 폐루프. ROS2↔DDS 브리지·MORAI 어댑터는 외부(SiLS 밖).</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>② Autoware 제어 인터페이스 (실측)</h2>
+    <p style="color:var(--muted);margin:-.4rem 0 1rem;font-size:14px"><code>autoware_vehicle_cmd_gate</code>가 아비트 후 최종 명령을 낸다. VCU는 실차 <code>vehicle_interface</code> 노드와 같은 자리에서 이 경계를 소비/생산한다.</p>
+    <div class="card">
+      <table>
+        <thead><tr><th>방향</th><th>토픽</th><th>타입 · 핵심 필드(단위)</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">구독</td><td class="k">/control/command/control_cmd</td><td><code>Control</code> — lateral.steering_tire_angle(<b>rad</b>), longitudinal.velocity(m/s)·acceleration(<b>m/s²</b>)·jerk</td></tr>
+          <tr><td class="mono">구독</td><td class="k">/control/command/gear_cmd</td><td><code>GearCommand</code> — command(NEUTRAL=1, DRIVE=2, REVERSE=20, PARK=22)</td></tr>
+          <tr><td class="mono">발행</td><td class="k">/vehicle/status/steering_status</td><td><code>SteeringReport</code> — steering_tire_angle(rad)</td></tr>
+          <tr><td class="mono">발행</td><td class="k">/vehicle/status/velocity_status</td><td><code>VelocityReport</code> — longitudinal/lateral_velocity, heading_rate(rad/s)</td></tr>
+          <tr><td class="mono">발행</td><td class="k">/vehicle/status/gear_status</td><td><code>GearReport</code></td></tr>
+        </tbody>
+      </table>
+      <p style="margin:.9rem 0 0;font-size:13px;color:var(--muted)"><b>단위가 우리 정규 계약과 거의 일치</b> — <code>steering_tire_angle</code>=rad(=우리 steering_angle), <code>longitudinal.acceleration</code>=m/s²(=우리 것). MORAI(deg·km/h)보다 변환 부담이 훨씬 작다(gear enum 매핑 정도).</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>③ 결정 — 정규 미러 (Option i)</h2>
+    <div class="rec"><b>ControlTarget.idl(정규 미러)를 두고, Autoware↔DDS 브리지(외부)가 <code>autoware_control_msgs/Control</code>→<code>ControlTarget</code> 번역.</b> VCU는 정규만 소비 → MORAI를 EgoState 정규로 받은 것과 대칭.</div>
+    <p style="color:var(--muted);margin:.7rem 0 0;font-size:14px">Autoware는 ROS2(=DDS)라 제어 타입이 이미 DDS지만, FastDDS vECU가 직접 구독하려면 ROS2 type name/hash·CDR·QoS·<code>ROS_DOMAIN_ID</code>·rmw 호환을 모두 맞춰야 한다(integration-review §3.4). 그 난관을 <b>브리지(외부 anti-corruption layer)</b>로 밀어낸다 — 브리지는 SiLS 소유 아님(MORAI 어댑터와 동일).</p>
+  </section>
+
+  <section>
+    <h2>④ 정규 계약 + 매핑 체인</h2>
+    <div class="card">
+      <pre>struct ControlTarget {   // idl/dds/sils/ControlTarget.idl (Autoware 제어 미러)
+    string run_id; unsigned long long seq; long long stamp_ns;
+    double steering_angle;   // rad   (= Control.lateral.steering_tire_angle)
+    double acceleration;     // m/s²  (= Control.longitudinal.acceleration, 단일 모드)
+    octet  gear;             // 0=P 1=R 2=N 3=D
+};</pre>
+      <table style="margin-top:1rem">
+        <thead><tr><th>단계</th><th>변환</th><th>주체</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">Autoware Control → ControlTarget</td><td>steering_tire_angle→steering_angle, longitudinal.acceleration→acceleration</td><td>브리지(외부)</td></tr>
+          <tr><td class="mono">GearCommand → gear</td><td>DRIVE(2)→3, REVERSE(20)→1, PARK(22)→0, NEUTRAL(1)→2</td><td>브리지(외부)</td></tr>
+          <tr><td class="mono">ControlTarget + EgoState → VehicleControl</td><td><b>아비트·안전 클램프·통합</b></td><td><b>VCU</b></td></tr>
+          <tr><td class="mono">VehicleControl → CtrlCmd</td><td>rad·m/s² 유지, longl_cmd_type=acceleration</td><td>MORAI 어댑터(외부)</td></tr>
+          <tr><td class="mono">EgoState → Steering/VelocityReport</td><td>steering→steering_tire_angle, velocity→longitudinal_velocity, yaw_rate→heading_rate</td><td>VCU</td></tr>
+        </tbody>
+      </table>
+      <p style="margin:.9rem 0 0;font-size:13px;color:var(--muted)"><code>ControlTarget</code>와 <code>VehicleControl</code>은 필드가 사실상 동일하나 의미가 다르다 — 전자는 Autoware가 <b>원하는 목표</b>, 후자는 VCU가 아비트·안전 후 <b>plant에 내리는 명령</b>. 평시 근사 pass-through, 이상시 VCU 개입.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>⑤ VCU 책임 — 아비트·안전 (궤적 제어 아님)</h2>
+    <div class="card">
+      <ol class="q">
+        <li><b>매핑/통합</b> — ControlTarget → 단일 VehicleControl.</li>
+        <li><b>안전</b> — control command <b>타임아웃 시 safe stop</b>(최근 target이 N ms 이상 없으면 감속/제동).</li>
+        <li><b>클램프</b> — 조향각·가속 물리 한계·rate 제한.</li>
+        <li><b>리포트</b> — EgoState → Steering/VelocityReport 되돌림(Autoware 폐루프).</li>
+        <li><b>모드</b> — engage/emergency 반영(후속).</li>
+      </ol>
+      <p style="margin:.6rem 0 0;font-size:13px;color:var(--muted)">VCU의 "control logic"은 <b>아비트레이션·안전 계층</b>이지 경로 추종이 아니다(그건 Autoware). steer-ecu의 P 컨트롤러와 성격이 다르다.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>⑥ 단계화 (VCU)</h2>
+    <div class="stages">
+      <div class="stage"><div class="s">S0 설계</div><p>이 문서 + ControlTarget 스키마.</p></div>
+      <div class="stage"><div class="s">S1 매핑</div><p>ControlTarget+EgoState in → VehicleControl out (pass-through, free-run).</p></div>
+      <div class="stage"><div class="s">S2 리포트</div><p>Steering/VelocityReport 되돌림 + gear 매핑.</p></div>
+      <div class="stage"><div class="s">S3 안전</div><p>타임아웃→safe stop·클램프·아비트.</p></div>
+      <div class="stage"><div class="s">S4 정합</div><p>lockstep + conformance(왕복·타임아웃 판정).</p></div>
+    </div>
+    <p style="margin:1rem 0 0;font-size:13px;color:var(--muted)"><b>외부(SiLS 밖)</b>: Autoware↔DDS 브리지, MORAI 어댑터. <b>프로파일 B</b>: <code>VehicleBehaviorContext</code>에 <code>target</code>+<code>have_target</code> 가산 확장(기존 상태-only behavior 무변경).</p>
+  </section>
+
+  <section>
+    <h2>⑦ 구현 계획 (합의 순서)</h2>
+    <div class="card">
+      <ol class="q">
+        <li><code>idl/dds/sils/ControlTarget.idl</code> 추가 (+ CMake: sils_vehicle_idl 합류).</li>
+        <li><code>VehicleBehaviorContext</code> 확장 — <code>ControlTargetSample target</code> + <code>have_target</code>; <code>vehicle_wire.hpp</code>에 ControlTarget 디코더, <code>vehicle_run.hpp</code>가 채널 <code>type</code>로 EgoState/ControlTarget reader 분기.</li>
+        <li>VCU 예제 <code>service/sils/examples/vehicle-interface</code> — IVehicleBehavior 구현(매핑+안전) + main + 채널맵(in: ControlTarget + EgoState / out: VehicleControl) + README. brake/steer-ecu와 동일 패턴.</li>
+      </ol>
+    </div>
+  </section>
+
+  <footer>SiLS · Vehicle Interface(VCU) ↔ Autoware 연동 설계 (검토 단계) · 정규 미러(ControlTarget) · 동반: sils-vehicle-interface-autoware.md · Autoware 소스 /Volumes/DATAPart/AUTOWARE</footer>
+</div>
+</body>
+</html>

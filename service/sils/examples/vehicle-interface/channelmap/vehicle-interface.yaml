@@ -1,0 +1,26 @@
+# vehicle-interface (VCU) channel map -- Option 2 / Profile B.
+# docs/sils-vehicle-interface-autoware.md.
+#
+# The VCU has TWO inputs -- the Autoware control target (via the external Autoware<->DDS
+# bridge) and the ego state (via MORAI) -- and ONE output, the unified command to the plant.
+#
+# Run:  SILS_CHANNELMAP=service/sils/examples/vehicle-interface/channelmap/vehicle-interface.yaml \
+#       VI_SAFE_DECEL=2.0  bin/vehicle_interface
+channels:
+  # --- CONTROL TARGET in (Autoware -> VCU, via bridge) ---
+  - name: Vehicle.ControlTarget
+    dir: in
+    topic: autoware/control_target
+    type: canonical/control-target
+
+  # --- STATE in (MORAI -> VCU) ---
+  - name: Vehicle.EgoState
+    dir: in
+    topic: sils/ego/state
+    type: canonical/ego-state
+
+  # --- unified ACTUATION out (VCU -> plant) ---
+  - name: Vehicle.Command
+    dir: out
+    topic: sils/ego/cmd
+    type: canonical/vehicle-control

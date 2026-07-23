@@ -8,3 +8,6 @@ add_subdirectory(brake-ecu-native)
 # steer-ecu: plant-coupling (Option 2) developer ECU -- implements IVehicleBehavior and
 # runs via RunVehicleProbe (bus-coupled world), the counterpart of brake-ecu's RunProbe.
 add_subdirectory(steer-ecu)
+# vehicle-interface: the VCU -- sits between Autoware and the plant (Profile B: two inputs,
+# control target + ego state -> unified command). docs/sils-vehicle-interface-autoware.md.
+add_subdirectory(vehicle-interface)
