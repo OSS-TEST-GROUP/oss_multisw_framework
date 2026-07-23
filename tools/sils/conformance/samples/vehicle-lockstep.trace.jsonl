@@ -1,0 +1,69 @@
+{"instance_id": "vi-probe-1", "event": "run_start", "wall_time_ms": 1000, "domain_id": 91, "backend": "local", "run_id": "veh-lockstep"}
+{"event": "domain_leased", "wall_time_ms": 1001, "domain_id": 91, "pool": "91-93", "run_id": "veh-lockstep"}
+{"instance_id": "vi-probe-1", "event": "run_start", "wall_time_ms": 1002, "domain_id": 91, "mode": "vehicle-coupling", "stage_input": true, "run_id": "veh-lockstep"}
+{"instance_id": "vi-probe-1", "event": "channelmap_start", "wall_time_ms": 1003, "file": "service/sils/examples/vehicle-interface/channelmap/vehicle-interface.yaml", "channels": 3, "in": 2, "out": 1, "run_id": "veh-lockstep"}
+{"instance_id": "vi-probe-1", "event": "channel_bound", "wall_time_ms": 1003, "name": "Vehicle.ControlTarget", "dir": "in", "topic": "autoware/control_target", "type": "canonical/control-target", "run_id": "veh-lockstep"}
+{"instance_id": "vi-probe-1", "event": "channel_bound", "wall_time_ms": 1003, "name": "Vehicle.EgoState", "dir": "in", "topic": "sils/ego/state", "type": "canonical/ego-state", "run_id": "veh-lockstep"}
+{"instance_id": "vi-probe-1", "event": "channel_bound", "wall_time_ms": 1003, "name": "Vehicle.Command", "dir": "out", "topic": "sils/ego/cmd", "type": "canonical/vehicle-control", "run_id": "veh-lockstep"}
+{"event": "clock_start", "wall_time_ms": 1005, "mode": "lockstep", "participants": 3, "ticks": 4, "dt_ns": 100000000, "run_id": "veh-lockstep"}
+{"instance_id": "vi-probe-1", "event": "behavior_start", "wall_time_ms": 1006, "name": "vehicle-interface", "run_id": "veh-lockstep"}
+{"instance_id": "vi-probe-1", "event": "input_staging_on", "wall_time_ms": 1006, "late_sample_policy": "next_tick", "state_channels": 1, "target_channels": 1, "run_id": "veh-lockstep"}
+{"event": "ego_source_start", "wall_time_ms": 1007, "topic": "sils/ego/state", "mode": "lockstep", "count": 3, "run_id": "veh-lockstep"}
+{"event": "control_source_start", "wall_time_ms": 1007, "topic": "autoware/control_target", "mode": "lockstep", "count": 3, "run_id": "veh-lockstep"}
+{"instance_id": "vi-probe-1", "event": "ready", "wall_time_ms": 1008, "run_id": "veh-lockstep"}
+{"event": "vecu_ready", "wall_time_ms": 1009, "run_id": "veh-lockstep"}
+{"event": "tick_grant", "wall_time_ms": 1010, "tick_seq": 1, "sim_time_ns": 100000000, "dt_ns": 100000000, "run_id": "veh-lockstep"}
+{"event": "ego_source_sent", "wall_time_ms": 1010, "seq": 1, "sim_time_ns": 100000000, "vx": 0.05, "px": 0.0, "run_id": "veh-lockstep"}
+{"instance_id": "ego-source", "event": "tick_complete", "wall_time_ms": 1010, "tick_seq": 1, "sim_time_ns": 100000000, "run_id": "veh-lockstep"}
+{"event": "control_source_sent", "wall_time_ms": 1010, "seq": 1, "sim_time_ns": 100000000, "steering": 0.05, "acceleration": 1.0, "run_id": "veh-lockstep"}
+{"instance_id": "control-source", "event": "tick_complete", "wall_time_ms": 1010, "tick_seq": 1, "sim_time_ns": 100000000, "run_id": "veh-lockstep"}
+{"instance_id": "vi-probe-1", "event": "input_received", "wall_time_ms": 1010, "recv_seq": 1, "channel": "Vehicle.EgoState", "kind": "ego-state", "src_seq": 1, "run_id": "veh-lockstep"}
+{"instance_id": "vi-probe-1", "event": "input_received", "wall_time_ms": 1010, "recv_seq": 1, "channel": "Vehicle.ControlTarget", "kind": "control-target", "src_seq": 1, "run_id": "veh-lockstep"}
+{"instance_id": "vi-probe-1", "event": "tick_input_frozen", "wall_time_ms": 1010, "tick_seq": 1, "channel": "Vehicle.EgoState", "kind": "ego-state", "recv_seqs": [], "count": 0, "run_id": "veh-lockstep"}
+{"instance_id": "vi-probe-1", "event": "tick_input_frozen", "wall_time_ms": 1010, "tick_seq": 1, "channel": "Vehicle.ControlTarget", "kind": "control-target", "recv_seqs": [], "count": 0, "run_id": "veh-lockstep"}
+{"instance_id": "vi-probe-1", "event": "control_published", "wall_time_ms": 1010, "tick_seq": 1, "behavior": "vehicle-interface", "steering_angle": 0.0, "acceleration": -2.0, "gear": 3, "run_id": "veh-lockstep"}
+{"instance_id": "vi-probe-1", "event": "tick_complete", "wall_time_ms": 1010, "tick_seq": 1, "sim_time_ns": 100000000, "run_id": "veh-lockstep"}
+{"event": "tick_barrier", "wall_time_ms": 1010, "tick_seq": 1, "completed": 3, "run_id": "veh-lockstep"}
+{"event": "tick_grant", "wall_time_ms": 1011, "tick_seq": 2, "sim_time_ns": 200000000, "dt_ns": 100000000, "run_id": "veh-lockstep"}
+{"event": "ego_source_sent", "wall_time_ms": 1011, "seq": 2, "sim_time_ns": 200000000, "vx": 0.1, "px": 0.0, "run_id": "veh-lockstep"}
+{"instance_id": "ego-source", "event": "tick_complete", "wall_time_ms": 1011, "tick_seq": 2, "sim_time_ns": 200000000, "run_id": "veh-lockstep"}
+{"event": "control_source_sent", "wall_time_ms": 1011, "seq": 2, "sim_time_ns": 200000000, "steering": 0.05, "acceleration": 1.0, "run_id": "veh-lockstep"}
+{"instance_id": "control-source", "event": "tick_complete", "wall_time_ms": 1011, "tick_seq": 2, "sim_time_ns": 200000000, "run_id": "veh-lockstep"}
+{"instance_id": "vi-probe-1", "event": "input_received", "wall_time_ms": 1011, "recv_seq": 2, "channel": "Vehicle.EgoState", "kind": "ego-state", "src_seq": 2, "run_id": "veh-lockstep"}
+{"instance_id": "vi-probe-1", "event": "input_received", "wall_time_ms": 1011, "recv_seq": 2, "channel": "Vehicle.ControlTarget", "kind": "control-target", "src_seq": 2, "run_id": "veh-lockstep"}
+{"instance_id": "vi-probe-1", "event": "tick_input_frozen", "wall_time_ms": 1011, "tick_seq": 2, "channel": "Vehicle.EgoState", "kind": "ego-state", "recv_seqs": [1], "count": 1, "run_id": "veh-lockstep"}
+{"instance_id": "vi-probe-1", "event": "tick_input_frozen", "wall_time_ms": 1011, "tick_seq": 2, "channel": "Vehicle.ControlTarget", "kind": "control-target", "recv_seqs": [1], "count": 1, "run_id": "veh-lockstep"}
+{"instance_id": "vi-probe-1", "event": "state_received", "wall_time_ms": 1011, "tick_seq": 2, "src_seq": 1, "vx": 0.05, "yaw": 0, "steering": 0, "run_id": "veh-lockstep"}
+{"instance_id": "vi-probe-1", "event": "target_received", "wall_time_ms": 1011, "tick_seq": 2, "src_seq": 1, "steering": 0.05, "acceleration": 1.0, "gear": 3, "run_id": "veh-lockstep"}
+{"instance_id": "vi-probe-1", "event": "control_published", "wall_time_ms": 1011, "tick_seq": 2, "behavior": "vehicle-interface", "steering_angle": 0.05, "acceleration": 1.0, "gear": 3, "run_id": "veh-lockstep"}
+{"instance_id": "vi-probe-1", "event": "tick_complete", "wall_time_ms": 1011, "tick_seq": 2, "sim_time_ns": 200000000, "run_id": "veh-lockstep"}
+{"event": "tick_barrier", "wall_time_ms": 1011, "tick_seq": 2, "completed": 3, "run_id": "veh-lockstep"}
+{"event": "tick_grant", "wall_time_ms": 1012, "tick_seq": 3, "sim_time_ns": 300000000, "dt_ns": 100000000, "run_id": "veh-lockstep"}
+{"event": "ego_source_sent", "wall_time_ms": 1012, "seq": 3, "sim_time_ns": 300000000, "vx": 0.15, "px": 0.0, "run_id": "veh-lockstep"}
+{"instance_id": "ego-source", "event": "tick_complete", "wall_time_ms": 1012, "tick_seq": 3, "sim_time_ns": 300000000, "run_id": "veh-lockstep"}
+{"event": "control_source_sent", "wall_time_ms": 1012, "seq": 3, "sim_time_ns": 300000000, "steering": 0.05, "acceleration": 1.0, "run_id": "veh-lockstep"}
+{"instance_id": "control-source", "event": "tick_complete", "wall_time_ms": 1012, "tick_seq": 3, "sim_time_ns": 300000000, "run_id": "veh-lockstep"}
+{"instance_id": "vi-probe-1", "event": "input_received", "wall_time_ms": 1012, "recv_seq": 3, "channel": "Vehicle.EgoState", "kind": "ego-state", "src_seq": 3, "run_id": "veh-lockstep"}
+{"instance_id": "vi-probe-1", "event": "input_received", "wall_time_ms": 1012, "recv_seq": 3, "channel": "Vehicle.ControlTarget", "kind": "control-target", "src_seq": 3, "run_id": "veh-lockstep"}
+{"instance_id": "vi-probe-1", "event": "tick_input_frozen", "wall_time_ms": 1012, "tick_seq": 3, "channel": "Vehicle.EgoState", "kind": "ego-state", "recv_seqs": [2], "count": 1, "run_id": "veh-lockstep"}
+{"instance_id": "vi-probe-1", "event": "tick_input_frozen", "wall_time_ms": 1012, "tick_seq": 3, "channel": "Vehicle.ControlTarget", "kind": "control-target", "recv_seqs": [2], "count": 1, "run_id": "veh-lockstep"}
+{"instance_id": "vi-probe-1", "event": "state_received", "wall_time_ms": 1012, "tick_seq": 3, "src_seq": 2, "vx": 0.1, "yaw": 0, "steering": 0, "run_id": "veh-lockstep"}
+{"instance_id": "vi-probe-1", "event": "target_received", "wall_time_ms": 1012, "tick_seq": 3, "src_seq": 2, "steering": 0.05, "acceleration": 1.0, "gear": 3, "run_id": "veh-lockstep"}
+{"instance_id": "vi-probe-1", "event": "control_published", "wall_time_ms": 1012, "tick_seq": 3, "behavior": "vehicle-interface", "steering_angle": 0.05, "acceleration": 1.0, "gear": 3, "run_id": "veh-lockstep"}
+{"instance_id": "vi-probe-1", "event": "tick_complete", "wall_time_ms": 1012, "tick_seq": 3, "sim_time_ns": 300000000, "run_id": "veh-lockstep"}
+{"event": "tick_barrier", "wall_time_ms": 1012, "tick_seq": 3, "completed": 3, "run_id": "veh-lockstep"}
+{"event": "tick_grant", "wall_time_ms": 1013, "tick_seq": 4, "sim_time_ns": 400000000, "dt_ns": 100000000, "run_id": "veh-lockstep"}
+{"instance_id": "vi-probe-1", "event": "tick_input_frozen", "wall_time_ms": 1013, "tick_seq": 4, "channel": "Vehicle.EgoState", "kind": "ego-state", "recv_seqs": [3], "count": 1, "run_id": "veh-lockstep"}
+{"instance_id": "vi-probe-1", "event": "tick_input_frozen", "wall_time_ms": 1013, "tick_seq": 4, "channel": "Vehicle.ControlTarget", "kind": "control-target", "recv_seqs": [3], "count": 1, "run_id": "veh-lockstep"}
+{"instance_id": "vi-probe-1", "event": "state_received", "wall_time_ms": 1013, "tick_seq": 4, "src_seq": 3, "vx": 0.15, "yaw": 0, "steering": 0, "run_id": "veh-lockstep"}
+{"instance_id": "vi-probe-1", "event": "target_received", "wall_time_ms": 1013, "tick_seq": 4, "src_seq": 3, "steering": 0.05, "acceleration": 1.0, "gear": 3, "run_id": "veh-lockstep"}
+{"instance_id": "vi-probe-1", "event": "control_published", "wall_time_ms": 1013, "tick_seq": 4, "behavior": "vehicle-interface", "steering_angle": 0.05, "acceleration": 1.0, "gear": 3, "run_id": "veh-lockstep"}
+{"instance_id": "vi-probe-1", "event": "tick_complete", "wall_time_ms": 1013, "tick_seq": 4, "sim_time_ns": 400000000, "run_id": "veh-lockstep"}
+{"event": "tick_barrier", "wall_time_ms": 1013, "tick_seq": 4, "completed": 3, "run_id": "veh-lockstep"}
+{"event": "ego_source_done", "wall_time_ms": 1014, "sent": 3, "run_id": "veh-lockstep"}
+{"event": "control_source_done", "wall_time_ms": 1014, "sent": 3, "run_id": "veh-lockstep"}
+{"instance_id": "vi-probe-1", "event": "run_stopped", "wall_time_ms": 1015, "last_seq": 4, "run_id": "veh-lockstep"}
+{"event": "clock_stop", "wall_time_ms": 1015, "exit_code": 0, "run_id": "veh-lockstep"}
+{"event": "domain_released", "wall_time_ms": 1016, "run_id": "veh-lockstep"}
+{"event": "cleanup_done", "wall_time_ms": 1016, "run_id": "veh-lockstep"}
+{"event": "run_pass", "wall_time_ms": 1017, "run_id": "veh-lockstep"}

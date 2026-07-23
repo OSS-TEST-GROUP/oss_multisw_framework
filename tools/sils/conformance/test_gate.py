@@ -12,6 +12,7 @@ import gate  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 NOMINAL = HERE / "samples" / "nominal.trace.jsonl"
+VEHICLE_LOCKSTEP = HERE / "samples" / "vehicle-lockstep.trace.jsonl"
 
 
 def write_trace(events, name="run.trace.jsonl"):
@@ -26,6 +27,12 @@ class GateTest(unittest.TestCase):
     def test_nominal_sample_passes_gate(self):
         self.assertTrue(NOMINAL.exists(), f"missing sample: {NOMINAL}")
         rc = gate.main([str(NOMINAL)])
+        self.assertEqual(rc, gate.EXIT_OK)
+
+    # --- bus-coupled (Option 2, S4) lockstep sample is a positive fixture ---
+    def test_vehicle_lockstep_sample_passes_gate(self):
+        self.assertTrue(VEHICLE_LOCKSTEP.exists(), f"missing sample: {VEHICLE_LOCKSTEP}")
+        rc = gate.main([str(VEHICLE_LOCKSTEP)])
         self.assertEqual(rc, gate.EXIT_OK)
 
     # --- schema stage is fail-closed ---------------------------------------

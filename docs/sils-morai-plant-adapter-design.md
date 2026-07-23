@@ -143,7 +143,7 @@ Option 2의 채널맵+lockstep을 **새 포트 `IExternalPlant`** 뒤에 두고,
 - **S1 (브링업, free-run)** — 채널맵 1~2채널로 MORAI/AWSIM STATE 1종 구독 → behavior → ACTUATION 1종 pub. 비결정론 허용. 버스 왕복 실증. ✅ **완료·develop 머지**(EgoState/VehicleControl 정규 IDL + `VehicleWireCodec` + `RunVehicleProbe` + fixture; steer-ecu·vehicle-interface 예제).
 - **S2 (MIMO staged 읽기)** — 다중 타입 토픽 tick 경계 freeze + `BehaviorContext` 다중 채널 접근자. 다중 엔드포인트 작업 흡수. ✅ **완료** — 아래 §5.1.
 - **S3 (lockstep)** — MORAI/AWSIM 스텝 제어 연동, `TickComplete` 확장. 결정론 회복. ✅ **완료** — 아래 §5.2.
-- **S4 (conformance)** — 버스 결합 폐루프용 새 판정(왕복 지연·lockstep 정합·채널 완전성). `analyze_plant`와 별도 관점.
+- **S4 (conformance)** — 버스 결합 폐루프용 새 판정(왕복 지연·lockstep 정합·채널 완전성). `analyze_plant`와 별도 관점. ✅ **완료** — 아래 §5.3.
 
 ### 5.1 S2 구현 — tick 경계 입력 staging (§7.3 계약 재사용)
 
@@ -168,6 +168,18 @@ VISS 경로가 이미 확립한 §7.3 입력 staging 계약(`tick_inbox.hpp`: �
 - **종료**: lockstep 소스는 `--count == clock_master --ticks`면 마지막 tick 완료 후 자가 종료; 프로브는 신호로 종료(기존 lockstep 모델과 동일).
 
 **검증**: 두 실행의 프로브 `control_published` 시퀀스가 bit-동일(값 재현) + `evaluate.py`가 combined trace를 `analyze_lockstep` PASS로 판정.
+
+### 5.3 S4 구현 — 버스결합 폐루프 conformance 판정
+
+S3까지 재현 가능한 trace를 *만들었으니*, S4는 conformance 툴이 그 trace를 **자동 합격/불합격 판정**하게 한다. 코드 무관·Python(evaluate.py/validate_trace.py/gate.py)+스키마 작업.
+
+- **스키마 등재(`trace-schema/v1.json`)**: vehicle 이벤트(`channelmap_start`·`channel_bound`·`state_received`·`target_received`·`control_published`)를 producer `vecu`로, lockstep fixture(`ego_source_*`·`control_source_*`)를 producer `sim_fixture`로 추가. 다중 producer가 공유하는 이벤트(`ready`·`behavior_start`·`input_staging_on`·`run_stopping`/`stopped`)의 `required`는 실제 교집합으로 완화(vehicle 프로브는 VISS의 seq/topic envelope를 안 emit) — `run_start` 노트와 동일 철학. `input_received`/`tick_input_frozen`엔 MIMO용 `channel` 필드 명시.
+- **`analyze_staging` MIMO 대응**: 기존엔 전 채널 recv_seq를 전역 concat해 sorted+unique 검사 → 채널별 카운터(각 1..N)에 오탐. **채널별 그룹화**로 §7.3 불변식을 채널마다 판정(위반 메시지에 채널 라벨). 단일 스트림(VISS)은 채널 필드 없음 → 그룹 1개, 기존과 동일(backward-compatible).
+- **신규 `analyze_vehicle`**: 버스결합 폐루프 판정(`analyze_plant`의 버스 짝). `control_published`가 있으면 버스결합 런. 검사 = tick당 1 명령·tick_seq 순증, 명령 well-formed(유한 steering/accel·유효 gear), **폐루프**(state_received≥1 소비, open-loop 아님). 값-수준 재현성은 여기서 안 봄(lockstep+compare_golden 몫).
+- **fidelity 배선**: 버스결합 working loop(state in·control out) → L0. **폐루프 + lockstep 결정론** → L3(in-process `analyze_plant` L3와 대등 — 단 버스 결정론은 lockstep 필수라 `clock.deterministic` 요구). PASS 증거 게이트도 버스결합이면 VISS(sample/endpoint/verify_pass) 대신 **버스 증거(state_received·control_published)** 요구.
+- **판정 권위**: 버스 raw 런은 terminal이 없어 INCOMPLETE — 실배포는 Run Coordinator가 `run_pass`를 낸다(§5.2). 전용 bus verifier는 향후(현재는 coordinator terminal + 분석기 결정론이 판정).
+
+**검증(sandbox 자체 완료)**: 커밋된 golden 샘플 `samples/vehicle-lockstep.trace.jsonl`(lockstep·2 in-채널·staging·1-tick lag)가 `gate.py` **SCHEMA+FIDELITY PASS(fidelity L3, conformant)**. evaluate/gate 단위테스트 +11(analyze_vehicle 6 + MIMO staging 3 + 샘플 gate 1 + …), 전체 141 passed. **채널 인터리브 오탐 회귀 테스트** 포함(채널 A/B 각 1..N이 전역 비정렬이어도 위반 아님).
 
 ---
 

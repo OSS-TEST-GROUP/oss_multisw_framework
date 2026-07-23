@@ -9,12 +9,15 @@
 > Machine-readable source of truth: [`config/sils/trace-schema/v1.json`](../config/sils/trace-schema/v1.json).
 > This document is its human companion.
 >
-> **Scope note (2026-07):** the MORAI/AWSIM bus-coupling probe (`sils_vecu_vehicle_probe`,
-> Option 2) emits its own events (`channelmap_start`, `channel_bound`, `state_received`,
-> `control_published`). These are **S1 bring-up events, NOT yet part of v1** — bus-coupled
-> conformance is deferred to S4 (see
-> [sils-morai-plant-adapter-design.md](sils-morai-plant-adapter-design.md) §5). The tables
-> below cover the VISS request model.
+> **Scope note (updated 2026-07, S4):** the MORAI/AWSIM bus-coupling probe
+> (`sils_vecu_vehicle_probe` / the plant-coupling examples, Option 2) emits its own events
+> (`channelmap_start`, `channel_bound`, `state_received`, `target_received`,
+> `control_published`) plus the lockstep fixtures (`ego_source_*`, `control_source_*`).
+> As of **S4 these ARE registered in v1** (producer `vecu` / `sim_fixture`), and
+> `evaluate.py` judges a bus-coupled run via `analyze_vehicle` (closed-loop + well-formed
+> commands) alongside `analyze_lockstep` and the per-channel `analyze_staging`. See
+> [sils-morai-plant-adapter-design.md](sils-morai-plant-adapter-design.md) §5.3. The event
+> tables below still center the VISS request model; the schema JSON is authoritative.
 
 ## Format
 
