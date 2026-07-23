@@ -106,6 +106,8 @@
   .stage{background:var(--surface);border:1px solid var(--line);border-top:3px solid var(--state);border-radius:0 0 10px 10px;padding:12px 12px 14px;box-shadow:var(--shadow)}
   .stage .s{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--state-ink)}
   .stage p{margin:.3rem 0 0;font-size:12px;color:var(--muted)}
+  .stage.done{border-top-color:#22a06b}
+  .stage.done .s{color:#22a06b}
   ol.q{margin:0;padding-left:1.3rem} ol.q li{margin:.4rem 0;font-size:14px}
   .rec-line{margin:.6rem 0 0;padding:.7rem .9rem;background:var(--state-soft);border:1px solid var(--state);border-radius:10px;font-size:14px}
   footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-family:var(--mono);font-size:12px;color:var(--faint)}
@@ -336,12 +338,13 @@
   <section>
     <h2>⑤ 단계화 (권장안 기준)</h2>
     <div class="stages">
-      <div class="stage"><div class="s">S0 · 설계확정</div><p>이 문서 리뷰 + 프레이밍 결정. 채널맵 스키마 초안.</p></div>
-      <div class="stage"><div class="s">S1 · free-run</div><p>1~2채널로 STATE 1종 구독→behavior→ACTUATION 1종 pub. 버스 왕복 실증.</p></div>
-      <div class="stage"><div class="s">S2 · MIMO staged</div><p>다중 타입 토픽 tick 경계 freeze + context 다중 채널. 다중 엔드포인트 흡수.</p></div>
-      <div class="stage"><div class="s">S3 · lockstep</div><p>MORAI/AWSIM 스텝 제어 연동, <code>TickComplete</code> 확장. 결정론 회복.</p></div>
+      <div class="stage done"><div class="s">S0 · 설계확정 ✅</div><p>이 문서 리뷰 + 프레이밍 결정. 채널맵 스키마 초안.</p></div>
+      <div class="stage done"><div class="s">S1 · free-run ✅</div><p>1~2채널로 STATE 1종 구독→behavior→ACTUATION 1종 pub. 버스 왕복 실증. 정규 IDL+<code>VehicleWireCodec</code>+<code>RunVehicleProbe</code>+fixture, develop 머지.</p></div>
+      <div class="stage done"><div class="s">S2 · MIMO staged ✅</div><p>in-채널마다 <code>VehicleTickInbox&lt;T&gt;</code>(§7.3 타입 버전) → tick 경계 <code>FreezeTick</code>. <code>SILS_STAGE_INPUT=1</code> opt-in(off=S1 폴링 보존). 채널별 <code>tick_input_frozen</code> 불변식. behavior엔 최신-frozen(ZOH).</p></div>
+      <div class="stage"><div class="s">S3 · lockstep</div><p>MORAI/AWSIM 스텝 제어 연동, <code>TickComplete</code> 확장. 결정론 회복(공유 sim 클럭).</p></div>
       <div class="stage"><div class="s">S4 · conformance</div><p>버스 결합 폐루프용 새 판정(왕복 지연·lockstep 정합·채널 완전성).</p></div>
     </div>
+    <p style="margin:.9rem 0 0;font-size:13px;color:var(--muted)"><b>S2 결정론 성격</b>: staging은 <i>소비 순서</i>를 고정(local-staged)하나 <i>도착 시점</i>은 여전히 wall clock — 완전 재현성은 S3 lockstep에서 회복. S2는 "어느 샘플이 어느 tick인지" pin하는 전제를 깐다.</p>
   </section>
 
   <section>

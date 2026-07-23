@@ -139,11 +139,23 @@ Option 2의 채널맵+lockstep을 **새 포트 `IExternalPlant`** 뒤에 두고,
 
 ## 5. 단계화 (권장안 기준, S-레벨)
 
-- **S0 (설계 확정)** — 이 문서 리뷰 + 프레이밍 결정. 채널맵 스키마 초안.
-- **S1 (브링업, free-run)** — 채널맵 1~2채널로 MORAI/AWSIM STATE 1종 구독 → behavior → ACTUATION 1종 pub. 비결정론 허용. 버스 왕복 실증.
-- **S2 (MIMO staged 읽기)** — 다중 타입 토픽 tick 경계 freeze + `BehaviorContext` 다중 채널 접근자. 다중 엔드포인트 작업 흡수.
+- **S0 (설계 확정)** — 이 문서 리뷰 + 프레이밍 결정. 채널맵 스키마 초안. ✅ **완료**.
+- **S1 (브링업, free-run)** — 채널맵 1~2채널로 MORAI/AWSIM STATE 1종 구독 → behavior → ACTUATION 1종 pub. 비결정론 허용. 버스 왕복 실증. ✅ **완료·develop 머지**(EgoState/VehicleControl 정규 IDL + `VehicleWireCodec` + `RunVehicleProbe` + fixture; steer-ecu·vehicle-interface 예제).
+- **S2 (MIMO staged 읽기)** — 다중 타입 토픽 tick 경계 freeze + `BehaviorContext` 다중 채널 접근자. 다중 엔드포인트 작업 흡수. ✅ **완료** — 아래 §5.1.
 - **S3 (lockstep)** — MORAI/AWSIM 스텝 제어 연동, `TickComplete` 확장. 결정론 회복.
 - **S4 (conformance)** — 버스 결합 폐루프용 새 판정(왕복 지연·lockstep 정합·채널 완전성). `analyze_plant`와 별도 관점.
+
+### 5.1 S2 구현 — tick 경계 입력 staging (§7.3 계약 재사용)
+
+VISS 경로가 이미 확립한 §7.3 입력 staging 계약(`tick_inbox.hpp`: 도착마다 `recv_seq` 부여 → tick 경계 `FreezeTick()` → `input_staging_on`/`input_received`/`tick_input_frozen` trace, 불변식 = "tick순 recv_seq 이어붙이면 strictly increasing")을 **플랜트결합 경로에 타입 있는 형태로 미러링**한다.
+
+- **왜 타입 버전인가**: VISS는 도착 **개수**만 필요(behavior가 count 소비)하지만, 플랜트결합 behavior는 **state/target 값**을 소비(피드백 제어)한다. 그래서 `VehicleTickInbox<T>`(`vehicle_staging.hpp`)는 `recv_seq`와 함께 **디코드된 타입 샘플**을 버퍼링한다 — `TickInbox`의 타입 카운터파트.
+- **MIMO**: in-채널마다 인박스 1개(EgoState용 / ControlTarget용). 각 채널 스트림이 독립적으로 pin되어 채널별로 §7.3 불변식을 만족하고 attribution 가능(`tick_input_frozen`에 `channel`·`kind` 필드 가산).
+- **배선**: `SILS_STAGE_INPUT=1`이면 in-채널 reader에 staging **리스너**를 붙여 **진짜 도착 시점**에 `recv_seq`를 부여하고, tick 경계에서 인박스를 freeze한다(폴링 take 아님). off면 S1 free-run 폴링(도착순 최신 채택)을 **정확히 그대로** 보존 — 이미 머지·런타임 검증된 경로 무변경.
+- **behavior가 보는 값**: freeze된 집합의 **최신 샘플**(ZOH — 도착 없는 tick은 이전 값 유지). 즉 staging은 제어 의미를 바꾸지 않고 "어느 raw 도착이 이 tick에 속하는가"만 결정론적으로 고정 + 감사가능 trace를 낸다. `late_sample_policy`=`next_tick`(늦은 도착은 다음 freeze로).
+- **다중 채널 접근자**: 현 behavior(longitudinal/steering/VCU)는 state 1 + target 1을 소비하므로 `VehicleBehaviorContext`는 `state`/`target`로 collapse. state 채널을 >1개 개별 노출하는 접근자는 **그런 behavior가 생길 때** 추가(earned-abstraction) — freeze 인프라는 이미 채널별이라 확장 저비용.
+
+**결정론 성격**: staging은 *소비 순서*를 고정(local-staged)하나 *도착 시점*은 여전히 wall clock. 완전 재현성은 S3 lockstep(공유 sim 클럭)에서 회복된다 — S2는 그 전제(어느 샘플이 어느 tick인지 pin)를 깐다.
 
 ---
 
