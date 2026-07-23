@@ -69,7 +69,8 @@ inline int RunVehicleProbe(const ProbeConfig& cfg, std::unique_ptr<IVehicleBehav
 
     if (!behavior) {
         std::cerr << "RunVehicleProbe: a vehicle behavior is required (inject one, e.g. "
-                     "sils::MakeVehicleBehavior(cfg.vehicle_behavior, cfg))" << std::endl;
+                     "std::make_unique<sils::LongitudinalBehavior>(cfg.ctrl_kp, cfg.ctrl_setpoint))"
+                  << std::endl;
         return 2;
     }
     // Channel-map driven -- fail-closed if none configured (§14): a plant-coupling probe

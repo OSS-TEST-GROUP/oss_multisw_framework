@@ -114,12 +114,6 @@ struct ProbeConfig {
     // docs/sils-morai-plant-adapter-design.md.
     std::string channelmap_file;           // SILS_CHANNELMAP
 
-    // MORAI/AWSIM control behavior selection (vehicle_behavior.hpp; plant-coupling path).
-    // Reuses ctrl_kp for the gain; ctrl_setpoint = target speed (longitudinal),
-    // steer_setpoint = target road-wheel angle (steering).
-    std::string vehicle_behavior;          // SILS_VEHICLE_BEHAVIOR (longitudinal|steering)
-    double steer_setpoint = 0.1;           // SILS_STEER_SETPOINT (rad)
-
     const char* durability_name() const {
         return durability_transient_local ? "TRANSIENT_LOCAL" : "VOLATILE";
     }
@@ -173,8 +167,6 @@ inline ProbeConfig ConfigFromEnv() {
     c.replay_file = GetEnvOr("SILS_REPLAY_FILE", "");
 
     c.channelmap_file = GetEnvOr("SILS_CHANNELMAP", "");
-    c.vehicle_behavior = GetEnvOr("SILS_VEHICLE_BEHAVIOR", "longitudinal");
-    c.steer_setpoint = GetEnvDoubleOr("SILS_STEER_SETPOINT", 0.1);
     return c;
 }
 

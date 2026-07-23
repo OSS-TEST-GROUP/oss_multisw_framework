@@ -1,14 +1,12 @@
-// sils_vecu_vehicle_probe -- MORAI/AWSIM plant-coupling probe (Option 2). Thin entry point:
-// read env, build the control behavior, hand it to RunVehicleProbe (vehicle_run.hpp) which
-// owns DDS/channel-map/tick-loop/trace. Mirrors the VISS probe's shape (config -> ports ->
-// RunProbe), but for the bus-coupled world model. docs/sils-morai-plant-adapter-design.md §5.
+// sils_vecu_vehicle_probe -- the DEFAULT plant-coupling probe (Option 2), the bus-coupled
+// counterpart of sils_vecu_viss_probe. Reads env, builds the reference LongitudinalBehavior,
+// and hands it to RunVehicleProbe (vehicle_run.hpp) which owns DDS/channel-map/tick-loop/
+// trace. docs/sils-morai-plant-adapter-design.md §5.
 //
-// Behavior is selected by SILS_VEHICLE_BEHAVIOR (longitudinal | steering); a developer's
-// own plant-coupled ECU builds its own IVehicleBehavior and calls RunVehicleProbe directly.
-// A "steering ECU" and a "longitudinal ECU" are the SAME binary with a different behavior +
-// channel map (process = instance), matching the VISS probe/brake variants.
+// This is the SDK's reference probe (like viss_probe uses the built-in VissRequestBehavior).
+// A developer's own plant-coupled ECU authors its own IVehicleBehavior and calls
+// RunVehicleProbe the same way -- see service/sils/examples/steer-ecu for a steering ECU.
 
-#include <iostream>
 #include <memory>
 
 #include "config.hpp"
@@ -17,12 +15,6 @@
 
 int main() {
     const sils::ProbeConfig cfg = sils::ConfigFromEnv();
-
-    auto behavior = sils::MakeVehicleBehavior(cfg.vehicle_behavior, cfg);
-    if (!behavior) {
-        std::cerr << "vehicle_probe: unknown SILS_VEHICLE_BEHAVIOR='" << cfg.vehicle_behavior
-                  << "' (expected 'longitudinal' or 'steering')" << std::endl;
-        return 2;
-    }
+    auto behavior = std::make_unique<sils::LongitudinalBehavior>(cfg.ctrl_kp, cfg.ctrl_setpoint);
     return sils::RunVehicleProbe(cfg, std::move(behavior));
 }
