@@ -142,7 +142,7 @@ Option 2의 채널맵+lockstep을 **새 포트 `IExternalPlant`** 뒤에 두고,
 - **S0 (설계 확정)** — 이 문서 리뷰 + 프레이밍 결정. 채널맵 스키마 초안. ✅ **완료**.
 - **S1 (브링업, free-run)** — 채널맵 1~2채널로 MORAI/AWSIM STATE 1종 구독 → behavior → ACTUATION 1종 pub. 비결정론 허용. 버스 왕복 실증. ✅ **완료·develop 머지**(EgoState/VehicleControl 정규 IDL + `VehicleWireCodec` + `RunVehicleProbe` + fixture; steer-ecu·vehicle-interface 예제).
 - **S2 (MIMO staged 읽기)** — 다중 타입 토픽 tick 경계 freeze + `BehaviorContext` 다중 채널 접근자. 다중 엔드포인트 작업 흡수. ✅ **완료** — 아래 §5.1.
-- **S3 (lockstep)** — MORAI/AWSIM 스텝 제어 연동, `TickComplete` 확장. 결정론 회복.
+- **S3 (lockstep)** — MORAI/AWSIM 스텝 제어 연동, `TickComplete` 확장. 결정론 회복. ✅ **완료** — 아래 §5.2.
 - **S4 (conformance)** — 버스 결합 폐루프용 새 판정(왕복 지연·lockstep 정합·채널 완전성). `analyze_plant`와 별도 관점.
 
 ### 5.1 S2 구현 — tick 경계 입력 staging (§7.3 계약 재사용)
@@ -156,6 +156,18 @@ VISS 경로가 이미 확립한 §7.3 입력 staging 계약(`tick_inbox.hpp`: �
 - **다중 채널 접근자**: 현 behavior(longitudinal/steering/VCU)는 state 1 + target 1을 소비하므로 `VehicleBehaviorContext`는 `state`/`target`로 collapse. state 채널을 >1개 개별 노출하는 접근자는 **그런 behavior가 생길 때** 추가(earned-abstraction) — freeze 인프라는 이미 채널별이라 확장 저비용.
 
 **결정론 성격**: staging은 *소비 순서*를 고정(local-staged)하나 *도착 시점*은 여전히 wall clock. 완전 재현성은 S3 lockstep(공유 sim 클럭)에서 회복된다 — S2는 그 전제(어느 샘플이 어느 tick인지 pin)를 깐다.
+
+### 5.2 S3 구현 — lockstep 폐루프 결정론 (기존 ClockMaster/TickControl 재사용)
+
+기존 lockstep 인프라(`sils_clock_master` + `TickControl.idl` `TickGrant`/`TickComplete` + `LockstepClockSource`)는 **일반 barrier**다 — grant를 구독하고 TickComplete를 응답하는 참가자면 누구나 barrier에 포함(`--participants N`). `RunVehicleProbe`는 이미 `MakeClockSource`로 이 경로를 타므로 `SILS_CLOCK_MODE=lockstep`이면 플랜트결합 프로브가 그대로 lockstep 참가자가 된다. **갭은 시뮬레이터(state 생산자)가 barrier 밖 wall-free-run**이라는 것 — 그러면 소비 *순서*만 결정론(S2)이고 소비 *값*은 wall 타이밍 의존.
+
+- **시뮬레이터를 barrier에 넣는다**: 소스 fixture(`sils_ego_source`/`sils_control_source`)에 lockstep 모드 추가. `SILS_CLOCK_MODE=lockstep`이면 프로브와 **동일한 `LockstepClockSource`를 재사용**해 barrier 참가자가 된다(빌드 변경 0 — `sils_vecu`가 이미 TickControl 제공). grant마다 state를 **sim_time_ns의 순수 함수**로 계산(ego: `vx=a·t`, `px=½a·t²`)·발행하고 `TickComplete("ego-source")` 응답. 실제 MORAI/AWSIM 어댑터가 구현할 계약과 동형(“grant 받으면 sim 한 스텝 전진→state 발행→complete”).
+- **결정론 회복의 의미**: free-run(S2)은 소비 순서만 고정, 소비 값은 wall 지터 의존. lockstep-aware 소스는 버스 위 샘플 값이 sim_time 함수 → 두 실행이 **동일 trace**(값 수준 재현). `analyze_lockstep`(evaluate.py): tick_seq 1..N +1, sim_time 상수 dt, 모든 tick barrier 닫힘, timeout 없음.
+- **인과/1-tick lag**: 단일 barrier에서 grant T는 전원 동시 수신 → 같은 tick 내 sim의 state(T)와 vECU freeze는 경쟁. barrier가 T-1을 닫은 뒤에야 T를 grant하므로 vECU는 tick T에서 **T-1까지의 state를 결정론적으로** 소비(reliable 전달 + barrier 왕복 시간창; grant 수신 직후 freeze하므로 sim의 state(T)가 그 사이 전달될 여지는 사실상 없음). 즉 결정론적 **1-tick I/O 지연**. zero-lag 동일-tick 결합은 phased barrier(서브틱)가 필요 — 향후.
+- **IDL 무변경**: `TickComplete`는 `participant_id`만 있으면 충분(sim 참가자는 고유 id `ego-source`/`control-source`). "TickComplete 확장"은 타입이 아니라 **참가자 집합 확장**을 뜻함(earned-abstraction: 타입은 안 건드림).
+- **종료**: lockstep 소스는 `--count == clock_master --ticks`면 마지막 tick 완료 후 자가 종료; 프로브는 신호로 종료(기존 lockstep 모델과 동일).
+
+**검증**: 두 실행의 프로브 `control_published` 시퀀스가 bit-동일(값 재현) + `evaluate.py`가 combined trace를 `analyze_lockstep` PASS로 판정.
 
 ---
 

@@ -2,15 +2,23 @@
 // / Profile B, docs/sils-vehicle-interface-autoware.md).
 //
 // Stand-in for the Autoware<->DDS bridge's control output: publishes canonical ControlTarget
-// samples on the target topic (default autoware/control_target) at a fixed rate. Lets the VCU
-// be exercised WITHOUT Autoware -- vehicle_interface subscribes, its `target_received` fires,
-// and it passes the target through as the unified command. Stop this source to see the VCU's
-// no-target safe-stop kick in. Open loop; a test fixture, not the real bridge.
+// samples on the target topic (default autoware/control_target). Lets the VCU be exercised
+// WITHOUT Autoware -- vehicle_interface subscribes, its `target_received` fires, and it passes
+// the target through as the unified command. Stop this source to see the VCU's no-target
+// safe-stop kick in. Open loop; a test fixture, not the real bridge.
+//
+// Clock modes mirror sils_ego_source (SILS_CLOCK_MODE): wall (default, free-running) and
+// lockstep (S3) -- in lockstep it joins the barrier via LockstepClockSource, publishing one
+// sim_time-stamped ControlTarget per grant and replying TickComplete("control-source"). The
+// target values are constant here, so lockstep just makes their tick alignment reproducible.
 
+#include <atomic>
 #include <chrono>
+#include <csignal>
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <thread>
 
@@ -22,10 +30,14 @@
 #include <fastdds/dds/topic/TypeSupport.hpp>
 
 #include "ControlTargetPubSubTypes.hpp"
+#include "clock_source.hpp"  // sils::LockstepClockSource (reused; TickControl via sils_vecu)
 
 using namespace eprosima::fastdds::dds;
 
 namespace {
+std::atomic<bool> g_stop{false};
+void OnSig(int) { g_stop.store(true); }
+
 std::string GetEnvOr(const char* n, const std::string& fb) {
     const char* v = std::getenv(n);
     return v ? std::string(v) : fb;
@@ -79,31 +91,58 @@ int main(int argc, char** argv) {
     wqos.durability().kind = TRANSIENT_LOCAL_DURABILITY_QOS;
     DataWriter* writer = pub->create_datawriter(topic, wqos, nullptr);
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(startup_ms));
+    const std::string clock_mode = GetEnvOr("SILS_CLOCK_MODE", "wall");
 
-    std::cout << "{\"run_id\":\"" << run_id << "\",\"event\":\"control_source_start\",\"topic\":\""
-              << topic_name << "\",\"count\":" << count << ",\"rate_ms\":" << rate_ms << "}"
-              << std::endl;
-
-    for (int i = 1; i <= count; ++i) {
-        const int64_t stamp_ns = static_cast<int64_t>(i) * static_cast<int64_t>(rate_ms) * 1000000LL;
+    auto publish_target = [&](uint64_t seq, int64_t stamp_ns) {
         ControlTarget m;
         m.run_id(run_id);
-        m.seq(static_cast<uint64_t>(i));
+        m.seq(seq);
         m.stamp_ns(stamp_ns);
         m.steering_angle(steer);
         m.acceleration(accel);
         m.gear(3);  // DRIVE
         writer->write(&m);
-        std::cout << "{\"run_id\":\"" << run_id << "\",\"event\":\"control_source_sent\",\"seq\":" << i
-                  << ",\"steering\":" << steer << ",\"acceleration\":" << accel << "}" << std::endl;
-        std::this_thread::sleep_for(std::chrono::milliseconds(rate_ms));
+        std::cout << "{\"run_id\":\"" << run_id << "\",\"event\":\"control_source_sent\",\"seq\":"
+                  << seq << ",\"sim_time_ns\":" << stamp_ns << ",\"steering\":" << steer
+                  << ",\"acceleration\":" << accel << "}" << std::endl;
+    };
+
+    int sent = 0;
+    // Hoisted for teardown ordering (delete readers before the grant listener) -- see
+    // sils_ego_source.cc.
+    std::unique_ptr<sils::LockstepClockSource> clock;
+    if (clock_mode == "lockstep") {
+        std::signal(SIGINT, OnSig);
+        std::signal(SIGTERM, OnSig);
+        clock = std::make_unique<sils::LockstepClockSource>(participant, run_id, "control-source", &g_stop);
+        std::cout << "{\"run_id\":\"" << run_id << "\",\"event\":\"control_source_start\",\"topic\":\""
+                  << topic_name << "\",\"mode\":\"lockstep\",\"count\":" << count << "}" << std::endl;
+        sils::TickInfo tick;
+        while (clock->WaitForNextTick(tick)) {
+            publish_target(tick.seq, tick.sim_time_ns);
+            clock->TickDone(tick);  // TickComplete(seq, "control-source") + tick_complete trace
+            ++sent;
+            if (count > 0 && tick.seq >= static_cast<uint64_t>(count)) break;  // count == --ticks
+        }
+    } else {
+        std::this_thread::sleep_for(std::chrono::milliseconds(startup_ms));
+        std::cout << "{\"run_id\":\"" << run_id << "\",\"event\":\"control_source_start\",\"topic\":\""
+                  << topic_name << "\",\"mode\":\"wall\",\"count\":" << count << ",\"rate_ms\":"
+                  << rate_ms << "}" << std::endl;
+        for (int i = 1; i <= count; ++i) {
+            const int64_t stamp_ns =
+                static_cast<int64_t>(i) * static_cast<int64_t>(rate_ms) * 1000000LL;
+            publish_target(static_cast<uint64_t>(i), stamp_ns);
+            ++sent;
+            std::this_thread::sleep_for(std::chrono::milliseconds(rate_ms));
+        }
     }
 
-    std::cout << "{\"run_id\":\"" << run_id << "\",\"event\":\"control_source_done\",\"sent\":" << count
+    std::cout << "{\"run_id\":\"" << run_id << "\",\"event\":\"control_source_done\",\"sent\":" << sent
               << "}" << std::endl;
 
-    participant->delete_contained_entities();
+    participant->delete_contained_entities();  // readers first (grant reader references the listener)
+    clock.reset();                              // then the clock (grant listener/queue)
     DomainParticipantFactory::get_instance()->delete_participant(participant);
     return 0;
 }
