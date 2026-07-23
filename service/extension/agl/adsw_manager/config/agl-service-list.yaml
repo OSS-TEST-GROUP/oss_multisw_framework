@@ -58,9 +58,13 @@ services:
 #      비활성(AGL activate-by-default=false). 표출/홈전환은 agl-shell 스위처가 담당
 #      (oss_hmi_app F006: agl-shell-activator -a activate -p wlroots). "상시기동 + activate-swap".
 #   소켓: /run/user/1001/wayland-0 (agl-driver 소유) → --user 1001 로 접근. 렌더: llvmpipe(SW).
+#   F010: recovery_policy=MANUAL — ext-agl does NOT auto-run or auto-recover rviz2.
+#   rviz2_monitor (hmi_launcher 임베드 제어판) 가 ctrl/StartContainer + ctrl/StopContainer 로
+#   사용자 의도에 따라 기동/정지를 제어한다. image/extra_args 는 유지하여 StateManager 가
+#   ctrl/StartContainer 수신 시 docker-run 방법을 알 수 있게 한다.
 - name: rviz2
   service_type: NORMAL
-  recovery_policy: ALWAYS
+  recovery_policy: MANUAL
   is_enabled: true
   mw_type: AGL
   init_state: NOT_RUNNING
