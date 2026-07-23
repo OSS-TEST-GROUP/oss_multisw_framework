@@ -52,3 +52,33 @@ services:
   - HMI_LAUNCHER_CONFIG=/etc/hmi_launcher/config.json
   command_args:
   - hmi_launcher
+# rviz2 (ROS2 Humble / Qt5 / OGRE) — cage(wlroots 키오스크, app_id="wlroots") 컨테이너.
+#   컨테이너 소스: oss_hmi_app apps/rviz2_port/docker/agl-display/ (멀티아치 rviz2-agl 이미지).
+#   ⚠️ ext-agl 은 `docker run` 만 한다 — agl-shell 활성화는 안 함. 따라서 rviz2 는 기동되나
+#      비활성(AGL activate-by-default=false). 표출/홈전환은 agl-shell 스위처가 담당
+#      (oss_hmi_app F006: agl-shell-activator -a activate -p wlroots). "상시기동 + activate-swap".
+#   소켓: /run/user/1001/wayland-0 (agl-driver 소유) → --user 1001 로 접근. 렌더: llvmpipe(SW).
+- name: rviz2
+  service_type: NORMAL
+  recovery_policy: ALWAYS
+  is_enabled: true
+  mw_type: AGL
+  init_state: NOT_RUNNING
+  image: registry.obigo.com/oss/rviz2-agl:latest
+  extra_args:
+  - --net=host
+  - --ipc=host
+  - --user
+  - 1001:1001
+  - --group-add
+  - "44"
+  - "-v"
+  - /run/user/1001:/run/user/1001
+  - "-e"
+  - HOME=/tmp
+  - "-e"
+  - XDG_RUNTIME_DIR=/run/user/1001
+  - "-e"
+  - WAYLAND_DISPLAY=wayland-0
+  - "-e"
+  - LIBGL_ALWAYS_SOFTWARE=1
