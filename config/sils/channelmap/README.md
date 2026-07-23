@@ -44,16 +44,24 @@ channels:
 
 ## 사용
 
+`sils_vecu_vehicle_probe`(기본 probe)가 채널맵을 읽어 `in`→EgoState reader, `out`→
+VehicleControl writer를 바인딩하고, 기준 `LongitudinalBehavior`로 free-run tick 루프를 돈다.
+
 ```bash
-export SILS_CHANNELMAP=config/sils/channelmap/ego-min.yaml
-# (S1: 로드+검증+trace. 각 채널의 DDS reader/writer 바인딩은 후속 — VSS 신호 DDS 타입 확정 후)
+SILS_CHANNELMAP=config/sils/channelmap/ego-min.yaml \
+SILS_CTRL_KP=0.8 SILS_CTRL_SETPOINT=10 \
+  bin/sils_vecu_vehicle_probe
 ```
 
 `SILS_CHANNELMAP`이 비어 있으면(기본) 채널맵은 비활성 — 기존 단일 엔드포인트 동작 그대로다(비침습, 가산).
 
+커스텀 제어 ECU는 `IVehicleBehavior`([vehicle_behavior.hpp](../../../service/sils/vecu/src/vehicle_behavior.hpp))를
+구현해 `RunVehicleProbe`로 주입한다 — 자기 채널맵을 동봉한다. 참조:
+[examples/steer-ecu](../../../service/sils/examples/steer-ecu/)(조향 ECU).
+
 ## 예제
 
-- [ego-min.yaml](ego-min.yaml) — 최소 2채널(STATE in 1 + ACTUATION out 1). S1 브링업용.
+- [ego-min.yaml](ego-min.yaml) — 기본 probe(longitudinal)용 최소 2채널(STATE in 1 + ACTUATION out 1).
 
 ## 단계 (설계 문서 §5)
 

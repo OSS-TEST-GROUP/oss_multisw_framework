@@ -32,32 +32,9 @@
 
 #include "EgoStatePubSubTypes.hpp"
 #include "VehicleControlPubSubTypes.hpp"
+#include "vehicle_sample.hpp"  // EgoStateSample / VehicleControlSample (DDS-free PODs)
 
 namespace sils {
-
-// ── SDK-level PODs (no DDS dependency) ───────────────────────────────────────
-// Plain mirrors of the canonical IDL structs so behavior/run_loop stay type-agnostic.
-// Field units are canonical SI (see the IDL); gear: 0=P 1=R 2=N 3=D.
-
-struct EgoStateSample {
-    uint64_t seq = 0;
-    int64_t stamp_ns = 0;
-    double px = 0, py = 0, pz = 0;              // position, m
-    double roll = 0, pitch = 0, yaw = 0;        // orientation, rad
-    double vx = 0, vy = 0, vz = 0;              // velocity, m/s
-    double ax = 0, ay = 0, az = 0;              // acceleration, m/s^2
-    double yaw_rate = 0;                        // rad/s
-    double steering_angle = 0;                  // rad
-    uint8_t gear = 0;
-};
-
-struct VehicleControlSample {
-    uint64_t seq = 0;
-    int64_t stamp_ns = 0;
-    double steering_angle = 0;                  // rad
-    double acceleration = 0;                    // m/s^2, signed (+ accel / - brake)
-    uint8_t gear = 0;
-};
 
 // ── Codec ────────────────────────────────────────────────────────────────────
 // Registers both canonical types on the participant, decodes inbound EgoState samples
