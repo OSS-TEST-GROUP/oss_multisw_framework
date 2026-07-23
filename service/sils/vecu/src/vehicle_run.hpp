@@ -20,6 +20,7 @@
 #include <csignal>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -55,6 +56,11 @@ inline long long VehicleWallMs() {
 // JSONL trace, same shape as run_loop.hpp's TraceEvent (conformance kit consumes this).
 inline void VehicleTrace(const std::string& run_id, const std::string& instance_id,
                          const std::string& event, const std::string& extra = "") {
+    // Locked (TraceMutex, clock_source.hpp): the DDS staging listeners emit input_received
+    // from their own threads concurrently with the main loop's frozen/state/control lines,
+    // and a bare `cout << ... << endl` is not atomic across threads -- interleaved writes
+    // corrupt JSONL lines and surface as phantom staging violations downstream.
+    std::lock_guard<std::mutex> lk(TraceMutex());
     std::cout << "{\"run_id\":\"" << run_id << "\",\"instance_id\":\"" << instance_id
               << "\",\"event\":\"" << event << "\",\"wall_time_ms\":" << VehicleWallMs()
               << (extra.empty() ? "" : ("," + extra)) << "}" << std::endl;

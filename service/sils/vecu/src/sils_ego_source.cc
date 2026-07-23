@@ -141,13 +141,19 @@ int main(int argc, char** argv) {
                   << topic_name << "\",\"mode\":\"lockstep\",\"count\":" << count << "}" << std::endl;
         sils::TickInfo tick;
         while (clock->WaitForNextTick(tick)) {
-            const double t = static_cast<double>(tick.sim_time_ns) / 1e9;  // sim seconds
-            const double vx = accel * t;             // exact integral -> pure fn of sim_time
-            const double px = 0.5 * accel * t * t;
-            publish_state(tick.seq, tick.sim_time_ns, px, vx);
+            // Publish only the first `count` grants, but COMPLETE every granted tick until
+            // stop -- a barrier participant must not leave while the master is still
+            // granting (else the barrier times out). Completing a few trailing empty ticks
+            // also lets the probe (1-tick lag) drain the last published sample, so nothing
+            // is left unstaged. Run clock_master with --ticks a bit above --count.
+            if (count <= 0 || tick.seq <= static_cast<uint64_t>(count)) {
+                const double t = static_cast<double>(tick.sim_time_ns) / 1e9;  // sim seconds
+                const double vx = accel * t;         // exact integral -> pure fn of sim_time
+                const double px = 0.5 * accel * t * t;
+                publish_state(tick.seq, tick.sim_time_ns, px, vx);
+                ++sent;
+            }
             clock->TickDone(tick);  // TickComplete(seq, "ego-source") + tick_complete trace
-            ++sent;
-            if (count > 0 && tick.seq >= static_cast<uint64_t>(count)) break;  // count == --ticks
         }
     } else {
         std::this_thread::sleep_for(std::chrono::milliseconds(startup_ms));

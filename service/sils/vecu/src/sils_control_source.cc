@@ -119,10 +119,15 @@ int main(int argc, char** argv) {
                   << topic_name << "\",\"mode\":\"lockstep\",\"count\":" << count << "}" << std::endl;
         sils::TickInfo tick;
         while (clock->WaitForNextTick(tick)) {
-            publish_target(tick.seq, tick.sim_time_ns);
+            // Publish first `count` grants; COMPLETE every granted tick until stop (a barrier
+            // participant can't leave mid-run, and trailing empty ticks let the probe drain
+            // the last sample). Run clock_master with --ticks a bit above --count. See
+            // sils_ego_source.cc.
+            if (count <= 0 || tick.seq <= static_cast<uint64_t>(count)) {
+                publish_target(tick.seq, tick.sim_time_ns);
+                ++sent;
+            }
             clock->TickDone(tick);  // TickComplete(seq, "control-source") + tick_complete trace
-            ++sent;
-            if (count > 0 && tick.seq >= static_cast<uint64_t>(count)) break;  // count == --ticks
         }
     } else {
         std::this_thread::sleep_for(std::chrono::milliseconds(startup_ms));

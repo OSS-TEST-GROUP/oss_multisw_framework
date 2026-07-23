@@ -47,6 +47,19 @@
 
 namespace sils {
 
+// Process-wide guard serializing JSONL trace writes to std::cout. A plant-coupling run
+// emits trace lines from MULTIPLE threads -- the main tick loop, each DDS staging listener
+// (one per in-channel), and this clock's TickDone -- and `std::cout << a << b << std::endl`
+// is NOT atomic across threads, so concurrent writers interleave into corrupt (unparseable)
+// lines. That surfaces downstream as phantom "froze never-received input" violations when a
+// listener's input_received line is shredded by a concurrent write. Every trace emitter that
+// can run off the main thread locks this. Function-local static so it is safe to define in a
+// header included by several TUs.
+inline std::mutex& TraceMutex() {
+    static std::mutex m;
+    return m;
+}
+
 struct TickInfo {
     uint64_t seq = 0;
     int64_t sim_time_ns = 0;
@@ -147,7 +160,9 @@ public:
         msg.status(0);
         complete_writer_->write(&msg);
         // Trace line matches evaluate.py's lockstep contract (§8.2): the adapter
-        // owns emission of tick_complete since it knows when the ack is sent.
+        // owns emission of tick_complete since it knows when the ack is sent. Locked so
+        // it can't interleave with a probe/listener trace line on another thread.
+        std::lock_guard<std::mutex> lk(TraceMutex());
         std::cout << "{\"run_id\":\"" << run_id_ << "\",\"instance_id\":\""
                   << participant_id_ << "\",\"event\":\"tick_complete\",\"tick_seq\":"
                   << tick.seq << ",\"sim_time_ns\":" << tick.sim_time_ns << "}" << std::endl;

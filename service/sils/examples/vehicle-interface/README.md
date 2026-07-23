@@ -48,9 +48,11 @@ bin/sils_control_source --count 40 --rate-ms 100                 # ControlTarget
 ClockMaster가 barrier를 돌리고, 세 참가자(VCU + 두 소스)가 sim 클럭에 맞춰 동기 전진 → 두 실행이 동일 trace.
 ```bash
 export VISS_DDS_DOMAIN_ID=0 SILS_RUN_ID=vi SILS_CLOCK_MODE=lockstep
-# ClockMaster: 40 tick, dt 100ms, wall-pace 100ms(소스/프로브가 tick에 붙을 시간)
-bin/sils_clock_master --participants 3 --ticks 40 --dt-ms 100 --tick-interval-ms 100 &
-# 세 lockstep 참가자 (--count == --ticks)
+# ClockMaster: dt 100ms, wall-pace 100ms. --ticks를 소스 --count보다 크게 잡아
+# 프로브(1-tick lag)가 마지막 샘플까지 drain하게 한다(꼬리 손실 0).
+bin/sils_clock_master --participants 3 --ticks 44 --dt-ms 100 --tick-interval-ms 100 | tee /tmp/vi-clk.jsonl &
+# 세 lockstep 참가자. 소스는 첫 --count grant만 publish하고 나머지 grant도 complete(참가자는
+# 마스터가 끝낼 때까지 barrier를 지킨다). clock_master 종료 후 Ctrl-C로 정리.
 SILS_CHANNELMAP=service/sils/examples/vehicle-interface/channelmap/vehicle-interface.yaml \
 SILS_STAGE_INPUT=1  bin/vehicle_interface | tee /tmp/vi-lockstep.jsonl &
 bin/sils_ego_source     --count 40 &
