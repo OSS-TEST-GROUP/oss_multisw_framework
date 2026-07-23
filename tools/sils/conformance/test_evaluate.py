@@ -795,6 +795,145 @@ def test_main_exit_codes():
     assert ev.main(["/nonexistent/nope.trace.jsonl", "--quiet"]) == ev.EXIT_USAGE
 
 
+# ── bus-coupled (Option 2, MORAI/AWSIM) -- analyze_vehicle + MIMO staging (S4) ──
+
+def vehicle_events(ticks=4, lockstep=True, closed=True, bad_gear_at=None,
+                   nonmonotone=False, run_pass=True):
+    """A bus-coupled merged stream: coordinator + (lockstep) clock_master + vehicle probe.
+    1-tick lag: state/target seq k-1 consumed at tick k (>=2). Knobs inject defects."""
+    IID, RID, DT = "vi-probe-1", "veh", 100_000_000
+    evs = [
+        {"run_id": RID, "instance_id": IID, "event": "run_start", "wall_time_ms": 1000, "domain_id": 91, "backend": "local"},
+        {"run_id": RID, "event": "domain_leased", "wall_time_ms": 1001, "domain_id": 91, "pool": "91-93"},
+        {"run_id": RID, "instance_id": IID, "event": "run_start", "wall_time_ms": 1002, "domain_id": 91, "mode": "vehicle-coupling", "stage_input": True},
+        {"run_id": RID, "instance_id": IID, "event": "behavior_start", "wall_time_ms": 1003, "name": "vehicle-interface"},
+        {"run_id": RID, "instance_id": IID, "event": "ready", "wall_time_ms": 1004},
+        {"run_id": RID, "event": "vecu_ready", "wall_time_ms": 1005},
+    ]
+    if lockstep:
+        evs.append({"run_id": RID, "event": "clock_start", "wall_time_ms": 1006, "mode": "lockstep", "dt_ns": DT})
+    wt = 1010
+    for k in range(1, ticks + 1):
+        sim = k * DT
+        if lockstep:
+            evs.append({"run_id": RID, "event": "tick_grant", "wall_time_ms": wt, "tick_seq": k, "sim_time_ns": sim, "dt_ns": DT})
+        ctl_tick = 1 if (nonmonotone and k > 1) else k  # force a repeat to break monotonicity
+        if closed and k >= 2:
+            evs.append({"run_id": RID, "instance_id": IID, "event": "state_received", "wall_time_ms": wt, "tick_seq": k, "src_seq": k - 1, "vx": 0.1 * k})
+            evs.append({"run_id": RID, "instance_id": IID, "event": "target_received", "wall_time_ms": wt, "tick_seq": k, "src_seq": k - 1})
+        gear = 9 if bad_gear_at == k else 3
+        evs.append({"run_id": RID, "instance_id": IID, "event": "control_published", "wall_time_ms": wt, "tick_seq": ctl_tick,
+                    "behavior": "vehicle-interface", "steering_angle": 0.05, "acceleration": 1.0, "gear": gear})
+        if lockstep:
+            evs.append({"run_id": RID, "instance_id": IID, "event": "tick_complete", "wall_time_ms": wt, "tick_seq": k, "sim_time_ns": sim})
+            evs.append({"run_id": RID, "event": "tick_barrier", "wall_time_ms": wt, "tick_seq": k, "completed": 1})
+        wt += 1
+    evs.append({"run_id": RID, "event": "domain_released", "wall_time_ms": wt})
+    if run_pass:
+        evs.append({"run_id": RID, "event": "run_pass", "wall_time_ms": wt + 1})
+    return evs
+
+
+def test_vehicle_none_when_absent():
+    r = ev.evaluate_run(ev.parse_trace(write_trace(passing_events()))[0], "x")
+    assert r["vehicle"] == {"mode": "none"}
+
+
+def test_vehicle_bus_coupled_lockstep_is_l3_conformant():
+    r = ev.evaluate_run(ev.parse_trace(write_trace(vehicle_events()))[0], "x")
+    assert r["verdict"] == "PASSED", r
+    assert r["vehicle"]["mode"] == "bus-coupled"
+    assert r["vehicle"]["closed_loop"] is True, r["violations"]
+    assert r["vehicle"]["deterministic"] is True
+    assert r["clock"]["deterministic"] is True
+    assert r["fidelity_evidenced"] == "L3", r
+    assert r["conformant"] is True, r["violations"]
+
+
+def test_vehicle_wall_is_l0_not_l3():
+    # A bus loop under the wall clock is a working (state in, control out) loop but not
+    # reproducible -> L0, never L3 (bus determinism requires lockstep).
+    r = ev.evaluate_run(ev.parse_trace(write_trace(vehicle_events(lockstep=False)))[0], "x")
+    assert r["vehicle"]["closed_loop"] is True
+    assert r["clock"]["deterministic"] is False
+    assert r["fidelity_evidenced"] == "L0", r
+    assert r["conformant"] is True, r["violations"]
+
+
+def test_vehicle_open_loop_flagged():
+    # published control but never consumed STATE -> open loop, not L3.
+    r = ev.evaluate_run(ev.parse_trace(write_trace(vehicle_events(closed=False)))[0], "x")
+    assert r["vehicle"]["closed_loop"] is False
+    assert any("loop is open" in v for v in r["violations"]), r["violations"]
+    assert r["fidelity_evidenced"] != "L3"
+    assert r["conformant"] is False
+
+
+def test_vehicle_invalid_gear_flagged():
+    r = ev.evaluate_run(ev.parse_trace(write_trace(vehicle_events(bad_gear_at=3)))[0], "x")
+    assert any("invalid gear" in v for v in r["violations"]), r["violations"]
+    assert r["vehicle"]["deterministic"] is False
+    assert r["fidelity_evidenced"] != "L3"
+
+
+def test_vehicle_nonmonotone_ticks_flagged():
+    r = ev.evaluate_run(ev.parse_trace(write_trace(vehicle_events(nonmonotone=True)))[0], "x")
+    assert any("strictly increasing tick order" in v for v in r["violations"]), r["violations"]
+    assert r["vehicle"]["deterministic"] is False
+
+
+def test_vehicle_pass_uses_bus_evidence_not_viss():
+    # The PASS gate must NOT demand VISS sample_received/endpoint_matched/verify_pass for a
+    # bus-coupled run -- its evidence is state_received + control_published.
+    r = ev.evaluate_run(ev.parse_trace(write_trace(vehicle_events()))[0], "x")
+    assert not any("sample_received" in v or "endpoint_matched" in v or "verify_pass" in v
+                   for v in r["violations"]), r["violations"]
+    assert r["evidence"]["samples_received"] == 0  # genuinely no VISS samples, yet conformant
+    assert r["conformant"] is True
+
+
+def _mimo(chA_frozen, chB_frozen, recvA, recvB, policy="next_tick"):
+    A, B = "Vehicle.EgoState", "Vehicle.ControlTarget"
+    evs = [{"run_id": "m", "instance_id": "vi", "event": "input_staging_on", "wall_time_ms": 1,
+            "late_sample_policy": policy, "state_channels": 1, "target_channels": 1}]
+    for rs in recvA:
+        evs.append({"run_id": "m", "instance_id": "vi", "event": "input_received", "recv_seq": rs, "channel": A})
+    for rs in recvB:
+        evs.append({"run_id": "m", "instance_id": "vi", "event": "input_received", "recv_seq": rs, "channel": B})
+    for tk, rs in chA_frozen:
+        evs.append({"run_id": "m", "instance_id": "vi", "event": "tick_input_frozen", "tick_seq": tk, "channel": A, "recv_seqs": rs, "count": len(rs)})
+    for tk, rs in chB_frozen:
+        evs.append({"run_id": "m", "instance_id": "vi", "event": "tick_input_frozen", "tick_seq": tk, "channel": B, "recv_seqs": rs, "count": len(rs)})
+    return evs
+
+
+def test_staging_mimo_per_channel_ok():
+    info, viol = ev.analyze_staging(_mimo(
+        chA_frozen=((2, [1]), (3, [2]), (4, [3])), chB_frozen=((2, [1]), (3, [2]), (4, [3])),
+        recvA=(1, 2, 3), recvB=(1, 2, 3)))
+    assert viol == [], viol
+    assert info["deterministic"] is True
+    assert info["inputs_received"] == 6 and info["inputs_staged"] == 6
+    assert sorted(info["channels"]) == ["Vehicle.ControlTarget", "Vehicle.EgoState"]
+
+
+def test_staging_mimo_channel_interleave_not_flagged():
+    # The KEY MIMO fix: each channel's recv_seq starts at 1, so the GLOBAL concatenation
+    # (1,1,2,2,3,3) is NOT sorted -- but per channel it is. Must NOT flag reception order.
+    _, viol = ev.analyze_staging(_mimo(
+        chA_frozen=((1, [1, 2, 3]),), chB_frozen=((1, [1, 2, 3]),),
+        recvA=(1, 2, 3), recvB=(1, 2, 3)))
+    assert not any("reception order" in v or "more than one tick" in v for v in viol), viol
+
+
+def test_staging_mimo_per_channel_dup_flagged_with_label():
+    # A duplicate WITHIN one channel is still a violation, labeled by channel.
+    _, viol = ev.analyze_staging(_mimo(
+        chA_frozen=((2, [1]), (3, [2]), (4, [2])), chB_frozen=((2, [1]), (3, [2]), (4, [3])),
+        recvA=(1, 2), recvB=(1, 2, 3)))
+    assert any("more than one tick" in v and "Vehicle.EgoState" in v for v in viol), viol
+
+
 def main() -> int:
     tests = [v for k, v in globals().items() if k.startswith("test_") and callable(v)]
     failed = 0

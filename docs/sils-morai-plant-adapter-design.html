@@ -342,7 +342,7 @@
       <div class="stage done"><div class="s">S1 · free-run ✅</div><p>1~2채널로 STATE 1종 구독→behavior→ACTUATION 1종 pub. 버스 왕복 실증. 정규 IDL+<code>VehicleWireCodec</code>+<code>RunVehicleProbe</code>+fixture, develop 머지.</p></div>
       <div class="stage done"><div class="s">S2 · MIMO staged ✅</div><p>in-채널마다 <code>VehicleTickInbox&lt;T&gt;</code>(§7.3 타입 버전) → tick 경계 <code>FreezeTick</code>. <code>SILS_STAGE_INPUT=1</code> opt-in(off=S1 폴링 보존). 채널별 <code>tick_input_frozen</code> 불변식. behavior엔 최신-frozen(ZOH).</p></div>
       <div class="stage done"><div class="s">S3 · lockstep ✅</div><p>소스 fixture가 <b>동일 <code>LockstepClockSource</code>로 barrier participant</b>화(빌드 변경 0) — grant마다 state를 <b>sim_time 함수</b>로 발행+<code>TickComplete</code>. 값 수준 재현 회복. 실 MORAI/AWSIM 어댑터가 구현할 계약과 동형. 결정론적 1-tick lag.</p></div>
-      <div class="stage"><div class="s">S4 · conformance</div><p>버스 결합 폐루프용 새 판정(왕복 지연·lockstep 정합·채널 완전성) + vehicle 이벤트 스키마 등재.</p></div>
+      <div class="stage done"><div class="s">S4 · conformance ✅</div><p>vehicle 이벤트 v1 스키마 등재 + <code>analyze_vehicle</code>(폐루프·well-formed 명령) + <code>analyze_staging</code> MIMO 채널 그룹화. golden 샘플이 <code>gate.py</code> SCHEMA+FIDELITY PASS(L3). 141 테스트 green.</p></div>
     </div>
     <p style="margin:.9rem 0 0;font-size:13px;color:var(--muted)"><b>S2</b>: staging은 <i>소비 순서</i> 고정(local-staged), <i>도착 시점</i>은 wall clock. <b>S3</b>: lockstep-aware 소스로 소비 <i>값</i>이 sim_time 함수가 되어 <b>값 수준 재현성 회복</b> — 두 실행이 동일 trace. 단일 barrier라 sim↔vECU는 결정론적 <b>1-tick I/O 지연</b>(zero-lag은 phased barrier=향후).</p>
   </section>

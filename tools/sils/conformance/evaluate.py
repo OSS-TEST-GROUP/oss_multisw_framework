@@ -33,7 +33,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from collections import Counter
+from collections import Counter, defaultdict
 from pathlib import Path
 
 EXIT_PASS = 0
@@ -196,6 +196,14 @@ def analyze_staging(events: list[dict]) -> tuple[dict, list[str]]:
       - no input consumed in more than one tick (no duplicate across freeze sets),
       - a frozen recv_seq must actually have been received,
       - every received input is staged or dropped per the declared late_sample_policy.
+
+    MIMO (plant-coupling, Option 2): a run may stage MORE THAN ONE input channel,
+    each with its OWN reception-sequence counter (1..N per channel). The frozen /
+    input_received / input_dropped events then carry a `channel` field, and the
+    invariants above hold PER CHANNEL (concatenating one channel's recv_seqs across
+    ticks is what must be non-decreasing/unique -- not the interleaving of channels).
+    A single-stream VISS run has no `channel` field -> one group keyed "", identical
+    to the pre-MIMO behavior.
     """
     frozen = [e for e in events if e.get("event") == "tick_input_frozen"]
     if not frozen:
@@ -210,73 +218,94 @@ def analyze_staging(events: list[dict]) -> tuple[dict, list[str]]:
         any(e.get("source") == "replay" for e in frozen)
     mode = "replay" if is_replay else "local-staged"
 
-    received = [e["recv_seq"] for e in events
-                if e.get("event") == "input_received" and "recv_seq" in e]
-    dropped = {e["recv_seq"] for e in events
-               if e.get("event") == "input_dropped" and "recv_seq" in e}
+    # Group frozen / received / dropped by channel (§7.3 per-channel invariant).
+    # No 'channel' field -> "" (single-stream VISS); messages then carry no label.
+    def _ch(e) -> str:
+        return e.get("channel", "")
 
-    all_frozen: list = []
+    received_by: dict[str, list] = defaultdict(list)
+    for e in events:
+        if e.get("event") == "input_received" and "recv_seq" in e:
+            received_by[_ch(e)].append(e["recv_seq"])
+    dropped_by: dict[str, set] = defaultdict(set)
+    for e in events:
+        if e.get("event") == "input_dropped" and "recv_seq" in e:
+            dropped_by[_ch(e)].add(e["recv_seq"])
+    frozen_by: dict[str, list] = defaultdict(list)
     for e in frozen:
         rs = e.get("recv_seqs")
         if isinstance(rs, list):
-            all_frozen.extend(rs)
-
-    # §7.2 defines local-staged determinism as "consumption ORDER fixed" -- these
-    # three checks are the reproducibility invariant and set `deterministic`.
-    order_violations: list[str] = []
-    seen = set()
-    dups = {s for s in all_frozen if s in seen or seen.add(s)}
-    if dups:
-        order_violations.append(f"staging consumed input(s) {sorted(dups)} in more than one tick (§7.3)")
-    if all_frozen != sorted(all_frozen):
-        order_violations.append("staging not in reception order: frozen recv_seqs across ticks "
-                                "are not non-decreasing (§7.2)")
-    recv_set = set(received)
-    phantom = sorted(set(all_frozen) - recv_set)
-    if phantom:
-        order_violations.append(f"staging froze never-received input(s) {phantom} (§7.3)")
+            frozen_by[_ch(e)].extend(rs)
 
     # Declared late-sample policy (§7.3). Surfaced in the trace (input_staging_on /
     # replay_start / any event carrying late_sample_policy); defaults to next_tick.
     policy = next((e["late_sample_policy"] for e in events
                    if e.get("late_sample_policy")), "next_tick")
 
-    # Input loss / late handling is a SEPARATE, completeness/policy concern (§7.3),
-    # not an order-determinism break -- it fails conformance but doesn't flip
-    # `deterministic`. What counts as a violation depends on the declared policy.
+    order_violations: list[str] = []
     completeness_violations: list[str] = []
     if policy not in LATE_SAMPLE_POLICIES:
         completeness_violations.append(
             f"unknown late_sample_policy '{policy}' (expected one of {sorted(LATE_SAMPLE_POLICIES)}, §7.3)")
 
-    lost = sorted(recv_set - set(all_frozen) - dropped)
-    if lost:  # neither staged nor dropped -> truly lost, a violation under EVERY policy
-        head = lost if len(lost) <= 10 else lost[:10] + ["..."]
-        completeness_violations.append(
-            f"{len(lost)} received input(s) never staged into a tick nor dropped "
-            f"{head} -- pace the clock so input lands in ticks, or declare a drop policy (§7.2/§7.3)")
+    total_received = total_staged = total_dropped = total_lost = 0
+    channels = sorted(set(received_by) | set(frozen_by) | set(dropped_by))
+    for c in channels:
+        lbl = f" on channel '{c}'" if c else ""
+        all_frozen = frozen_by[c]
+        received = received_by[c]
+        dropped = dropped_by[c]
 
-    # Drops are only legitimate under the 'drop' policy. next_tick defers (no drop
-    # expected); fail permits neither drop nor loss.
-    if dropped and policy == "next_tick":
-        completeness_violations.append(
-            f"{len(dropped)} input(s) dropped under late_sample_policy 'next_tick' -- "
-            "this policy defers late input to the next tick, it does not drop (§7.3)")
-    if policy == "fail" and (dropped or lost):
-        completeness_violations.append(
-            f"late_sample_policy 'fail': {len(dropped)} dropped + {len(lost)} unstaged input(s) "
-            "-- this policy admits no late samples, so the run must fail (§7.3)")
+        # §7.2 local-staged determinism = "consumption ORDER fixed" (per channel).
+        seen: set = set()
+        dups = {s for s in all_frozen if s in seen or seen.add(s)}
+        if dups:
+            order_violations.append(
+                f"staging consumed input(s) {sorted(dups)} in more than one tick{lbl} (§7.3)")
+        if all_frozen != sorted(all_frozen):
+            order_violations.append("staging not in reception order: frozen recv_seqs across ticks "
+                                    f"are not non-decreasing{lbl} (§7.2)")
+        recv_set = set(received)
+        phantom = sorted(set(all_frozen) - recv_set)
+        if phantom:
+            order_violations.append(f"staging froze never-received input(s) {phantom}{lbl} (§7.3)")
+
+        # Completeness / late handling is a SEPARATE policy concern (§7.3): it fails
+        # conformance but doesn't flip `deterministic`.
+        lost = sorted(recv_set - set(all_frozen) - dropped)
+        if lost:  # neither staged nor dropped -> truly lost, a violation under EVERY policy
+            head = lost if len(lost) <= 10 else lost[:10] + ["..."]
+            completeness_violations.append(
+                f"{len(lost)} received input(s) never staged into a tick nor dropped "
+                f"{head}{lbl} -- pace the clock so input lands in ticks, or declare a drop policy (§7.2/§7.3)")
+        if dropped and policy == "next_tick":
+            completeness_violations.append(
+                f"{len(dropped)} input(s) dropped{lbl} under late_sample_policy 'next_tick' -- "
+                "this policy defers late input to the next tick, it does not drop (§7.3)")
+        if policy == "fail" and (dropped or lost):
+            completeness_violations.append(
+                f"late_sample_policy 'fail'{lbl}: {len(dropped)} dropped + {len(lost)} unstaged input(s) "
+                "-- this policy admits no late samples, so the run must fail (§7.3)")
+
+        total_received += len(received)
+        total_staged += len(all_frozen)
+        total_dropped += len(dropped)
+        total_lost += len(lost)
 
     staging = {
         "input_mode": mode,
         "late_sample_policy": policy,
-        "inputs_received": len(received),
-        "inputs_staged": len(all_frozen),
-        "inputs_dropped": len(dropped),
-        "inputs_unstaged": len(lost),
+        "inputs_received": total_received,
+        "inputs_staged": total_staged,
+        "inputs_dropped": total_dropped,
+        "inputs_unstaged": total_lost,
         "ticks_with_input": len(frozen),
         "deterministic": not order_violations,
     }
+    # Surface the channel set only for genuinely multi-channel (MIMO) runs.
+    real_channels = [c for c in channels if c]
+    if real_channels:
+        staging["channels"] = real_channels
     return staging, order_violations + completeness_violations
 
 
@@ -385,6 +414,67 @@ def analyze_plant(events: list[dict]) -> tuple[dict, list[str]]:
     if fmi_version:
         plant["fmi_version"] = fmi_version
     return plant, violations
+
+
+# Valid gears in the canonical VehicleControl POD (vehicle_sample.hpp): 0=P 1=R 2=N 3=D.
+VEHICLE_GEARS = {0, 1, 2, 3}
+
+
+def analyze_vehicle(events: list[dict]) -> tuple[dict, list[str]]:
+    """Check bus-coupled plant-coupling closed-loop integrity (Option 2, MORAI/AWSIM,
+    docs/sils-morai-plant-adapter-design.md). Returns (vehicle_info, violations).
+
+    A run is bus-coupled iff it carries `control_published` events -- each is one tick of
+    the loop: the vECU consumed the bus STATE (`state_received`) and/or an upstream control
+    target (`target_received`, Profile B) and published a unified VehicleControl back to the
+    plant. Unlike analyze_plant (in-process IPlant, feedback_in == previous output), the loop
+    closes over the DDS bus, so the checks are structural + completeness:
+      - one command per tick, tick_seq strictly increasing (no gap/dupe/reorder),
+      - every published command is well-formed: finite steering/acceleration, valid gear,
+      - the loop is CLOSED -- the vECU actually consumed bus feedback (>=1 state_received),
+        not merely publishing open-loop.
+    VALUE-level reproducibility across runs is NOT judged here: it comes from lockstep
+    (analyze_lockstep) plus a lockstep-aware sim, and is confirmed by compare_golden. So a
+    wall bus-coupled run is a working-but-nondeterministic loop (L0); L3 is evidenced only
+    when the loop is closed AND the clock is lockstep-deterministic (evaluate_run bumps it)."""
+    ctrl = [e for e in events if e.get("event") == "control_published"]
+    if not ctrl:
+        return {"mode": "none"}, []
+
+    violations: list[str] = []
+    ticks = [e.get("tick_seq") for e in ctrl]
+    monotone = all(isinstance(a, int) and isinstance(b, int) and b > a
+                   for a, b in zip(ticks, ticks[1:]))
+    if not monotone:
+        violations.append(f"control_published not in strictly increasing tick order: {ticks[:12]} "
+                          "-- each tick must publish exactly one command (§8)")
+
+    bad = []
+    for e in ctrl:
+        g = e.get("gear")
+        if (not _finite(e.get("steering_angle")) or not _finite(e.get("acceleration"))
+                or (g is not None and g not in VEHICLE_GEARS)):
+            bad.append(e.get("tick_seq"))
+    if bad:
+        violations.append(f"control_published with non-finite steering/acceleration or invalid gear "
+                          f"at tick(s) {bad[:10]} -- fail-fast (§14)")
+
+    n_state = sum(1 for e in events if e.get("event") == "state_received")
+    n_target = sum(1 for e in events if e.get("event") == "target_received")
+    closed = n_state > 0  # consumed real bus STATE feedback, not open-loop publishing
+    if not closed:
+        violations.append("bus-coupled run published control but never consumed STATE "
+                          "(no state_received) -- loop is open, not closed (§9)")
+
+    vehicle = {
+        "mode": "bus-coupled",
+        "control_published": len(ctrl),
+        "state_received": n_state,
+        "target_received": n_target,
+        "closed_loop": closed,
+        "deterministic": monotone and not bad,
+    }
+    return vehicle, violations
 
 
 # Contracted transport reliability for the VISS protocol (dds_transport.cpp uses
@@ -603,7 +693,20 @@ def evaluate_run(events: list[dict], path: str) -> dict:
     verify_pass = "verify_pass" in names
     fidelity = "L0" if (samples >= 1 and endpoints_matched >= 1) else "none"
 
-    if verdict == "PASSED":
+    # A bus-coupled run (Option 2, MORAI/AWSIM) closes its loop over the DDS bus, so its
+    # L0 evidence is NOT VISS samples/endpoints/verifier -- it is STATE consumed and control
+    # published (a live loop). The PASS gate below picks the right evidence per run shape.
+    bus_coupled = "control_published" in names
+
+    if verdict == "PASSED" and bus_coupled:
+        n_state = sum(1 for n in names if n == "state_received")
+        n_ctrl = sum(1 for n in names if n == "control_published")
+        if n_state < 1 or n_ctrl < 1:
+            violations.append(
+                "PASS without bus evidence: terminal PASS but the bus loop produced no "
+                "state_received/control_published (§11 L0 over the bus)"
+            )
+    elif verdict == "PASSED":
         if samples < 1:
             violations.append(
                 "PASS without evidence: terminal PASS but no sample_received "
@@ -663,6 +766,10 @@ def evaluate_run(events: list[dict], path: str) -> dict:
     plant, plant_violations = analyze_plant(events)
     violations.extend(plant_violations)
 
+    # --- bus-coupled plant coupling (Option 2, MORAI/AWSIM closed loop over the bus) --
+    vehicle, vehicle_violations = analyze_vehicle(events)
+    violations.extend(vehicle_violations)
+
     # --- target attestation (§11 L4, recorded not scored) -------------------
     attestation = analyze_attestation(events)
 
@@ -677,6 +784,15 @@ def evaluate_run(events: list[dict], path: str) -> dict:
         _bump("L1")
     if (plant.get("model", "none") != "none" and plant.get("mode") == "live"
             and plant.get("closed_loop") and plant.get("deterministic")):
+        _bump("L3")
+    # Bus-coupled (Option 2): a working loop (state in, control out) evidences the L0
+    # endpoint/sample base over the bus; L3 needs the loop CLOSED and the clock
+    # lockstep-deterministic (bus determinism, unlike in-process plant, requires lockstep).
+    if (vehicle.get("mode") == "bus-coupled"
+            and vehicle.get("control_published", 0) >= 1 and vehicle.get("state_received", 0) >= 1):
+        _bump("L0")
+    if (vehicle.get("mode") == "bus-coupled" and vehicle.get("closed_loop")
+            and vehicle.get("deterministic") and clock.get("deterministic")):
         _bump("L3")
 
     # --- identity (probe carries the vECU instance_id) ----------------------
@@ -708,6 +824,7 @@ def evaluate_run(events: list[dict], path: str) -> dict:
         "scenario": scenario,
         "protocol": protocol,
         "plant": plant,
+        "vehicle": vehicle,
         "attestation": attestation,
         "fidelity_evidenced": fidelity,
         "evidence": {
