@@ -177,7 +177,7 @@ S3까지 재현 가능한 trace를 *만들었으니*, S4는 conformance 툴이 �
 - **`analyze_staging` MIMO 대응**: 기존엔 전 채널 recv_seq를 전역 concat해 sorted+unique 검사 → 채널별 카운터(각 1..N)에 오탐. **채널별 그룹화**로 §7.3 불변식을 채널마다 판정(위반 메시지에 채널 라벨). 단일 스트림(VISS)은 채널 필드 없음 → 그룹 1개, 기존과 동일(backward-compatible).
 - **신규 `analyze_vehicle`**: 버스결합 폐루프 판정(`analyze_plant`의 버스 짝). `control_published`가 있으면 버스결합 런. 검사 = tick당 1 명령·tick_seq 순증, 명령 well-formed(유한 steering/accel·유효 gear), **폐루프**(state_received≥1 소비, open-loop 아님). 값-수준 재현성은 여기서 안 봄(lockstep+compare_golden 몫).
 - **fidelity 배선**: 버스결합 working loop(state in·control out) → L0. **폐루프 + lockstep 결정론** → L3(in-process `analyze_plant` L3와 대등 — 단 버스 결정론은 lockstep 필수라 `clock.deterministic` 요구). PASS 증거 게이트도 버스결합이면 VISS(sample/endpoint/verify_pass) 대신 **버스 증거(state_received·control_published)** 요구.
-- **판정 권위**: 버스 raw 런은 terminal이 없어 INCOMPLETE — 실배포는 Run Coordinator가 `run_pass`를 낸다(§5.2). 전용 bus verifier는 향후(현재는 coordinator terminal + 분석기 결정론이 판정).
+- **판정 권위**: 실배포는 Run Coordinator가 `run_pass`를 낸다(§5.2). coordinator 없는 raw 버스 런을 위해 **전용 bus verifier `sils_vecu_vehicle_verify`**(S4 후속) 추가 — VCU의 OUT 채널(`sils/ego/cmd`)을 구독해 명령을 검증(유한 actuation + 유효 gear)하고 `verify_pass`/`verify_fail`을 emit. 이는 이미 verifier producer로 스키마에 있고 `evaluate`가 `VERIFIER_TERMINAL`로 처리하므로 **스키마 변경 0으로 standalone terminal** 성립. VISS verifier의 버스 짝이며, 판정 자체(결정론·폐루프)는 `analyze_vehicle`가 하고 verifier는 "수신 가능 + well-formed"(버스 L0) 증거 + terminal만 제공.
 
 **검증(sandbox 자체 완료)**: 커밋된 golden 샘플 `samples/vehicle-lockstep.trace.jsonl`(lockstep·2 in-채널·staging·1-tick lag)가 `gate.py` **SCHEMA+FIDELITY PASS(fidelity L3, conformant)**. evaluate/gate 단위테스트 +11(analyze_vehicle 6 + MIMO staging 3 + 샘플 gate 1 + …), 전체 141 passed. **채널 인터리브 오탐 회귀 테스트** 포함(채널 A/B 각 1..N이 전역 비정렬이어도 위반 아님).
 

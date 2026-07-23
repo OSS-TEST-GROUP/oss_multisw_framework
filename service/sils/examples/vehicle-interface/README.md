@@ -59,6 +59,14 @@ bin/sils_control_source --count 40 &
 - `tick_grant`(master) → 각 참가자 `tick_complete` → `tick_barrier`. `control_published`는 sim_time 함수라 재현 가능.
 - 두 번 돌려 `grep control_published`가 동일하면 결정론 회복 확인. `evaluate.py`로 `analyze_lockstep` PASS 판정.
 
+### standalone 판정 (coordinator 없이)
+`sils_vecu_vehicle_verify`가 VCU의 OUT 채널(`sils/ego/cmd`)을 구독해 명령을 검증하고
+`verify_pass`/`verify_fail`을 낸다 → coordinator 없이도 `evaluate.py`가 terminal(PASSED)로 판정.
+```bash
+SILS_VEHICLE_VERIFY_MIN_SAMPLES=3 bin/sils_vecu_vehicle_verify   # sils/ego/cmd 구독, 유효 명령 카운트
+```
+- 유효 = 유한 steering/acceleration + gear 0~3. 결정론/폐루프 판단은 `evaluate.py`의 `analyze_vehicle` 몫(이 verifier는 "수신 가능 + well-formed" = 버스 L0 증거 + terminal).
+
 ## 성숙도
 S1(매핑 pass-through + 무-target safe-stop) + S2 입력 staging + S3 lockstep. 예정: 리포트(Steering/VelocityReport → Autoware),
 S3 시간기반 타임아웃·클램프·아비트, S4 lockstep/conformance. Autoware↔DDS 브리지·MORAI 어댑터는 외부.
