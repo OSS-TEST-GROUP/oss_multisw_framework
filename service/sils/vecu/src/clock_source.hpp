@@ -120,7 +120,7 @@ public:
           participant_id_(std::move(participant_id)),
           stop_(stop),
           participant_(participant),
-          listener_(&queue_) {
+          listener_(&queue_, &master_gone_) {
         using namespace eprosima::fastdds::dds;
 
         grant_type_ = TypeSupport(new TickGrantPubSubType());
@@ -149,7 +149,7 @@ public:
     }
 
     bool WaitForNextTick(TickInfo& out) override {
-        return queue_.pop(out, stop_);
+        return queue_.pop(out, stop_, &master_gone_);
     }
 
     void TickDone(const TickInfo& tick) override {
@@ -179,11 +179,14 @@ private:
             { std::lock_guard<std::mutex> l(m_); q_.push(t); }
             cv_.notify_one();
         }
-        bool pop(TickInfo& out, std::atomic<bool>* stop) {
+        // Wake a blocked pop() without enqueuing (used when the master disconnects).
+        void wake() { cv_.notify_all(); }
+        bool pop(TickInfo& out, std::atomic<bool>* stop, std::atomic<bool>* master_gone) {
             std::unique_lock<std::mutex> l(m_);
             while (true) {
                 if (!q_.empty()) { out = q_.front(); q_.pop(); return true; }
                 if (stop->load()) return false;
+                if (master_gone->load()) return false;  // ClockMaster finished -> end the run
                 cv_.wait_for(l, std::chrono::milliseconds(100));
             }
         }
@@ -195,7 +198,21 @@ private:
 
     class GrantListener : public eprosima::fastdds::dds::DataReaderListener {
     public:
-        explicit GrantListener(GrantQueue* q) : q_(q) {}
+        GrantListener(GrantQueue* q, std::atomic<bool>* master_gone)
+            : q_(q), master_gone_(master_gone) {}
+        void on_subscription_matched(
+            eprosima::fastdds::dds::DataReader* /*reader*/,
+            const eprosima::fastdds::dds::SubscriptionMatchedStatus& info) override {
+            if (info.current_count > 0) ever_matched_ = true;
+            // The ClockMaster's grant writer went away AFTER we had matched it -> the run's
+            // ticks are done. End cleanly (like a stop signal) so a lockstep participant
+            // self-terminates when the master finishes, instead of hanging forever on a grant
+            // that will never come. `ever_matched_` guards against pre-discovery 0-counts.
+            if (ever_matched_ && info.current_count == 0) {
+                master_gone_->store(true);
+                q_->wake();
+            }
+        }
         void on_data_available(eprosima::fastdds::dds::DataReader* reader) override {
             TickGrant g;
             eprosima::fastdds::dds::SampleInfo info;
@@ -211,6 +228,8 @@ private:
         }
     private:
         GrantQueue* q_;
+        std::atomic<bool>* master_gone_;
+        bool ever_matched_ = false;
     };
 
     std::string run_id_;
@@ -225,6 +244,9 @@ private:
     eprosima::fastdds::dds::Topic* complete_topic_ = nullptr;
     eprosima::fastdds::dds::DataReader* grant_reader_ = nullptr;
     eprosima::fastdds::dds::DataWriter* complete_writer_ = nullptr;
+    // Set by the grant listener when the ClockMaster's writer disconnects (run's ticks done).
+    // Declared before queue_/listener_ so its address is valid when listener_ captures it.
+    std::atomic<bool> master_gone_{false};
     GrantQueue queue_;
     GrantListener listener_;
 };
