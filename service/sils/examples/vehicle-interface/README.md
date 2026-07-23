@@ -48,17 +48,14 @@ bin/sils_control_source --count 40 --rate-ms 100                 # ControlTarget
 ClockMaster가 barrier를 돌리고, 세 참가자(VCU + 두 소스)가 sim 클럭에 맞춰 동기 전진 → 두 실행이 동일 trace.
 ```bash
 export VISS_DDS_DOMAIN_ID=0 SILS_RUN_ID=vi SILS_CLOCK_MODE=lockstep
-# ClockMaster: dt 100ms, wall-pace 100ms. --ticks를 소스 --count보다 크게 잡아
-# 프로브(1-tick lag)가 마지막 샘플까지 drain하게 한다(꼬리 손실 0).
-bin/sils_clock_master --participants 3 --ticks 44 --dt-ms 100 --tick-interval-ms 100 | tee /tmp/vi-clk.jsonl &
-# 세 lockstep 참가자. 소스는 첫 --count grant만 publish하고 나머지 grant도 complete(참가자는
-# 마스터가 끝낼 때까지 barrier를 지킨다). clock_master 종료 후 Ctrl-C로 정리.
+# 대칭 규칙: clock_master --ticks == 소스 --count (예: 둘 다 40). 소스는 --count grant를
+# complete한 뒤 self-terminate하고(정렬 어긋나면 tick_timeout), 프로브는 종료 시 마지막
+# 샘플을 drain해 staging 꼬리를 0으로 만든다. 프로브만 Ctrl-C로 정리.
+bin/sils_clock_master --participants 3 --ticks 40 --dt-ms 100 --tick-interval-ms 100 | tee /tmp/vi-clk.jsonl &
 SILS_CHANNELMAP=service/sils/examples/vehicle-interface/channelmap/vehicle-interface.yaml \
 SILS_STAGE_INPUT=1  bin/vehicle_interface | tee /tmp/vi-lockstep.jsonl &
-# --ticks == clock_master --ticks (그만큼 grant를 complete하고 self-terminate),
-# --count < --ticks (publish는 40개, 나머지 empty tick이 프로브 drain을 보장 → 꼬리 0)
-bin/sils_ego_source     --count 40 --ticks 44 &
-bin/sils_control_source --count 40 --ticks 44 &
+bin/sils_ego_source     --count 40 &
+bin/sils_control_source --count 40 &
 ```
 - `tick_grant`(master) → 각 참가자 `tick_complete` → `tick_barrier`. `control_published`는 sim_time 함수라 재현 가능.
 - 두 번 돌려 `grep control_published`가 동일하면 결정론 회복 확인. `evaluate.py`로 `analyze_lockstep` PASS 판정.

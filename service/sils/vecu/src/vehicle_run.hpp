@@ -356,6 +356,30 @@ inline int RunVehicleProbe(const ProbeConfig& cfg, std::unique_ptr<IVehicleBehav
         last_seq = tick.seq;
     }
 
+    // Shutdown drain (§7.3 completeness): under 1-tick-lag staging, inputs that arrived
+    // during the final tick(s) were never frozen by a subsequent tick -- a bounded run
+    // would otherwise report them as unstaged/lost. Freeze the remainder here, in reception
+    // order (the invariant holds), so a run with clock ticks == source sample count leaves
+    // nothing unstaged. Marked drain=true: staged for accounting, no behavior ran on them.
+    if (stage_input) {
+        auto drain = [&](auto& inboxes, const std::vector<std::string>& names, const char* kind) {
+            for (std::size_t i = 0; i < inboxes.size(); ++i) {
+                auto frozen = inboxes[i]->FreezeTick();
+                if (frozen.empty()) continue;
+                std::vector<uint64_t> rs;
+                rs.reserve(frozen.size());
+                for (const auto& f : frozen) rs.push_back(f.recv_seq);
+                VehicleTrace(run_id, id, "tick_input_frozen",
+                             "\"tick_seq\":" + std::to_string(last_seq) + ",\"channel\":\"" +
+                                 names[i] + "\",\"kind\":\"" + kind + "\",\"recv_seqs\":" +
+                                 VehicleRecvSeqsJson(rs) + ",\"count\":" +
+                                 std::to_string(rs.size()) + ",\"drain\":true");
+            }
+        };
+        drain(state_inboxes, state_inbox_names, "ego-state");
+        drain(target_inboxes, target_inbox_names, "control-target");
+    }
+
     VehicleTrace(run_id, id, "run_stopping", "\"last_seq\":" + std::to_string(last_seq));
     participant->delete_contained_entities();
     clock.reset();
