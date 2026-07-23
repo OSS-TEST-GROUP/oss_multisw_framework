@@ -121,8 +121,9 @@ inline int RunVehicleProbe(const ProbeConfig& cfg, std::unique_ptr<IVehicleBehav
     Subscriber* sub = participant->create_subscriber(SUBSCRIBER_QOS_DEFAULT, nullptr);
     Publisher* pub = participant->create_publisher(PUBLISHER_QOS_DEFAULT, nullptr);
 
-    std::vector<DataReader*> state_readers;
-    std::vector<DataWriter*> control_writers;
+    std::vector<DataReader*> state_readers;   // in, type canonical/ego-state
+    std::vector<DataReader*> target_readers;  // in, type canonical/control-target (Profile B)
+    std::vector<DataWriter*> control_writers; // out, VehicleControl
     VehicleTrace(run_id, id, "channelmap_start",
                  "\"file\":\"" + cfg.channelmap_file + "\",\"channels\":" +
                      std::to_string(cmap.size()) + ",\"in\":" +
@@ -130,13 +131,18 @@ inline int RunVehicleProbe(const ProbeConfig& cfg, std::unique_ptr<IVehicleBehav
                      std::to_string(cmap.outputs().size()));
 
     for (const Channel& ch : cmap.channels()) {
-        const std::string& type = ch.dir == ChannelDir::In ? codec.state_type_name()
-                                                            : codec.control_type_name();
+        // Dispatch `in` channels by declared type: control-target (Autoware) vs ego-state
+        // (sim). Anything else defaults to ego-state. `out` is always VehicleControl.
+        const bool is_target = ch.type == "canonical/control-target";
+        const char* type = ch.dir != ChannelDir::In ? codec.control_type_name()
+                           : is_target             ? codec.control_target_type_name()
+                                                   : codec.state_type_name();
         Topic* t = participant->create_topic(ch.topic, type, TOPIC_QOS_DEFAULT);
         if (ch.dir == ChannelDir::In) {
             DataReaderQos q = DATAREADER_QOS_DEFAULT;
             apply_qos_r(q);
-            state_readers.push_back(sub->create_datareader(t, q, nullptr));
+            DataReader* r = sub->create_datareader(t, q, nullptr);
+            (is_target ? target_readers : state_readers).push_back(r);
         } else {
             DataWriterQos q = DATAWRITER_QOS_DEFAULT;
             apply_qos_w(q);
@@ -155,6 +161,8 @@ inline int RunVehicleProbe(const ProbeConfig& cfg, std::unique_ptr<IVehicleBehav
 
     EgoStateSample latest;   // last state seen from any in-channel (§9 feedback)
     bool have_state = false;
+    ControlTargetSample latest_target;   // last Autoware target (Profile B)
+    bool have_target = false;
     TickInfo tick;
     uint64_t last_seq = 0;
     while (clock->WaitForNextTick(tick)) {
@@ -164,6 +172,12 @@ inline int RunVehicleProbe(const ProbeConfig& cfg, std::unique_ptr<IVehicleBehav
                 have_state = true;
             }
         }
+        for (DataReader* r : target_readers) {
+            for (const ControlTargetSample& t2 : codec.TakeControlTarget(r)) {
+                latest_target = t2;
+                have_target = true;
+            }
+        }
         if (have_state) {
             std::ostringstream ex;
             ex << "\"tick_seq\":" << tick.seq << ",\"src_seq\":" << latest.seq
@@ -171,8 +185,17 @@ inline int RunVehicleProbe(const ProbeConfig& cfg, std::unique_ptr<IVehicleBehav
                << ",\"steering\":" << latest.steering_angle;
             VehicleTrace(run_id, id, "state_received", ex.str());
         }
+        if (have_target) {
+            std::ostringstream ex;
+            ex << "\"tick_seq\":" << tick.seq << ",\"src_seq\":" << latest_target.seq
+               << ",\"steering\":" << latest_target.steering_angle
+               << ",\"acceleration\":" << latest_target.acceleration
+               << ",\"gear\":" << static_cast<int>(latest_target.gear);
+            VehicleTrace(run_id, id, "target_received", ex.str());
+        }
 
-        VehicleBehaviorContext bctx{tick.seq, tick.sim_time_ns, latest, have_state};
+        VehicleBehaviorContext bctx{tick.seq, tick.sim_time_ns, latest, have_state,
+                                    latest_target, have_target};
         VehicleControlSample c = behavior->OnTick(bctx);
         c.seq = tick.seq;                 // run loop is the single source of seq/stamp
         c.stamp_ns = tick.sim_time_ns;

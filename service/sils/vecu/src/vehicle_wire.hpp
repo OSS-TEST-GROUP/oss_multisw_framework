@@ -30,9 +30,10 @@
 #include <fastdds/dds/subscriber/SampleInfo.hpp>
 #include <fastdds/dds/topic/TypeSupport.hpp>
 
+#include "ControlTargetPubSubTypes.hpp"
 #include "EgoStatePubSubTypes.hpp"
 #include "VehicleControlPubSubTypes.hpp"
-#include "vehicle_sample.hpp"  // EgoStateSample / VehicleControlSample (DDS-free PODs)
+#include "vehicle_sample.hpp"  // EgoStateSample / VehicleControlSample / ControlTargetSample (DDS-free)
 
 namespace sils {
 
@@ -53,11 +54,16 @@ public:
         control_type_ = eprosima::fastdds::dds::TypeSupport(new VehicleControlPubSubType());
         control_type_.register_type(participant);
         control_type_name_ = control_type_.get_type_name();
+
+        target_type_ = eprosima::fastdds::dds::TypeSupport(new ControlTargetPubSubType());
+        target_type_.register_type(participant);
+        target_type_name_ = target_type_.get_type_name();
     }
 
     // Registered type names, for create_topic on the resolved channel topics.
     const char* state_type_name() const { return state_type_name_.c_str(); }
     const char* control_type_name() const { return control_type_name_.c_str(); }
+    const char* control_target_type_name() const { return target_type_name_.c_str(); }
 
     // READ path (`in` channel): take all available EgoState samples and decode each valid
     // one into an EgoStateSample POD. Same take-loop mechanics as viss_wire's Take.
@@ -83,6 +89,25 @@ public:
         return out;
     }
 
+    // READ path (`in` channel, Profile B): take ControlTarget samples (Autoware target via
+    // the bridge) and decode each valid one into a ControlTargetSample POD.
+    std::vector<ControlTargetSample> TakeControlTarget(eprosima::fastdds::dds::DataReader* reader) {
+        std::vector<ControlTargetSample> out;
+        ControlTarget s;
+        eprosima::fastdds::dds::SampleInfo info;
+        while (reader->take_next_sample(&s, &info) == eprosima::fastdds::dds::RETCODE_OK) {
+            if (!info.valid_data) continue;
+            ControlTargetSample t;
+            t.seq = s.seq();
+            t.stamp_ns = s.stamp_ns();
+            t.steering_angle = s.steering_angle();
+            t.acceleration = s.acceleration();
+            t.gear = s.gear();
+            out.push_back(t);
+        }
+        return out;
+    }
+
     // WRITE path (`out` channel): encode a VehicleControlSample and write it. seq/stamp are
     // the caller's (tick) values; run_id is stamped from construction.
     void PublishControl(eprosima::fastdds::dds::DataWriter* writer,
@@ -101,8 +126,10 @@ private:
     std::string run_id_;
     eprosima::fastdds::dds::TypeSupport state_type_;
     eprosima::fastdds::dds::TypeSupport control_type_;
+    eprosima::fastdds::dds::TypeSupport target_type_;
     std::string state_type_name_;
     std::string control_type_name_;
+    std::string target_type_name_;
 };
 
 }  // namespace sils
