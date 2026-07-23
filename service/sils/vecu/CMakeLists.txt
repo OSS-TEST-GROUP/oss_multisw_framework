@@ -191,10 +191,17 @@ target_link_libraries(sils_ego_source PRIVATE sils_vecu sils_vehicle_idl)
 add_executable(sils_control_source src/sils_control_source.cc)
 target_link_libraries(sils_control_source PRIVATE sils_vecu sils_vehicle_idl)
 
+# Plant-coupling VehicleControl verifier -- independent subscriber on the vECU's OUT channel
+# (sils/ego/cmd) that emits verify_pass/verify_fail, giving a bus-coupled run a standalone
+# terminal (evaluate.py VERIFIER_TERMINAL) with no coordinator. Bus counterpart of
+# sils_vecu_viss_verify; links sils_vehicle_idl for VehicleControl.
+add_executable(sils_vecu_vehicle_verify src/sils_vehicle_verify_main.cc)
+target_link_libraries(sils_vecu_vehicle_verify PRIVATE sils_vecu sils_vehicle_idl)
+
 # ── Runtime install (always) ─────────────────────────────────────────────────
 install(TARGETS sils_vecu_viss_probe sils_vecu_viss_verify sils_vecu_viss_responder
                 sils_clock_master sils_input_source sils_vecu_vehicle_probe sils_ego_source
-                sils_control_source
+                sils_control_source sils_vecu_vehicle_verify
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 # ── SDK install/export for find_package(sils_vecu) (T1-B Part 2) ─────────────
