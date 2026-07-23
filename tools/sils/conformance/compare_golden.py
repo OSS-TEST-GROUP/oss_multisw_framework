@@ -68,6 +68,13 @@ DEFAULT_RULES = {
         # is compared, so a fault-injection run is itself golden-reproducible -- the same
         # schedule must inject the same fault at the same tick every run.
         "scenario_fault",
+        # bus-coupled control output (Option 2, §9 over the DDS bus): the vECU's per-tick
+        # command (steering_angle/acceleration/gear) is compared, so a plant-coupling
+        # regression surfaces as a value diff -- the golden counterpart of plant_step for
+        # the bus loop. Under lockstep (S3) these are bit-exact by construction (a pure
+        # function of sim_time), so the default 0 tolerance holds; loosen per-field in the
+        # rules file if a run couples to a non-deterministic external sim.
+        "control_published",
     ],
     "key_fields": ["event"],
     # Per-run identity and transport noise never participate in value comparison;

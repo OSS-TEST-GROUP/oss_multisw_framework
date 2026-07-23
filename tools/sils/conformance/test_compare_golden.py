@@ -301,6 +301,46 @@ def test_main_exit_codes():
                         "--rules", str(reject_rules), "--quiet"]) == cg.EXIT_REJECT
 
 
+def _veh(steer=0.05, accel=1.0, gear=3):
+    """A minimal lockstep bus-coupled trace with two control_published ticks."""
+    return [
+        {"event": "clock_start", "mode": "lockstep", "wall_time_ms": 1000, "run_id": "G"},
+        {"event": "control_published", "instance_id": "vi", "tick_seq": 1, "behavior": "vehicle-interface",
+         "steering_angle": 0.0, "acceleration": -2.0, "gear": 3, "wall_time_ms": 1010, "run_id": "G"},
+        {"event": "control_published", "instance_id": "vi", "tick_seq": 2, "behavior": "vehicle-interface",
+         "steering_angle": steer, "acceleration": accel, "gear": gear, "wall_time_ms": 1020, "run_id": "G"},
+    ]
+
+
+def test_control_published_identical_is_match():
+    g, c = _veh(), _veh()
+    for e in c:
+        e["run_id"] = "C"
+    r = cg.compare(g, c, rules(input_mode="local-staged"))
+    assert r["verdict"] == "MATCH", r
+
+
+def test_control_published_value_diff_regresses():
+    # A steering regression (0.05 -> 0.06) must surface under the default 0 tolerance.
+    g = _veh()
+    c = _veh(steer=0.06)
+    for e in c:
+        e["run_id"] = "C"
+    r = cg.compare(g, c, rules(input_mode="local-staged"))
+    assert r["verdict"] == "REGRESSION", r
+    assert any(d["field"] == "steering_angle" and d["kind"] == "numeric" for d in r["field_diffs"]), r["field_diffs"]
+
+
+def test_control_published_gear_diff_regresses():
+    # gear is exact (a value diff), not tolerance-compared.
+    g = _veh()
+    c = _veh(gear=2)
+    for e in c:
+        e["run_id"] = "C"
+    r = cg.compare(g, c, rules(input_mode="local-staged"))
+    assert any(d["field"] == "gear" for d in r["field_diffs"]), r["field_diffs"]
+
+
 def main() -> int:
     tests = [v for k, v in globals().items() if k.startswith("test_") and callable(v)]
     failed = 0
