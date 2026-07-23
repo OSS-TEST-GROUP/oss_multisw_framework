@@ -26,6 +26,7 @@ SDK는 포트(`IVehicleBehavior`)와 러너(`RunVehicleProbe`)·코덱·채널�
 | `SILS_CTRL_KP` | 비례 게인 (SDK 공통 필드 재사용) | 0.8 |
 | `STEER_SETPOINT` | 목표 조향각, rad (이 ECU 고유 knob, `GetEnvDoubleOr`로 직접) | 0.1 |
 | `SILS_STAGE_INPUT` | `1`이면 tick 경계 입력 staging(§7.3 결정론, SDK 공통 S2). off=free-run 폴링 | 0 |
+| `SILS_CLOCK_MODE` | `wall` 또는 `lockstep`(S3 — ClockMaster barrier, 소스도 lockstep이면 값 재현) | wall |
 | `VISS_DDS_DOMAIN_ID` | DDS 도메인 (상대와 동일) | 0 |
 
 ## 실행 (MORAI 없이 왕복 확인)
