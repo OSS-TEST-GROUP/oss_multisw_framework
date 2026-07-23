@@ -55,8 +55,10 @@ bin/sils_clock_master --participants 3 --ticks 44 --dt-ms 100 --tick-interval-ms
 # 마스터가 끝낼 때까지 barrier를 지킨다). clock_master 종료 후 Ctrl-C로 정리.
 SILS_CHANNELMAP=service/sils/examples/vehicle-interface/channelmap/vehicle-interface.yaml \
 SILS_STAGE_INPUT=1  bin/vehicle_interface | tee /tmp/vi-lockstep.jsonl &
-bin/sils_ego_source     --count 40 &
-bin/sils_control_source --count 40 &
+# --ticks == clock_master --ticks (그만큼 grant를 complete하고 self-terminate),
+# --count < --ticks (publish는 40개, 나머지 empty tick이 프로브 drain을 보장 → 꼬리 0)
+bin/sils_ego_source     --count 40 --ticks 44 &
+bin/sils_control_source --count 40 --ticks 44 &
 ```
 - `tick_grant`(master) → 각 참가자 `tick_complete` → `tick_barrier`. `control_published`는 sim_time 함수라 재현 가능.
 - 두 번 돌려 `grep control_published`가 동일하면 결정론 회복 확인. `evaluate.py`로 `analyze_lockstep` PASS 판정.

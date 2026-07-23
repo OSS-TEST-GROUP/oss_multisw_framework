@@ -72,6 +72,11 @@ int main(int argc, char** argv) {
     const std::string topic_name =
         ArgStr(argc, argv, "--topic", GetEnvOr("SILS_EGO_STATE_TOPIC", "sils/ego/state"));
     const int count = ArgInt(argc, argv, "--count", 20);
+    // Lockstep only: how many grants to PARTICIPATE in (complete) before self-terminating.
+    // Set == clock_master --ticks so the source leaves exactly when the master stops (no
+    // barrier timeout); keep it > --count so the probe (1-tick lag) drains the last sample
+    // (no staging tail). Default = count (stops at count; may leave a 1-sample tail).
+    const int part_ticks = ArgInt(argc, argv, "--ticks", count);
     const int rate_ms = ArgInt(argc, argv, "--rate-ms", 100);
     const int startup_ms = ArgInt(argc, argv, "--startup-ms", 1000);
     const double accel = 0.5;  // m/s^2 nominal ramp so vx (and position) visibly evolve
@@ -154,6 +159,7 @@ int main(int argc, char** argv) {
                 ++sent;
             }
             clock->TickDone(tick);  // TickComplete(seq, "ego-source") + tick_complete trace
+            if (part_ticks > 0 && tick.seq >= static_cast<uint64_t>(part_ticks)) break;  // self-terminate
         }
     } else {
         std::this_thread::sleep_for(std::chrono::milliseconds(startup_ms));

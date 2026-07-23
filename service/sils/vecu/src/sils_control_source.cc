@@ -59,6 +59,9 @@ int main(int argc, char** argv) {
     const std::string topic_name =
         ArgStr(argc, argv, "--topic", GetEnvOr("SILS_CONTROL_TARGET_TOPIC", "autoware/control_target"));
     const int count = ArgInt(argc, argv, "--count", 40);
+    // Lockstep only: grants to PARTICIPATE in before self-terminating (== clock_master
+    // --ticks; keep > --count so the probe drains the last sample). See sils_ego_source.cc.
+    const int part_ticks = ArgInt(argc, argv, "--ticks", count);
     const int rate_ms = ArgInt(argc, argv, "--rate-ms", 100);
     const int startup_ms = ArgInt(argc, argv, "--startup-ms", 1000);
     // Nominal target: mild steering + gentle accel (stand-in for Autoware output).
@@ -128,6 +131,7 @@ int main(int argc, char** argv) {
                 ++sent;
             }
             clock->TickDone(tick);  // TickComplete(seq, "control-source") + tick_complete trace
+            if (part_ticks > 0 && tick.seq >= static_cast<uint64_t>(part_ticks)) break;  // self-terminate
         }
     } else {
         std::this_thread::sleep_for(std::chrono::milliseconds(startup_ms));
