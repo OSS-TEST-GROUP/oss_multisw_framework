@@ -27,6 +27,7 @@ VCU ──통합 VehicleControl──▶ sils/ego/cmd ──▶ [MORAI 어댑터
 |---|---|---|
 | `SILS_CHANNELMAP` | 채널맵 경로 | — (필수) |
 | `VI_SAFE_DECEL` | 무-target 시 safe-stop 감속도, m/s² (고유 knob) | 2.0 |
+| `SILS_STAGE_INPUT` | `1`이면 tick 경계 입력 staging(§7.3, SDK 공통 S2) — 두 in-채널(target·state) 각각 채널별로 freeze. off=free-run 폴링 | 0 |
 | `VISS_DDS_DOMAIN_ID` | DDS 도메인 | 0 |
 
 ## 실행 (Autoware/MORAI 없이 스모크)

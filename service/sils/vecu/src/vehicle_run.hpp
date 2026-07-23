@@ -8,9 +8,12 @@
 // control out). A developer's plant-coupled ECU builds its behavior and hands it in --
 // same shape as RunProbe taking IBehavior. docs/sils-morai-plant-adapter-design.md §5.
 //
-// S1 scope: wall clock (free-run), polling take each tick (no staging -- S2), no lockstep
-// (S3). Header-only (inline) like run_loop.hpp so it compiles into the single executable
-// that includes it.
+// S1 scope: wall clock (free-run), polling take each tick, no lockstep (S3). S2 adds
+// OPTIONAL per-tick input staging (SILS_STAGE_INPUT=1, §7.3): the in-channels then feed
+// typed inboxes via listeners and each tick freezes its pinned input set, so which samples
+// a tick consumes is deterministic even though arrival timing isn't. Off = S1 polling,
+// preserved exactly. Header-only (inline) like run_loop.hpp so it compiles into the single
+// executable that includes it.
 
 #include <atomic>
 #include <chrono>
@@ -35,6 +38,7 @@
 #include "clock_source.hpp"
 #include "config.hpp"
 #include "vehicle_behavior.hpp"
+#include "vehicle_staging.hpp"
 #include "vehicle_wire.hpp"
 
 namespace sils {
@@ -55,6 +59,67 @@ inline void VehicleTrace(const std::string& run_id, const std::string& instance_
               << "\",\"event\":\"" << event << "\",\"wall_time_ms\":" << VehicleWallMs()
               << (extra.empty() ? "" : ("," + extra)) << "}" << std::endl;
 }
+
+// Render a reception-sequence list as a JSON array for the tick_input_frozen trace (§7.3);
+// the local counterpart of run_loop.hpp's RecvSeqsJson (kept separate so this header pulls
+// in none of the VISS loop).
+inline std::string VehicleRecvSeqsJson(const std::vector<uint64_t>& seqs) {
+    std::ostringstream os;
+    os << "[";
+    for (std::size_t i = 0; i < seqs.size(); ++i) {
+        if (i) os << ",";
+        os << seqs[i];
+    }
+    os << "]";
+    return os.str();
+}
+
+// Stages EgoState arrivals into a typed inbox (§7.3). Runs on the reader thread: decodes
+// each arrival via the codec, assigns a reception sequence, and traces input_received. The
+// typed, per-channel counterpart of run_loop.hpp's InputStagingListener (which counts only).
+class StateStagingListener : public eprosima::fastdds::dds::DataReaderListener {
+public:
+    StateStagingListener(VehicleWireCodec* codec, VehicleTickInbox<EgoStateSample>* inbox,
+                         std::string run_id, std::string instance_id, std::string channel)
+        : codec_(codec), inbox_(inbox), run_id_(std::move(run_id)),
+          instance_id_(std::move(instance_id)), channel_(std::move(channel)) {}
+    void on_data_available(eprosima::fastdds::dds::DataReader* reader) override {
+        for (const EgoStateSample& s : codec_->TakeState(reader)) {
+            uint64_t rs = inbox_->OnSample(s);
+            VehicleTrace(run_id_, instance_id_, "input_received",
+                         "\"recv_seq\":" + std::to_string(rs) + ",\"channel\":\"" + channel_ +
+                             "\",\"kind\":\"ego-state\",\"src_seq\":" + std::to_string(s.seq));
+        }
+    }
+
+private:
+    VehicleWireCodec* codec_;
+    VehicleTickInbox<EgoStateSample>* inbox_;
+    std::string run_id_, instance_id_, channel_;
+};
+
+// Stages ControlTarget arrivals (Profile B, Autoware target via the bridge) into a typed
+// inbox. Same contract as StateStagingListener, different decode + kind.
+class TargetStagingListener : public eprosima::fastdds::dds::DataReaderListener {
+public:
+    TargetStagingListener(VehicleWireCodec* codec, VehicleTickInbox<ControlTargetSample>* inbox,
+                          std::string run_id, std::string instance_id, std::string channel)
+        : codec_(codec), inbox_(inbox), run_id_(std::move(run_id)),
+          instance_id_(std::move(instance_id)), channel_(std::move(channel)) {}
+    void on_data_available(eprosima::fastdds::dds::DataReader* reader) override {
+        for (const ControlTargetSample& t : codec_->TakeControlTarget(reader)) {
+            uint64_t rs = inbox_->OnSample(t);
+            VehicleTrace(run_id_, instance_id_, "input_received",
+                         "\"recv_seq\":" + std::to_string(rs) + ",\"channel\":\"" + channel_ +
+                             "\",\"kind\":\"control-target\",\"src_seq\":" + std::to_string(t.seq));
+        }
+    }
+
+private:
+    VehicleWireCodec* codec_;
+    VehicleTickInbox<ControlTargetSample>* inbox_;
+    std::string run_id_, instance_id_, channel_;
+};
 
 // Run one plant-coupled probe to completion. `behavior` is required (the injected control
 // port). Returns a process exit code (0 ok, 1 DDS setup, 2 config/channel-map fail-fast).
@@ -88,7 +153,9 @@ inline int RunVehicleProbe(const ProbeConfig& cfg, std::unique_ptr<IVehicleBehav
     }
 
     VehicleTrace(run_id, id, "run_start",
-                 "\"domain_id\":" + std::to_string(cfg.domain_id) + ",\"mode\":\"vehicle-coupling\"");
+                 "\"domain_id\":" + std::to_string(cfg.domain_id) +
+                     ",\"mode\":\"vehicle-coupling\",\"stage_input\":" +
+                     (cfg.stage_input ? "true" : "false"));
 
     DomainParticipantQos pqos;
     pqos.name("sils_vecu_vehicle_probe:" + id);
@@ -121,9 +188,22 @@ inline int RunVehicleProbe(const ProbeConfig& cfg, std::unique_ptr<IVehicleBehav
     Subscriber* sub = participant->create_subscriber(SUBSCRIBER_QOS_DEFAULT, nullptr);
     Publisher* pub = participant->create_publisher(PUBLISHER_QOS_DEFAULT, nullptr);
 
-    std::vector<DataReader*> state_readers;   // in, type canonical/ego-state
+    std::vector<DataReader*> state_readers;   // in, type canonical/ego-state (polled, non-staging)
     std::vector<DataReader*> target_readers;  // in, type canonical/control-target (Profile B)
     std::vector<DataWriter*> control_writers; // out, VehicleControl
+
+    // S2 staging (§7.3): typed per-tick inboxes + listeners, one per in-channel. Populated
+    // only when cfg.stage_input -- the readers then feed listeners (arrival-time recv_seq)
+    // instead of being polled in-tick. unique_ptr for stable addresses (the listener holds
+    // &inbox, the reader holds &listener) and because VehicleTickInbox holds a mutex.
+    const bool stage_input = cfg.stage_input;
+    std::vector<std::unique_ptr<VehicleTickInbox<EgoStateSample>>> state_inboxes;
+    std::vector<std::string> state_inbox_names;
+    std::vector<std::unique_ptr<StateStagingListener>> state_listeners;
+    std::vector<std::unique_ptr<VehicleTickInbox<ControlTargetSample>>> target_inboxes;
+    std::vector<std::string> target_inbox_names;
+    std::vector<std::unique_ptr<TargetStagingListener>> target_listeners;
+
     VehicleTrace(run_id, id, "channelmap_start",
                  "\"file\":\"" + cfg.channelmap_file + "\",\"channels\":" +
                      std::to_string(cmap.size()) + ",\"in\":" +
@@ -141,8 +221,26 @@ inline int RunVehicleProbe(const ProbeConfig& cfg, std::unique_ptr<IVehicleBehav
         if (ch.dir == ChannelDir::In) {
             DataReaderQos q = DATAREADER_QOS_DEFAULT;
             apply_qos_r(q);
-            DataReader* r = sub->create_datareader(t, q, nullptr);
-            (is_target ? target_readers : state_readers).push_back(r);
+            if (stage_input) {
+                // Attach a staging listener so recv_seq is assigned at true arrival time;
+                // the tick loop freezes the inbox at the boundary (no in-tick polling).
+                if (is_target) {
+                    target_inboxes.push_back(std::make_unique<VehicleTickInbox<ControlTargetSample>>());
+                    target_inbox_names.push_back(ch.name);
+                    target_listeners.push_back(std::make_unique<TargetStagingListener>(
+                        &codec, target_inboxes.back().get(), run_id, id, ch.name));
+                    sub->create_datareader(t, q, target_listeners.back().get());
+                } else {
+                    state_inboxes.push_back(std::make_unique<VehicleTickInbox<EgoStateSample>>());
+                    state_inbox_names.push_back(ch.name);
+                    state_listeners.push_back(std::make_unique<StateStagingListener>(
+                        &codec, state_inboxes.back().get(), run_id, id, ch.name));
+                    sub->create_datareader(t, q, state_listeners.back().get());
+                }
+            } else {
+                DataReader* r = sub->create_datareader(t, q, nullptr);
+                (is_target ? target_readers : state_readers).push_back(r);
+            }
         } else {
             DataWriterQos q = DATAWRITER_QOS_DEFAULT;
             apply_qos_w(q);
@@ -157,6 +255,12 @@ inline int RunVehicleProbe(const ProbeConfig& cfg, std::unique_ptr<IVehicleBehav
         MakeClockSource(cfg.clock_mode, cfg.period_ms, &g_vehicle_stop, participant, run_id, id);
     VehicleTrace(run_id, id, "clock_start", "\"mode\":\"" + std::string(clock->mode()) + "\"");
     VehicleTrace(run_id, id, "behavior_start", "\"name\":\"" + std::string(behavior->name()) + "\"");
+    if (stage_input) {
+        VehicleTrace(run_id, id, "input_staging_on",
+                     "\"late_sample_policy\":\"" + cfg.late_sample_policy +
+                         "\",\"state_channels\":" + std::to_string(state_inboxes.size()) +
+                         ",\"target_channels\":" + std::to_string(target_inboxes.size()));
+    }
     VehicleTrace(run_id, id, "ready");
 
     EgoStateSample latest;   // last state seen from any in-channel (§9 feedback)
@@ -166,16 +270,50 @@ inline int RunVehicleProbe(const ProbeConfig& cfg, std::unique_ptr<IVehicleBehav
     TickInfo tick;
     uint64_t last_seq = 0;
     while (clock->WaitForNextTick(tick)) {
-        for (DataReader* r : state_readers) {
-            for (const EgoStateSample& s : codec.TakeState(r)) {
-                latest = s;
-                have_state = true;
+        if (stage_input) {
+            // §7.3: freeze each in-channel's pending arrivals as this tick's input set. The
+            // newest frozen sample is the value the behavior sees (ZOH: held across ticks
+            // with no arrival). tick_input_frozen records which recv_seqs were pinned here.
+            for (std::size_t i = 0; i < state_inboxes.size(); ++i) {
+                auto frozen = state_inboxes[i]->FreezeTick();
+                std::vector<uint64_t> rs;
+                rs.reserve(frozen.size());
+                for (const auto& f : frozen) rs.push_back(f.recv_seq);
+                VehicleTrace(run_id, id, "tick_input_frozen",
+                             "\"tick_seq\":" + std::to_string(tick.seq) + ",\"channel\":\"" +
+                                 state_inbox_names[i] + "\",\"kind\":\"ego-state\",\"recv_seqs\":" +
+                                 VehicleRecvSeqsJson(rs) + ",\"count\":" + std::to_string(rs.size()));
+                if (!frozen.empty()) {
+                    latest = frozen.back().sample;
+                    have_state = true;
+                }
             }
-        }
-        for (DataReader* r : target_readers) {
-            for (const ControlTargetSample& t2 : codec.TakeControlTarget(r)) {
-                latest_target = t2;
-                have_target = true;
+            for (std::size_t i = 0; i < target_inboxes.size(); ++i) {
+                auto frozen = target_inboxes[i]->FreezeTick();
+                std::vector<uint64_t> rs;
+                rs.reserve(frozen.size());
+                for (const auto& f : frozen) rs.push_back(f.recv_seq);
+                VehicleTrace(run_id, id, "tick_input_frozen",
+                             "\"tick_seq\":" + std::to_string(tick.seq) + ",\"channel\":\"" +
+                                 target_inbox_names[i] + "\",\"kind\":\"control-target\",\"recv_seqs\":" +
+                                 VehicleRecvSeqsJson(rs) + ",\"count\":" + std::to_string(rs.size()));
+                if (!frozen.empty()) {
+                    latest_target = frozen.back().sample;
+                    have_target = true;
+                }
+            }
+        } else {
+            for (DataReader* r : state_readers) {
+                for (const EgoStateSample& s : codec.TakeState(r)) {
+                    latest = s;
+                    have_state = true;
+                }
+            }
+            for (DataReader* r : target_readers) {
+                for (const ControlTargetSample& t2 : codec.TakeControlTarget(r)) {
+                    latest_target = t2;
+                    have_target = true;
+                }
             }
         }
         if (have_state) {
