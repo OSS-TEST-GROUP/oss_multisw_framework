@@ -144,6 +144,7 @@ Option 2의 채널맵+lockstep을 **새 포트 `IExternalPlant`** 뒤에 두고,
 - **S2 (MIMO staged 읽기)** — 다중 타입 토픽 tick 경계 freeze + `BehaviorContext` 다중 채널 접근자. 다중 엔드포인트 작업 흡수. ✅ **완료** — 아래 §5.1.
 - **S3 (lockstep)** — MORAI/AWSIM 스텝 제어 연동, `TickComplete` 확장. 결정론 회복. ✅ **완료** — 아래 §5.2.
 - **S4 (conformance)** — 버스 결합 폐루프용 새 판정(왕복 지연·lockstep 정합·채널 완전성). `analyze_plant`와 별도 관점. ✅ **완료** — 아래 §5.3.
+- **S5 (결함 주입 / negative path)** — 인바운드 STATE를 결정론 tick 스케줄로 교란(drop/nan/oor)해 컨트롤러 **안전 저하** 검증. `IScenario`(아웃바운드 VISS)의 버스 짝. ✅ **완료** — 아래 §5.4.
 
 ### 5.1 S2 구현 — tick 경계 입력 staging (§7.3 계약 재사용)
 
@@ -181,6 +182,16 @@ S3까지 재현 가능한 trace를 *만들었으니*, S4는 conformance 툴이 �
 - **판정 권위**: 실배포는 Run Coordinator가 `run_pass`를 낸다(§5.2). coordinator 없는 raw 버스 런을 위해 **전용 bus verifier `sils_vecu_vehicle_verify`**(S4 후속) 추가 — VCU의 OUT 채널(`sils/ego/cmd`)을 구독해 명령을 검증(유한 actuation + 유효 gear)하고 `verify_pass`/`verify_fail`을 emit. 이는 이미 verifier producer로 스키마에 있고 `evaluate`가 `VERIFIER_TERMINAL`로 처리하므로 **스키마 변경 0으로 standalone terminal** 성립. VISS verifier의 버스 짝이며, 판정 자체(결정론·폐루프)는 `analyze_vehicle`가 하고 verifier는 "수신 가능 + well-formed"(버스 L0) 증거 + terminal만 제공.
 
 **검증(sandbox 자체 완료)**: 커밋된 golden 샘플 `samples/vehicle-lockstep.trace.jsonl`(lockstep·2 in-채널·staging·1-tick lag)가 `gate.py` **SCHEMA+FIDELITY PASS(fidelity L3, conformant)**. evaluate/gate 단위테스트 +11(analyze_vehicle 6 + MIMO staging 3 + 샘플 gate 1 + …), 전체 141 passed. **채널 인터리브 오탐 회귀 테스트** 포함(채널 A/B 각 1..N이 전역 비정렬이어도 위반 아님).
+
+### 5.4 S5 구현 — 인바운드 결함 주입 (negative path)
+
+"로직이 도는가"를 넘어 "**센서 피드가 망가져도 안전한가**"를 검증한다. 기존 `IScenario`(scenario.hpp)는 **아웃바운드 VISS 요청**을 교란(drop/corrupt/duplicate)하고 `RunProbe`에만 붙어 있어 버스결합 경로엔 결함 인프라가 없었다. 그래서 대칭 포트를 staging 계층에 신설.
+
+- **새 포트 `IInputFault`**(`vehicle_input_fault.hpp`, DDS-free) — `IScenario`의 **결정론 계약**을 그대로 재사용: 결함은 wall/RNG 아닌 **tick_seq 고정 스케줄**(`SILS_INPUT_FAULTS="10-14:drop,20:nan,30:oor"`)에서 나오므로 결함 런 자체가 golden 재현 가능. 3종: `drop`(센서 드롭 → 직전 값 ZOH 유지), `nan`(손상 프레임), `oor`(범위 초과). `NominalInputFault`/`ScheduledInputFault` 2구현으로 earned.
+- **주입 지점 = staging 계층 interceptor**(`RunVehicleProbe`): 입력 취득(staging freeze 또는 free-run 폴링) **직후, behavior 소비 직전**에 적용 → 두 경로 모두 커버. `drop`은 tick 시작 시점 스냅샷(`prev_latest`)으로 복원해 아웃티지 동안 마지막 good 값 유지. `nan`/`oor`는 소비할 `EgoStateSample` 필드를 그 자리에서 손상. tick마다 `input_fault`(mode) + 시작 시 `input_fault_on`(스케줄 크기) 트레이스. **일반적 위치라 실 브리지가 와도 재사용**(fixture든 실 MORAI든 정규 계약 위에서 교란).
+- **판정 `analyze_fault`**(evaluate.py) — 두 축: (1) **완전성** — `input_fault_on` 선언 수 == 실제 `input_fault` 수(조용히 미주입되면 결함 런이 거짓 PASS). (2) **강건성**(핵심) — 각 결함 tick의 `control_published`가 **유한 + 유효 gear** 유지 = 컨트롤러가 손상/부재 상태를 액추에이션으로 **전파하지 않고 안전 저하**. 전파 시 "did not degrade safely"(§14). 결함 원인 tick과 제어 결과를 직접 연결(전역 finiteness 검사로는 귀속 불가). `report["fault"]`에 declared/injected/by_mode/robust 기록.
+
+**검증(sandbox 자체 완료)**: 포트 단위테스트(스케줄 파싱·range·apply 3종) + `analyze_fault` 4테스트(none/robust-conformant/선언불일치/전파실패), 전체 **148 passed**. 스키마 v1에 `input_fault`/`input_fault_on`(producer vecu) 등재. 결함 런타임 왕복은 빌드PC.
 
 ---
 

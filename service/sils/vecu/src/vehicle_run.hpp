@@ -39,6 +39,7 @@
 #include "clock_source.hpp"
 #include "config.hpp"
 #include "vehicle_behavior.hpp"
+#include "vehicle_input_fault.hpp"
 #include "vehicle_staging.hpp"
 #include "vehicle_wire.hpp"
 
@@ -261,6 +262,24 @@ inline int RunVehicleProbe(const ProbeConfig& cfg, std::unique_ptr<IVehicleBehav
         MakeClockSource(cfg.clock_mode, cfg.period_ms, &g_vehicle_stop, participant, run_id, id);
     VehicleTrace(run_id, id, "clock_start", "\"mode\":\"" + std::string(clock->mode()) + "\"");
     VehicleTrace(run_id, id, "behavior_start", "\"name\":\"" + std::string(behavior->name()) + "\"");
+
+    // Inbound fault injection (§11 negative path, bus-coupled counterpart of IScenario):
+    // perturb the ego STATE the behavior consumes on a deterministic tick schedule
+    // (SILS_INPUT_FAULTS). Empty spec -> nominal (run byte-identical). Fail-fast (§14) if a
+    // spec was given but parses to zero faults, so a typo can't silently disable the test.
+    const std::string input_fault_spec = GetEnvOr("SILS_INPUT_FAULTS", "");
+    std::unique_ptr<IInputFault> input_fault = MakeInputFault(input_fault_spec);
+    if (!input_fault_spec.empty() && input_fault->scheduled_faults() == 0) {
+        std::cerr << "RunVehicleProbe: SILS_INPUT_FAULTS set but no faults parsed from \""
+                  << input_fault_spec << "\" (expected e.g. \"10:drop,20-25:nan,40:oor\")"
+                  << std::endl;
+        return 2;
+    }
+    if (input_fault->scheduled_faults() > 0) {
+        VehicleTrace(run_id, id, "input_fault_on",
+                     "\"schedule\":\"" + input_fault_spec + "\",\"faults\":" +
+                         std::to_string(input_fault->scheduled_faults()));
+    }
     if (stage_input) {
         VehicleTrace(run_id, id, "input_staging_on",
                      "\"late_sample_policy\":\"" + cfg.late_sample_policy +
@@ -276,6 +295,10 @@ inline int RunVehicleProbe(const ProbeConfig& cfg, std::unique_ptr<IVehicleBehav
     TickInfo tick;
     uint64_t last_seq = 0;
     while (clock->WaitForNextTick(tick)) {
+        // Snapshot pre-tick state so a Drop fault (sensor dropout) can hold the last good
+        // value across the outage instead of the freshly-arrived sample.
+        const EgoStateSample prev_latest = latest;
+        const bool prev_have_state = have_state;
         if (stage_input) {
             // §7.3: freeze each in-channel's pending arrivals as this tick's input set. The
             // newest frozen sample is the value the behavior sees (ZOH: held across ticks
@@ -322,6 +345,23 @@ inline int RunVehicleProbe(const ProbeConfig& cfg, std::unique_ptr<IVehicleBehav
                 }
             }
         }
+        // Inbound fault injection (staging-layer interceptor): perturb the STATE the behavior
+        // is about to consume. Applied here so both staging and free-run paths are covered,
+        // and after acquisition so Drop can restore the pre-tick value (held across the outage).
+        const InputFault fault_now = input_fault->OnTick(tick.seq);
+        if (fault_now == InputFault::Drop) {
+            latest = prev_latest;         // sensor dropout: hold last good state
+            have_state = prev_have_state;
+        } else if (fault_now != InputFault::None) {
+            ApplyInputFault(fault_now, latest, have_state);  // Nan / OutOfRange: corrupt in place
+        }
+        if (fault_now != InputFault::None) {
+            VehicleTrace(run_id, id, "input_fault",
+                         "\"tick_seq\":" + std::to_string(tick.seq) +
+                             ",\"channel\":\"Vehicle.EgoState\",\"kind\":\"ego-state\",\"mode\":\"" +
+                             InputFaultName(fault_now) + "\"");
+        }
+
         if (have_state) {
             std::ostringstream ex;
             ex << "\"tick_seq\":" << tick.seq << ",\"src_seq\":" << latest.seq
