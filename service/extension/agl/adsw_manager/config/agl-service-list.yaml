@@ -64,6 +64,30 @@ services:
   - "999"
   command_args:
   - hmi_launcher
+# homebar (F010): floating "home" button overlay so the user can return to the
+# launcher while rviz2 is fullscreen (the compositor has no panel). It is a
+# normal xdg_toplevel app the compositor floats on top; its entrypoint self-
+# floats via the agl-shell gRPC (:14005) and, on tap, activates hmi_launcher.
+# Image is built on-board from apps/rviz2_port/docker/homebar (docker build -t
+# homebar:latest .). adsw_manager uses the local image (no registry pull).
+- name: homebar
+  service_type: NORMAL
+  recovery_policy: ALWAYS
+  is_enabled: true
+  mw_type: AGL
+  init_state: NOT_RUNNING
+  image: homebar:latest
+  extra_args:
+  - --network
+  - host
+  - --user
+  - 1001:1001
+  - "-v"
+  - /run/user/1001:/host-xdg
+  - "-e"
+  - XDG_RUNTIME_DIR=/host-xdg
+  - "-e"
+  - WAYLAND_DISPLAY=wayland-0
 # rviz2 is no longer managed by ext-agl / adsw_manager (F010 direct-docker).
 # rviz2_monitor (embedded in hmi_launcher) controls the rviz2 container
 # directly via `docker run/stop/inspect/logs` + AGL shell gRPC :14005.
