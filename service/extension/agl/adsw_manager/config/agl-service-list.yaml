@@ -57,7 +57,11 @@ services:
 #   ⚠️ ext-agl 은 `docker run` 만 한다 — agl-shell 활성화는 안 함. 따라서 rviz2 는 기동되나
 #      비활성(AGL activate-by-default=false). 표출/홈전환은 agl-shell 스위처가 담당
 #      (oss_hmi_app F006: agl-shell-activator -a activate -p wlroots). "상시기동 + activate-swap".
-#   소켓: /run/user/1001/wayland-0 (agl-driver 소유) → --user 1001 로 접근. 렌더: llvmpipe(SW).
+#   소켓: 호스트 /run/user/1001 을 컨테이너 중립경로 /host-xdg 로 마운트(XDG_RUNTIME_DIR=/host-xdg).
+#   ⚠️ /run/user/1001 을 컨테이너 동일경로에 직접 마운트하면 컨테이너 /run tmpfs 와 충돌해
+#      cage 가 소켓 열기 실패(EINVAL)로 크래시한다 — 실기 검증(2026-07-24)으로 확인.
+#   ⚠️ adsw_manager 는 같은 이름 컨테이너를 재사용하므로 extra_args 변경 후엔 기존 rviz2
+#      컨테이너를 제거해야 새 인자로 재생성된다. 렌더: llvmpipe(SW).
 #   F010: recovery_policy=MANUAL — ext-agl does NOT auto-run or auto-recover rviz2.
 #   rviz2_monitor (hmi_launcher 임베드 제어판) 가 ctrl/StartContainer + ctrl/StopContainer 로
 #   사용자 의도에 따라 기동/정지를 제어한다. image/extra_args 는 유지하여 StateManager 가
@@ -77,11 +81,11 @@ services:
   - --group-add
   - "44"
   - "-v"
-  - /run/user/1001:/run/user/1001
+  - /run/user/1001:/host-xdg
   - "-e"
   - HOME=/tmp
   - "-e"
-  - XDG_RUNTIME_DIR=/run/user/1001
+  - XDG_RUNTIME_DIR=/host-xdg
   - "-e"
   - WAYLAND_DISPLAY=wayland-0
   - "-e"
