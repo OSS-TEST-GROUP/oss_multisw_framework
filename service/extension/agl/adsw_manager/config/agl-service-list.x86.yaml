@@ -64,3 +64,13 @@ services:
   - /usr/share/fonts:/usr/share/fonts:ro
   - "-v"
   - /etc/fonts:/etc/fonts:ro
+  # F010 (direct-docker): rviz2_monitor controls rviz2 via docker CLI.
+  # docker.sock lets rviz2_monitor run `docker run/stop/inspect/logs rviz2`.
+  # On x86, agl-shell-activator / gRPC :14005 are not present (AGL-only);
+  # showRviz2/showHome calls will return a gRPC error (non-fatal, UI stays).
+  - "-v"
+  - /var/run/docker.sock:/var/run/docker.sock
+# rviz2 is not registered with ext-agl on x86 (F010 direct-docker).
+# rviz2_monitor controls it directly via docker CLI (same as arm64).
+# On x86 development, rviz2 can also be run manually:
+#   bash apps/docker/script/run-rviz2-x86.sh   (GPU=nvidia|none)

@@ -50,5 +50,21 @@ services:
   - /root/oss/hmi_launcher_config.json:/etc/hmi_launcher/config.json:rw
   - "-e"
   - HMI_LAUNCHER_CONFIG=/etc/hmi_launcher/config.json
+  # F010 (direct-docker): rviz2_monitor (inside hmi_launcher) controls the
+  # rviz2 container directly via the docker CLI + AGL shell gRPC (:14005).
+  # docker.sock lets rviz2_monitor run `docker run/stop/inspect/logs rviz2`.
+  # Screen switching (showRviz2 / showHome) goes through the agl-shell gRPC
+  # service at 127.0.0.1:14005 using --net=host (no activator binary needed).
+  - "-v"
+  - /var/run/docker.sock:/var/run/docker.sock
+  # The container runs as uid 1001, but docker.sock is owned by root:docker.
+  # Add the host `docker` group gid (999 on this Orin board — verify with
+  # `stat -c %g /var/run/docker.sock`) so rviz2_monitor can talk to the daemon.
+  - --group-add
+  - "999"
   command_args:
   - hmi_launcher
+# rviz2 is no longer managed by ext-agl / adsw_manager (F010 direct-docker).
+# rviz2_monitor (embedded in hmi_launcher) controls the rviz2 container
+# directly via `docker run/stop/inspect/logs` + AGL shell gRPC :14005.
+# The rviz2 entry has been REMOVED from this file.
