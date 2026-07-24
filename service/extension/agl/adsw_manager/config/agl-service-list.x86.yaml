@@ -64,9 +64,13 @@ services:
   - /usr/share/fonts:/usr/share/fonts:ro
   - "-v"
   - /etc/fonts:/etc/fonts:ro
-# rviz2 (amd64/x86) — ext-agl 로 등재하지 않는다.
-#   rviz2-agl 이미지의 ENTRYPOINT(cage)는 AGL Wayland 소켓을 필수로 요구하므로
-#   (entrypoint.sh 가 $XDG_RUNTIME_DIR/$WAYLAND_DISPLAY 소켓 없으면 exit) X11 데스크톱에선
-#   그대로 못 뜬다. x86 개발/CI 에서 rviz2 는 엔트리포인트를 우회해 호스트 X11 에 직접 실행:
-#     oss_hmi_app  bash apps/docker/script/run-rviz2-x86.sh   (GPU=nvidia|none)
-#   arm64/AGL 보드의 rviz2 ext-agl 등재는 agl-service-list.yaml 참조.
+  # F010 (direct-docker): rviz2_monitor controls rviz2 via docker CLI.
+  # docker.sock lets rviz2_monitor run `docker run/stop/inspect/logs rviz2`.
+  # On x86, agl-shell-activator / gRPC :14005 are not present (AGL-only);
+  # showRviz2/showHome calls will return a gRPC error (non-fatal, UI stays).
+  - "-v"
+  - /var/run/docker.sock:/var/run/docker.sock
+# rviz2 is not registered with ext-agl on x86 (F010 direct-docker).
+# rviz2_monitor controls it directly via docker CLI (same as arm64).
+# On x86 development, rviz2 can also be run manually:
+#   bash apps/docker/script/run-rviz2-x86.sh   (GPU=nvidia|none)
