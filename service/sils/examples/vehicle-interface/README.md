@@ -48,13 +48,15 @@ bin/sils_control_source --count 40 --rate-ms 100                 # ControlTarget
 ClockMaster가 barrier를 돌리고, 세 참가자(VCU + 두 소스)가 sim 클럭에 맞춰 동기 전진 → 두 실행이 동일 trace.
 ```bash
 export VISS_DDS_DOMAIN_ID=0 SILS_RUN_ID=vi SILS_CLOCK_MODE=lockstep
-# ClockMaster: 40 tick, dt 100ms, wall-pace 100ms(소스/프로브가 tick에 붙을 시간)
-bin/sils_clock_master --participants 3 --ticks 40 --dt-ms 100 --tick-interval-ms 100 &
-# 세 lockstep 참가자 (--count == --ticks)
+# 대칭 규칙: clock_master --ticks == 소스 --count (예: 둘 다 40). ClockMaster가 tick을
+# 다 돌고 종료하면 **모든 lockstep 참가자(프로브·소스)가 자동 종료**한다(grant writer
+# 연결이 끊기면 감지). 프로브는 종료 직전 마지막 샘플을 drain해 staging 꼬리 0. 수동 kill 불필요.
+bin/sils_clock_master --participants 3 --ticks 40 --dt-ms 100 --tick-interval-ms 100 | tee /tmp/vi-clk.jsonl &
 SILS_CHANNELMAP=service/sils/examples/vehicle-interface/channelmap/vehicle-interface.yaml \
 SILS_STAGE_INPUT=1  bin/vehicle_interface | tee /tmp/vi-lockstep.jsonl &
 bin/sils_ego_source     --count 40 &
 bin/sils_control_source --count 40 &
+wait   # 모두 자동 종료될 때까지 대기
 ```
 - `tick_grant`(master) → 각 참가자 `tick_complete` → `tick_barrier`. `control_published`는 sim_time 함수라 재현 가능.
 - 두 번 돌려 `grep control_published`가 동일하면 결정론 회복 확인. `evaluate.py`로 `analyze_lockstep` PASS 판정.
