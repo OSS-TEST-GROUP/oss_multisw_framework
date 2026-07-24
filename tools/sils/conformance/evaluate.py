@@ -477,6 +477,59 @@ def analyze_vehicle(events: list[dict]) -> tuple[dict, list[str]]:
     return vehicle, violations
 
 
+def analyze_fault(events: list[dict]) -> tuple[dict, list[str]]:
+    """Check INBOUND fault-injection robustness (bus-coupled negative path, IInputFault port,
+    vehicle_input_fault.hpp). The bus-coupled counterpart of analyze_scenario (which perturbs
+    the outbound VISS request): here a deterministic tick schedule (SILS_INPUT_FAULTS) perturbs
+    the ego STATE the controller consumes -- drop (sensor dropout), nan (bad frame), oor
+    (out-of-range) -- traced as input_fault, with input_fault_on declaring the schedule size.
+
+    Returns (fault_info, violations). Two checks:
+      - COMPLETENESS: input_fault_on declares N faults -> exactly N input_fault events must
+        fire (a fault that silently didn't inject would let a 'fault run' falsely PASS, §11).
+      - ROBUSTNESS (the point): at every fault tick, the command published THAT tick must stay
+        finite with a valid gear -- i.e. the controller did NOT propagate the corrupt/absent
+        state into actuation. A NaN/invalid command at a fault tick means the controller failed
+        to degrade safely (§14 fail-fast). This ties the injected cause to the control effect,
+        which analyze_vehicle's global finiteness check cannot attribute."""
+    ons = [e for e in events if e.get("event") == "input_fault_on"]
+    faults = [e for e in events if e.get("event") == "input_fault"]
+    if not ons and not faults:
+        return {"mode": "none"}, []
+
+    violations: list[str] = []
+    declared = ons[-1].get("faults") if ons else None
+    injected = len(faults)
+    if isinstance(declared, int) and injected != declared:
+        violations.append(f"input_fault_on declared {declared} fault(s) but {injected} fired "
+                          "-- an injected fault did not take effect (§11 negative path)")
+    if injected == 0:
+        violations.append("input fault schedule injected nothing (nominal run mislabeled, §11)")
+
+    ctrl_by_tick = {e.get("tick_seq"): e for e in events
+                    if e.get("event") == "control_published"}
+    unsafe = []
+    for f in faults:
+        c = ctrl_by_tick.get(f.get("tick_seq"))
+        if c is None:
+            continue  # no command that tick (e.g. shutdown drain) -- not a propagation
+        g = c.get("gear")
+        if (not _finite(c.get("steering_angle")) or not _finite(c.get("acceleration"))
+                or (g is not None and g not in VEHICLE_GEARS)):
+            unsafe.append(f.get("tick_seq"))
+    if unsafe:
+        violations.append(f"input fault propagated to non-finite/invalid control at tick(s) "
+                          f"{unsafe[:10]} -- controller did not degrade safely (§14)")
+
+    return {
+        "mode": "injected",
+        "declared": declared,
+        "injected": injected,
+        "by_mode": dict(Counter(f.get("mode") for f in faults)),
+        "robust": not unsafe,
+    }, violations
+
+
 # Contracted transport reliability for the VISS protocol (dds_transport.cpp uses
 # RELIABLE; a vECU that negotiated anything weaker isn't protocol-faithful).
 CONTRACT_RELIABILITY = "RELIABLE"
@@ -770,6 +823,10 @@ def evaluate_run(events: list[dict], path: str) -> dict:
     vehicle, vehicle_violations = analyze_vehicle(events)
     violations.extend(vehicle_violations)
 
+    # --- inbound fault injection (bus-coupled negative path, IInputFault) ----
+    fault, fault_violations = analyze_fault(events)
+    violations.extend(fault_violations)
+
     # --- target attestation (§11 L4, recorded not scored) -------------------
     attestation = analyze_attestation(events)
 
@@ -825,6 +882,7 @@ def evaluate_run(events: list[dict], path: str) -> dict:
         "protocol": protocol,
         "plant": plant,
         "vehicle": vehicle,
+        "fault": fault,
         "attestation": attestation,
         "fidelity_evidenced": fidelity,
         "evidence": {

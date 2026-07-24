@@ -45,6 +45,8 @@
     "state_received":    {"producer": "vecu", "required": ["instance_id", "wall_time_ms", "tick_seq"], "note": "plant-coupling: the vECU consumed a bus EgoState this tick (closed-loop feedback, §9)"},
     "target_received":   {"producer": "vecu", "required": ["instance_id", "wall_time_ms", "tick_seq"], "note": "plant-coupling Profile B: an upstream control target (Autoware via the bridge) this tick"},
     "control_published": {"producer": "vecu", "required": ["instance_id", "wall_time_ms", "tick_seq", "behavior"], "note": "plant-coupling: the vECU published a unified VehicleControl to the plant this tick (steering_angle/acceleration/gear)"},
+    "input_fault_on":    {"producer": "vecu", "required": ["instance_id", "wall_time_ms", "schedule", "faults"], "note": "plant-coupling negative path (IInputFault, vehicle_input_fault.hpp): a deterministic inbound-state fault schedule (SILS_INPUT_FAULTS) is active; `faults` = scheduled count"},
+    "input_fault":       {"producer": "vecu", "required": ["instance_id", "wall_time_ms", "tick_seq", "mode"], "note": "plant-coupling negative path: one injected inbound-state fault this tick (mode = drop/nan/oor; adds a `channel` field). analyze_fault checks the command that tick stayed finite (safe degradation)"},
 
     "tick_grant":        {"producer": "clock_master", "required": ["tick_seq", "sim_time_ns", "dt_ns", "wall_time_ms"]},
     "tick_barrier":      {"producer": "clock_master", "required": ["tick_seq", "completed", "wall_time_ms"]},
