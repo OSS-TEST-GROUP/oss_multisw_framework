@@ -28,11 +28,22 @@ EgoState(state) ─▶ FMU 입력 VR ─▶ doStep() ─▶ FMU 출력 VR ─▶
 | `channelmap/classic-min.yaml` | EgoState in / VehicleControl out |
 | `models/vecu-fmu/` | **스탠드인 V-ECU FMU**(실 V-ECU export 대역). 종방향 속도 제어기(`accel=Kp·(Vset−vx)`), FMI 2.0 co-sim |
 
-`FmuBehavior`는 SDK 코어에 있습니다: [`vehicle_fmu_behavior.hpp`](../../vecu/src/vehicle_fmu_behavior.hpp) — SISO `FmuPlant`의 MIMO 짝(state 필드 → 입력 VR, 출력 VR → control 필드). `-DSILS_ENABLE_FMU`로 빌드할 때만 활성(그 외엔 `MakeFmuBehavior`가 명확한 에러 반환).
+`FmuBehavior`는 SDK 코어에 있습니다: [`vehicle_fmu_behavior.hpp`](../../vecu/src/vehicle_fmu_behavior.hpp) — SISO `FmuPlant`의 MIMO 짝(state 필드 → 입력 VR, 출력 VR → control 필드). FMU 지원을 켜고 빌드할 때만 활성(그 외엔 `MakeFmuBehavior`가 명확한 에러 반환).
+
+> **빌드**: `SILS_ENABLE_FMU`는 `./build.sh`로 **전달되는 환경변수**이지 `-D` 인자가 아니다(인자로 주면 build.sh가 "Unknown option"으로 거부). brake-ecu FMU 예제와 동일:
+> ```bash
+> export SILS_ENABLE_FMU=ON
+> ./build.sh --build-sils            # -> bin/classic_vecu (+ fmi4c 정적 링크)
+> ```
+> `--build-sils`만 주면 Case 1·2는 빌드되고 이 예제만 빠진다(cmake `option(SILS_ENABLE_FMU)` 기본 OFF).
 
 ## 실행
 
 ```bash
+# 0) FMU 지원 켜고 빌드 (환경변수 — build.sh의 -D 인자 아님)
+export SILS_ENABLE_FMU=ON
+./build.sh --build-sils
+
 # 1) 스탠드인 V-ECU FMU 빌드 (vECU가 도는 것과 같은 플랫폼 = Linux 컨테이너에서)
 service/sils/examples/classic-vecu/models/vecu-fmu/build.sh   # -> vecu.fmu
 
