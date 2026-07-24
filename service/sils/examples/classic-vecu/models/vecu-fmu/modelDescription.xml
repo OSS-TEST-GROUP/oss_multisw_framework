@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<fmiModelDescription
+    fmiVersion="2.0"
+    modelName="VirtualEcuCtrl"
+    guid="{b1a4e0de-0000-4000-8000-7665637563}"
+    description="Virtual ECU: longitudinal speed controller (SiLS Classic V-ECU example)"
+    generationTool="hand-written FMI 2.0 co-sim example (stands in for a V-ECU export)"
+    numberOfEventIndicators="0">
+
+  <CoSimulation
+      modelIdentifier="vecu_ctrl"
+      canHandleVariableCommunicationStepSize="true"
+      canGetAndSetFMUstate="false"
+      canSerializeFMUstate="false"/>
+
+  <!-- Value references map to the example's env (classic-vecu/src/main.cc):
+       vx=0 (input)  -> SILS_FMU_VR_VX,  accel=1 (output) -> SILS_FMU_VR_ACCEL_OUT.
+       A real V-ECU FMU exposes the ECU's RTE port data elements as variables the same
+       way. NOTE: no comment may precede the root element above -- fmi4c's ezxml parser
+       fails to read the root's attributes if one does. Body comments are fine. -->
+  <ModelVariables>
+    <!-- index 1 -->
+    <ScalarVariable name="accel" valueReference="1" causality="output"
+                    variability="continuous" initial="exact">
+      <Real start="0.0"/>
+    </ScalarVariable>
+    <!-- index 2 -->
+    <ScalarVariable name="vx" valueReference="0" causality="input"
+                    variability="continuous">
+      <Real start="0.0"/>
+    </ScalarVariable>
+  </ModelVariables>
+
+  <ModelStructure>
+    <Outputs>
+      <Unknown index="1"/>
+    </Outputs>
+    <InitialUnknowns>
+      <Unknown index="1"/>
+    </InitialUnknowns>
+  </ModelStructure>
+
+</fmiModelDescription>

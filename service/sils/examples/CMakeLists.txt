@@ -11,3 +11,11 @@ add_subdirectory(steer-ecu)
 # vehicle-interface: the VCU -- sits between Autoware and the plant (Profile B: two inputs,
 # control target + ego state -> unified command). docs/sils-vehicle-interface-autoware.md.
 add_subdirectory(vehicle-interface)
+
+# "How a developer's code plugs in" -- three plant-coupled ECUs, one per integration case:
+#   plainc-ecu   : Case 1, plain C / Simulink-TargetLink auto-code wrapped in IVehicleBehavior
+#   adaptive-ecu : Case 2, AUTOSAR Adaptive SWC (ara::com) bridged to the canonical contract
+#   classic-vecu : Case 3, AUTOSAR Classic ECU loaded as a V-ECU FMU (gated on SILS_ENABLE_FMU)
+add_subdirectory(plainc-ecu)
+add_subdirectory(adaptive-ecu)
+add_subdirectory(classic-vecu)

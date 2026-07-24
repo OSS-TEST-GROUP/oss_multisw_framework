@@ -1,0 +1,18 @@
+# plainc-ecu channel map -- plain-C / auto-code ECU (MORAI/AWSIM plant coupling, Option 2).
+# Same wire as steer-ecu / ego-min.yaml (EgoState in, VehicleControl out) -- the case
+# differs by WHERE the control comes from (a generated C model), not by its channels.
+#
+# Run:  SILS_CHANNELMAP=service/sils/examples/plainc-ecu/channelmap/plainc-min.yaml \
+#       SILS_CTRL_SETPOINT=10  bin/plainc_ecu
+channels:
+  # --- STATE in (MORAI/AWSIM -> vECU): EgoState struct ---
+  - name: Vehicle.EgoState
+    dir: in
+    topic: sils/ego/state
+    type: canonical/ego-state
+
+  # --- ACTUATION out (vECU -> MORAI/AWSIM): VehicleControl struct ---
+  - name: Vehicle.Control
+    dir: out
+    topic: sils/ego/cmd
+    type: canonical/vehicle-control
