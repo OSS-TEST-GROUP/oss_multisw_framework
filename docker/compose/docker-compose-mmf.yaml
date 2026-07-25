@@ -1,0 +1,84 @@
+# docker-compose-mmf.yaml — run-mmf.sh 의 docker compose 등가물
+#
+# core + ext-ros2 런타임을 registry:latest 로 기동한다 (arm64 실보드/범용).
+# run-mmf.sh 와 동일 구성:
+#   - host network + privileged + NET_RAW/NET_ADMIN + /dev/shm 공유
+#   - 전 스택 동일 DDS 도메인 (raw FastDDS=MMF_DDS_DOMAIN_ID, VISS=VISS_DDS_DOMAIN_ID,
+#     ROS2=ROS_DOMAIN_ID — 세 env 를 같은 값으로 맞춰야 실제로 한 도메인에 격리됨)
+#   - ext-ros2 는 docker.sock + docker group → adsw_manager 가 컨테이너(autoware 등) 기동
+#   - core 가 뜬 뒤(healthcheck) ext-ros2 기동 (discovery 레이스 방지 — run-mmf.sh 의 12s 대기 등가)
+#   - --restart unless-stopped → 부팅 시 자동 재기동
+#
+# 사용 (oss_multisw_framework 루트에서):
+#   # 1) docker 소켓 그룹 gid 정확히 주입 (run-mmf.sh 의 `getent group docker` 등가)
+#   export DOCKER_SOCK_GID=$(stat -c '%g' /var/run/docker.sock)
+#   # 2) (선택) 보드별 DDS 도메인 격리
+#   export ROS_DOMAIN_ID=1
+#   # 3) (권장) 재기동 시 stale FastDDS SHM 세그먼트 청소 — compose 는 호스트 액션 불가라 수동
+#   find /dev/shm -maxdepth 1 \
+#     \( -name 'fastdds_*' -o -name 'fast_datasharing_*' -o -name 'sem.fastdds_*' \) -delete 2>/dev/null || true
+#   # 4) 기동
+#   docker compose -f docker/compose/docker-compose-mmf.yaml up -d
+#   docker compose -f docker/compose/docker-compose-mmf.yaml ps
+#   docker compose -f docker/compose/docker-compose-mmf.yaml logs -f mmf-ext-ros2
+#   docker compose -f docker/compose/docker-compose-mmf.yaml down
+#
+# 이미지 오버라이드: CORE_IMG / EXTROS2_IMG (run-mmf.sh 와 동일 취지)
+#   EXTROS2_IMG=oss-mmf-ext-ros2:diag2-local docker compose -f ... up -d
+# saved-service-list 오버라이드: 아래 mmf-ext-ros2 volumes 의 주석 해제 후
+#   SAVED_SERVICE_LIST=/abs/adsw-service-list.yaml docker compose -f ... up -d
+#
+# Linux 전용 — network_mode: host 는 Docker Desktop(mac/win) 미지원.
+
+services:
+  mmf-core:
+    container_name: oss-mmf-core
+    image: ${CORE_IMG:-registry.obigo.com/oss/oss-mmf-core:latest}
+    privileged: true
+    network_mode: host
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+    environment:
+      # 세 도메인 env 를 ROS_DOMAIN_ID 한 값으로 통일 (run-mmf.sh 의 DOMAIN 과 동일)
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      MMF_DDS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      VISS_DDS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      HEARTBEAT_INTERVAL_SEC: ${HEARTBEAT_INTERVAL_SEC:-3}
+    volumes:
+      - /dev/shm:/dev/shm
+    restart: unless-stopped
+    healthcheck:
+      # lifecycle_mgr 프로세스가 뜨면 core ready → ext-ros2 기동 (run-mmf.sh 의 sleep 12 등가)
+      test: ["CMD-SHELL", "cat /proc/[0-9]*/comm 2>/dev/null | grep -q lifecycle_mgr"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  mmf-ext-ros2:
+    container_name: oss-mmf-ext-ros2
+    image: ${EXTROS2_IMG:-registry.obigo.com/oss/oss-mmf-ext-ros2:latest}
+    privileged: true
+    network_mode: host
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+    group_add:
+      # run-mmf.sh: getent group docker → 호스트 docker gid. 반드시 정확히 주입할 것.
+      #   export DOCKER_SOCK_GID=$(stat -c '%g' /var/run/docker.sock)
+      - "${DOCKER_SOCK_GID:-999}"
+    environment:
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      MMF_DDS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+    volumes:
+      - /dev/shm:/dev/shm
+      # adsw_manager 가 컨테이너(autoware 등)를 docker run/start/stop 하려면 필수.
+      # 없으면 StartService 가 lifecycle 상 Success 여도 실제 컨테이너 생성 실패.
+      - /var/run/docker.sock:/var/run/docker.sock
+      # (선택) 보드 로컬 서비스목록 오버라이드 — 사용 시 아래 한 줄 주석 해제:
+      # - ${SAVED_SERVICE_LIST:?set SAVED_SERVICE_LIST to an absolute yaml path}:/oss/bin/config/saved-service-list.yaml:ro
+    depends_on:
+      mmf-core:
+        condition: service_healthy
+    restart: unless-stopped
