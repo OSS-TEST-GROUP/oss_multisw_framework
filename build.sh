@@ -27,7 +27,7 @@ export EXTENSION_PLATFORM="ROS2"
 export SDK_DIR=${HOME}/obigo-sdk
 #export TARGET_MF_NAME="aadp"
 
-# push 전용 로그인 루틴 (별도 계정). pull=REGISTRY_ID(ossuser), push=REGISTRY_PUSH_*(env).
+# 레지스트리 로그인 헬퍼 (ossuser 단일 계정, pull·push 공용).
 source "${WORKDIR}/docker/registry-auth.sh"
 
 show_help() {
@@ -397,14 +397,10 @@ do_pull_builder_image()
 		docker build -t ${REGISTRY_ADDRESS}/oss/${BUILDER_CONTAINER_NAME}:${BUILDER_CONTAINER_TAG} \
 			-f ${PWD}/docker/Dockerfile .
 		do_error_check
-		# 빌더 이미지 push — push 계정으로 잠깐 전환 후 pull 계정(ossuser)으로 복귀.
-		if registry_push_login; then
-			docker push ${REGISTRY_ADDRESS}/oss/${BUILDER_CONTAINER_NAME}:${BUILDER_CONTAINER_TAG} || \
-				echo "[build_all] push to registry failed (502/auth) — using local image" >&2
-			registry_pull_login >/dev/null 2>&1 || true
-		else
-			echo "[build_all] push 계정(REGISTRY_PUSH_*) 미설정 — 빌더 이미지 push 스킵(로컬 이미지 사용)" >&2
-		fi
+		# 빌더 이미지 push (ossuser 단일 계정 — pull·push 공용).
+		registry_login >/dev/null 2>&1 || true
+		docker push ${REGISTRY_ADDRESS}/oss/${BUILDER_CONTAINER_NAME}:${BUILDER_CONTAINER_TAG} || \
+			echo "[build_all] push to registry failed (502/auth) — using local image" >&2
 	else
 		docker pull ${img_name}
 	fi
