@@ -111,7 +111,11 @@ MORAI 어댑터와 **동일 패턴**: **중립 정규 표현 + 얇은 importer(a
 
 ## 6. 로드맵
 
-- **(a) `analyze_requirements` 엔진** — 간이 assert(in_range/max_abs/max_rate/settle_to/overshoot_lt/never) + `requirements.yaml` 스키마 + gate 배선 + 테스트. **지금·sandbox 완결**(S5 결함주입과 동류). 요구 ID로 추적성.
+- **(a) `analyze_requirements` 엔진** — ✅ **구현 완료**(evaluate.py/gate.py). assert 5종(`in_range`/`max_abs`/`max_rate`/`settle_to`/`overshoot_lt`), `requirements.yaml`(요구 ID 추적성 + signal `event.field` + 선택 `scenario`), gate `--requirements`로 FIDELITY verdict에 융합. sandbox 자체검증(단위 5 + gate 2, 전체 155 passed). 샘플 `samples/vehicle-requirements.yaml`.
+  ```bash
+  gate.py run.jsonl --requirements requirements.yaml    # 요구 미충족이면 gate FAIL
+  evaluate.py run.jsonl --requirements requirements.yaml  # report["requirements"]: total/passed/failed
+  ```
 - **(b) OpenSCENARIO 수용** — `.xosc → 시나리오(②) + StopTrigger를 요구(③)로` 추출하는 importer. **②와 ③을 한 번에** 때리고, **MORAI·Autoware·CarMaker·Simulink가 전부 이 포맷을 말함** → 어느 진영에서 와도 재사용. 나중에 **① 실 브리지(MORAI)와도 정합**(같은 .xosc로 MORAI 구동 + 우리 판정).
 
 **순서 근거**: (a)가 판정 엔진(요구를 받는 내부 표현)을 세우고, (b)가 그 요구를 **표준에서 자동으로 채운다**. (a) 없이 (b)만 있으면 채울 대상이 없다.

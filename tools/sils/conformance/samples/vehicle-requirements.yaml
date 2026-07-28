@@ -1,0 +1,19 @@
+# Functional requirements (§3, docs/sils-functional-verification-interop.md) -- the
+# developer's OWN pass/fail spec, judged over the trace by evaluate.py analyze_requirements.
+# This sample passes on samples/vehicle-lockstep.trace.jsonl:
+#   gate.py samples/vehicle-lockstep.trace.jsonl --requirements samples/vehicle-requirements.yaml
+#
+# Each requirement asserts a temporal property over ONE trace signal (event.field). Assert
+# kinds: in_range [lo,hi] | max_abs X | max_rate X | settle_to {target,tol,within_tick}
+# | overshoot_lt {target,limit}. `id` gives requirement traceability; `scenario` (optional)
+# is forward-compat metadata for the OpenSCENARIO importer (§4, not yet applied).
+requirements:
+  - id: SR-DEMO-001
+    name: comfort-decel-bound
+    signal: control_published.acceleration
+    assert: {in_range: [-8.0, 4.0]}     # 항상 m/s² 안전·승차감 범위 내
+
+  - id: SR-DEMO-002
+    name: steering-actuator-limit
+    signal: control_published.steering_angle
+    assert: {max_abs: 0.6}              # rad, 조향 액추에이터 한계
