@@ -36,21 +36,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build
-        run: echo "TODO: 프로젝트 빌드 명령"
+        run: 'echo "TODO: 프로젝트 빌드 명령"'
 
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Test
-        run: echo "TODO: 테스트 명령"
+        run: 'echo "TODO: 테스트 명령"'
 
   security-scan:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Secret / dependency scan
-        run: echo "TODO: 시크릿·의존성 취약점 스캔"
+        run: 'echo "TODO: 시크릿·의존성 취약점 스캔"'
 
   publish-approval:
     needs: [build, test, security-scan]
