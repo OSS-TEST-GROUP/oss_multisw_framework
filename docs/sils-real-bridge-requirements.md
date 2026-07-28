@@ -10,19 +10,54 @@ SiLS vECU를 **실제 MORAI(플랜트) + Autoware(인지·판단)**와 닫힌 �
 
 ## 0. 토폴로지 & 데이터 흐름
 
+세 구역: **외부(그들의 세계)** / **브리지(=#1, 구축 대상)** / **우리 SiLS(완료)**. "우리 SiLS"는 vECU만이 아니라 **ClockMaster(결정론) + conformance 판정 + .xosc importer**를 포함한다 — 이게 제품이다.
+
 ```
-                 EgoVehicleStatus(ROS2)                control_cmd/gear_cmd(ROS2)
-  MORAI ───────────────────────────▶ Autoware ─────────────────────────────┐
-   ▲                                (인지·판단·경로)                         │
-   │ CtrlCmd(ROS2)                                                          ▼
-   │                          [Autoware↔DDS 브리지]              autoware/control_target (DDS)
-   │                                                                        │
-   └──[MORAI↔DDS 브리지]◀── sils/ego/cmd(DDS) ◀── vECU(VCU) ◀── sils/ego/state(DDS)◀─┤
-        VehicleControl→CtrlCmd          VehicleControl              EgoState        (MORAI 상태)
+┌──────────────── 외부 (ROS2 · 그들의 세계) ────────────────┐
+│   MORAI  ──EgoVehicleStatus──▶  Autoware                  │
+│  (시뮬=플랜트/권위) ◀──CtrlCmd──┐  (인지·판단·경로)         │
+└────┬──────────────────────────┼──────────┬───────────────┘
+     │ EgoStatus                │ CtrlCmd   │ control_cmd / gear_cmd
+     ▼                          │           ▼
+╔═══ #1 구축 대상 ══════════════╪═══════════════════════════╗
+║ ┌─────────────────┐          │        ┌──────────────────┐║
+║ │ MORAI↔DDS 브리지 │          │        │ Autoware↔DDS 브리지│║
+║ └────┬────────▲───┘          │        └─────────┬────────┘║
+╚══════╪════════╪══════════════╪══════════════════╪═════════╝
+   EgoState  VehicleControl → CtrlCmd         ControlTarget
+════════╪════════╪═══════════════════════════════╪═══ DDS 정규 버스 ═══
+╔═══════╪════════╪═══════ 우리 SiLS (완료) ═══════╪═══════════════════╗
+║  sils/ego/state │ sils/ego/cmd        autoware/control_target       ║
+║       │         │                             │                     ║
+║       ▼         │                             ▼                     ║
+║   ┌─────────────┴─────────────────────────────────────┐            ║
+║   │ vECU (VCU / 개발자 ECU)                             │            ║
+║   │   EgoState + ControlTarget ─▶ 통합 VehicleControl   │            ║
+║   └───────────────▲───────────────────────┬────────────┘            ║
+║   ClockMaster ────┘ tick (lockstep 결정론)  │ trace (JSONL)           ║
+║                                            ▼                         ║
+║   conformance 판정:  evaluate / gate / requirements                  ║
+║                          ▲ import_openscenario(.xosc)               ║
+╚══════════════════════════════════════════════════════════════════════╝
 ```
 
-- **권위(authority) = MORAI**(공유 세계). vECU는 상태를 소비하고 통합 명령을 발행한다.
-- 브리지는 **ROS2 ↔ 우리 DDS 정규 계약** 경계에 앉는다(rclcpp 노드).
+위는 **데이터 평면**(DDS 제어 루프)이다. 그 아래 **제어 평면**(누가 무엇을 기동·관리하나)에 **MMF**가 있다 — vECU(및 향후 브리지)를 컨테이너 서비스로 띄운다:
+
+```
+                          ╎ 기동·수명관리 (제어 평면 — 데이터 아님)
+  ╭╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┴╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╮
+  ╎ MMF  ─ adsw_manager + lifecycle_mgr                ╎ ╌╌▶ vECU(및 브리지)
+  ╎   speclist → StartServiceRequest → docker run      ╎     컨테이너 기동·수명관리
+  ╎   이미지: oss-mmf-sils-vecu                         ╎     (경로 B, 실기동 검증됨)
+  ╰╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╯
+```
+
+**닫힌 루프 흐름**(데이터 평면): ① MORAI 상태 →(MORAI 브리지)→ `EgoState`(DDS) → vECU. ② Autoware 제어 →(Autoware 브리지)→ `ControlTarget`(DDS) → vECU. ③ vECU가 통합 `VehicleControl` 발행(`sils/ego/cmd`). ④ →(MORAI 브리지)→ `CtrlCmd`(ROS2) → MORAI(루프 닫힘). ⑤ 전 참가자가 남긴 trace를 conformance가 판정(요구는 `.xosc`에서 (b)로 추출).
+
+- **권위(authority) = MORAI**(공유 세계). vECU는 상태·타깃을 소비하고 통합 명령을 발행한다.
+- **브리지(#1)만 새로 만든다.** MORAI·Autoware는 외부, 우리 SiLS(vECU·ClockMaster·판정)는 완료.
+- 브리지는 **ROS2 ↔ 우리 DDS 정규 계약** 경계(rclcpp 노드). ClockMaster의 tick에 MORAI가 물리는지가 결정론을 좌우(BR-C-1).
+- **MMF = 배포·수명 관리 평면**(제어 평면, 데이터 루프 아님): `adsw_manager`+`lifecycle_mgr`가 speclist 기반으로 vECU를 **컨테이너 서비스로 기동·관리**(경로 B, `oss-mmf-sils-vecu` 이미지로 실기동 검증됨). "vECU가 어떻게 뜨고 관리되나"의 답. 브리지(#1)도 완성되면 MMF 서비스로 배포 가능 → **BR-C-3 오케스트레이션이 MMF speclist로 수렴**할 수 있다.
 
 ## 1. 이미 확정된 것 — 브리지 개발자가 건드리지 않는 경계
 
@@ -105,7 +140,8 @@ Autoware는 계획을 위해 `/vehicle/status/{steering,velocity,gear}_status`(f
 - **도메인 정합**: 정규 DDS는 `VISS_DDS_DOMAIN_ID`(기본 0). ROS2 rmw 도메인과 분리·매핑.
 - **QoS**: 상태/명령은 RELIABLE 권장(제어 평면). 계약과 정합.
 
-### BR-C-3 · 실행 오케스트레이션
+### BR-C-3 · 실행 오케스트레이션 (MMF로 수렴)
+- **SiLS 측 서비스(vECU·브리지·ClockMaster)는 MMF가 기동·관리**(adsw_manager/lifecycle_mgr, speclist) — 경로 B가 이미 vECU로 실증. 브리지를 MMF 서비스로 추가하면 오케스트레이션이 speclist 하나로 수렴. **MORAI·Autoware는 외부 기동**(각자 런처).
 - 기동 순서(MORAI → Autoware → 브리지 → vECU → ClockMaster), `run_id` 전파.
 - **시나리오 로딩**: `.xosc`를 MORAI 시나리오 러너 / Autoware `scenario_simulator_v2`에 로드. → [(b) importer](sils-functional-verification-interop.md)가 같은 `.xosc`에서 요구를 뽑으므로 **자극과 판정이 한 소스**.
 - 트레이스 병합: 브리지/vECU/ClockMaster stdout → merged JSONL → `gate.py`.
