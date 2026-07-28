@@ -26,6 +26,7 @@
 <a href="#s14">14. Lifecycle과 장애 정책</a>
 <a href="#s15">15. 확장 로드맵</a>
 <a href="#s16">16. 제안 리포 레이아웃</a>
+<a href="#s16-1" style="padding-left:22px">16.1 제안 vs as-built</a>
 <a href="#s17">17. 단계별 구현 계획</a>
 <a href="#s18">18. 기존 MMF 수정 영향도</a>
 <a href="#s19">19. 열린 결정 사항</a>
@@ -161,6 +162,82 @@
  → pass/fail/timeout 판정
  → clock 중지 및 trace flush
  → 컨테이너 정지·정리</code></pre>
+<figure style="margin:20px 0;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 16px 12px">
+<svg viewBox="0 0 1000 700" width="100%" role="img" aria-label="전체 오케스트레이션 관계: Topology Compiler 출력을 Run Coordinator가 소비해 MMF가 vECU 컨테이너를 기동하고, 데이터 평면 DDS 버스에서 Clock Master·SUT와 동작" style="display:block;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Apple SD Gothic Neo','Noto Sans KR',Roboto,sans-serif">
+<defs><marker id="oa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#98a4bd"/></marker><marker id="oa2" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M10 0 L0 5 L10 10 z" fill="#98a4bd"/></marker></defs>
+<style>.n{fill:var(--panel2);stroke:var(--line);stroke-width:1.4}.hub{fill:var(--panel2);stroke:var(--accent);stroke-width:2.2}.pkg{fill:var(--panel);stroke:var(--accent2);stroke-width:1.8}.inner{fill:var(--panel2);stroke:var(--line);stroke-width:1}</style>
+<rect x="8" y="92" width="984" height="214" rx="12" style="fill:none;stroke:var(--line);stroke-dasharray:5 5;stroke-width:1.2"/>
+<text x="22" y="112" style="fill:var(--mut);font-size:11px;letter-spacing:.06em;text-transform:uppercase">제어 평면 (control plane)</text>
+<rect x="8" y="344" width="984" height="348" rx="12" style="fill:none;stroke:var(--line);stroke-dasharray:5 5;stroke-width:1.2"/>
+<text x="22" y="364" style="fill:var(--mut);font-size:11px;letter-spacing:.06em;text-transform:uppercase">데이터 평면 (run domain · DDS / VISS)</text>
+<line x1="8" y1="324" x2="992" y2="324" stroke="var(--warn)" stroke-width="1.2" stroke-dasharray="3 4"/>
+<text x="500" y="320" text-anchor="middle" style="fill:var(--warn);font-size:10.5px;font-weight:600">실행 경계 — MMF 가 vECU 컨테이너를 기동 (run_id label)</text>
+<rect class="n" x="20" y="14" width="250" height="52" rx="9"/>
+<text x="145" y="38" text-anchor="middle" style="fill:var(--ink);font-size:12px;font-weight:600">Topology · Descriptors</text>
+<text x="145" y="54" text-anchor="middle" style="fill:var(--mut);font-size:11px;font-weight:400">Contract Catalog · QoS</text>
+<rect class="n" x="300" y="14" width="180" height="52" rx="9"/>
+<text x="390" y="39" text-anchor="middle" style="fill:var(--ink);font-size:12.5px;font-weight:600">Topology Compiler</text>
+<text x="390" y="54" text-anchor="middle" style="fill:var(--mut);font-size:10.5px;font-weight:400">정적 변환 · 검증</text>
+<rect class="n" x="510" y="10" width="300" height="60" rx="9"/>
+<text x="660" y="39" text-anchor="middle" style="fill:var(--accent2);font-size:12.5px;font-weight:600">resolved-run.yaml (hash)</text>
+<text x="660" y="54" text-anchor="middle" style="fill:var(--mut);font-size:10.5px;font-weight:400">deployment artifact · validation report</text>
+<path d="M270 40 L298 40" fill="none" stroke="#98a4bd" stroke-width="1.6" marker-end="url(#oa)"/>
+<path d="M480 40 L508 40" fill="none" stroke="#98a4bd" stroke-width="1.6" marker-end="url(#oa)"/>
+<rect class="hub" x="360" y="150" width="280" height="88" rx="9"/>
+<text x="500" y="186" text-anchor="middle" style="fill:var(--accent);font-size:14px;font-weight:700">SiLS Run Coordinator</text>
+<text x="500" y="201" text-anchor="middle" style="fill:var(--mut);font-size:10.5px;font-weight:400">run state · verdict</text>
+<text x="500" y="216" text-anchor="middle" style="fill:var(--mut);font-size:10.5px;font-weight:400">idempotent cleanup</text>
+<rect class="n" x="40" y="148" width="220" height="66" rx="9"/>
+<text x="150" y="180" text-anchor="middle" style="fill:var(--ink);font-size:12.5px;font-weight:600">Clock Master</text>
+<text x="150" y="194" text-anchor="middle" style="fill:var(--mut);font-size:10.5px;font-weight:400">별도 프로세스</text>
+<rect class="n" x="40" y="232" width="220" height="60" rx="9"/>
+<text x="150" y="261" text-anchor="middle" style="fill:var(--ink);font-size:12px;font-weight:600">Scenario / Trace</text>
+<text x="150" y="275" text-anchor="middle" style="fill:var(--mut);font-size:10.5px;font-weight:400">서비스</text>
+<rect class="n" x="700" y="120" width="288" height="122" rx="9"/>
+<text x="844" y="165" text-anchor="middle" style="fill:var(--ink);font-size:12.5px;font-weight:700">MMF 제어 평면</text>
+<text x="844" y="180" text-anchor="middle" style="fill:var(--mut);font-size:11px;font-weight:400">lifecycle_mgr  ⇄  adsw_manager</text>
+<text x="844" y="195" text-anchor="middle" style="fill:var(--mut);font-size:11px;font-weight:400">ContainerController</text>
+<text x="844" y="210" text-anchor="middle" style="fill:var(--mut);font-size:10.5px;font-weight:400">→ docker / compose / k3s</text>
+<path d="M660 66 L560 148" fill="none" stroke="#98a4bd" stroke-width="1.6" marker-end="url(#oa)"/>
+<text x="648" y="108" text-anchor="start" style="fill:var(--mut);font-size:10.5px;font-weight:600">consume</text>
+<path d="M360 178 L262 172" fill="none" stroke="#98a4bd" stroke-width="1.6" marker-end="url(#oa)"/>
+<text x="312" y="166" text-anchor="middle" style="fill:var(--mut);font-size:10.5px;font-weight:600">clock start/stop</text>
+<path d="M360 210 L262 250" fill="none" stroke="#98a4bd" stroke-width="1.6" marker-end="url(#oa)"/>
+<text x="300" y="232" text-anchor="end" style="fill:var(--mut);font-size:10.5px;font-weight:600">load/start/stop</text>
+<path d="M640 172 L698 172" fill="none" stroke="#98a4bd" stroke-width="1.6" marker-end="url(#oa)"/>
+<text x="669" y="164" text-anchor="middle" style="fill:var(--mut);font-size:10.5px;font-weight:600">StartContainer (경로 B)</text>
+<path d="M720 120 L628 152" fill="none" stroke="#98a4bd" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#oa)"/>
+<text x="654" y="136" text-anchor="end" style="fill:var(--mut);font-size:10.5px;font-weight:600">NotifyContainerState</text>
+<rect class="pkg" x="300" y="362" width="340" height="250" rx="9"/>
+<text x="470" y="384" text-anchor="middle" style="fill:var(--accent2);font-size:12.5px;font-weight:700">vECU 컨테이너 (package)</text>
+<rect class="inner" x="320" y="396" width="300" height="32" rx="7"/>
+<text x="470" y="418" text-anchor="middle" style="fill:var(--ink);font-size:11.5px;font-weight:600">vECU 런타임 (kernel)</text>
+<rect class="inner" x="320" y="436" width="300" height="48" rx="7"/>
+<text x="470" y="458" text-anchor="middle" style="fill:var(--accent);font-size:10.5px;font-weight:600">포트/어댑터</text>
+<text x="470" y="472" text-anchor="middle" style="fill:var(--mut);font-size:9.5px;font-weight:400">IClock·IBus·IVehicleBehavior·IPlant·IInputFault</text>
+<rect class="inner" x="320" y="492" width="300" height="32" rx="7"/>
+<text x="470" y="514" text-anchor="middle" style="fill:var(--ink);font-size:11px;font-weight:400">TickInbox · behavior / plant</text>
+<rect class="inner" x="320" y="532" width="146" height="34" rx="7"/>
+<text x="393" y="554" text-anchor="middle" style="fill:var(--accent2);font-size:10.5px;font-weight:600">VecuReport.READY</text>
+<rect class="inner" x="474" y="532" width="146" height="34" rx="7"/>
+<text x="547" y="554" text-anchor="middle" style="fill:var(--ink);font-size:10.5px;font-weight:400">JSONL trace</text>
+<rect class="n" x="770" y="452" width="200" height="92" rx="9"/>
+<text x="870" y="497" text-anchor="middle" style="fill:var(--ink);font-size:13px;font-weight:700">SUT</text>
+<text x="870" y="512" text-anchor="middle" style="fill:var(--mut);font-size:10.5px;font-weight:400">기존 MMF 소프트웨어</text>
+<path d="M844 242 L610 300 L438 360" fill="none" stroke="#98a4bd" stroke-width="1.6" marker-end="url(#oa)"/>
+<text x="700" y="288" text-anchor="start" style="fill:var(--accent);font-size:10.5px;font-weight:600">docker run</text>
+<path d="M40 178 L22 178 L22 470 L298 470" fill="none" stroke="#98a4bd" stroke-width="1.6" marker-end="url(#oa)"/>
+<text x="205" y="462" text-anchor="middle" style="fill:var(--mut);font-size:10.5px;font-weight:600">TickGrant</text>
+<path d="M298 494 L32 494 L32 200 L40 200" fill="none" stroke="#98a4bd" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#oa)"/>
+<text x="205" y="510" text-anchor="middle" style="fill:var(--mut);font-size:10.5px;font-weight:600">TickComplete</text>
+<path d="M640 498 L768 498" fill="none" stroke="#98a4bd" stroke-width="1.6" marker-start="url(#oa2)" marker-end="url(#oa)"/>
+<text x="704" y="488" text-anchor="middle" style="fill:var(--mut);font-size:10.5px;font-weight:600">EgoState / VehicleControl</text>
+<text x="704" y="528" text-anchor="middle" style="fill:var(--mut);font-size:10.5px;font-weight:600">VISS · DDS 버스</text>
+<path d="M520 360 L520 240" fill="none" stroke="var(--accent2)" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#oa)"/>
+<text x="530" y="306" style="fill:var(--accent2);font-size:10.5px;font-weight:600">VecuReady · trace → 판정</text>
+</svg>
+<figcaption style="color:var(--mut);font-size:12.5px;margin-top:8px;text-align:center">그림 5.1 — 전체 오케스트레이션 관계: Topology Compiler 출력을 Run Coordinator 가 소비 → MMF(lifecycle_mgr/adsw_manager)가 vECU 컨테이너를 기동(경로 B) → 데이터 평면 DDS/VISS 버스에서 Clock Master·SUT 와 폐루프. vECU 는 READY·trace 를 Run Coordinator 에 보고한다.</figcaption>
+</figure>
 <h3 id="5-2-run-상태기계">5.2 Run 상태기계</h3>
 <pre><code class="language-text">CREATED
   → COMPILED
@@ -170,6 +247,65 @@
   → COMPLETING
   → PASSED | FAILED | ABORTED
   → CLEANED</code></pre>
+<figure style="margin:20px 0;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 16px 12px">
+<svg viewBox="0 0 980 300" width="100%" role="img" aria-label="Run Coordinator 상태 기계: CREATED에서 COMPLETING까지 선형 진행 후 PASSED/FAILED/ABORTED로 분기, 모두 CLEANED로 수렴" style="display:block;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Apple SD Gothic Neo','Noto Sans KR',Roboto,sans-serif">
+  <defs>
+    <marker id="rcah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#98a4bd"/>
+    </marker>
+  </defs>
+  <style>
+    .rc-n{fill:var(--panel2);stroke:var(--line);stroke-width:1.4;rx:9}
+    .rc-t{fill:var(--ink);font-size:12.5px;font-weight:600}
+    .rc-e{stroke:#98a4bd;stroke-width:1.6;fill:none;marker-end:url(#rcah)}
+    .rc-cap{fill:var(--mut);font-size:11.5px}
+  </style>
+  <!-- top linear chain -->
+  <g>
+    <rect class="rc-n" x="8"   y="30" width="140" height="46" rx="9"/>
+    <text class="rc-t" x="78"  y="57" text-anchor="middle">CREATED</text>
+    <rect class="rc-n" x="160" y="30" width="140" height="46" rx="9"/>
+    <text class="rc-t" x="230" y="57" text-anchor="middle">COMPILED</text>
+    <rect class="rc-n" x="312" y="30" width="140" height="46" rx="9"/>
+    <text class="rc-t" x="382" y="57" text-anchor="middle">STARTING</text>
+    <rect class="rc-n" x="464" y="30" width="140" height="46" rx="9"/>
+    <text class="rc-t" x="534" y="57" text-anchor="middle">WAITING_READY</text>
+    <rect class="rc-n" x="616" y="30" width="140" height="46" rx="9" style="stroke:var(--accent);stroke-width:2"/>
+    <text class="rc-t" x="686" y="57" text-anchor="middle" style="fill:var(--accent)">RUNNING</text>
+    <rect class="rc-n" x="768" y="30" width="140" height="46" rx="9"/>
+    <text class="rc-t" x="838" y="57" text-anchor="middle">COMPLETING</text>
+  </g>
+  <!-- horizontal edges -->
+  <path class="rc-e" d="M148 53 H158"/>
+  <path class="rc-e" d="M300 53 H310"/>
+  <path class="rc-e" d="M452 53 H462"/>
+  <path class="rc-e" d="M604 53 H614"/>
+  <path class="rc-e" d="M756 53 H766"/>
+  <!-- branch from COMPLETING to verdicts -->
+  <path class="rc-e" d="M838 76 C 838 118, 563 108, 563 148"/>
+  <path class="rc-e" d="M838 76 C 838 112, 723 112, 723 148"/>
+  <path class="rc-e" d="M838 76 C 900 118, 883 108, 883 148"/>
+  <!-- verdict nodes -->
+  <rect class="rc-n" x="488" y="150" width="150" height="44" rx="9" style="stroke:var(--accent2);stroke-width:1.8"/>
+  <text class="rc-t" x="563" y="176" text-anchor="middle" style="fill:var(--accent2)">PASSED</text>
+  <rect class="rc-n" x="648" y="150" width="150" height="44" rx="9" style="stroke:#ff8a8a;stroke-width:1.8"/>
+  <text class="rc-t" x="723" y="176" text-anchor="middle" style="fill:#ffb0b0">FAILED</text>
+  <rect class="rc-n" x="808" y="150" width="150" height="44" rx="9" style="stroke:var(--mut);stroke-width:1.8"/>
+  <text class="rc-t" x="883" y="176" text-anchor="middle" style="fill:var(--mut)">ABORTED</text>
+  <!-- converge to CLEANED -->
+  <path class="rc-e" d="M563 194 C 563 218, 723 210, 723 230"/>
+  <path class="rc-e" d="M723 194 V 230"/>
+  <path class="rc-e" d="M883 194 C 883 218, 723 210, 723 230"/>
+  <rect class="rc-n" x="648" y="232" width="150" height="46" rx="9"/>
+  <text class="rc-t" x="723" y="259" text-anchor="middle">CLEANED</text>
+  <!-- notes (lower-left void) -->
+  <text class="rc-cap" x="8" y="150">전이 기록: run_id · 원인 · wall time · sim time</text>
+  <text class="rc-cap" x="8" y="172">실패 전이 → idempotent cleanup 호출</text>
+  <text class="rc-cap" x="8" y="200">WAITING_READY 부분 기동 → 기본 전체 rollback</text>
+  <text class="rc-cap" x="8" y="222">(allow_degraded: true 인 topology 만 degraded run 허용)</text>
+</svg>
+<figcaption style="color:var(--mut);font-size:12.5px;margin-top:6px;text-align:center">그림 5.2 — Run 상태 기계: 선형 기동(CREATED→COMPLETING) 후 판정으로 분기, 모든 종단은 idempotent CLEANED 로 수렴</figcaption>
+</figure>
 <p>모든 전이는 <code>run_id</code>, 원인, wall time, sim time을 기록한다. 실패한 전이는 idempotent cleanup을 호출한다.</p>
 <p>Coordinator는 run당 단일 소유자이지만 고가용성 cluster를 Phase 1 범위에 넣지 않는다. 대신 run state와 ownership lease를 외부에서 복구 가능한 형태로 남기고 모든 정리 동작을 idempotent하게 만든다.</p>
 <pre><code class="language-text">run directory
@@ -707,6 +843,28 @@ docker/compose/
 
 docs/
   sils-virtual-ecu-architecture-v3.md</code></pre>
+
+<h3 id="s16-1">16.1 제안 vs 현재(as-built) 대조</h3>
+<p>위 레이아웃은 <strong>설계 시점의 목표(target)</strong>다. 실제 구현은 P4(earned-abstraction: 소비자가 ≥2가 될 때까지 폴더/포트를 미리 쪼개지 않음)와 문서 이후의 기능 진화를 따라 아래와 같이 갈라져 있다. 파트너 핸드오프 시 <strong>아래 as-built 열</strong>을 기준으로 코드를 찾을 것.</p>
+<div class="table-wrap"><table><thead><tr><th>§16 제안</th><th>현재 as-built</th><th>상태</th></tr></thead><tbody>
+<tr><td><code>tools/sils/topology_compiler/</code></td><td><code>tools/sils/topology_compiler/</code></td><td>✅ 일치</td></tr>
+<tr><td><code>tools/sils/run_coordinator/</code></td><td><code>tools/sils/run_coordinator/</code>(domain_lease.py) + <code>service/sils/run_coordinator/</code>(run_phase1.sh, test_fleet.sh)</td><td>⚠️ 두 곳에 분산</td></tr>
+<tr><td><code>service/sils/vecu/{kernel,tick_inbox,ports,adapters,behaviors,scenarios}/</code></td><td>전부 <strong>flat</strong> <code>service/sils/vecu/src/*.hpp</code> — ports=<code>clock_source.hpp</code>·<code>behavior.hpp</code>, behaviors=<code>vehicle_behavior.hpp</code>·<code>vehicle_fmu_behavior.hpp</code>, tick_inbox=<code>tick_inbox.hpp</code>, scenarios=<code>scenario.hpp</code></td><td>⚠️ 구조만 다름(내용 존재)</td></tr>
+<tr><td><code>service/sils/vecu/descriptors/</code></td><td><code>service/sils/vecu/descriptors/</code></td><td>✅ 일치</td></tr>
+<tr><td><code>service/sils/clock_master/</code></td><td><code>service/sils/vecu/src/sils_clock_master.cc</code> (vecu 하위 실행 타깃 <code>sils_clock_master</code>)</td><td>⚠️ 위치 다름</td></tr>
+<tr><td><code>service/sils/relay_gateway/</code></td><td>없음</td><td>❌ 미구현(선택 기능)</td></tr>
+<tr><td><code>service/sils/external_integration/{bridge_supervisor,contract_adapter}/</code></td><td>없음</td><td>❌ 미구현(= 실 브리지, deferred)</td></tr>
+<tr><td><code>config/sils/{contracts,qos,topologies}</code></td><td>+ <code>channelmap</code>·<code>fmu</code>·<code>parity</code>·<code>regression</code>·<code>trace-schema</code></td><td>➕ 확장</td></tr>
+<tr><td><code>idl/dds/sils/{Tick,RunControl,VecuReport,ScenarioControl}.idl</code></td><td><code>TickControl.idl</code> + <code>EgoState.idl</code>·<code>VehicleControl.idl</code>·<code>ControlTarget.idl</code></td><td>⚠️ 이름·구성 다름</td></tr>
+<tr><td><code>docker/compose/docker-compose-sils.yaml</code></td><td>없음</td><td>❌ 미생성</td></tr>
+<tr><td>(§16에 없음)</td><td><code>tools/sils/conformance/</code>(validate·evaluate·gate·compare_golden·parity·to_junit·import_openscenario), <code>tools/sils/{contracts,fmu,ci}/</code></td><td>➕ 문서 이후 추가</td></tr>
+</tbody></table></div>
+<p><strong>차이의 원인 3종:</strong></p>
+<ol>
+<li><strong>Earned-abstraction (구조)</strong> — vecu는 6개 폴더로 미리 분리하지 않고 <code>src/</code> 평면을 유지한다. 제안된 조각들(ports/behaviors/tick_inbox/scenarios)은 폴더가 아니라 <strong>헤더 파일</strong>로 존재하며 기능은 모두 구현되어 있다.</li>
+<li><strong>문서 이후 진화 (추가)</strong> — conformance kit, 버스결합 정규 IDL(<code>EgoState</code>/<code>VehicleControl</code>/<code>ControlTarget</code>), fmu·parity·regression·channelmap 설정은 §16 작성 이후 도입.</li>
+<li><strong>미구현 (기능 부재)</strong> — 실제로 빠진 것은 <code>relay_gateway</code>, <code>external_integration</code>(실 브리지, 보류), compose 생성물뿐이다. 별도 <code>RunControl</code>/<code>VecuReport</code>/<code>ScenarioControl.idl</code>은 만들지 않았고, tick 제어는 <code>TickControl.idl</code>로 통합, vECU 리포트는 별도 IDL 대신 <strong>JSONL trace</strong>(§trace-schema)로 처리한다.</li>
+</ol>
 <hr>
 <h2 class="sec" id="s17">17. 단계별 구현 계획</h2>
 <div class="table-wrap"><table><thead><tr><th>Phase</th><th>목표</th><th>주요 산출물</th><th>통과 기준</th></tr></thead><tbody>
