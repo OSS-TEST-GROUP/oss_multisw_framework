@@ -72,6 +72,11 @@ int main(int argc, char** argv) {
     const std::string topic_name =
         ArgStr(argc, argv, "--topic", GetEnvOr("SILS_EGO_STATE_TOPIC", "sils/ego/state"));
     const int count = ArgInt(argc, argv, "--count", 20);
+    // Lockstep only: how many grants to PARTICIPATE in (complete) before self-terminating.
+    // Set == clock_master --ticks so the source leaves exactly when the master stops (no
+    // barrier timeout); keep it > --count so the probe (1-tick lag) drains the last sample
+    // (no staging tail). Default = count (stops at count; may leave a 1-sample tail).
+    const int part_ticks = ArgInt(argc, argv, "--ticks", count);
     const int rate_ms = ArgInt(argc, argv, "--rate-ms", 100);
     const int startup_ms = ArgInt(argc, argv, "--startup-ms", 1000);
     const double accel = 0.5;  // m/s^2 nominal ramp so vx (and position) visibly evolve
@@ -141,13 +146,20 @@ int main(int argc, char** argv) {
                   << topic_name << "\",\"mode\":\"lockstep\",\"count\":" << count << "}" << std::endl;
         sils::TickInfo tick;
         while (clock->WaitForNextTick(tick)) {
-            const double t = static_cast<double>(tick.sim_time_ns) / 1e9;  // sim seconds
-            const double vx = accel * t;             // exact integral -> pure fn of sim_time
-            const double px = 0.5 * accel * t * t;
-            publish_state(tick.seq, tick.sim_time_ns, px, vx);
+            // Publish only the first `count` grants, but COMPLETE every granted tick until
+            // stop -- a barrier participant must not leave while the master is still
+            // granting (else the barrier times out). Completing a few trailing empty ticks
+            // also lets the probe (1-tick lag) drain the last published sample, so nothing
+            // is left unstaged. Run clock_master with --ticks a bit above --count.
+            if (count <= 0 || tick.seq <= static_cast<uint64_t>(count)) {
+                const double t = static_cast<double>(tick.sim_time_ns) / 1e9;  // sim seconds
+                const double vx = accel * t;         // exact integral -> pure fn of sim_time
+                const double px = 0.5 * accel * t * t;
+                publish_state(tick.seq, tick.sim_time_ns, px, vx);
+                ++sent;
+            }
             clock->TickDone(tick);  // TickComplete(seq, "ego-source") + tick_complete trace
-            ++sent;
-            if (count > 0 && tick.seq >= static_cast<uint64_t>(count)) break;  // count == --ticks
+            if (part_ticks > 0 && tick.seq >= static_cast<uint64_t>(part_ticks)) break;  // self-terminate
         }
     } else {
         std::this_thread::sleep_for(std::chrono::milliseconds(startup_ms));

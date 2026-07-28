@@ -892,6 +892,56 @@ def test_vehicle_pass_uses_bus_evidence_not_viss():
     assert r["conformant"] is True
 
 
+# ── inbound fault injection (IInputFault, analyze_fault) ──────────────────────
+
+def fault_events(fault_ticks=(3,), declared=None, propagate_at=None, ticks=4):
+    """A bus-coupled stream with an inbound-state fault schedule. `declared` overrides the
+    input_fault_on count (to test completeness mismatch); `propagate_at` corrupts the command
+    at that tick's control_published (to test unsafe propagation)."""
+    IID = "vi-probe-1"
+    evs = vehicle_events(ticks=ticks)
+    d = declared if declared is not None else len(fault_ticks)
+    evs.append({"run_id": "veh", "instance_id": IID, "event": "input_fault_on",
+                "wall_time_ms": 1007, "schedule": "sched", "faults": d})
+    for t in fault_ticks:
+        evs.append({"run_id": "veh", "instance_id": IID, "event": "input_fault", "wall_time_ms": 1010,
+                    "tick_seq": t, "channel": "Vehicle.EgoState", "kind": "ego-state", "mode": "nan"})
+    if propagate_at is not None:
+        for e in evs:
+            if e.get("event") == "control_published" and e.get("tick_seq") == propagate_at:
+                e["acceleration"] = float("nan")  # controller leaked the corrupt state
+    return evs
+
+
+def test_fault_none_when_absent():
+    r = ev.evaluate_run(ev.parse_trace(write_trace(vehicle_events()))[0], "x")
+    assert r["fault"] == {"mode": "none"}
+
+
+def test_fault_injected_robust_is_conformant():
+    r = ev.evaluate_run(ev.parse_trace(write_trace(fault_events(fault_ticks=(2, 3))))[0], "x")
+    assert r["fault"]["mode"] == "injected"
+    assert r["fault"]["declared"] == 2 and r["fault"]["injected"] == 2
+    assert r["fault"]["robust"] is True, r["violations"]
+    assert r["conformant"] is True, r["violations"]  # faults injected, controller degraded safely
+
+
+def test_fault_declared_mismatch_flagged():
+    # input_fault_on says 2 but only 1 fired -> a fault silently didn't inject.
+    r = ev.evaluate_run(ev.parse_trace(write_trace(fault_events(fault_ticks=(3,), declared=2)))[0], "x")
+    assert any("declared 2" in v and "1 fired" in v for v in r["violations"]), r["violations"]
+    assert r["conformant"] is False
+
+
+def test_fault_propagation_to_control_flagged():
+    # A NaN state that leaked into the command at the fault tick = unsafe degradation.
+    r = ev.evaluate_run(ev.parse_trace(write_trace(
+        fault_events(fault_ticks=(3,), propagate_at=3)))[0], "x")
+    assert r["fault"]["robust"] is False
+    assert any("did not degrade safely" in v for v in r["violations"]), r["violations"]
+    assert r["conformant"] is False
+
+
 def _mimo(chA_frozen, chB_frozen, recvA, recvB, policy="next_tick"):
     A, B = "Vehicle.EgoState", "Vehicle.ControlTarget"
     evs = [{"run_id": "m", "instance_id": "vi", "event": "input_staging_on", "wall_time_ms": 1,

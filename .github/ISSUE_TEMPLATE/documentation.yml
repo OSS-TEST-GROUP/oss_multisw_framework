@@ -1,5 +1,5 @@
-name: 📖 문서 오류 (Documentation)
-description: 문서의 오류, 누락, 개선점을 신고합니다.
+name: 📖 문서 오류 · Documentation
+description: 문서의 오류, 누락, 개선점을 신고합니다. / Report doc errors, gaps, or improvements.
 title: "[Docs] "
 labels: ["documentation", "needs-triage"]
 body:
@@ -7,28 +7,37 @@ body:
     attributes:
       value: |
         문서 개선 제보 감사합니다. 어느 문서의 어떤 부분인지 알려주시면 빠르게 반영할 수 있습니다.
+        Thanks for helping improve the docs! Tell us which document and which part so we can fix it quickly.
 
   - type: input
     id: location
     attributes:
-      label: 문서 위치
-      description: 문제가 있는 문서의 경로나 URL
-      placeholder: 예) README.md 의 "설치" 섹션, 또는 문서 링크
+      label: 문서 위치 · Location
+      description: 문제가 있는 문서의 경로나 URL / Path or URL of the affected document
+      placeholder: 예/e.g. README.md 의 "설치 / Install" 섹션, 또는 문서 링크 / doc link
     validations:
       required: true
 
   - type: textarea
     id: problem
     attributes:
-      label: 무엇이 문제인가요?
-      description: 오류·누락·모호한 내용 등 개선이 필요한 부분을 설명해 주세요.
+      label: 무엇이 문제인가요? · What's wrong?
+      description: 오류·누락·모호한 내용 등 개선이 필요한 부분을 설명해 주세요. / Describe the error, omission, or ambiguity.
     validations:
       required: true
 
   - type: textarea
     id: suggestion
     attributes:
-      label: 제안하는 수정 내용
-      description: 어떻게 바꾸면 좋을지 제안이 있다면 적어주세요.
+      label: 제안하는 수정 내용 · Suggested fix
+      description: 어떻게 바꾸면 좋을지 제안이 있다면 적어주세요. / If you have a suggested wording/change, add it here.
     validations:
       required: false
+
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: 기여 · Contribution
+      options:
+        - label: 직접 PR 로 수정 제출할 의향이 있습니다. / I'm willing to submit a PR for this.
+          required: false

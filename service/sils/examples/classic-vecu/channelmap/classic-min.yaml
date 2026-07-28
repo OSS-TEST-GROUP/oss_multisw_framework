@@ -1,0 +1,19 @@
+# classic-vecu channel map -- AUTOSAR Classic ECU as a V-ECU FMU (plant coupling, Option 2).
+# Same wire as steer-ecu / ego-min.yaml. The FMU's value references are bound to these
+# canonical channels by FmuBehavior (see src/main.cc SILS_FMU_VR_* env).
+#
+# Run:  SILS_CHANNELMAP=service/sils/examples/classic-vecu/channelmap/classic-min.yaml \
+#       SILS_FMU_FILE=service/sils/examples/classic-vecu/models/vecu-fmu/vecu.fmu \
+#       SILS_FMU_VR_VX=0 SILS_FMU_VR_ACCEL_OUT=1  bin/classic_vecu
+channels:
+  # --- STATE in (MORAI/AWSIM -> V-ECU FMU input VRs): EgoState struct ---
+  - name: Vehicle.EgoState
+    dir: in
+    topic: sils/ego/state
+    type: canonical/ego-state
+
+  # --- ACTUATION out (V-ECU FMU output VRs -> MORAI/AWSIM): VehicleControl struct ---
+  - name: Vehicle.Control
+    dir: out
+    topic: sils/ego/cmd
+    type: canonical/vehicle-control

@@ -1,13 +1,14 @@
-# 이슈 템플릿 선택 화면 설정
-# 빈 이슈 작성을 막고, 버그가 아닌 질문은 Discussions 로 유도한다.
+# 이슈 템플릿 선택 화면 설정 / Issue template chooser config
+# 빈 이슈를 막고, 버그가 아닌 질문은 Discussions 로 유도한다.
+# Block blank issues; route non-bug questions to Discussions.
 blank_issues_enabled: false
 contact_links:
-  - name: ❓ 질문 / 사용법 문의 (Q&A)
-    url: https://github.com/orgs/OSS-TEST-GROUP/discussions
-    about: 버그가 아닌 질문·사용법 문의는 Discussions Q&A 에 올려주세요.
-  - name: 💡 아이디어 / 자유 토론
-    url: https://github.com/orgs/OSS-TEST-GROUP/discussions
-    about: 방향이 정해지지 않은 제안이나 토론은 Discussions Ideas 를 이용해 주세요.
-  - name: 🔒 보안 취약점 신고
+  - name: ❓ 질문 / 사용법 (Q&A) · Question / Usage
+    url: https://github.com/orgs/OSS-TEST-GROUP/discussions/categories/q-a
+    about: 버그가 아닌 질문·사용법 문의는 Discussions Q&A 에 올려주세요. / For questions (not bugs), please use Discussions Q&A.
+  - name: 💡 아이디어 / 자유 토론 · Ideas
+    url: https://github.com/orgs/OSS-TEST-GROUP/discussions/categories/ideas
+    about: 방향이 정해지지 않은 제안·토론은 Discussions Ideas 를 이용해 주세요. / For open-ended proposals or discussion, use Discussions Ideas.
+  - name: 🔒 보안 취약점 신고 · Security
     url: https://github.com/OSS-TEST-GROUP/oss_multisw_framework/security/advisories/new
-    about: 보안 취약점은 공개 이슈가 아니라 비공개 신고 채널로 알려주세요.
+    about: 보안 취약점은 공개 이슈가 아니라 비공개 신고 채널로 알려주세요. / Report security vulnerabilities privately, not as public issues.

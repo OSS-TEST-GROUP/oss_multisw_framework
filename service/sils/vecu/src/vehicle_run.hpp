@@ -20,6 +20,7 @@
 #include <csignal>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -38,6 +39,7 @@
 #include "clock_source.hpp"
 #include "config.hpp"
 #include "vehicle_behavior.hpp"
+#include "vehicle_input_fault.hpp"
 #include "vehicle_staging.hpp"
 #include "vehicle_wire.hpp"
 
@@ -55,6 +57,11 @@ inline long long VehicleWallMs() {
 // JSONL trace, same shape as run_loop.hpp's TraceEvent (conformance kit consumes this).
 inline void VehicleTrace(const std::string& run_id, const std::string& instance_id,
                          const std::string& event, const std::string& extra = "") {
+    // Locked (TraceMutex, clock_source.hpp): the DDS staging listeners emit input_received
+    // from their own threads concurrently with the main loop's frozen/state/control lines,
+    // and a bare `cout << ... << endl` is not atomic across threads -- interleaved writes
+    // corrupt JSONL lines and surface as phantom staging violations downstream.
+    std::lock_guard<std::mutex> lk(TraceMutex());
     std::cout << "{\"run_id\":\"" << run_id << "\",\"instance_id\":\"" << instance_id
               << "\",\"event\":\"" << event << "\",\"wall_time_ms\":" << VehicleWallMs()
               << (extra.empty() ? "" : ("," + extra)) << "}" << std::endl;
@@ -255,6 +262,24 @@ inline int RunVehicleProbe(const ProbeConfig& cfg, std::unique_ptr<IVehicleBehav
         MakeClockSource(cfg.clock_mode, cfg.period_ms, &g_vehicle_stop, participant, run_id, id);
     VehicleTrace(run_id, id, "clock_start", "\"mode\":\"" + std::string(clock->mode()) + "\"");
     VehicleTrace(run_id, id, "behavior_start", "\"name\":\"" + std::string(behavior->name()) + "\"");
+
+    // Inbound fault injection (§11 negative path, bus-coupled counterpart of IScenario):
+    // perturb the ego STATE the behavior consumes on a deterministic tick schedule
+    // (SILS_INPUT_FAULTS). Empty spec -> nominal (run byte-identical). Fail-fast (§14) if a
+    // spec was given but parses to zero faults, so a typo can't silently disable the test.
+    const std::string input_fault_spec = GetEnvOr("SILS_INPUT_FAULTS", "");
+    std::unique_ptr<IInputFault> input_fault = MakeInputFault(input_fault_spec);
+    if (!input_fault_spec.empty() && input_fault->scheduled_faults() == 0) {
+        std::cerr << "RunVehicleProbe: SILS_INPUT_FAULTS set but no faults parsed from \""
+                  << input_fault_spec << "\" (expected e.g. \"10:drop,20-25:nan,40:oor\")"
+                  << std::endl;
+        return 2;
+    }
+    if (input_fault->scheduled_faults() > 0) {
+        VehicleTrace(run_id, id, "input_fault_on",
+                     "\"schedule\":\"" + input_fault_spec + "\",\"faults\":" +
+                         std::to_string(input_fault->scheduled_faults()));
+    }
     if (stage_input) {
         VehicleTrace(run_id, id, "input_staging_on",
                      "\"late_sample_policy\":\"" + cfg.late_sample_policy +
@@ -270,6 +295,10 @@ inline int RunVehicleProbe(const ProbeConfig& cfg, std::unique_ptr<IVehicleBehav
     TickInfo tick;
     uint64_t last_seq = 0;
     while (clock->WaitForNextTick(tick)) {
+        // Snapshot pre-tick state so a Drop fault (sensor dropout) can hold the last good
+        // value across the outage instead of the freshly-arrived sample.
+        const EgoStateSample prev_latest = latest;
+        const bool prev_have_state = have_state;
         if (stage_input) {
             // §7.3: freeze each in-channel's pending arrivals as this tick's input set. The
             // newest frozen sample is the value the behavior sees (ZOH: held across ticks
@@ -316,6 +345,23 @@ inline int RunVehicleProbe(const ProbeConfig& cfg, std::unique_ptr<IVehicleBehav
                 }
             }
         }
+        // Inbound fault injection (staging-layer interceptor): perturb the STATE the behavior
+        // is about to consume. Applied here so both staging and free-run paths are covered,
+        // and after acquisition so Drop can restore the pre-tick value (held across the outage).
+        const InputFault fault_now = input_fault->OnTick(tick.seq);
+        if (fault_now == InputFault::Drop) {
+            latest = prev_latest;         // sensor dropout: hold last good state
+            have_state = prev_have_state;
+        } else if (fault_now != InputFault::None) {
+            ApplyInputFault(fault_now, latest, have_state);  // Nan / OutOfRange: corrupt in place
+        }
+        if (fault_now != InputFault::None) {
+            VehicleTrace(run_id, id, "input_fault",
+                         "\"tick_seq\":" + std::to_string(tick.seq) +
+                             ",\"channel\":\"Vehicle.EgoState\",\"kind\":\"ego-state\",\"mode\":\"" +
+                             InputFaultName(fault_now) + "\"");
+        }
+
         if (have_state) {
             std::ostringstream ex;
             ex << "\"tick_seq\":" << tick.seq << ",\"src_seq\":" << latest.seq
@@ -348,6 +394,30 @@ inline int RunVehicleProbe(const ProbeConfig& cfg, std::unique_ptr<IVehicleBehav
 
         clock->TickDone(tick);
         last_seq = tick.seq;
+    }
+
+    // Shutdown drain (§7.3 completeness): under 1-tick-lag staging, inputs that arrived
+    // during the final tick(s) were never frozen by a subsequent tick -- a bounded run
+    // would otherwise report them as unstaged/lost. Freeze the remainder here, in reception
+    // order (the invariant holds), so a run with clock ticks == source sample count leaves
+    // nothing unstaged. Marked drain=true: staged for accounting, no behavior ran on them.
+    if (stage_input) {
+        auto drain = [&](auto& inboxes, const std::vector<std::string>& names, const char* kind) {
+            for (std::size_t i = 0; i < inboxes.size(); ++i) {
+                auto frozen = inboxes[i]->FreezeTick();
+                if (frozen.empty()) continue;
+                std::vector<uint64_t> rs;
+                rs.reserve(frozen.size());
+                for (const auto& f : frozen) rs.push_back(f.recv_seq);
+                VehicleTrace(run_id, id, "tick_input_frozen",
+                             "\"tick_seq\":" + std::to_string(last_seq) + ",\"channel\":\"" +
+                                 names[i] + "\",\"kind\":\"" + kind + "\",\"recv_seqs\":" +
+                                 VehicleRecvSeqsJson(rs) + ",\"count\":" +
+                                 std::to_string(rs.size()) + ",\"drain\":true");
+            }
+        };
+        drain(state_inboxes, state_inbox_names, "ego-state");
+        drain(target_inboxes, target_inbox_names, "control-target");
     }
 
     VehicleTrace(run_id, id, "run_stopping", "\"last_seq\":" + std::to_string(last_seq));
