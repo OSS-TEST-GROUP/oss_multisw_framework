@@ -942,6 +942,55 @@ def test_fault_propagation_to_control_flagged():
     assert r["conformant"] is False
 
 
+# ── functional requirements (analyze_requirements, the '검증완료' layer) ───────
+
+def _req(reqs):
+    return {"requirements": reqs}
+
+
+def test_requirements_none_when_absent():
+    r = ev.evaluate_run(ev.parse_trace(write_trace(vehicle_events()))[0], "x")
+    assert r["requirements"] == {"mode": "none"}
+
+
+def test_requirements_pass_is_conformant():
+    spec = _req([{"id": "R1", "name": "accel-bound", "signal": "control_published.acceleration",
+                  "assert": {"in_range": [-8.0, 4.0]}}])
+    r = ev.evaluate_run(ev.parse_trace(write_trace(vehicle_events()))[0], "x", spec)
+    assert r["requirements"]["mode"] == "checked"
+    assert r["requirements"]["passed"] == 1 and r["requirements"]["failed"] == 0
+    assert r["conformant"] is True, r["violations"]
+
+
+def test_requirements_bound_fail_flagged():
+    # fixture accel = 1.0 everywhere; max_abs 0.5 must fail.
+    spec = _req([{"id": "R2", "name": "accel-tight", "signal": "control_published.acceleration",
+                  "assert": {"max_abs": 0.5}}])
+    r = ev.evaluate_run(ev.parse_trace(write_trace(vehicle_events()))[0], "x", spec)
+    assert r["requirements"]["failed"] == 1
+    assert any("R2" in v and "exceeds 0.5" in v for v in r["violations"]), r["violations"]
+    assert r["conformant"] is False
+
+
+def test_requirements_settle_pass_and_fail():
+    # state_received vx = 0.1*k for k>=2 -> ticks 2,3,4 = 0.2,0.3,0.4.
+    good = _req([{"id": "S1", "name": "settle", "signal": "state_received.vx",
+                  "assert": {"settle_to": {"target": 0.4, "tol": 0.05, "within_tick": 4}}}])
+    r = ev.evaluate_run(ev.parse_trace(write_trace(vehicle_events()))[0], "x", good)
+    assert r["requirements"]["passed"] == 1, r["violations"]
+    bad = _req([{"id": "S2", "name": "settle", "signal": "state_received.vx",
+                 "assert": {"settle_to": {"target": 0.4, "tol": 0.05, "within_tick": 2}}}])
+    r2 = ev.evaluate_run(ev.parse_trace(write_trace(vehicle_events()))[0], "x", bad)
+    assert any("S2" in v and "not settled" in v for v in r2["violations"]), r2["violations"]
+
+
+def test_requirements_bad_signal_flagged():
+    spec = _req([{"id": "R3", "name": "nope", "signal": "control_published.nonexistent",
+                  "assert": {"max_abs": 1.0}}])
+    r = ev.evaluate_run(ev.parse_trace(write_trace(vehicle_events()))[0], "x", spec)
+    assert any("R3" in v and "no numeric samples" in v for v in r["violations"]), r["violations"]
+
+
 def _mimo(chA_frozen, chB_frozen, recvA, recvB, policy="next_tick"):
     A, B = "Vehicle.EgoState", "Vehicle.ControlTarget"
     evs = [{"run_id": "m", "instance_id": "vi", "event": "input_staging_on", "wall_time_ms": 1,

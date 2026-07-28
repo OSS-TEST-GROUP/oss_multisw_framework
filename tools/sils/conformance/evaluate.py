@@ -530,6 +530,133 @@ def analyze_fault(events: list[dict]) -> tuple[dict, list[str]]:
     }, violations
 
 
+def _req_series(events: list[dict], signal) -> tuple[list | None, str | None]:
+    """Extract the (tick_seq, value) time series for an 'event.field' signal, in trace order."""
+    if not isinstance(signal, str) or "." not in signal:
+        return None, f"signal '{signal}' must be 'event.field' (e.g. control_published.acceleration)"
+    ev_name, field = signal.split(".", 1)
+    pts = []
+    for e in events:
+        if e.get("event") == ev_name and field in e:
+            v = e.get(field)
+            if isinstance(v, (int, float)) and not isinstance(v, bool):
+                pts.append((e.get("tick_seq"), v))
+    return pts, None
+
+
+def _req_dt_seconds(events: list[dict]) -> float | None:
+    """Best-effort tick dt in seconds (from the clock) for rate metrics. None if unknown."""
+    for e in events:
+        d = e.get("dt_ns")
+        if isinstance(d, (int, float)) and d > 0:
+            return d / 1e9
+    return None
+
+
+def _check_requirement(req: dict, events: list[dict], dt_s: float | None) -> tuple[bool, dict, list[str]]:
+    """Evaluate one requirement's assert against the trace. Returns (ok, detail, violations)."""
+    rid = req.get("id", req.get("name", "?"))
+    name = req.get("name", rid)
+    signal = req.get("signal")
+    a = req.get("assert", {}) or {}
+    label = f"requirement {rid} '{name}'"
+    pts, err = _req_series(events, signal)
+    if err:
+        return False, {"id": rid, "name": name, "status": "error"}, [f"{label}: {err}"]
+    if not pts:
+        return False, {"id": rid, "name": name, "status": "no-signal"}, \
+            [f"{label}: signal '{signal}' produced no numeric samples"]
+
+    vals = [val for _, val in pts]
+    viol: list[str] = []
+    if "in_range" in a:
+        lo, hi = a["in_range"]
+        bad = [t for t, val in pts if (lo is not None and val < lo) or (hi is not None and val > hi)]
+        if bad:
+            viol.append(f"{label}: {signal} outside range [{lo}, {hi}] at tick(s) {bad[:10]}")
+    if "max_abs" in a:
+        X = a["max_abs"]
+        bad = [t for t, val in pts if abs(val) > X]
+        if bad:
+            viol.append(f"{label}: |{signal}| exceeds {X} at tick(s) {bad[:10]}")
+    if "max_rate" in a:
+        X = a["max_rate"]
+        d = dt_s if dt_s else 1.0
+        unit = "/s" if dt_s else "/tick"
+        bad = [t1 for (_, v0), (t1, v1) in zip(pts, pts[1:]) if abs(v1 - v0) / d > X]
+        if bad:
+            viol.append(f"{label}: rate of {signal} exceeds {X}{unit} at tick(s) {bad[:10]}")
+    if "settle_to" in a:
+        s = a["settle_to"]
+        tgt, tol, wt = s["target"], s["tol"], s["within_tick"]
+        late = [(t, val) for t, val in pts if isinstance(t, int) and t >= wt]
+        if not late:
+            viol.append(f"{label}: never reached the settle window (tick >= {wt})")
+        else:
+            bad = [t for t, val in late if abs(val - tgt) > tol]
+            if bad:
+                viol.append(f"{label}: {signal} not settled to {tgt}±{tol} by tick {wt} at tick(s) {bad[:10]}")
+    if "overshoot_lt" in a:
+        o = a["overshoot_lt"]
+        tgt, lim = o["target"], o["limit"]
+        peak = max(val - tgt for val in vals)
+        if peak >= lim:
+            viol.append(f"{label}: overshoot {peak:.4g} >= {lim} above target {tgt}")
+
+    ok = not viol
+    return ok, {"id": rid, "name": name, "status": "pass" if ok else "fail"}, viol
+
+
+def analyze_requirements(events: list[dict], spec) -> tuple[dict, list[str]]:
+    """Check developer-authored FUNCTIONAL requirements against the trace -- the '검증완료'
+    layer (docs/sils-functional-verification-interop.md). Where analyze_vehicle/analyze_plant
+    judge whether the loop is SOUND, this judges whether the control MEETS THE DEVELOPER'S
+    SPEC. `spec` is the parsed requirements file ({"requirements": [...]}) or None.
+
+    Each requirement asserts a temporal property over one trace signal (event.field):
+    in_range / max_abs / max_rate / settle_to / overshoot_lt -- a declarative, data-form
+    'simplified STL' judged from the trace (industry equivalents: Simulink Test Assessment,
+    Signal Temporal Logic). Returns (info, violations). Note: a metric is only as meaningful
+    as the plant the run used -- a stub-fixture run makes performance thresholds moot (§3.3)."""
+    if not spec:
+        return {"mode": "none"}, []
+    reqs = spec.get("requirements") if isinstance(spec, dict) else None
+    if not reqs:
+        return {"mode": "empty"}, ["requirements spec present but declares no requirements"]
+    dt_s = _req_dt_seconds(events)
+    violations: list[str] = []
+    results: list[dict] = []
+    passed = 0
+    for req in reqs:
+        ok, detail, viol = _check_requirement(req, events, dt_s)
+        results.append(detail)
+        violations.extend(viol)
+        passed += 1 if ok else 0
+    return {
+        "mode": "checked",
+        "total": len(reqs),
+        "passed": passed,
+        "failed": len(reqs) - passed,
+        "dt_source": "clock" if dt_s else "per-tick",
+        "results": results,
+    }, violations
+
+
+def load_requirements(path):
+    """Load a requirements YAML ({"requirements":[...]}) -> (spec, error). None path = no
+    requirements. Mirrors compare_golden.load_rules (lazy PyYAML, graceful if absent)."""
+    if path is None:
+        return None, None
+    try:
+        import yaml
+    except ImportError:  # pragma: no cover
+        return None, "PyYAML not available; cannot read --requirements"
+    if not Path(path).exists():
+        return None, f"requirements file not found: {path}"
+    spec = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+    return spec, None
+
+
 # Contracted transport reliability for the VISS protocol (dds_transport.cpp uses
 # RELIABLE; a vECU that negotiated anything weaker isn't protocol-faithful).
 CONTRACT_RELIABILITY = "RELIABLE"
@@ -708,7 +835,7 @@ def analyze_protocol(events: list[dict], injected: dict | None = None) -> tuple[
 FIDELITY_RANK = {"none": 0, "L0": 1, "L1": 2, "L2": 3, "L3": 4, "L4": 5}
 
 
-def evaluate_run(events: list[dict], path: str) -> dict:
+def evaluate_run(events: list[dict], path: str, requirements=None) -> dict:
     """Reduce one run's merged event stream to a verdict + violations."""
     run_id = dominant_run_id(events)
     names = [e.get("event") for e in events]
@@ -827,6 +954,10 @@ def evaluate_run(events: list[dict], path: str) -> dict:
     fault, fault_violations = analyze_fault(events)
     violations.extend(fault_violations)
 
+    # --- functional requirements (developer's own pass/fail spec, the '검증완료' layer) --
+    req_info, req_violations = analyze_requirements(events, requirements)
+    violations.extend(req_violations)
+
     # --- target attestation (§11 L4, recorded not scored) -------------------
     attestation = analyze_attestation(events)
 
@@ -883,6 +1014,7 @@ def evaluate_run(events: list[dict], path: str) -> dict:
         "plant": plant,
         "vehicle": vehicle,
         "fault": fault,
+        "requirements": req_info,
         "attestation": attestation,
         "fidelity_evidenced": fidelity,
         "evidence": {
@@ -957,8 +1089,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("traces", nargs="+", help="trace.jsonl file(s) or a run dir containing *.trace.jsonl")
     parser.add_argument("--resolved", type=Path, default=None,
                         help="optional resolved-run.yaml to cross-check fleet completeness (§9)")
+    parser.add_argument("--requirements", type=Path, default=None,
+                        help="optional requirements YAML (functional pass/fail spec, §3)")
     parser.add_argument("--quiet", action="store_true", help="suppress the human summary on stderr")
     args = parser.parse_args(argv)
+
+    requirements, rerr = load_requirements(args.requirements)
+    if rerr:
+        print(f"# error: {rerr}", file=sys.stderr)
+        return EXIT_USAGE
 
     trace_paths = collect_trace_paths(args.traces)
     if not trace_paths:
@@ -971,7 +1110,7 @@ def main(argv: list[str] | None = None) -> int:
         if err:
             print(f"# error: {err}", file=sys.stderr)
             return EXIT_USAGE
-        run_results.append(evaluate_run(events, str(tp)))
+        run_results.append(evaluate_run(events, str(tp), requirements))
 
     expected_ids = None
     if args.resolved is not None:

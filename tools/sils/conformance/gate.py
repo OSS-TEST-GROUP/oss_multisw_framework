@@ -60,15 +60,16 @@ def _schema_stage(trace_paths: list[Path], schema: dict, strict: bool) -> tuple[
     return ok, lines
 
 
-def _fidelity_stage(trace_paths: list[Path], resolved: Path | None
+def _fidelity_stage(trace_paths: list[Path], resolved: Path | None, requirements=None
                     ) -> tuple[bool, list[str], dict | None, str | None]:
-    """Stage 2: evaluate the fleet. Returns (ok, summary_lines, fleet, error)."""
+    """Stage 2: evaluate the fleet. Returns (ok, summary_lines, fleet, error).
+    `requirements` (parsed spec) folds developer functional pass/fail into the verdict."""
     results = []
     for tp in trace_paths:
         events, err = ev.parse_trace(tp)
         if err:
             return False, [], None, err
-        results.append(ev.evaluate_run(events, str(tp)))
+        results.append(ev.evaluate_run(events, str(tp), requirements))
     expected_ids = None
     if resolved is not None:
         expected_ids, err = ev.load_resolved_instance_ids(resolved)
@@ -129,6 +130,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="parity contract YAML (required with --target)")
     parser.add_argument("--junit", type=Path, default=None,
                         help="write the fidelity verdict as JUnit XML here")
+    parser.add_argument("--requirements", type=Path, default=None,
+                        help="optional functional requirements YAML (folds into FIDELITY verdict)")
     parser.add_argument("--suite-name", default="sils-conformance")
     args = parser.parse_args(argv)
 
@@ -158,7 +161,11 @@ def main(argv: list[str] | None = None) -> int:
         print(ln, file=sys.stderr)
 
     # Stage 2: fidelity.
-    fidelity_ok, fid_lines, fleet, ferr = _fidelity_stage(trace_paths, args.resolved)
+    requirements, rerr = ev.load_requirements(args.requirements)
+    if rerr:
+        print(f"# error: {rerr}", file=sys.stderr)
+        return EXIT_USAGE
+    fidelity_ok, fid_lines, fleet, ferr = _fidelity_stage(trace_paths, args.resolved, requirements)
     if ferr:
         print(f"# error: fidelity stage: {ferr}", file=sys.stderr)
         return EXIT_USAGE

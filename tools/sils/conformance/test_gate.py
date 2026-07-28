@@ -13,6 +13,7 @@ import gate  # noqa: E402
 HERE = Path(__file__).resolve().parent
 NOMINAL = HERE / "samples" / "nominal.trace.jsonl"
 VEHICLE_LOCKSTEP = HERE / "samples" / "vehicle-lockstep.trace.jsonl"
+VEHICLE_REQUIREMENTS = HERE / "samples" / "vehicle-requirements.yaml"
 
 
 def write_trace(events, name="run.trace.jsonl"):
@@ -34,6 +35,25 @@ class GateTest(unittest.TestCase):
         self.assertTrue(VEHICLE_LOCKSTEP.exists(), f"missing sample: {VEHICLE_LOCKSTEP}")
         rc = gate.main([str(VEHICLE_LOCKSTEP)])
         self.assertEqual(rc, gate.EXIT_OK)
+
+    # --- functional requirements fold into the FIDELITY verdict (§3) --------
+    def test_vehicle_lockstep_passes_gate_with_requirements(self):
+        # The sample requirements are satisfied by the golden -> gate still PASSES.
+        self.assertTrue(VEHICLE_REQUIREMENTS.exists(), f"missing: {VEHICLE_REQUIREMENTS}")
+        rc = gate.main([str(VEHICLE_LOCKSTEP), "--requirements", str(VEHICLE_REQUIREMENTS)])
+        self.assertEqual(rc, gate.EXIT_OK)
+
+    def test_unmet_requirement_fails_gate(self):
+        # A requirement the golden violates (accel is -2.0/1.0, so max_abs 0.5 fails) ->
+        # gate FAILS even though the run is otherwise conformant.
+        spec = write_trace([], name="req.yaml")  # reuse tmpdir helper for a file path
+        spec.write_text(
+            "requirements:\n"
+            "  - id: X\n    name: too-tight\n"
+            "    signal: control_published.acceleration\n"
+            "    assert: {max_abs: 0.5}\n", encoding="utf-8")
+        rc = gate.main([str(VEHICLE_LOCKSTEP), "--requirements", str(spec)])
+        self.assertEqual(rc, gate.EXIT_GATE_FAIL)
 
     # --- schema stage is fail-closed ---------------------------------------
     def test_unknown_event_fails_schema_stage(self):
