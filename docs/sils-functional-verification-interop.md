@@ -116,7 +116,12 @@ MORAI 어댑터와 **동일 패턴**: **중립 정규 표현 + 얇은 importer(a
   gate.py run.jsonl --requirements requirements.yaml    # 요구 미충족이면 gate FAIL
   evaluate.py run.jsonl --requirements requirements.yaml  # report["requirements"]: total/passed/failed
   ```
-- **(b) OpenSCENARIO 수용** — `.xosc → 시나리오(②) + StopTrigger를 요구(③)로` 추출하는 importer. **②와 ③을 한 번에** 때리고, **MORAI·Autoware·CarMaker·Simulink가 전부 이 포맷을 말함** → 어느 진영에서 와도 재사용. 나중에 **① 실 브리지(MORAI)와도 정합**(같은 .xosc로 MORAI 구동 + 우리 판정).
+- **(b) OpenSCENARIO 수용** — ✅ **첫 컷 구현 완료**(`import_openscenario.py`, stdlib xml만). `.xosc → 시나리오 메타 + 매핑가능 조건을 requirements(③)로` 추출해 (a) 엔진이 그대로 소비. `SpeedCondition→state_received.vx`, `AccelerationCondition→control_published.acceleration`(rule→in_range 바운드 + `source` 추적성). **매핑 불가 조건(Collision·TraveledDistance·Position·TTC…)은 unmapped로 명시 리포트**(조용히 안 버림 — 트레이스에 신호 없음=플랜트/시뮬 필요). 정직한 스코프: 실행 안 함(스펙만), StopTrigger polarity는 리뷰 대상(헤더 경고), 조건 subset만(earned 확장). sandbox 자체검증(6 테스트, 전체 161 passed) + **round-trip 실증**(.xosc→requirements→gate --requirements→PASS).
+  ```bash
+  import_openscenario.py scenario.xosc -o requirements.yaml   # + unmapped 조건 stderr 리포트
+  gate.py run.jsonl --requirements requirements.yaml
+  ```
+  **MORAI·Autoware·CarMaker·Simulink가 전부 이 포맷을 말함** → 어느 진영에서 와도 재사용. 나중에 **① 실 브리지(MORAI)와도 정합**(같은 .xosc로 MORAI 구동 + 우리 판정; unmapped 조건들이 그때 판정 가능해짐).
 
 **순서 근거**: (a)가 판정 엔진(요구를 받는 내부 표현)을 세우고, (b)가 그 요구를 **표준에서 자동으로 채운다**. (a) 없이 (b)만 있으면 채울 대상이 없다.
 

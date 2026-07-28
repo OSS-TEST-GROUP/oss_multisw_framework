@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Minimal ASAM OpenSCENARIO sample for import_openscenario.py. Exercises two mappable
+     conditions (Speed, Acceleration) and two unmappable ones (Collision, TraveledDistance)
+     so the importer's map/unmapped split is demonstrable. NOT a complete runnable scenario. -->
+<OpenSCENARIO>
+  <FileHeader revMajor="1" revMinor="0" date="2026-07-24T00:00:00"
+              description="SiLS import sample: comfort + safety criteria" author="obigo"/>
+  <Entities>
+    <ScenarioObject name="Ego">
+      <Vehicle name="ego_vehicle" vehicleCategory="car"/>
+    </ScenarioObject>
+  </Entities>
+  <Storyboard>
+    <Init/>
+    <Story name="main">
+      <Act name="act1">
+        <ManeuverGroup name="mg1" maximumExecutionCount="1">
+          <Maneuver name="m1"/>
+        </ManeuverGroup>
+      </Act>
+    </Story>
+    <StopTrigger>
+      <ConditionGroup>
+        <Condition name="speed-limit" delay="0" conditionEdge="rising">
+          <ByEntityCondition>
+            <TriggeringEntities triggeringEntitiesRule="any">
+              <EntityRef entityRef="Ego"/>
+            </TriggeringEntities>
+            <EntityCondition>
+              <SpeedCondition rule="lessThan" value="30.0"/>
+            </EntityCondition>
+          </ByEntityCondition>
+        </Condition>
+        <Condition name="comfort-accel" delay="0" conditionEdge="none">
+          <ByEntityCondition>
+            <TriggeringEntities triggeringEntitiesRule="any">
+              <EntityRef entityRef="Ego"/>
+            </TriggeringEntities>
+            <EntityCondition>
+              <AccelerationCondition rule="lessThan" value="4.0"/>
+            </EntityCondition>
+          </ByEntityCondition>
+        </Condition>
+        <Condition name="no-collision" delay="0" conditionEdge="none">
+          <ByEntityCondition>
+            <TriggeringEntities triggeringEntitiesRule="any">
+              <EntityRef entityRef="Ego"/>
+            </TriggeringEntities>
+            <EntityCondition>
+              <CollisionCondition><EntityRef entityRef="Ego"/></CollisionCondition>
+            </EntityCondition>
+          </ByEntityCondition>
+        </Condition>
+        <Condition name="min-distance" delay="0" conditionEdge="none">
+          <ByEntityCondition>
+            <TriggeringEntities triggeringEntitiesRule="any">
+              <EntityRef entityRef="Ego"/>
+            </TriggeringEntities>
+            <EntityCondition>
+              <TraveledDistanceCondition value="100.0"/>
+            </EntityCondition>
+          </ByEntityCondition>
+        </Condition>
+      </ConditionGroup>
+    </StopTrigger>
+  </Storyboard>
+</OpenSCENARIO>
