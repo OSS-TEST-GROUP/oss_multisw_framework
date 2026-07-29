@@ -48,6 +48,12 @@ DDS/ROS2 연결, 단위·signal 변환, Clock Master, golden 비교, 실패 판�
 
 ---
 
+> **FMU는 역할 중립 소켓** — 안에 무엇을 넣느냐로 역할이 갈린다. 이 문서는 **FMU = 물리 모델(plant)**,
+> 즉 `IPlant` 뒤의 `FmuPlant`(입력 = 제어 u, 출력 = 상태 y). FMU에 **ECU 제어로직**을 넣으면(V-ECU)
+> `IVehicleBehavior` 뒤의 `FmuBehavior`가 되어 **버스결합 경로에서 vECU 자체로 동작**한다
+> (개발자 연동 Case 3, 입력 = 상태, 출력 = 제어명령). 즉 "ECU를 FMU로"와 "플랜트가 FMU"는
+> 방향이 반대인 **다른 역할 · 다른 포트**다.
+
 ## 2. SiLS에서의 위치 — IPlant 뒤 어댑터
 
 fmi4c는 최상위 컴포넌트가 아니라 **IPlant 뒤 구현체**다. tick 루프·evaluate·golden은
