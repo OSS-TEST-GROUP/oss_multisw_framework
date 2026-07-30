@@ -15,6 +15,7 @@
 | `sils-extension-model.md` | ADR·경계 | 왜 이 확장 경계인가(core 무수정 원칙) |
 | `sils-vecu-development-guide` (.md/.html) | **실무** | 내 vECU 작성→패키징→배포 (§7 = 플랜트 결합 모드) |
 | `sils-trace-schema.md` | 계약 | vECU 가 내는 trace = 공개 conformance 경계(v1) |
+| `sils-clock-master` (.md/.html) | 심화 | lockstep 시간 권위 — TickGrant/TickComplete barrier |
 | `sils-fmu-plant` (.md/.html) | 심화 | FMU(in-process) 폐루프 결합 |
 | `sils-target-parity.md` | 심화 | L4 ARM64 타깃 동등성 |
 | `sils-morai-autoware-topology.html` | 시각 | MORAI/rosbag ↔ Autoware ↔ vECU 데이터 흐름 |
@@ -52,7 +53,7 @@
 → `vecu-development-guide.md §7`(실제 만드는 법)
 
 ### ✅ conformance/검증
-**`trace-schema.md`**(계약) → `understanding.md` 6장(trace→verdict) → `target-parity.md`(L4)
+**`trace-schema.md`**(계약) → `understanding.md` 6장(trace→verdict) → **`clock-master`**(lockstep 시간 권위) → `target-parity.md`(L4)
 
 ### 🏛️ 아키텍트/의사결정 리뷰
 `architecture-v3` → `extension-model`(ADR) → `morai-plant-adapter-design`(3안 비교)
