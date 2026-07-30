@@ -1,0 +1,83 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SiLS Clock Master — lockstep 시간 권위</title><style>*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Apple SD Gothic Neo','Noto Sans KR',Roboto,sans-serif;line-height:1.65;font-size:15.5px}
+:root{--bg:#0f1420;--panel:#161d2e;--panel2:#1b2436;--ink:#e6ebf5;--mut:#98a4bd;--line:#293350;--accent:#5b9dff;--accent2:#7ee0c0;--warn:#ffcf6b}
+main{max-width:1000px;margin:0 auto;padding:44px 40px 120px}h1{font-size:29px;margin:0 0 6px;color:#f2f5fb}.sub{color:var(--mut);font-size:13.5px;margin:0 0 8px}
+h2{font-size:20px;margin:44px 0 12px;padding-top:14px;border-top:1px solid var(--line);color:#f0f4ff}p{margin:12px 0}strong{color:#f1f5ff}
+code{background:var(--panel2);padding:2px 6px;border-radius:5px;font-size:12.6px;font-family:'SF Mono',ui-monospace,Menlo,Consolas,monospace;color:#a8d7ff}
+pre{background:#0b0f1a;border:1px solid var(--line);border-radius:12px;padding:15px 17px;overflow-x:auto;font-family:'SF Mono',ui-monospace,Menlo,Consolas,monospace;font-size:12.3px;line-height:1.5;color:#c3d2ee}pre code{background:none;padding:0;color:inherit}
+blockquote{margin:16px 0;padding:12px 18px;border-left:3px solid var(--accent);background:var(--panel);border-radius:0 8px 8px 0;color:var(--mut)}
+.table-wrap{overflow-x:auto;margin:16px 0}table{border-collapse:collapse;width:100%;font-size:13.4px}th,td{border:1px solid var(--line);padding:8px 11px;text-align:left;vertical-align:top}th{background:#1f2942;color:#dbe4fb}tr:nth-child(even) td{background:var(--panel)}
+figure{margin:22px 0;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 16px 12px}figcaption{color:var(--mut);font-size:12.5px;margin-top:8px;text-align:center}
+footer{margin-top:52px;padding-top:16px;border-top:1px solid var(--line);color:var(--mut);font-size:13px}ul{padding-left:22px}li{margin:6px 0}</style></head><body><main>
+<h1>SiLS Clock Master — lockstep 시간 권위</h1>
+<p class="sub">TickGrant/TickComplete barrier로 참가자 tick을 동기 전진 · 별도 프로세스 · run당 1 · 2026-07</p>
+<blockquote>매 tick <code>TickGrant</code>를 발행하고 <strong>모든 참가자</strong>의 <code>TickComplete</code>를 받은 뒤에야 다음 tick을 grant한다(=barrier). 이 barrier가 실행 순서·타이밍을 고정해 <strong>동일 입력 = 동일 trace</strong>를 만든다.</blockquote>
+
+<h2>1. 역할과 배선</h2>
+<p>Clock Master = <strong>TickGrant 발행자 + TickComplete 구독자</strong>. 참가자(vECU 프로브 + 입력 소스)는 그 반대. 제어 평면은 참가자와 <strong>같은 DDS 도메인</strong>(<code>VISS_DDS_DOMAIN_ID</code>)을 공유한다.</p>
+<figure><svg viewBox="0 0 940 360" width="100%" role="img" aria-label="Clock Master 배선: TickGrant 발행/TickComplete 구독, 참가자 N" style="display:block;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',sans-serif"><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#98a4bd"/></marker></defs><rect x="340" y="22" width="260" height="68" rx="10" fill="#1b2436" stroke="#5b9dff" stroke-width="2.2"/><text x="470" y="53" text-anchor="middle" style="fill:#e6ebf5;font-size:16px;font-weight:700">Clock Master</text><text x="470" y="71" text-anchor="middle" style="fill:#98a4bd;font-size:10.5px">시간 권위 · run당 1 · 별도 프로세스</text><rect x="50" y="158" width="840" height="34" rx="10" fill="#12202e" stroke="#2b6a7a" stroke-width="1.5"/><text x="470" y="180" text-anchor="middle" style="fill:#7ee0c0;font-size:11px;font-weight:700">DDS 제어 평면  ·  VISS_DDS_DOMAIN_ID  ·  RELIABLE KEEP_LAST(256)</text><path d="M440 90 L440 156" fill="none" stroke="#5b9dff" stroke-width="2.0" marker-end="url(#ar)"/><text x="392" y="128" text-anchor="end" style="fill:#5b9dff;font-size:11px;font-weight:700">TickGrant</text><text x="392" y="142" text-anchor="end" style="fill:#98a4bd;font-size:9px;font-weight:400">sils/tick/grant</text><path d="M500 156 L500 90" fill="none" stroke="#7ee0c0" stroke-width="2.0" marker-end="url(#ar)"/><text x="548" y="128" text-anchor="start" style="fill:#7ee0c0;font-size:11px;font-weight:700">TickComplete</text><text x="548" y="142" text-anchor="start" style="fill:#98a4bd;font-size:9px;font-weight:400">sils/tick/complete</text><rect x="50" y="254" width="200" height="66" rx="10" fill="#1b2436" stroke="#293350" stroke-width="1.4"/><text x="150" y="284" text-anchor="middle" style="fill:#e6ebf5;font-size:13px;font-weight:700">vECU #1</text><text x="150" y="302" text-anchor="middle" style="fill:#98a4bd;font-size:10.5px">brake</text><path d="M128 192 L128 254" fill="none" stroke="#5b9dff" stroke-width="1.5" marker-end="url(#ar)"/><path d="M172 254 L172 192" fill="none" stroke="#7ee0c0" stroke-width="1.5" marker-end="url(#ar)"/><rect x="263" y="254" width="200" height="66" rx="10" fill="#1b2436" stroke="#293350" stroke-width="1.4"/><text x="363" y="284" text-anchor="middle" style="fill:#e6ebf5;font-size:13px;font-weight:700">vECU #2</text><text x="363" y="302" text-anchor="middle" style="fill:#98a4bd;font-size:10.5px">steer</text><path d="M341 192 L341 254" fill="none" stroke="#5b9dff" stroke-width="1.5" marker-end="url(#ar)"/><path d="M385 254 L385 192" fill="none" stroke="#7ee0c0" stroke-width="1.5" marker-end="url(#ar)"/><rect x="476" y="254" width="200" height="66" rx="10" fill="#1b2436" stroke="#293350" stroke-width="1.4"/><text x="576" y="284" text-anchor="middle" style="fill:#e6ebf5;font-size:13px;font-weight:700">vECU #3</text><text x="576" y="302" text-anchor="middle" style="fill:#98a4bd;font-size:10.5px">VCU</text><path d="M554 192 L554 254" fill="none" stroke="#5b9dff" stroke-width="1.5" marker-end="url(#ar)"/><path d="M598 254 L598 192" fill="none" stroke="#7ee0c0" stroke-width="1.5" marker-end="url(#ar)"/><rect x="689" y="254" width="200" height="66" rx="10" fill="#1b2436" stroke="#293350" stroke-width="1.4"/><text x="789" y="284" text-anchor="middle" style="fill:#e6ebf5;font-size:13px;font-weight:700">입력 소스</text><text x="789" y="302" text-anchor="middle" style="fill:#98a4bd;font-size:10.5px">EgoState·ControlTarget</text><path d="M767 192 L767 254" fill="none" stroke="#5b9dff" stroke-width="1.5" marker-end="url(#ar)"/><path d="M811 254 L811 192" fill="none" stroke="#7ee0c0" stroke-width="1.5" marker-end="url(#ar)"/><text x="470" y="342" text-anchor="middle" style="fill:#98a4bd;font-size:10px;font-weight:700">참가자 N (= --participants) = 모든 vECU + 입력 소스 · 각자 participant_id 로 TickComplete · 하나라도 늦으면 barrier 안 닫힘</text></svg><figcaption>그림 1 — 배선: Clock Master ↔ 여러 vECU + 입력 소스(참가자 N), 공유 DDS 제어 평면. grant는 한 번 발행되어 전원에 broadcast</figcaption></figure>
+<div class="table-wrap"><table><thead><tr><th>방향</th><th>토픽</th><th>타입</th><th>발행 → 구독</th></tr></thead><tbody>
+<tr><td>grant</td><td><code>sils/tick/grant</code></td><td><code>TickGrant</code></td><td>Clock Master → 참가자 N</td></tr>
+<tr><td>complete</td><td><code>sils/tick/complete</code></td><td><code>TickComplete</code></td><td>참가자 N → Clock Master</td></tr>
+</tbody></table></div>
+<pre><code>struct TickGrant    { string run_id; unsigned long long tick_seq; long long sim_time_ns; long long dt_ns; };
+struct TickComplete { string run_id; unsigned long long tick_seq; string participant_id; long status; }; // 0=ok</code></pre>
+
+<h2>2. 한 tick의 흐름 (barrier)</h2>
+<figure><svg viewBox="0 0 940 390" width="100%" role="img" aria-label="한 tick barrier 시퀀스" style="display:block;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',sans-serif"><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#98a4bd"/></marker></defs><rect x="95" y="20" width="200" height="46" rx="10" fill="#1b2436" stroke="#5b9dff" stroke-width="2"/><text x="195" y="48" text-anchor="middle" style="fill:#e6ebf5;font-size:13px;font-weight:700">Clock Master</text><rect x="635" y="20" width="220" height="46" rx="10" fill="#1b2436" stroke="#7ee0c0" stroke-width="2"/><text x="745" y="48" text-anchor="middle" style="fill:#e6ebf5;font-size:12.5px;font-weight:700">참가자들 (vECU N + 소스)</text><path d="M195 66 V 362" stroke="#293350" stroke-width="1.3" stroke-dasharray="5 5"/><path d="M745 66 V 362" stroke="#293350" stroke-width="1.3" stroke-dasharray="5 5"/><path d="M195 110 L745 110" fill="none" stroke="#5b9dff" stroke-width="2.0" marker-end="url(#ar)"/><text x="470" y="102" text-anchor="middle" style="fill:#5b9dff;font-size:10.5px;font-weight:700">TickGrant(seq=i, sim_time=i·dt, dt)</text><text x="470" y="128" text-anchor="middle" style="fill:#98a4bd;font-size:9.5px;font-weight:700">1회 발행 → 전원 동시 수신(broadcast) · 참가자 병렬 실행</text><rect x="650" y="138" width="190" height="40" rx="8" fill="#1b2436" stroke="#293350" stroke-width="1"/><text x="745" y="163" text-anchor="middle" style="fill:#e6ebf5;font-size:11px;font-weight:700">tick 실행 + drain</text><path d="M745 210 L195 210" fill="none" stroke="#7ee0c0" stroke-width="2.0" marker-end="url(#ar)"/><text x="470" y="202" text-anchor="middle" style="fill:#7ee0c0;font-size:10.5px;font-weight:700">TickComplete(seq=i, participant_id) × N</text><rect x="95" y="238" width="200" height="40" rx="8" fill="#12202e" stroke="#7ee0c0" stroke-width="1.4"/><text x="195" y="263" text-anchor="middle" style="fill:#7ee0c0;font-size:11px;font-weight:700">barrier 닫힘 (N / N)</text><path d="M195 320 L745 320" fill="none" stroke="#5b9dff" stroke-width="2.0" stroke-dasharray="5 4" marker-end="url(#ar)"/><text x="470" y="312" text-anchor="middle" style="fill:#5b9dff;font-size:10.5px;font-weight:700">TickGrant(seq=i+1)</text><text x="470" y="360" text-anchor="middle" style="fill:#98a4bd;font-size:10.5px;font-weight:700">불변식: 모든 참가자 complete 전엔 다음 grant 없음 → 순서·타이밍 고정</text><text x="838" y="210" text-anchor="end" style="fill:#ffcf6b;font-size:10px;font-weight:700">N 미달 → tick_timeout → 종료</text></svg><figcaption>그림 2 — 한 tick: grant → 실행+drain → TickComplete×N → barrier 닫힘 → 다음 grant</figcaption></figure>
+<ul>
+<li><strong>grant = broadcast, complete = barrier</strong> (순차 아님): grant는 <code>write()</code> 한 번으로 발행되고 DDS가 <strong>모든 참가자에게 동시 전달</strong>한다. 여러 vECU가 같은 <code>TickGrant(seq)</code>를 받아 <strong>병렬 실행</strong> → 각자 <code>participant_id</code>로 complete. 마스터는 <strong>N개 distinct</strong>가 모여야 다음 grant → <strong>틱 사이만 순차, 틱 안 참가자 순서는 무관</strong>(vECU 간 데이터는 tick 경계 staged = 1-tick lag).</li>
+<li><strong>불변식</strong>: 모든 참가자의 complete를 받기 전엔 다음 tick을 grant하지 않는다 → 순서·타이밍 고정.</li>
+<li><code>sim_time_ns = tick_seq · dt_ns</code> — tick은 <strong>1부터</strong>, 첫 grant sim_time은 <code>dt</code>(0 아님). 참가자는 출력을 sim_time의 함수로 만들어 재현.</li>
+<li><code>--tick-timeout-ms</code> 안에 N개가 안 모이면 <code>tick_timeout</code> → 종료(비결정론 = 게이트 실패).</li>
+</ul>
+
+<h2>3. 실행 방법</h2>
+<pre><code>export VISS_DDS_DOMAIN_ID=0 SILS_RUN_ID=vi SILS_CLOCK_MODE=lockstep
+bin/sils_clock_master --participants 3 --ticks 40 --dt-ms 100 --tick-interval-ms 100 &amp;   # 시간 권위
+bin/vehicle_interface &amp;        # 참가자 = vECU (SILS_CLOCK_MODE=lockstep 이면 자동 참가)
+bin/sils_ego_source     --count 40 &amp;
+bin/sils_control_source --count 40 &amp;
+wait</code></pre>
+<div class="table-wrap"><table><thead><tr><th>인자</th><th>기본</th><th>뜻</th></tr></thead><tbody>
+<tr><td><code>--participants N</code></td><td>1</td><td>barrier가 기다릴 참가자 수 — <strong>lockstep 참가자 수와 정확히 일치</strong></td></tr>
+<tr><td><code>--ticks T</code></td><td>10</td><td>총 tick 수(다 돌면 종료)</td></tr>
+<tr><td><code>--dt-ms D</code></td><td>10</td><td>tick당 sim_time 증가(ms)</td></tr>
+<tr><td><code>--tick-interval-ms I</code></td><td>0</td><td>grant 사이 최소 wall 시간. 0=free-run. wall 입력 소스가 tick에 걸치게 하려면 설정</td></tr>
+<tr><td><code>--tick-timeout-ms</code></td><td>5000</td><td>tick의 complete 수집 제한</td></tr>
+<tr><td><code>--startup-timeout-ms</code></td><td>10000</td><td>참가자 grant 구독 초기 대기</td></tr>
+</tbody></table></div>
+<p><strong>⚠️ 대칭 규칙</strong>: <code>--ticks</code> == 소스 <code>--count</code>. 마스터가 tick을 다 돌면 grant writer 연결이 끊기고, 그걸 감지한 <strong>모든 참가자가 자동 종료</strong>(drain 후 꼬리 0). 수동 kill 불필요.</p>
+<p>참가자 쪽 <code>SILS_CLOCK_MODE=lockstep</code> 이 있어야 <code>LockstepClockSource</code>가 선택돼 barrier에 참가한다(없으면 wall-clock으로 마스터 무시).</p>
+
+<h2>4. 수명과 자동 종료</h2>
+<figure><svg viewBox="0 0 940 170" width="100%" role="img" aria-label="Clock Master 수명" style="display:block;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',sans-serif"><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#98a4bd"/></marker></defs><rect x="30" y="30" width="175" height="60" rx="10" fill="#1b2436" stroke="#293350" stroke-width="1.4"/><text x="118" y="57" text-anchor="middle" style="fill:#e6ebf5;font-size:12.5px;font-weight:700">clock_start</text><text x="118" y="75" text-anchor="middle" style="fill:#98a4bd;font-size:10.5px">시작</text><rect x="230" y="30" width="175" height="60" rx="10" fill="#1b2436" stroke="#293350" stroke-width="1.4"/><text x="318" y="57" text-anchor="middle" style="fill:#e6ebf5;font-size:12.5px;font-weight:700">startup 대기</text><text x="318" y="75" text-anchor="middle" style="fill:#98a4bd;font-size:10.5px">참가자 구독</text><rect x="430" y="30" width="175" height="60" rx="10" fill="#1b2436" stroke="#293350" stroke-width="1.4"/><text x="518" y="57" text-anchor="middle" style="fill:#e6ebf5;font-size:12.5px;font-weight:700">tick 1..T</text><text x="518" y="75" text-anchor="middle" style="fill:#98a4bd;font-size:10.5px">grant→barrier</text><rect x="640" y="30" width="175" height="60" rx="10" fill="#1b2436" stroke="#293350" stroke-width="1.4"/><text x="728" y="57" text-anchor="middle" style="fill:#e6ebf5;font-size:12.5px;font-weight:700">clock_stop</text><text x="728" y="75" text-anchor="middle" style="fill:#98a4bd;font-size:10.5px">종료·정리</text><path d="M205 60 L229 60" fill="none" stroke="#98a4bd" stroke-width="2.0" marker-end="url(#ar)"/><path d="M405 60 L429 60" fill="none" stroke="#98a4bd" stroke-width="2.0" marker-end="url(#ar)"/><path d="M605 60 L629 60" fill="none" stroke="#98a4bd" stroke-width="2.0" marker-end="url(#ar)"/><path d="M727 91 L727 118" fill="none" stroke="#ffcf6b" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#ar)"/><text x="470" y="146" text-anchor="middle" style="fill:#ffcf6b;font-size:10.5px;font-weight:700">grant writer 끊김 → 참가자가 master_gone 감지 → 자동 종료 (drain 후 꼬리 0)</text></svg><figcaption>그림 3 — 수명: clock_start → 참가자 대기 → tick 루프 → clock_stop, 종료 시 참가자 자동 종료</figcaption></figure>
+
+<h2>5. 결정론 계약</h2>
+<ul>
+<li><strong>sim_time_ns가 시간 권위</strong> — 실행 속도(wall)와 무관. 참가자는 doStep/출력을 sim_time의 함수로.</li>
+<li><strong>wall 지터에 둔감</strong> — barrier는 논리적 순서지 실시간이 아니다. Clock Master를 어디에 두든 결정론은 안 흔들린다.</li>
+<li><strong>1-tick I/O 지연</strong> — 단일 barrier라 sim↔vECU 결정론적 1-tick lag. zero-lag은 phased barrier(향후).</li>
+</ul>
+
+<h2>6. Trace 이벤트 &amp; conformance</h2>
+<div class="table-wrap"><table><thead><tr><th>이벤트</th><th>producer</th><th>언제</th></tr></thead><tbody>
+<tr><td><code>clock_start</code></td><td>clock_master</td><td>시작(participants·ticks·dt_ns)</td></tr>
+<tr><td><code>tick_grant</code></td><td>clock_master</td><td>매 tick grant</td></tr>
+<tr><td><code>tick_barrier</code></td><td>clock_master</td><td>N개 complete 수집</td></tr>
+<tr><td><code>tick_timeout</code></td><td>clock_master</td><td>complete 미달 → 종료</td></tr>
+<tr><td><code>clock_stop</code></td><td>clock_master</td><td>종료(exit_code)</td></tr>
+<tr><td><code>tick_complete</code></td><td>참가자(vecu/소스)</td><td>자기 tick 작업 완료</td></tr>
+</tbody></table></div>
+<p><code>evaluate.py</code>의 <strong>analyze_lockstep</strong>: <code>tick_grant</code> 존재=lockstep, <code>tick_seq</code> 1..N 연속, sim_time 상수 dt, barrier 닫힘, timeout 없음 → 결정론 판정.</p>
+
+<h2>7. 자주 겪는 함정</h2>
+<ul>
+<li><strong>stale env</strong> — 이전 <code>SILS_CLOCK_MODE=lockstep</code>가 남으면 마스터 없이 vECU가 grant를 기다리며 멈춤. lockstep 안 쓸 땐 <code>unset SILS_CLOCK_MODE SILS_RUN_ID SILS_STAGE_INPUT</code>.</li>
+<li><strong><code>--participants</code> 불일치</strong> — 실제 참가자 수와 다르면 barrier가 안 닫혀 <code>tick_timeout</code>(L0).</li>
+<li><strong><code>--ticks</code> ≠ <code>--count</code></strong> — 어긋나면 timeout이나 꼬리. 대칭 규칙 지키면 자동 종료+꼬리0.</li>
+<li><strong><code>--tick-interval-ms 0</code> + wall 입력</strong> — free-run이 ms 안에 질주 → wall 입력 미staging. dt에 맞춰 interval 설정.</li>
+</ul>
+
+<footer>근거: sils_clock_master.cc(225L) · clock_source.hpp · TickControl.idl · evaluate.py analyze_lockstep · 관련: sils-understanding §6 · sils-virtual-ecu-architecture-v3 §8</footer>
+</main></body></html>
