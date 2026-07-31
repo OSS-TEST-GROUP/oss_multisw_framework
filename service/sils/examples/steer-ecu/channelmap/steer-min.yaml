@@ -1,5 +1,5 @@
 # steer-ecu channel map -- Steering ECU (MORAI/AWSIM plant coupling, Option 2).
-# See docs/sils-morai-plant-adapter-design.md and service/sils/vecu/src/channel_map.hpp.
+# See docs/sils/sils-morai-plant-adapter-design.md and service/sils/vecu/src/channel_map.hpp.
 #
 # Same shape as the SDK's config/sils/channelmap/ego-min.yaml (EgoState in, VehicleControl
 # out) -- a steering ECU differs by its BEHAVIOR, not its wire. The ACTUATION topic is

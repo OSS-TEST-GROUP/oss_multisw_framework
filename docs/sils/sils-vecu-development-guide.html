@@ -372,7 +372,7 @@
   <!-- ============ 05 env 매핑 ============ -->
   <section>
     <div class="sec-head"><span class="sec-n">05</span><h2>env 계약 (ProbeConfig ↔ SILS_*)</h2></div>
-    <p class="sub">런타임 동작은 전부 env 구동. 핵심 발췌 — 전체는 <a href="../service/sils/vecu/src/config.hpp">config.hpp</a>.</p>
+    <p class="sub">런타임 동작은 전부 env 구동. 핵심 발췌 — 전체는 <a href="../../service/sils/vecu/src/config.hpp">config.hpp</a>.</p>
     <div class="tblwrap">
       <table>
         <thead><tr><th>env</th><th>필드</th><th>기본</th><th>의미</th></tr></thead>
@@ -512,7 +512,7 @@ bin/sils_ego_source --count 20 --rate-ms 100
           <table style="min-width:0">
             <tbody>
               <tr><td class="k">빌드</td><td>컴파일·링크·DDS 타입 — <span class="m">build.sh --build-sils</span></td></tr>
-              <tr><td class="k">L0/L1</td><td>trace 스키마 적합 — <a href="../tools/sils/conformance/gate.py">gate.py</a> (fail-closed)</td></tr>
+              <tr><td class="k">L0/L1</td><td>trace 스키마 적합 — <a href="../../tools/sils/conformance/gate.py">gate.py</a> (fail-closed)</td></tr>
               <tr><td class="k">L2</td><td>behavior 결정성 — golden 재현</td></tr>
               <tr><td class="k">L3</td><td>폐루프 물리 — plant trace 비교</td></tr>
               <tr><td class="k">타깃</td><td>ARM64 동등성 — <a href="sils-target-parity.md">target-parity</a></td></tr>
@@ -541,7 +541,7 @@ bin/sils_ego_source --count 20 --rate-ms 100
       <a href="sils-morai-plant-adapter-design.md">plant coupling (MORAI)</a>
       <a href="sils-fmu-plant.md">FMU plant</a>
       <a href="sils-trace-schema.md">trace schema</a>
-      <a href="../service/sils/examples/README.md">examples</a>
+      <a href="../../service/sils/examples/README.md">examples</a>
     </div>
   </section>
 

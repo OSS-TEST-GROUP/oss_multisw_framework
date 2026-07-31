@@ -84,7 +84,7 @@ endif()
 
 # ── Generated-IDL libraries (T1-B: compile once, link many) ──────────────────
 # The fastddsgen output was previously re-globbed and re-compiled into EVERY
-# executable and every example (docs/sils-extension-model.md T1-B). Compile each IDL
+# executable and every example (docs/sils/sils-extension-model.md T1-B). Compile each IDL
 # ONCE into its own static lib; consumers just link. The include dirs are PUBLIC and
 # carry a BUILD/INSTALL split so both the in-tree build and an installed find_package
 # consumer resolve the generated headers.
@@ -107,7 +107,7 @@ target_link_libraries(sils_viss_idl PUBLIC fastdds fastcdr)
 set_target_properties(sils_viss_idl PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 # Canonical vehicle plant-coupling types (MORAI/AWSIM Option 2, bus-coupled external
-# world -- docs/sils-morai-plant-adapter-design.md). EgoState (sim -> vECU, STATE) and
+# world -- docs/sils/sils-morai-plant-adapter-design.md). EgoState (sim -> vECU, STATE) and
 # VehicleControl (vECU -> sim, ACTUATION), SI-canonical so the bus contract is sim-
 # agnostic. Generated into the same sils dir as TickControl. Linked only by MORAI-mode
 # consumers (the channel_map.hpp path); a VISS-only vECU never links it -- same opt-in
@@ -133,7 +133,7 @@ set_target_properties(sils_vehicle_idl PROPERTIES POSITION_INDEPENDENT_CODE ON)
 # header-only 라, INTERFACE 라이브러리로 그 include 경로 + DDS 사용요건을 한 handle 로
 # 묶는다. 외부 개발자(그리고 아래 실행파일들)가 `target_link_libraries(x sils_vecu)`
 # 한 번으로 포트 헤더 + fastdds/fastcdr + TickControl(클록) + FMU 플래그를 얻는다
-# (docs/sils-extension-model.md P1). VISS 타입은 sils_vecu 에 없다 — VISS wire 를 쓰는
+# (docs/sils/sils-extension-model.md P1). VISS 타입은 sils_vecu 에 없다 — VISS wire 를 쓰는
 # 소비자만 sils_viss_idl 을 추가로 link (T1-A: run_loop 는 DDS 타입 무명명).
 add_library(sils_vecu INTERFACE)
 target_include_directories(sils_vecu INTERFACE
@@ -172,7 +172,7 @@ target_link_libraries(sils_clock_master PRIVATE sils_vecu)
 add_executable(sils_input_source src/sils_input_source.cc)
 target_link_libraries(sils_input_source PRIVATE sils_vecu sils_viss_idl)
 
-# MORAI/AWSIM plant-coupling probe (Option 2 S1, docs/sils-morai-plant-adapter-design.md).
+# MORAI/AWSIM plant-coupling probe (Option 2 S1, docs/sils/sils-morai-plant-adapter-design.md).
 # Channel-map driven: reads canonical EgoState off the bus, publishes VehicleControl back
 # (free-run). Links sils_vehicle_idl for the canonical types (vehicle_wire.hpp); a separate
 # entry point from the VISS probe so that path is untouched.

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "description": "SiLS vECU trace event schema v1. The JSONL trace a run emits IS the public conformance boundary (docs/sils-extension-model.md §2): the conformance kit (evaluate.py / parity.py / validate_trace.py) consumes only this. `required` fields are grounded in real captured traces (always present); other fields are allowed (forward-compatible). Every line is one JSON object with at least `run_id` and `event`. Events span all six producers of a merged run trace -- the vECU plus the harness (coordinator/clock/responder/verifier/input_source); use validate_trace --producer to check one producer's slice.",
+  "description": "SiLS vECU trace event schema v1. The JSONL trace a run emits IS the public conformance boundary (docs/sils/sils-extension-model.md §2): the conformance kit (evaluate.py / parity.py / validate_trace.py) consumes only this. `required` fields are grounded in real captured traces (always present); other fields are allowed (forward-compatible). Every line is one JSON object with at least `run_id` and `event`. Events span all six producers of a merged run trace -- the vECU plus the harness (coordinator/clock/responder/verifier/input_source); use validate_trace --producer to check one producer's slice.",
   "base_required": ["run_id", "event"],
   "producers": {
     "vecu": "the vECU probe itself (sils::RunProbe, run_loop.hpp) -- what a developer ECU emits for free",

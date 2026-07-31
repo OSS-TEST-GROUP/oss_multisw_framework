@@ -2,7 +2,7 @@
 
 Reference developer ECUs built on the `sils_vecu` SDK. Each links the SDK and
 implements its own ports **without touching core** — the extension boundary described
-in [docs/sils-extension-model.md](../../../docs/sils-extension-model.md).
+in [docs/sils/sils-extension-model.md](../../../docs/sils/sils-extension-model.md).
 
 | example | plant path | fidelity | shows |
 |---|---|---|---|

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Validate a SiLS vECU trace (JSONL) against the published trace schema.
 
-The trace a run emits is the public conformance boundary (docs/sils-extension-model.md
-§2 / docs/sils-trace-schema.md): evaluate.py / parity.py consume only this. This checker
+The trace a run emits is the public conformance boundary (docs/sils/sils-extension-model.md
+§2 / docs/sils/sils-trace-schema.md): evaluate.py / parity.py consume only this. This checker
 is the schema's gatekeeper -- a developer runs it on their own ECU's trace to confirm the
 events + fields the conformance tools rely on are actually present and well-formed, before
 those tools (or the reviewer) ever see it.

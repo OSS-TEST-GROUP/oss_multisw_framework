@@ -1,5 +1,5 @@
 // SiLS EgoState source -- test fixture for the vehicle plant-coupling probe (Option 2,
-// docs/sils-morai-plant-adapter-design.md §5).
+// docs/sils/sils-morai-plant-adapter-design.md §5).
 //
 // Stand-in for the sim adapter's STATE broadcast: publishes canonical EgoState samples on
 // the `in` topic (default sils/ego/state), on the run's DDS domain. It lets the round trip

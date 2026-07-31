@@ -1,5 +1,5 @@
 # brake-ecu-native -- example ECU publishing a NATIVE custom DDS type (BrakeCmd),
-# demonstrating the "bring your own IDL" path (docs/sils-extension-model.md P4b).
+# demonstrating the "bring your own IDL" path (docs/sils/sils-extension-model.md P4b).
 #
 # The custom type is generated HERE by fastddsgen -- not added to the core idl/dds tree --
 # so no core file changes and non-SILS builds don't generate it. An out-of-tree developer

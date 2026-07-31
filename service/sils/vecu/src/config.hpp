@@ -2,7 +2,7 @@
 #define SILS_VECU_CONFIG_HPP
 
 // ProbeConfig + ConfigFromEnv() -- the SILS_* runtime environment parsed into one
-// value struct (libsils_vecu SDK, docs/sils-extension-model.md P1). Previously this
+// value struct (libsils_vecu SDK, docs/sils/sils-extension-model.md P1). Previously this
 // lived inline at the top of viss_probe_main.cc; extracting it lets a developer's own
 // ECU main() reuse the exact same env contract (ConfigFromEnv()) and hand the result
 // to sils::RunProbe (run_loop.hpp) instead of re-parsing every SILS_* variable.
@@ -51,7 +51,7 @@ inline double GetEnvDoubleOr(const char* name, double fallback) {
 }
 
 // One run's fully-resolved configuration. Every field maps to exactly one SILS_*
-// (or VISS_DDS_DOMAIN_ID) variable; see docs/sils-understanding.md ch.3 for the
+// (or VISS_DDS_DOMAIN_ID) variable; see docs/sils/sils-understanding.md ch.3 for the
 // descriptor -> SILS_* wiring that produces these at deploy time.
 struct ProbeConfig {
     // identity / transport
@@ -111,7 +111,7 @@ struct ProbeConfig {
     // = inactive (single-endpoint behavior unchanged). Points at a channel-map YAML
     // (config/sils/channelmap/*.yaml) listing the VSS-path MIMO signals this vECU
     // subscribes to (STATE in) / publishes (ACTUATION out). See
-    // docs/sils-morai-plant-adapter-design.md.
+    // docs/sils/sils-morai-plant-adapter-design.md.
     std::string channelmap_file;           // SILS_CHANNELMAP
 
     const char* durability_name() const {

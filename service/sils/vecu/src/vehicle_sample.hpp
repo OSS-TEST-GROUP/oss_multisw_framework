@@ -33,7 +33,7 @@ struct VehicleControlSample {
 
 // Autoware control target (mirror of ControlTarget.idl) -- the "what Autoware wants" input
 // to the Vehicle Interface (VCU). Same fields as VehicleControlSample, different meaning
-// (target vs commanded); see docs/sils-vehicle-interface-autoware.md.
+// (target vs commanded); see docs/sils/sils-vehicle-interface-autoware.md.
 struct ControlTargetSample {
     uint64_t seq = 0;
     int64_t stamp_ns = 0;

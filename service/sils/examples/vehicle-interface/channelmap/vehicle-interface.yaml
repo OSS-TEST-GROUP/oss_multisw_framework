@@ -1,5 +1,5 @@
 # vehicle-interface (VCU) channel map -- Option 2 / Profile B.
-# docs/sils-vehicle-interface-autoware.md.
+# docs/sils/sils-vehicle-interface-autoware.md.
 #
 # The VCU has TWO inputs -- the Autoware control target (via the external Autoware<->DDS
 # bridge) and the ego state (via MORAI) -- and ONE output, the unified command to the plant.

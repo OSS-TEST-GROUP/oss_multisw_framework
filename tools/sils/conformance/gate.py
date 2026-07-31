@@ -4,7 +4,7 @@
 The kit ships three checkers (validate_trace / evaluate / parity, see README.md). A
 developer or CI shouldn't have to wire them by hand: this chains them into ONE fail-closed
 command run on a run's trace(s), which is the whole point of "the trace is the conformance
-boundary" (docs/sils-extension-model.md §2). It reuses the checkers as libraries -- no
+boundary" (docs/sils/sils-extension-model.md §2). It reuses the checkers as libraries -- no
 logic is duplicated here; gate.py only orchestrates and reduces their verdicts to one exit.
 
 Stages (each fail-closed; a failed stage does not stop later stages, so one run surfaces

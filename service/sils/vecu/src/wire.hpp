@@ -1,7 +1,7 @@
 #ifndef SILS_VECU_WIRE_HPP
 #define SILS_VECU_WIRE_HPP
 
-// IWireCodec -- the DDS wire port (libsils_vecu SDK, docs/sils-extension-model.md P4).
+// IWireCodec -- the DDS wire port (libsils_vecu SDK, docs/sils/sils-extension-model.md P4).
 //
 // The fifth hexagonal port. It owns everything type-specific about what crosses the
 // wire in BOTH directions: registering the DDS type, its registered_type name, turning

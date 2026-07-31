@@ -36,7 +36,7 @@ DT는 하나가 아니라 동기(sync) 정도에 따른 스펙트럼이다.
 | **충실도 L0~L4** | 실물과의 동등성을 등급으로 **선언하고 시험으로 증명**. SiLS 상한 L3(폐루프 결정론), L4=실타깃 parity | `evaluate.py` `FIDELITY_RANK{none:0…L4:5}` |
 | **Conformance 게이트** | 트윈이 내는 trace = 공개 계약. SCHEMA→FIDELITY→PARITY 3단 **fail-closed**, 161 테스트 | `gate.py` · `validate_trace.py` |
 | **결정론 (lockstep)** | 동일 입력 = 동일 trace → 트윈 실행을 **재현·회귀** 가능 | ClockMaster grant/complete · TickInbox |
-| **Tool Confidence 도시에** | 판정 도구 자체의 신뢰 근거를 코드로 명시(안전팀이 얹을 기술 근거) | `docs/sils-tool-confidence.md` |
+| **Tool Confidence 도시에** | 판정 도구 자체의 신뢰 근거를 코드로 명시(안전팀이 얹을 기술 근거) | `docs/sils/sils-tool-confidence.md` |
 
 이 네 계층이 합쳐져 **"기계로 검증된 트윈 출력"**을 만든다. 트윈의 충실도가 **주장이 아니라 등급으로 선언되고 게이트로 검사**된다는 것이 요지다.
 
@@ -61,10 +61,10 @@ DT는 하나가 아니라 동기(sync) 정도에 따른 스펙트럼이다.
 
 ## 6. 관련 문서
 
-- `docs/sils-tool-confidence.md` — 신뢰 스택의 근거 문서(도구 신뢰)
-- `docs/sils-functional-verification-interop.md` — conformance≠verification, 표준 상호운용
-- `docs/sils-virtual-ecu-architecture-v3.md` — 충실도 L0~L4, 아키텍처
-- `docs/sils-reading-order.md` — 문서 인덱스
+- `docs/sils/sils-tool-confidence.md` — 신뢰 스택의 근거 문서(도구 신뢰)
+- `docs/sils/sils-functional-verification-interop.md` — conformance≠verification, 표준 상호운용
+- `docs/sils/sils-virtual-ecu-architecture-v3.md` — 충실도 L0~L4, 아키텍처
+- `docs/sils/sils-reading-order.md` — 문서 인덱스
 
 ---
 *포지셔닝 문서 — 신규 구현을 수반하지 않는다. Shadow/Operational 확장은 구체 수요가 생길 때 착수.*

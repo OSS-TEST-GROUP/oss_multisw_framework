@@ -4,7 +4,7 @@
 방법, 그리고 그 스캐폴딩(도구·계약·attestation)을 정의한다. L4 의 대표 검증은
 **target parity** 다.
 
-관련: [SiLS 도구 README](../tools/sils/README.md) · [FMU/L3 가이드](sils-fmu-plant.md) ·
+관련: [SiLS 도구 README](../../tools/sils/README.md) · [FMU/L3 가이드](sils-fmu-plant.md) ·
 아키텍처 [v3](sils-virtual-ecu-architecture-v3.md) §11.
 
 ---

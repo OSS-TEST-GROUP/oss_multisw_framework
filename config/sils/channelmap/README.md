@@ -1,6 +1,6 @@
 # SiLS Channel Map — MORAI / AWSIM plant coupling
 
-> Option 2 (버스 결합 외부 세계). 설계: [../../../docs/sils-morai-plant-adapter-design.md](../../../docs/sils-morai-plant-adapter-design.md)
+> Option 2 (버스 결합 외부 세계). 설계: [../../../docs/sils/sils-morai-plant-adapter-design.md](../../../docs/sils/sils-morai-plant-adapter-design.md)
 > 파서: [service/sils/vecu/src/channel_map.hpp](../../../service/sils/vecu/src/channel_map.hpp)
 
 MORAI/AWSIM 토폴로지에서 plant는 in-process `IPlant`가 아니라 **DDS 버스 위의 공유 세계**다(authority=morai). vECU는 로컬 모델을 `Step()` 하지 않고 — 시뮬레이터의 **STATE 신호를 구독**하고 자신의 **ACTUATION 신호를 pub** 한다. 채널맵은 그 vECU가 관심 있는 MIMO 신호를 **선언적으로** 나열한 것이다.

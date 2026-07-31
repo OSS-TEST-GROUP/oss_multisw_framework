@@ -1,6 +1,6 @@
 // SiLS vECU -- default VISS /VIN/Vehicle probe.
 //
-// This is now a thin consumer of the libsils_vecu SDK (docs/sils-extension-model.md):
+// This is now a thin consumer of the libsils_vecu SDK (docs/sils/sils-extension-model.md):
 // it parses the SILS_* environment (ConfigFromEnv), builds the two injected ports from
 // the built-in factories per the env selection (SILS_BEHAVIOR -> IBehavior,
 // SILS_PLANT -> IPlant), and hands them to sils::RunProbe, which owns the DDS setup,

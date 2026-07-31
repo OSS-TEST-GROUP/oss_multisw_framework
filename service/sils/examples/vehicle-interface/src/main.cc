@@ -1,5 +1,5 @@
 // vehicle-interface -- the VCU: a developer ECU that sits between Autoware and the plant
-// (libsils_vecu example, Option 2 / Profile B). docs/sils-vehicle-interface-autoware.md.
+// (libsils_vecu example, Option 2 / Profile B). docs/sils/sils-vehicle-interface-autoware.md.
 //
 // Parses env, builds VehicleInterfaceBehavior, hands it to sils::RunVehicleProbe. The run
 // loop binds the channel map's inputs -- a `canonical/control-target` channel (Autoware,

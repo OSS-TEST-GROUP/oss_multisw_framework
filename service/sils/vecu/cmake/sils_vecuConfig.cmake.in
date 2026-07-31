@@ -1,6 +1,6 @@
 @PACKAGE_INIT@
 
-# find_package(sils_vecu) config for out-of-tree consumers (docs/sils-extension-model.md
+# find_package(sils_vecu) config for out-of-tree consumers (docs/sils/sils-extension-model.md
 # T1-B). Provides the imported targets:
 #   sils::sils_vecu     -- port headers + FastDDS/fastcdr + TickControl (link this)
 #   sils::sils_viss_idl -- the VISS wire type (link additionally if you use viss_wire.hpp)

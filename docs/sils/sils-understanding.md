@@ -4,7 +4,7 @@
 > 학습 문서**다. 챕터 단위로 늘려간다. 각 챕터는 독립적으로 읽히도록 쓰고, 코드 근거는
 > `파일:라인` 링크로 건다. 시각 다이어그램(렌더판): [sils-understanding.html](sils-understanding.html).
 
-전체 개요는 [SiLS 도구 README](../tools/sils/README.md), 아키텍처 근거는
+전체 개요는 [SiLS 도구 README](../../tools/sils/README.md), 아키텍처 근거는
 [v3](sils-virtual-ecu-architecture-v3.md). 이 문서는 "코드가 실제로 어떻게 도는지"를
 차근차근 풀어 쓰는 쪽에 집중한다.
 
@@ -92,9 +92,9 @@ resolved-run.yaml + saved-service-list.yaml              (실행 계획)
         ▼  Run Coordinator (run_phase1.sh) 가 소비 → 실제 기동
 ```
 
-핵심 코드: [compile.py](../tools/sils/topology_compiler/compile.py) ·
-[lint_catalog.py](../tools/sils/contracts/lint_catalog.py) ·
-[resolved_to_shell.py](../tools/sils/topology_compiler/resolved_to_shell.py).
+핵심 코드: [compile.py](../../tools/sils/topology_compiler/compile.py) ·
+[lint_catalog.py](../../tools/sils/contracts/lint_catalog.py) ·
+[resolved_to_shell.py](../../tools/sils/topology_compiler/resolved_to_shell.py).
 
 ## 1.2 언제 검증되는가 — 실행(launch) 전, 컴파일 시점
 
@@ -109,8 +109,8 @@ resolved-run.yaml + saved-service-list.yaml              (실행 계획)
 
 - **앞에서 한 번**: `sils-ci.sh` 기준 `stage 0 lint → stage 1 compile → stage 2 run`.
   compile 이 실패하면 **아무것도 launch 되지 않는다**(shift-left).
-- **실행은 신뢰**: [run_phase1.sh](../service/sils/run_coordinator/run_phase1.sh) 는
-  `--from-resolved <resolved-run.yaml>` 로 [resolved_to_shell.py](../tools/sils/topology_compiler/resolved_to_shell.py)
+- **실행은 신뢰**: [run_phase1.sh](../../service/sils/run_coordinator/run_phase1.sh) 는
+  `--from-resolved <resolved-run.yaml>` 로 [resolved_to_shell.py](../../tools/sils/topology_compiler/resolved_to_shell.py)
   를 써서 계획을 **읽기만** 한다. `compile.py` 를 다시 호출하지 않는다.
 - **순수 정적**: 아무 때나(에디터·pre-commit·PR·CI) 돌릴 수 있다.
 
@@ -118,47 +118,47 @@ resolved-run.yaml + saved-service-list.yaml              (실행 계획)
 
 ## 1.3 어떻게 — 변환 (transform)
 
-[compile_topology](../tools/sils/topology_compiler/compile.py#L385) 가 입력 4종을 읽고
-[resolve_topology](../tools/sils/topology_compiler/compile.py#L117) 가 **선언 → 구체적 인스턴스
+[compile_topology](../../tools/sils/topology_compiler/compile.py#L385) 가 입력 4종을 읽고
+[resolve_topology](../../tools/sils/topology_compiler/compile.py#L117) 가 **선언 → 구체적 인스턴스
 목록**으로 펼친다. 네 단계:
 
 | 단계 | 함수/위치 | 하는 일 |
 |---|---|---|
-| ① replica 전개 | [expand_replicas](../tools/sils/topology_compiler/compile.py#L72) | `replicas:4`+`params` → `(container_name, instance_id, index)` N개 |
-| ② 엔드포인트 해석 | [L157-L184](../tools/sils/topology_compiler/compile.py#L157) | `contract_id` → catalog 의 `topic·domain_env·qos·ownership·late_sample_policy` 치환 |
-| ③ per-instance 토픽 | [L197](../tools/sils/topology_compiler/compile.py#L197) | `{instance_id}`/`{index}` → 실제 인스턴스로 치환(각 replica 고유 토픽) |
-| ④ 포트→env | [resolve_runtime_env](../tools/sils/topology_compiler/compile.py#L118) | Descriptor 의 `clock/behavior/plant/scenario/attestation` → `SILS_*` env |
+| ① replica 전개 | [expand_replicas](../../tools/sils/topology_compiler/compile.py#L72) | `replicas:4`+`params` → `(container_name, instance_id, index)` N개 |
+| ② 엔드포인트 해석 | [L157-L184](../../tools/sils/topology_compiler/compile.py#L157) | `contract_id` → catalog 의 `topic·domain_env·qos·ownership·late_sample_policy` 치환 |
+| ③ per-instance 토픽 | [L197](../../tools/sils/topology_compiler/compile.py#L197) | `{instance_id}`/`{index}` → 실제 인스턴스로 치환(각 replica 고유 토픽) |
+| ④ 포트→env | [resolve_runtime_env](../../tools/sils/topology_compiler/compile.py#L118) | Descriptor 의 `clock/behavior/plant/scenario/attestation` → `SILS_*` env |
 
 **출력 2종** + **재현성 해시**:
-- [render_resolved_run](../tools/sils/topology_compiler/compile.py#L275): `resolved-run.yaml` — `containers[]`(각 인스턴스의 endpoints·env) + `input_hashes`.
-- [render_saved_service_list](../tools/sils/topology_compiler/compile.py#L242): MMF 컨테이너 제어 포맷(`-e` env·`--network host`).
-- [input_hashes](../tools/sils/topology_compiler/compile.py#L401): topology·contracts·qos·각 descriptor 의 sha256 을 박아 "어떤 입력에서 나온 계획인지" 봉인.
+- [render_resolved_run](../../tools/sils/topology_compiler/compile.py#L275): `resolved-run.yaml` — `containers[]`(각 인스턴스의 endpoints·env) + `input_hashes`.
+- [render_saved_service_list](../../tools/sils/topology_compiler/compile.py#L242): MMF 컨테이너 제어 포맷(`-e` env·`--network host`).
+- [input_hashes](../../tools/sils/topology_compiler/compile.py#L401): topology·contracts·qos·각 descriptor 의 sha256 을 박아 "어떤 입력에서 나온 계획인지" 봉인.
 
 ## 1.4 어떻게 — 검증 (validate), 2계층
 
-### A. 사전 게이트 — [lint_catalog.py](../tools/sils/contracts/lint_catalog.py) (카탈로그 단독)
+### A. 사전 게이트 — [lint_catalog.py](../../tools/sils/contracts/lint_catalog.py) (카탈로그 단독)
 컴파일 *전에* 카탈로그 자체 위생 검사(토폴로지가 안 쓰는 항목의 오류까지):
 필수필드·**중복 id**·dangling qos·**IDL 파일 실존**(디스크 stat)·domain_env 오타·
 enum(transport/ownership/reliability/durability/history)·`KEEP_LAST` depth>0·
 중복 `(topic,domain_env)`·semver·per-instance ⊃ `{instance_id}`·late_sample_policy.
 
-### B. 문맥 검증 — [resolve_topology](../tools/sils/topology_compiler/compile.py#L117) (토폴로지 안에서만 보임)
+### B. 문맥 검증 — [resolve_topology](../../tools/sils/topology_compiler/compile.py#L117) (토폴로지 안에서만 보임)
 
 | 검사 | 위치 |
 |---|---|
-| `run.domain_id` 필수(SUT 도메인 일치, §3.4) | [L135](../tools/sils/topology_compiler/compile.py#L135) |
-| 알 수 없는 `contract_id` | [L162](../tools/sils/topology_compiler/compile.py#L162) |
-| `qos_profile` 미존재 | [L169](../tools/sils/topology_compiler/compile.py#L169) |
-| 이름 중복 | [L188](../tools/sils/topology_compiler/compile.py#L188) |
-| **§9.5 단일 소유권** (RESOLVED 토픽 기준) | [L217-L231](../tools/sils/topology_compiler/compile.py#L217) |
-| `replicas`↔`params` 길이 | [L82](../tools/sils/topology_compiler/compile.py#L82) |
+| `run.domain_id` 필수(SUT 도메인 일치, §3.4) | [L135](../../tools/sils/topology_compiler/compile.py#L135) |
+| 알 수 없는 `contract_id` | [L162](../../tools/sils/topology_compiler/compile.py#L162) |
+| `qos_profile` 미존재 | [L169](../../tools/sils/topology_compiler/compile.py#L169) |
+| 이름 중복 | [L188](../../tools/sils/topology_compiler/compile.py#L188) |
+| **§9.5 단일 소유권** (RESOLVED 토픽 기준) | [L217-L231](../../tools/sils/topology_compiler/compile.py#L217) |
+| `replicas`↔`params` 길이 | [L82](../../tools/sils/topology_compiler/compile.py#L82) |
 
 **§9.5 검사의 묘미**: **RESOLVED 토픽**(③ 템플릿 치환 후) 기준으로 producer 를 센다. 그래서
 per-instance fleet(replica 마다 고유 토픽)은 유효, `{instance_id}` 안 박은 경우만 충돌로 잡힌다.
 
 ### Fail-closed
-에러가 하나라도 있으면 [compile_topology 가 `(None, None, errors)` 반환](../tools/sils/topology_compiler/compile.py#L398)
-→ **아티팩트를 아예 안 쓴다**([main](../tools/sils/topology_compiler/compile.py#L448), exit 1).
+에러가 하나라도 있으면 [compile_topology 가 `(None, None, errors)` 반환](../../tools/sils/topology_compiler/compile.py#L398)
+→ **아티팩트를 아예 안 쓴다**([main](../../tools/sils/topology_compiler/compile.py#L448), exit 1).
 "부분적으로 잘못된 실행 계획"이 하류로 새지 않는다.
 
 ## 1.5 어디서 도는가 — 두 개의 면(plane)
@@ -198,13 +198,13 @@ per-instance fleet(replica 마다 고유 토픽)은 유효, `{instance_id}` 안 
   = 그게 만들어진 순간의 입력에 대해 모든 정적 검사를 통과했다. 반쪽 아티팩트는 없다.
 - ⚠️ **단, 그 순간의 입력(스냅샷)에 대해서만**: 컴파일 *후에* 카탈로그/descriptor 를 고치면
   resolved-run.yaml 은 stale(옛 입력 기준). 파일은 유효하지만 지금 소스와 안 맞는다.
-- 그래서 [input_hashes](../tools/sils/topology_compiler/compile.py#L401) 가 있다 —
+- 그래서 [input_hashes](../../tools/sils/topology_compiler/compile.py#L401) 가 있다 —
   재해시해서 현재 소스와 일치하는지 **검증할 수단**. 다만 **Coordinator 는 launch 시 이 해시를
   자동 대조하지 않는다**(신뢰 모델). → drift 체크는 미구현(아래 "다음 후보").
 
 ## 1.7 구체 예 — smoke 토폴로지 한 번 통과
 
-[viss_probe_smoke.yaml](../config/sils/topologies/viss_probe_smoke.yaml)(vECU 1개, docker) 컴파일 시:
+[viss_probe_smoke.yaml](../../config/sils/topologies/viss_probe_smoke.yaml)(vECU 1개, docker) 컴파일 시:
 
 1. **lint**: 카탈로그 위생 통과
 2. **① 전개**: `viss-probe` × replicas 1 → 인스턴스 `viss-probe-1`
@@ -213,7 +213,7 @@ per-instance fleet(replica 마다 고유 토픽)은 유효, `{instance_id}` 안 
 5. **④ 포트→env**: `clock:wall, behavior:stub…` → `SILS_CLOCK_MODE=wall SILS_BEHAVIOR=viss-request …`
 6. **출력**: `resolved-run.yaml`(1 container + hashes) + `saved-service-list.yaml` → `validation OK: 1 container(s) resolved`
 
-전 과정이 [test_compile.py](../tools/sils/topology_compiler/test_compile.py) 16개 + lint 18개
+전 과정이 [test_compile.py](../../tools/sils/topology_compiler/test_compile.py) 16개 + lint 18개
 테스트로 **DDS 없이** 검증된다.
 
 ---
@@ -227,8 +227,8 @@ per-instance fleet(replica 마다 고유 토픽)은 유효, `{instance_id}` 안 
 
 **IDL 은 타입만 정의한다.** "이 타입을 *어느 topic·domain 에서, 어떤 QoS 로, 누가 발행/구독하며,
 누가 소유하는가*"는 IDL 에 없다. 그 **기계 판독 가능한 합의**를 한곳에 모은 게 Contract Catalog
-([mmf-endpoints.yaml](../config/sils/contracts/mmf-endpoints.yaml))와 QoS Catalog
-([qos-profiles.yaml](../config/sils/qos/qos-profiles.yaml))다.
+([mmf-endpoints.yaml](../../config/sils/contracts/mmf-endpoints.yaml))와 QoS Catalog
+([qos-profiles.yaml](../../config/sils/qos/qos-profiles.yaml))다.
 
 ```
 IDL (VissRequest.idl)      "타입"    → struct VissRequestTopic { string payload; }
@@ -241,7 +241,7 @@ QoS Catalog                "품질"    → viss-default = RELIABLE · VOLATILE �
 
 ## 2.2 계약이 선언하는 것 — 필드
 
-한 계약([viss-request](../config/sils/contracts/mmf-endpoints.yaml)) 기준:
+한 계약([viss-request](../../config/sils/contracts/mmf-endpoints.yaml)) 기준:
 
 | 필드 | 값(예) | 의미 |
 |---|---|---|
@@ -291,7 +291,7 @@ QoS (묶음)
 ```
 
 그래서 QoS Catalog 의 한 "프로파일"은 정책 여러 개를 묶은 것이다
-([qos-profiles.yaml](../config/sils/qos/qos-profiles.yaml)):
+([qos-profiles.yaml](../../config/sils/qos/qos-profiles.yaml)):
 
 ```yaml
 viss-sils-verifiable:              # ← 하나의 QoS 프로파일(묶음)
@@ -327,7 +327,7 @@ Reader.requested─┘   NO  → 매칭 실패, 침묵(데이터 0). incompatibl
 idle** 한다. 독립 기동한 verifier(reader)가 마지막 샘플 *이후에* match 하면, **VOLATILE writer 는
 히스토리를 안 남겨** → endpoint 는 match 됐는데 **샘플 0개**(matched-but-no-data).
 
-→ 해결: probe writer/verify reader 가 [viss-sils-verifiable](../config/sils/qos/qos-profiles.yaml)
+→ 해결: probe writer/verify reader 가 [viss-sils-verifiable](../../config/sils/qos/qos-profiles.yaml)
 (`TRANSIENT_LOCAL`, depth 256)을 기본으로 쓴다(코드상 `SILS_DURABILITY=transient-local` 기본).
 `TRANSIENT_LOCAL` 은 **superset offer** 라 VOLATILE reader 와도 RxO 호환 → late-join 이어도
 히스토리를 받는다. `SILS_DURABILITY=volatile` 로 원래 `viss-default` 동작을 강제할 수도 있다.
@@ -346,7 +346,7 @@ idle** 한다. 독립 기동한 verifier(reader)가 마지막 샘플 *이후에*
 | `per-instance` | replica 마다 자기 topic 단독 소유. `topic` 에 `{instance_id}` 필수 | N 인스턴스 = N topic = 각 1 owner → valid |
 | `shared` / `multi` | co-producer 허용 | 다중 producer 면제 |
 
-[fleet-example.yaml](../config/sils/contracts/fleet-example.yaml) 의 `wheelspeed` 가
+[fleet-example.yaml](../../config/sils/contracts/fleet-example.yaml) 의 `wheelspeed` 가
 `per-instance` + `/VIN/WheelSpeed/{instance_id}` 예: replica 4개가 `/VIN/WheelSpeed/wheelspeed-1…4`
 로 각자 다른 topic 을 소유 → 같은 topic 다중 producer(single 위반)가 아니라 §9.5-valid.
 
@@ -412,8 +412,8 @@ service/sils/vecu/descriptors/
 └─ wheelspeed_probe.yaml      # per-instance fleet 멤버
 ```
 
-Topology([config/sils/topologies/*.yaml](../config/sils/topologies/))가 `vecus[].descriptor` 로
-**경로를 참조**하고, compile.py 가 그 경로로 읽는다([load](../tools/sils/topology_compiler/compile.py#L140)):
+Topology([config/sils/topologies/*.yaml](../../config/sils/topologies/))가 `vecus[].descriptor` 로
+**경로를 참조**하고, compile.py 가 그 경로로 읽는다([load](../../tools/sils/topology_compiler/compile.py#L140)):
 
 ```yaml
 # config/sils/topologies/viss_scenario.yaml
@@ -425,13 +425,13 @@ vecus:
 실제 참조 3건:
 | Topology | → Descriptor |
 |---|---|
-| [viss_probe_smoke.yaml](../config/sils/topologies/viss_probe_smoke.yaml) | `service/sils/vecu/descriptors/viss_probe.yaml` |
-| [viss_scenario.yaml](../config/sils/topologies/viss_scenario.yaml) | `service/sils/vecu/descriptors/viss_scenario_probe.yaml` |
-| [wheelspeed_fleet.yaml](../config/sils/topologies/wheelspeed_fleet.yaml) | `service/sils/vecu/descriptors/wheelspeed_probe.yaml` |
+| [viss_probe_smoke.yaml](../../config/sils/topologies/viss_probe_smoke.yaml) | `service/sils/vecu/descriptors/viss_probe.yaml` |
+| [viss_scenario.yaml](../../config/sils/topologies/viss_scenario.yaml) | `service/sils/vecu/descriptors/viss_scenario_probe.yaml` |
+| [wheelspeed_fleet.yaml](../../config/sils/topologies/wheelspeed_fleet.yaml) | `service/sils/vecu/descriptors/wheelspeed_probe.yaml` |
 
 ## 3.2 무엇이 변환되나 — Descriptor 필드 → `SILS_*`
 
-[resolve_runtime_env](../tools/sils/topology_compiler/compile.py#L118) 의 매핑(발췌):
+[resolve_runtime_env](../../tools/sils/topology_compiler/compile.py#L118) 의 매핑(발췌):
 
 | Descriptor | `SILS_*` env | 비고 |
 |---|---|---|
@@ -451,8 +451,8 @@ vecus:
 
 ## 3.3 세 갈래 주입 경로 — local / docker / fleet
 
-[resolved_to_shell.py](../tools/sils/topology_compiler/resolved_to_shell.py) 가 **두 가지 형태**로
-방출하고, [run_phase1.sh](../service/sils/run_coordinator/run_phase1.sh) 가 백엔드별로 주입한다:
+[resolved_to_shell.py](../../tools/sils/topology_compiler/resolved_to_shell.py) 가 **두 가지 형태**로
+방출하고, [run_phase1.sh](../../service/sils/run_coordinator/run_phase1.sh) 가 백엔드별로 주입한다:
 
 | 경로 | 방출 형태 | 주입 방식 |
 |---|---|---|
@@ -484,7 +484,7 @@ vecus:
 이 문자열 동등성은 DDS·빌드 없이 순수 파이썬/셸 테스트로 단언된다(1장 §1 도구들과 같은 방식).
 probe(C++)는 그 env 를 읽을 뿐이라, 문자열이 같으면 런타임 동작은 자동으로 따라온다 — 그래서
 이미 실측한 L1/L3/scenario 런타임 결과가 그대로 성립한다.
-검증: [test_compile.py](../tools/sils/topology_compiler/test_compile.py) 의 포트→env·smoke·예제·
+검증: [test_compile.py](../../tools/sils/topology_compiler/test_compile.py) 의 포트→env·smoke·예제·
 export/env-args 케이스.
 
 ## 3.6 실제 예 — 같은 바이너리, env 만 다르게 (실측 출력)
@@ -534,14 +534,14 @@ service/sils/run_coordinator/run_phase1.sh start \
 
 **A vs B: 바이너리는 동일**, resolved-run 의 env 만 다르다. A 는 `viss-request` 를 500ms 마다,
 B 는 `accumulate` + tick 3 drop·tick 7 duplicate. **재빌드 없음** — §3.0 의 "같은 이미지, env 만"
-그대로다. (선언 원본: [viss_scenario_probe.yaml](../service/sils/vecu/descriptors/viss_scenario_probe.yaml))
+그대로다. (선언 원본: [viss_scenario_probe.yaml](../../service/sils/vecu/descriptors/viss_scenario_probe.yaml))
 
 ---
 
 # 4장. Run Coordinator — 실행 오케스트레이터
 
 > 1~3장은 **실행 전(정적)** 이었다. 이 장부터 **실행**이다. Run Coordinator
-> ([run_phase1.sh](../service/sils/run_coordinator/run_phase1.sh))는 검증된 계획(resolved-run)과
+> ([run_phase1.sh](../../service/sils/run_coordinator/run_phase1.sh))는 검증된 계획(resolved-run)과
 > SILS_* env 를 받아 **실제로 vECU 를 띄우고**, 도메인 격리·생명주기·정리를 책임지는 호스트측
 > bash 오케스트레이터다.
 
@@ -551,7 +551,7 @@ Run Coordinator 는 한 run 을 **도메인 확보 → (FMU 게이트) → 기�
 teardown** 으로 몰고 가며, 병렬 run 이 서로 간섭하지 않게 **DDS domain 을 격리**하고, 죽어도 자원이
 새지 않게 **lease·state 파일로 회수 가능**하게 만든다.
 
-## 4.2 네 서브명령 ([main](../service/sils/run_coordinator/run_phase1.sh) dispatch)
+## 4.2 네 서브명령 ([main](../../service/sils/run_coordinator/run_phase1.sh) dispatch)
 
 | 명령 | 하는 일 |
 |---|---|
@@ -574,11 +574,11 @@ domain 확보 ─▶ fmu_preflight ─▶ 기동 ─────▶ ready 대기
 - **ready 대기**: "VecuReady" 대용 — probe 가 스스로 찍는 `"event":"ready"` trace 를 폴링한다
   (local 은 trace 파일, docker 는 `docker logs`). `ready_timeout_sec` 넘으면 `ready_timeout` +
   teardown + 실패.
-- **verify**: Coordinator 가 **독립 one-shot 구독자**([sils_vecu_viss_verify](../service/sils/vecu/src/viss_verify_main.cc))를
+- **verify**: Coordinator 가 **독립 one-shot 구독자**([sils_vecu_viss_verify](../../service/sils/vecu/src/viss_verify_main.cc))를
   띄워 실제 샘플이 오는지 본다. 이게 §11 L0(엔드포인트 match + 샘플 수신)의 런타임 증거.
 - 모든 단계가 **trace.jsonl 한 줄씩** 남고, 그 스트림이 6장 evaluate 의 입력이 된다.
 
-## 4.4 도메인 임대 — 병렬 run 격리 (§12, [domain_lease.py](../tools/sils/run_coordinator/domain_lease.py))
+## 4.4 도메인 임대 — 병렬 run 격리 (§12, [domain_lease.py](../../tools/sils/run_coordinator/domain_lease.py))
 
 DDS 는 **domain id** 로 통신을 격리한다. 같은 domain 이면 서로 샘플이 섞이므로, **병렬 run 은
 서로 다른 domain** 을 써야 한다. 그런데 domain 은 유한하다 → 유한 pool 에서 **임대(lease)**:
@@ -597,7 +597,7 @@ DDS 는 **domain id** 로 통신을 격리한다. 같은 domain 이면 서로 �
 ## 4.5 상태·추적 파일 — 두 개의 사이드카
 
 Coordinator 는 run 마다 `STATE_DIR` 에 두 파일을 둔다
-([state_file / trace_file](../service/sils/run_coordinator/run_phase1.sh#L82)):
+([state_file / trace_file](../../service/sils/run_coordinator/run_phase1.sh#L82)):
 
 | 파일 | 역할 |
 |---|---|
@@ -609,10 +609,10 @@ state 파일에 `CONTAINER_NAME` 을 `docker run` **전에** 먼저 적는 이�
 
 ## 4.6 teardown & reap — 새지 않게
 
-- **[do_teardown](../service/sils/run_coordinator/run_phase1.sh#L127)** (idempotent): state 를 읽어
+- **[do_teardown](../../service/sils/run_coordinator/run_phase1.sh#L127)** (idempotent): state 를 읽어
   컨테이너(`docker stop/rm`)·프로세스(`TERM`→안 죽으면 `KILL`)를 정리하고, `DOMAIN_LEASED` 면 lease
   release, `domain_released`·`cleanup_done` trace. 이미 정리됐으면 `cleanup_noop`(성공).
-- **[cmd_reap](../service/sils/run_coordinator/run_phase1.sh#L198)**: Coordinator 가 mid-run 에 죽어
+- **[cmd_reap](../../service/sils/run_coordinator/run_phase1.sh#L198)**: Coordinator 가 mid-run 에 죽어
   teardown 을 못 한 **고아 run** 을 state 파일 기준으로 회수 + state 파일이 이미 사라진 **만료 lease**
   도 정리. 주기적으로 돌리는 안전망(§14.4).
 
@@ -631,9 +631,9 @@ SHM 데이터 경로를 연다.
 
 ## 4.8 실행 환경 — 컨테이너 안에서 probe 가 어떻게 뜨나
 
-SiLS vECU 이미지 `runtime-mmf-sils-vecu`([Dockerfile.rel](../docker/Dockerfile.rel#L147))는 probe
+SiLS vECU 이미지 `runtime-mmf-sils-vecu`([Dockerfile.rel](../../docker/Dockerfile.rel#L147))는 probe
 바이너리를 `/oss/bin/` 에 넣고 `ENTRYPOINT ["/oss/entrypoint.sh"]`
-([sils_vecu_entrypoint.sh](../docker/entrypoint/sils_vecu_entrypoint.sh))를 둔다. 엔트리포인트가
+([sils_vecu_entrypoint.sh](../../docker/entrypoint/sils_vecu_entrypoint.sh))를 둔다. 엔트리포인트가
 하는 건 딱 하나 — **probe 를 PID 1 로 `exec`**:
 
 ```
@@ -651,14 +651,14 @@ docker run -d -e SILS_*=… -e VISS_DDS_DOMAIN_ID=90 <image>
 
 ### entrypoint·이미지는 범용 — vECU 정보를 담지 않는다
 
-[sils_vecu_entrypoint.sh](../docker/entrypoint/sils_vecu_entrypoint.sh) 전문에는 vECU 를 특정하는
+[sils_vecu_entrypoint.sh](../../docker/entrypoint/sils_vecu_entrypoint.sh) 전문에는 vECU 를 특정하는
 값이 **하나도 없다**:
 
 - ✅ 하는 일: `LD_LIBRARY_PATH` 세팅 → 바이너리 존재 확인 → `exec /oss/bin/sils_vecu_viss_probe`
 - ❌ 없는 것: behavior/plant/scenario 값·instance_id·domain — 전부 없음
 
 모든 vECU 인스턴스(viss-request든 accumulate+결함이든 wheelspeed든)가 **동일한 entrypoint·동일한
-이미지**를 쓴다. core 컨테이너([core_entrypoint.sh](../docker/entrypoint/core_entrypoint.sh), ~4KB,
+이미지**를 쓴다. core 컨테이너([core_entrypoint.sh](../../docker/entrypoint/core_entrypoint.sh), ~4KB,
 다중 서비스 supervised fan-out)와 달리 sils 는 **probe 하나만 exec**(~1KB) — 그래서 "컨테이너 수명 =
 probe".
 
@@ -672,7 +672,7 @@ probe".
 | **② 선택·파라미터·경로** | **`SILS_*` env** (런타임 주입) | 실행 | `SILS_BEHAVIOR=accumulate` · `SILS_CTRL_KP=0.8` · `SILS_SCENARIO_FAULTS=3:drop` · `SILS_FMU_FILE=/models/vehicle.fmu`(경로) |
 | **③ 모델 아티팩트(데이터)** | **컨테이너 파일시스템** (파일) | 이미지 bake / mount | 실제 `.fmu` 파일 · replay 데이터 — env 는 **PATH 만** 주고 파일 자체는 FS 에 있어야 함 |
 
-- **로직**은 바이너리에 컴파일된다([viss_probe_main.cc 가 behavior/plant/scenario.hpp include](../service/sils/vecu/CMakeLists.txt#L85))
+- **로직**은 바이너리에 컴파일된다([viss_probe_main.cc 가 behavior/plant/scenario.hpp include](../../service/sils/vecu/CMakeLists.txt#L85))
   — 범용 바이너리가 4개 포트의 **모든 구현**을 담고, env(②)가 그중 하나를 선택. 그래서 "어떤 vECU인가"의
   **행동 로직 자체는 이미 바이너리 안**에 있다(env 는 스위치일 뿐).
 - **모델 데이터**(FMU 등)는 파일이라 **컨테이너 FS 에 실제로 존재**해야 한다. `SILS_FMU_FILE` 은
@@ -699,12 +699,12 @@ docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' <container> | grep
 
 vECU 를 실제로 띄우는 주체는 두 가지다:
 
-**(A) Phase 1 직접 경로** — [run_phase1.sh](../service/sils/run_coordinator/run_phase1.sh) 가 직접
+**(A) Phase 1 직접 경로** — [run_phase1.sh](../../service/sils/run_coordinator/run_phase1.sh) 가 직접
 `docker run`(또는 로컬 프로세스). **현재 구현·검증된 런타임**. MMF 서비스 제어를 우회하는 **부트스트랩**
 (vECU 런타임 자체를 먼저 세우는 최소 경로).
 
 **(B) MMF 통합 경로** (아키텍처 목표) — compile 이 낸
-[saved-service-list.yaml](../tools/sils/topology_compiler/compile.py#L336)(MMF ServiceRegistry 포맷)을
+[saved-service-list.yaml](../../tools/sils/topology_compiler/compile.py#L336)(MMF ServiceRegistry 포맷)을
 MMF 의 기존 컨테이너 제어가 소비한다:
 
 ```
@@ -719,7 +719,7 @@ lifecycle_mgr  DDS 제어 (service/core/lifecycle_mgr)
 ```
 
 - `extra_args` 에 **`-e SILS_*`(3장 포트 env)**가 그대로 들어가 MMF 가 **올바른 포트로** 컨테이너를 띄운다.
-- MMF 는 DOCKER 외 **DOCKER_COMPOSE·K3S** 도 지원([ContainerType](../service/core/lifecycle_mgr/include/ContainerType.hpp)).
+- MMF 는 DOCKER 외 **DOCKER_COMPOSE·K3S** 도 지원([ContainerType](../../service/core/lifecycle_mgr/include/ContainerType.hpp)).
 
 | | (A) Phase 1 직접 | (B) MMF 통합 |
 |---|---|---|
@@ -733,7 +733,7 @@ lifecycle_mgr  DDS 제어 (service/core/lifecycle_mgr)
 ## 4.10 멀티 인스턴스 — "N 컨테이너 = N 인스턴스"
 
 토폴로지 `vecus[]` 는 여러 vECU 를, 각각 `replicas` 로 여러 복제본을 가질 수 있고, compile 의
-[expand_replicas](../tools/sils/topology_compiler/compile.py#L72) 가 이를 **N 개 container 로 전개**한다
+[expand_replicas](../../tools/sils/topology_compiler/compile.py#L72) 가 이를 **N 개 container 로 전개**한다
 (resolved-run·saved-service-list **둘 다 N개**). 하지만 **한 컨테이너/프로세스 = 정확히 1 인스턴스**:
 
 ```
@@ -747,7 +747,7 @@ topology.vecus[]  ──expand──▶  c1 (instance_id=ws-1) → probe(PID1)  
   개는 안 들어간다.**
 - 여러 인스턴스 = **분리된 N 개 컨테이너/프로세스**(각자 instance_id), `fleet` 명령이 도메인 1개를 공유해
   동시 기동(§4.2).
-- 한 프로세스에 여러 vECU 를 넣는 in-process 다중화는 [plant.hpp](../service/sils/vecu/src/plant.hpp) 주석대로
+- 한 프로세스에 여러 vECU 를 넣는 in-process 다중화는 [plant.hpp](../../service/sils/vecu/src/plant.hpp) 주석대로
   fmi4c thread-safety·임시경로 충돌 시험 전 **미허용** — 지금은 "프로세스=인스턴스" 모델.
 
 즉 "vECU 패키지/플릿"엔 인스턴스가 여러 개 **들어가지만**, 그건 **컨테이너 N개**로 실현된다.
@@ -766,14 +766,14 @@ Coordinator 가 남긴 **trace.jsonl** 은 그 자체로 판정되지 않는다.
 > 쓸지 고르는 스위치**일 뿐 — 구현 자체는 여기 헤더들에 컴파일돼 있다.
 >
 > **⇢ 이 tick 루프는 이제 라이브러리(`libsils_vecu`)로 추출됐다.** 조립 코드는
-> [run_loop.hpp](../service/sils/vecu/src/run_loop.hpp) 의 `sils::RunProbe(cfg, behavior, plant, wire)`
+> [run_loop.hpp](../../service/sils/vecu/src/run_loop.hpp) 의 `sils::RunProbe(cfg, behavior, plant, wire)`
 > 함수이고, `viss_probe_main.cc` 는 그걸 호출하는 얇은 소비자다. 외부 개발자가 같은 방식으로 자기 ECU
 > 를 만드는 확장 모델(P1~P5 구현 완료)은 [sils-extension-model.md](sils-extension-model.md) 참조.
 
 ## 5.1 한 문장
 
 vECU 내부는 **IClockSource·IBehavior·IPlant·IScenario·IWireCodec** 다섯 포트로 나뉘고,
-[`RunProbe` tick 루프](../service/sils/vecu/src/run_loop.hpp)가 매 tick 이들을 순서대로 호출해 하나의
+[`RunProbe` tick 루프](../../service/sils/vecu/src/run_loop.hpp)가 매 tick 이들을 순서대로 호출해 하나의
 vECU 동작을 만든다. 각 포트는 **≥2개 구현**을 갖고 env(또는 코드 주입)로 선택된다.
 
 ## 5.2 헥사고날 포트 + "earned abstraction"
@@ -787,11 +787,11 @@ vECU 동작을 만든다. 각 포트는 **≥2개 구현**을 갖고 env(또는 
 
 | 포트 | 인터페이스 | 구현 (≥2) | env 선택 | 파일 |
 |---|---|---|---|---|
-| **Clock** | `IClockSource` | WallClockSource · LockstepClockSource | `SILS_CLOCK_MODE=wall\|lockstep` | [clock_source.hpp](../service/sils/vecu/src/clock_source.hpp) |
-| **Behavior** | `IBehavior` | VissRequestBehavior · AccumulatorBehavior · PControllerBehavior | `SILS_BEHAVIOR=viss-request\|accumulate\|p-controller` | [behavior.hpp](../service/sils/vecu/src/behavior.hpp) |
-| **Plant** | `IPlant` | AnalyticPlant · ReplayPlant · FmuPlant | `SILS_PLANT=first-order\|replay\|fmu\|none` | [plant.hpp](../service/sils/vecu/src/plant.hpp) |
-| **Scenario** | `IScenario` | NominalScenario · ScheduledFaultScenario | `SILS_SCENARIO=nominal\|scheduled` | [scenario.hpp](../service/sils/vecu/src/scenario.hpp) |
-| **Wire** | `IWireCodec` | VissWireCodec · RawValueWireCodec (+ 개발자 커스텀, 예: BrakeCmdWireCodec) | `SILS_WIRE=viss\|raw` (또는 코드 주입) | [wire.hpp](../service/sils/vecu/src/wire.hpp) |
+| **Clock** | `IClockSource` | WallClockSource · LockstepClockSource | `SILS_CLOCK_MODE=wall\|lockstep` | [clock_source.hpp](../../service/sils/vecu/src/clock_source.hpp) |
+| **Behavior** | `IBehavior` | VissRequestBehavior · AccumulatorBehavior · PControllerBehavior | `SILS_BEHAVIOR=viss-request\|accumulate\|p-controller` | [behavior.hpp](../../service/sils/vecu/src/behavior.hpp) |
+| **Plant** | `IPlant` | AnalyticPlant · ReplayPlant · FmuPlant | `SILS_PLANT=first-order\|replay\|fmu\|none` | [plant.hpp](../../service/sils/vecu/src/plant.hpp) |
+| **Scenario** | `IScenario` | NominalScenario · ScheduledFaultScenario | `SILS_SCENARIO=nominal\|scheduled` | [scenario.hpp](../../service/sils/vecu/src/scenario.hpp) |
+| **Wire** | `IWireCodec` | VissWireCodec · RawValueWireCodec (+ 개발자 커스텀, 예: BrakeCmdWireCodec) | `SILS_WIRE=viss\|raw` (또는 코드 주입) | [wire.hpp](../../service/sils/vecu/src/wire.hpp) |
 
 > **Wire 포트(P4)** 는 DDS 로 나가는 타입·페이로드를 추상화한다. `RunProbe` 는 타입 등록·인코딩·
 > corrupt/duplicate 를 codec 에 위임하므로, 개발자가 자기 IDL(예: `BrakeCmd`)을 등록하는 codec 을
@@ -799,7 +799,7 @@ vECU 동작을 만든다. 각 포트는 **≥2개 구현**을 갖고 env(또는 
 
 ## 5.4 tick 루프 — 포트들이 한 tick 에서 협력
 
-[`RunProbe`(run_loop.hpp)](../service/sils/vecu/src/run_loop.hpp) 의 루프가 포트들을 조립한다
+[`RunProbe`(run_loop.hpp)](../../service/sils/vecu/src/run_loop.hpp) 의 루프가 포트들을 조립한다
 (clock/scenario 는 cfg 에서 내부 생성, behavior/plant/wire 는 주입):
 
 ```
@@ -930,15 +930,15 @@ probe 본체가 그대로 새 포트를 조립한다(earned-abstraction, §5.2).
 - **라이브러리화됨(P1)** — tick 루프가 `libsils_vecu`(`RunProbe`/`ConfigFromEnv`)로 추출돼, 개발자는
   이걸 링크하고 자기 포트만 구현한다.
 - **워크드 예제 실재(P2/P3)** — 아래 (f)의 brake 코드는 더 이상 "예시"가 아니라
-  [`service/sils/examples/brake-ecu/`](../service/sils/examples/brake-ecu/) 의 **실제 컴파일되는 ECU**다.
+  [`service/sils/examples/brake-ecu/`](../../service/sils/examples/brake-ecu/) 의 **실제 컴파일되는 ECU**다.
   plant 는 코드경로(`BrakePlant`)와 FMU경로(`sils::MakeFmuPlant`, `models/brake-fmu/`) 둘 다.
 - **네이티브 신규 DDS 타입 — 이제 가능(P4)** — 예전에 "미구현/transport 일반화 남음"이라 한 부분이
   `IWireCodec` 포트로 구현됐다. `BrakeCmdWireCodec` 로 네이티브 `BrakeCmd` 타입을 core 무수정으로 발행
-  ([`examples/brake-ecu-native/`](../service/sils/examples/brake-ecu-native/), P4b). "DDS 타입 교체 = codec 한 줄".
+  ([`examples/brake-ecu-native/`](../../service/sils/examples/brake-ecu-native/), P4b). "DDS 타입 교체 = codec 한 줄".
 - **읽기 경로까지 codec 화 완료(T1-A)** — 예전엔 발행만 네이티브였고 `RunProbe` 의 읽기 경로(reqresp 응답 ·
   입력 스테이징 리더)가 `VissRequestTopic` 에 결합돼 커스텀 타입 ECU 도 VISS 생성소스를 컴파일했다. 이제
-  포트에 읽기 대칭 [`WireInbound`/`Take()`](../service/sils/vecu/src/wire.hpp) 를 추가하고, VISS 구현을
-  [`viss_wire.hpp`](../service/sils/vecu/src/viss_wire.hpp) 로 분리해 **`wire.hpp`/`run_loop.hpp` 가 어떤 DDS
+  포트에 읽기 대칭 [`WireInbound`/`Take()`](../../service/sils/vecu/src/wire.hpp) 를 추가하고, VISS 구현을
+  [`viss_wire.hpp`](../../service/sils/vecu/src/viss_wire.hpp) 로 분리해 **`wire.hpp`/`run_loop.hpp` 가 어떤 DDS
   타입도 명명하지 않는다**. `wire` 는 이제 RunProbe 의 **필수 주입 인자**(기본 폴백 제거) — 기본 probe 는
   `MakeWireCodec(cfg.wire_kind)` 로 VISS codec 을 조립하고, brake-ecu-native 는 **VISS 생성소스를 전혀
   컴파일하지 않는다**(발행·응답·입력 100% 네이티브).
@@ -989,7 +989,7 @@ C++ ABI 가 아니다(§2, [확장 모델](sils-extension-model.md)). P4b 의 `B
 
 ### (f) 실제 파일 내용 (워크드 예제)
 
-> 아래 스니펫은 이제 **실재하는 예제 코드**다 — [`service/sils/examples/brake-ecu/`](../service/sils/examples/brake-ecu/)
+> 아래 스니펫은 이제 **실재하는 예제 코드**다 — [`service/sils/examples/brake-ecu/`](../../service/sils/examples/brake-ecu/)
 > (P2/P3, 빌드·실행 검증 완료). core `behavior.hpp`/`plant.hpp` 엔 넣지 않고(earned-abstraction, §5.2),
 > 개발자 ECU 레포로 분리해 `libsils_vecu` 를 링크하는 형태. 현재 IBehavior/IPlant 시그니처 그대로.
 
@@ -1116,7 +1116,7 @@ scenario: {}
 
 # 6장. Conformance 판정 — `evaluate.py` 가 trace 를 verdict 로
 
-> 4장이 남긴 **trace.jsonl** 은 그 자체로 합/불이 아니다. [evaluate.py](../tools/sils/conformance/evaluate.py)
+> 4장이 남긴 **trace.jsonl** 은 그 자체로 합/불이 아니다. [evaluate.py](../../tools/sils/conformance/evaluate.py)
 > 가 이 이벤트 스트림을 **상태기계·증거**로 읽어 verdict 로 환원한다. 이게 cross-cutting 검증(전체
 > 지도 표)의 **② 런타임 conformance**.
 
@@ -1134,7 +1134,7 @@ evaluate 는 **trace.jsonl(이벤트 스트림) → verdict(합/불 + 충실도 
 
 ## 6.3 terminal verdict (§5.2)
 
-먼저 "이 run 이 어떻게 끝났나"를 정한다([evaluate_run](../tools/sils/conformance/evaluate.py#L568)):
+먼저 "이 run 이 어떻게 끝났나"를 정한다([evaluate_run](../../tools/sils/conformance/evaluate.py#L568)):
 
 | 이벤트 | verdict | 출처 |
 |---|---|---|
@@ -1155,13 +1155,13 @@ evaluate_run 은 축마다 정보 + 위반을 모은다:
 | **evidence (L0)** | inline | `sample_received` ≥1 + `endpoint_matched` ≥1 | §11 L0 |
 | lease 무결성 | inline | `domain_leased` → `domain_released`(누수) | §12.2 |
 | domain 일관성 | inline | 한 run == 한 domain_id | §12.1 |
-| lockstep 결정론 | [analyze_lockstep](../tools/sils/conformance/evaluate.py#L119) | clock mode·grant/ack·sim_time | §7/§8 |
-| 입력 staging | [analyze_staging](../tools/sils/conformance/evaluate.py#L188) | tick 별 입력 확정·late-sample 정책 | §7.3 |
-| behavior (L2) | [analyze_behavior](../tools/sils/conformance/evaluate.py#L283) | 상태기계 출력 | §11 L2 |
-| scenario | [analyze_scenario](../tools/sils/conformance/evaluate.py#L395) | 선언 결함이 실제 주입됐나 + injected 집합 | §11 |
-| protocol (L1) | [analyze_protocol](../tools/sils/conformance/evaluate.py#L464) | req/resp 상관·QoS·오류(주입 결함 제외) | §11 L1 |
-| plant (L3) | [analyze_plant](../tools/sils/conformance/evaluate.py#L311) | 폐루프 연속성·live·결정론 | §11 L3 |
-| attestation | [analyze_attestation](../tools/sils/conformance/evaluate.py#L444) | arch/gateway/protocol **기록만**(L4 는 parity.py) | §11 L4 |
+| lockstep 결정론 | [analyze_lockstep](../../tools/sils/conformance/evaluate.py#L119) | clock mode·grant/ack·sim_time | §7/§8 |
+| 입력 staging | [analyze_staging](../../tools/sils/conformance/evaluate.py#L188) | tick 별 입력 확정·late-sample 정책 | §7.3 |
+| behavior (L2) | [analyze_behavior](../../tools/sils/conformance/evaluate.py#L283) | 상태기계 출력 | §11 L2 |
+| scenario | [analyze_scenario](../../tools/sils/conformance/evaluate.py#L395) | 선언 결함이 실제 주입됐나 + injected 집합 | §11 |
+| protocol (L1) | [analyze_protocol](../../tools/sils/conformance/evaluate.py#L464) | req/resp 상관·QoS·오류(주입 결함 제외) | §11 L1 |
+| plant (L3) | [analyze_plant](../../tools/sils/conformance/evaluate.py#L311) | 폐루프 연속성·live·결정론 | §11 L3 |
+| attestation | [analyze_attestation](../../tools/sils/conformance/evaluate.py#L444) | arch/gateway/protocol **기록만**(L4 는 parity.py) | §11 L4 |
 
 ## 6.5 증거 기반 판정 — "PASS 인데 증거가 없다"를 잡는다
 
@@ -1176,7 +1176,7 @@ terminal 만 믿지 않는다.
 
 ## 6.6 fidelity_evidenced — 보인 최고 레벨
 
-[FIDELITY_RANK](../tools/sils/conformance/evaluate.py) `{none, L0, L1, L2, L3, L4}` 중 **보인 최고**를
+[FIDELITY_RANK](../../tools/sils/conformance/evaluate.py) `{none, L0, L1, L2, L3, L4}` 중 **보인 최고**를
 `_bump` 으로 올린다: L0(엔드포인트+샘플) 기반 위에 protocol 이 conformant 면 L1, live·폐루프·결정론
 plant 면 L3 … replay/broken/open plant 는 L3 못 올림. **L4 는 단일 trace 로 안 준다**(교차-trace
 parity.py, 10장). 각 레벨의 정의는 **7장**.
@@ -1188,13 +1188,13 @@ PASSED 라도 위반이 하나라도 있으면 conformant 아님. verdict(끝났
 
 ## 6.8 fleet 판정 (§13)
 
-여러 인스턴스 run 은 [evaluate_fleet](../tools/sils/conformance/evaluate.py#L736) 가 합친다: 각 run
+여러 인스턴스 run 은 [evaluate_fleet](../../tools/sils/conformance/evaluate.py#L736) 가 합친다: 각 run
 verdict + **완전성**(기대한 instance_id 가 다 나왔나 — 빠지거나 rogue 면 FAIL) + 전원 conformant 여야
 fleet PASS.
 
 ## 6.9 다음으로
 
-verdict 는 [to_junit.py](../tools/sils/conformance/to_junit.py) 로 **JUnit XML**(CI 수집, §16)이 되고,
+verdict 는 [to_junit.py](../../tools/sils/conformance/to_junit.py) 로 **JUnit XML**(CI 수집, §16)이 되고,
 `fidelity_evidenced` 는 **7장 충실도 사다리**로, 재현성은 **8장 golden**(compare_golden)으로 이어진다.
 
 ---
@@ -1212,10 +1212,10 @@ verdict 는 [to_junit.py](../tools/sils/conformance/to_junit.py) 로 **JUnit XML
 | 레벨 | 이름 | 증명하는 것 | trace 증거 | 판정 코드 |
 |---|---|---|---|---|
 | **L0** | 인터페이스 스텁 | 샘플이 계약 엔드포인트에 도착한다 | `endpoint_matched` + 수신 샘플 (pass-with-evidence) | evaluate.py 증거 게이트 |
-| **L1** | 프로토콜 | 요청/응답 대화가 성립 + QoS 계약 준수 | `request_sent`↔`response_received` 상관, 미응답·중복·유령 응답 0, `qos_negotiated` RELIABLE | [analyze_protocol](../tools/sils/conformance/evaluate.py#L464) |
-| **L2** | 행동 | 상태기계가 tick-indexed 로 결정론 재현 | `behavior_output.value` 시퀀스가 golden 과 일치 | [analyze_behavior](../tools/sils/conformance/evaluate.py#L283) + compare_golden(8장) |
-| **L3** | 플랜트 결합 | 물리 모델과 폐루프, 결정론 | `plant_step`(feedback→command→output) live·폐루프·재현 | [analyze_plant](../tools/sils/conformance/evaluate.py#L311) |
-| **L4** | 타깃 패리티 | 실 타깃과 값이 맞는다 | **교차-trace** 비교 + attestation(arch=aarch64·gateway/protocol=real) | [parity.py](../tools/sils/conformance/parity.py) (10장) |
+| **L1** | 프로토콜 | 요청/응답 대화가 성립 + QoS 계약 준수 | `request_sent`↔`response_received` 상관, 미응답·중복·유령 응답 0, `qos_negotiated` RELIABLE | [analyze_protocol](../../tools/sils/conformance/evaluate.py#L464) |
+| **L2** | 행동 | 상태기계가 tick-indexed 로 결정론 재현 | `behavior_output.value` 시퀀스가 golden 과 일치 | [analyze_behavior](../../tools/sils/conformance/evaluate.py#L283) + compare_golden(8장) |
+| **L3** | 플랜트 결합 | 물리 모델과 폐루프, 결정론 | `plant_step`(feedback→command→output) live·폐루프·재현 | [analyze_plant](../../tools/sils/conformance/evaluate.py#L311) |
+| **L4** | 타깃 패리티 | 실 타깃과 값이 맞는다 | **교차-trace** 비교 + attestation(arch=aarch64·gateway/protocol=real) | [parity.py](../../tools/sils/conformance/parity.py) (10장) |
 
 계단으로 — 각 칸은 아래 칸을 딛고, 증거가 있어야 오른다:
 
@@ -1237,15 +1237,15 @@ verdict 는 [to_junit.py](../tools/sils/conformance/to_junit.py) 로 **JUnit XML
 
 ## 7.3 사다리는 "올라간다" — `_bump`
 
-[FIDELITY_RANK](../tools/sils/conformance/evaluate.py#L565) `{none:0, L0:1, …, L4:5}`. 한 run 은 L0 증거
+[FIDELITY_RANK](../../tools/sils/conformance/evaluate.py#L565) `{none:0, L0:1, …, L4:5}`. 한 run 은 L0 증거
 위에 조건이 더 충족될수록 위로 bump 된다: 프로토콜 conformant → L1, live·폐루프·결정론 plant →
 L3(= L2 를 내포). **replay/개루프/broken plant 는 L3 로 못 올린다** — 증거가 약하면 레벨이 안 오른다.
 
 ## 7.4 L4 는 단일 trace 로 안 준다 ★
 
 L0~L3 은 한 run 의 trace 만으로 판정된다. **L4 만은 예외** — 실 타깃 레퍼런스 trace 와의 **교차 비교**가
-필요하다. probe 는 `target_attestation`(arch/gateway/protocol)만 **기록**하고([analyze_attestation](../tools/sils/conformance/evaluate.py#L444)),
-L4 인정 여부는 [parity.py](../tools/sils/conformance/parity.py) 가 판정한다. ARM64 실행은 L4 의 **구성요소**일 뿐
+필요하다. probe 는 `target_attestation`(arch/gateway/protocol)만 **기록**하고([analyze_attestation](../../tools/sils/conformance/evaluate.py#L444)),
+L4 인정 여부는 [parity.py](../../tools/sils/conformance/parity.py) 가 판정한다. ARM64 실행은 L4 의 **구성요소**일 뿐
 충분조건이 아니다. 자세히는 10장·[sils-target-parity.md](sils-target-parity.md).
 
 ## 7.5 env 조합이 레벨을 만든다
@@ -1266,26 +1266,26 @@ Golden 은 "**믿을 수 있는 한 run 을 정답으로 박제**(capture)"하�
 
 | 도구 | 하는 일 | 핵심 |
 |---|---|---|
-| [capture_golden.py](../tools/sils/conformance/capture_golden.py) | conformant run 을 정규화해 golden 으로 저장 | 비결정 필드(wall_time 등) 제거·정규화, **비-conformant run 은 저장 거부**(exit 1) |
-| [compare_golden.py](../tools/sils/conformance/compare_golden.py) | 새 run 을 golden 과 비교 | 이벤트를 키로 그룹·순서 비교, 필드 허용오차(tolerance), 결과 MATCH/REGRESSION |
+| [capture_golden.py](../../tools/sils/conformance/capture_golden.py) | conformant run 을 정규화해 golden 으로 저장 | 비결정 필드(wall_time 등) 제거·정규화, **비-conformant run 은 저장 거부**(exit 1) |
+| [compare_golden.py](../../tools/sils/conformance/compare_golden.py) | 새 run 을 golden 과 비교 | 이벤트를 키로 그룹·순서 비교, 필드 허용오차(tolerance), 결과 MATCH/REGRESSION |
 
 ## 8.3 무엇을 비교하나 — 결정론 필드만
 
 `wall_time_ms` 같은 비결정 값은 정규화로 빼고, `behavior_output.value`·`plant_step`(command/output)
-처럼 **결정론이어야 하는 값**만 tick-indexed 로 비교한다. 수치는 [within_tolerance](../tools/sils/conformance/compare_golden.py#L131)
+처럼 **결정론이어야 하는 값**만 tick-indexed 로 비교한다. 수치는 [within_tolerance](../../tools/sils/conformance/compare_golden.py#L131)
 로 허용오차 안이면 통과(부동소수 잡음 흡수).
 
 ## 8.4 결정론 모드 게이트 ★
 
 Wall-clock run 은 tick 타이밍이 비결정이라 골든 대조가 무의미할 수 있다. compare 는
-[gate_input_mode](../tools/sils/conformance/compare_golden.py#L275)/[is_lockstep](../tools/sils/conformance/compare_golden.py#L161)
+[gate_input_mode](../../tools/sils/conformance/compare_golden.py#L275)/[is_lockstep](../../tools/sils/conformance/compare_golden.py#L161)
 로 **재현 가능한 모드(lockstep/replay)인지 먼저 확인**하고, 아니면 대조를 거부/경고한다 — "재현 안 되는 걸
 재현 비교"하는 거짓 안심을 막는다.
 
 ## 8.5 Exit 코드 = CI 게이트
 
 capture: `0` 저장 / `1` 거부(비-conformant) / `2` 사용오류. compare: `0` MATCH / `1` REGRESSION /
-`2` 정책거부. 그대로 CI 게이트(§16)로 들어간다. CI 배선은 [sils-ci.sh](../tools/sils/ci/sils-ci.sh) 의
+`2` 정책거부. 그대로 CI 게이트(§16)로 들어간다. CI 배선은 [sils-ci.sh](../../tools/sils/ci/sils-ci.sh) 의
 capture-golden 스테이지.
 
 ---
@@ -1306,9 +1306,9 @@ IPlant 의 세 번째 구현 `FmuPlant`(fmi4c 로 실제 `.fmu` co-sim, §5.5 L3
   꽂는다. tick 루프·evaluate·golden 무변경 — 같은 `plant_step` 계약을 낸다.
 - **선택** — `SILS_PLANT=fmu` + `SILS_FMU_FILE`/`_INPUT_VR`/`_OUTPUT_VR`. 빌드는 `SILS_ENABLE_FMU=ON`(fmi4c).
 - **개발자 API(P3)** — `sils::MakeFmuPlant(cfg, err)` 로 코드경로(`make_unique<MyPlant>`)와 **한 줄만** 다르게.
-  워크드 예제: [examples/brake-ecu](../service/sils/examples/brake-ecu/) (코드경로) ↔ FMU경로(`main_fmu.cc` +
+  워크드 예제: [examples/brake-ecu](../../service/sils/examples/brake-ecu/) (코드경로) ↔ FMU경로(`main_fmu.cc` +
   `models/brake-fmu/`, 손수 짠 최소 FMI 2.0 소스·재현빌드).
-- **보안 게이트** — `.fmu` 는 신뢰 못 할 바이너리를 dlopen 하므로 [fmu_gate.py](../tools/sils/fmu/fmu_gate.py)
+- **보안 게이트** — `.fmu` 는 신뢰 못 할 바이너리를 dlopen 하므로 [fmu_gate.py](../../tools/sils/fmu/fmu_gate.py)
   allowlist/해시로 실행 전 검증(§5.6). 플랫폼 불일치는 `FmuPlant` preflight 가 크래시 대신 에러로 막는다.
 
 상세(FMI 매핑·VR·보안·플랫폼)는 → **[sils-fmu-plant.md](sils-fmu-plant.md)**.
@@ -1320,13 +1320,13 @@ IPlant 의 세 번째 구현 `FmuPlant`(fmi4c 로 실제 `.fmu` co-sim, §5.5 L3
 L4(충실도 최상단, 7.4)는 SiLS run 이 **실 타깃과 값이 맞는지**를 교차-trace 로 판정한다. 전용 문서가 있다.
 요점만:
 
-- **판정자** — [parity.py](../tools/sils/conformance/parity.py): `--sils`(SiLS trace) vs `--target`(실 타깃 trace)
-  를 `--contract`(패리티 계약 YAML)의 신호·허용오차·타이밍 창으로 비교. [compare_golden.compare](../tools/sils/conformance/compare_golden.py#L174) 재사용.
+- **판정자** — [parity.py](../../tools/sils/conformance/parity.py): `--sils`(SiLS trace) vs `--target`(실 타깃 trace)
+  를 `--contract`(패리티 계약 YAML)의 신호·허용오차·타이밍 창으로 비교. [compare_golden.compare](../../tools/sils/conformance/compare_golden.py#L174) 재사용.
 - **attestation 게이트** — 계약이 요구하는 `arch=aarch64`·`gateway=real`·`protocol=real` 을 trace 의
   `target_attestation` 이 만족해야 한다. 값이 맞아도 attestation 미달이면 **PARITY_UNATTESTED(L3)**, 둘 다면 **PARITY(L4)**, 발산이면 **DIVERGENCE**.
 - **왜 단일 trace 로 안 되나** — L4 는 "실물과 같다"는 주장이라, 실물 레퍼런스 없이는 증명 불가(7.4). 단일 run 은
   attestation 을 기록만 한다.
-- **계약 예** — [config/sils/parity/viss-target-parity.yaml](../config/sils/parity/viss-target-parity.yaml).
+- **계약 예** — [config/sils/parity/viss-target-parity.yaml](../../config/sils/parity/viss-target-parity.yaml).
 
 상세(계약 스키마·verdict·CI)는 → **[sils-target-parity.md](sils-target-parity.md)**.
 
@@ -1345,7 +1345,7 @@ L4(충실도 최상단, 7.4)는 SiLS run 이 **실 타깃과 값이 맞는지**�
 고유 `instance_id`(participant 이름·trace 메타)와 해석된 topic(예: `/VIN/WheelSpeed/<id>`)을 갖고, **한 도메인**을
 공유한다. 한 컨테이너/프로세스 = 정확히 한 인스턴스(§4.10).
 
-## 11.3 run 격리 — 도메인 임대 (§12, [domain_lease.py](../tools/sils/run_coordinator/domain_lease.py))
+## 11.3 run 격리 — 도메인 임대 (§12, [domain_lease.py](../../tools/sils/run_coordinator/domain_lease.py))
 
 동시에 도는 여러 run 이 같은 DDS 도메인을 쓰면 서로의 트래픽이 섞인다. Coordinator 는 run 마다
 **도메인을 임대**한다:
@@ -1369,7 +1369,7 @@ L4(충실도 최상단, 7.4)는 SiLS run 이 **실 타깃과 값이 맞는지**�
 
 ## 11.5 fleet 판정 (§13, §6.8 재확인)
 
-[evaluate_fleet](../tools/sils/conformance/evaluate.py#L736) 이 인스턴스별 run 을 합쳐: 각 run **conformant** +
+[evaluate_fleet](../../tools/sils/conformance/evaluate.py#L736) 이 인스턴스별 run 을 합쳐: 각 run **conformant** +
 **완전성**(기대한 `instance_id` 전원 출현, 누락·rogue 면 FAIL)이어야 fleet PASS. `--resolved` 로
 resolved-run.yaml 의 기대 인스턴스 집합과 대조한다.
 

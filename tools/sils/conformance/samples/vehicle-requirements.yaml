@@ -1,4 +1,4 @@
-# Functional requirements (§3, docs/sils-functional-verification-interop.md) -- the
+# Functional requirements (§3, docs/sils/sils-functional-verification-interop.md) -- the
 # developer's OWN pass/fail spec, judged over the trace by evaluate.py analyze_requirements.
 # This sample passes on samples/vehicle-lockstep.trace.jsonl:
 #   gate.py samples/vehicle-lockstep.trace.jsonl --requirements samples/vehicle-requirements.yaml

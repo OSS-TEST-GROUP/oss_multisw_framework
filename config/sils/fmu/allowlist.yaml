@@ -1,4 +1,4 @@
-# SiLS FMU security allowlist (FMU guide docs/sils-fmu-plant.md §5.6).
+# SiLS FMU security allowlist (FMU guide docs/sils/sils-fmu-plant.md §5.6).
 #
 # A `.fmu` ships a native `.so`/`.dll`; loading it runs that code in-process, so only
 # FMUs vetted and listed here may be loaded. tools/sils/fmu/fmu_gate.py verifies a

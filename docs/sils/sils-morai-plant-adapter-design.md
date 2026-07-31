@@ -26,9 +26,9 @@ MORAI(또는 TIER IV **AWSIM**)를 SiLS vECU의 plant로 붙일 때, **어느 �
 
 ### 현재 코드의 결합점 (변경 영향 범위)
 
-- [plant.hpp](../service/sils/vecu/src/plant.hpp): `IPlant` 포트 + `AnalyticPlant`/`ReplayPlant`/`FmuPlant`.
-- [behavior.hpp](../service/sils/vecu/src/behavior.hpp): `BehaviorContext.plant_feedback`(double), `BehaviorOutput.value`(double).
-- [run_loop.hpp](../service/sils/vecu/src/run_loop.hpp): tick 루프가 폐루프를 닫는 곳 —
+- [plant.hpp](../../service/sils/vecu/src/plant.hpp): `IPlant` 포트 + `AnalyticPlant`/`ReplayPlant`/`FmuPlant`.
+- [behavior.hpp](../../service/sils/vecu/src/behavior.hpp): `BehaviorContext.plant_feedback`(double), `BehaviorOutput.value`(double).
+- [run_loop.hpp](../../service/sils/vecu/src/run_loop.hpp): tick 루프가 폐루프를 닫는 곳 —
   `plant->SetInputs(out.value); double y = plant->Step(tick.dt_ns); ctx.plant_feedback = plant->output();`
   그리고 `plant_step` trace `{feedback_in, command, output}` 방출.
 - **conformance**: `evaluate.py analyze_plant`이 trace에서 `feedback_in[N] == output[N-1]`(폐루프 연속성), 상수 dt, 유한값을 판정. `plant_step`은 golden 비교 이벤트.

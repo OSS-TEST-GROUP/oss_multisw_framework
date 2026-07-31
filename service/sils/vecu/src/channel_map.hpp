@@ -1,6 +1,6 @@
 // ChannelMap -- MORAI/AWSIM plant coupling, Option 2 (bus-coupled external world).
-// See docs/sils-morai-plant-adapter-design.md (권장 Option 2) and
-// docs/sils-morai-autoware-topology.html ①/④.
+// See docs/sils/sils-morai-plant-adapter-design.md (권장 Option 2) and
+// docs/sils/sils-morai-autoware-topology.html ①/④.
 //
 // In the MORAI/AWSIM topology the plant is NOT an in-process IPlant: it is a shared
 // world on the DDS bus (authority=morai) that many consumers (N vECUs + Autoware) read
