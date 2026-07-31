@@ -1,22 +1,10 @@
 #include "ContainerController.hpp"
-#include "HelperUtils.hpp"
 #include "logger/Log.hpp"
 
 namespace ros2 {
 namespace adsw_manager {
 
 const std::string ADSW_ROS2_CONTAINER_NAME = "oss-mmf-ext-ros2";
-
-namespace {
-// Trim leading/trailing whitespace (incl. newline) from captured cmd output.
-std::string TrimWs(std::string s) {
-    const char* ws = " \t\r\n";
-    const auto b = s.find_first_not_of(ws);
-    if (b == std::string::npos) return "";
-    const auto e = s.find_last_not_of(ws);
-    return s.substr(b, e - b + 1);
-}
-}  // namespace
 
 ContainerController::ContainerController() {
     LOG_DEBUG("ContainerController create");
@@ -158,35 +146,12 @@ bool ContainerController::RestartK3sContainer(std::shared_ptr<Container> contain
 
 bool ContainerController::StartDockerContainer(std::shared_ptr<Container> container) {
     const std::string name  = container->GetName();
-    const std::string image = container->GetImage();
 
-    // Best-effort image pull so mutable tags (e.g. junohb/...:sample-adsw-*)
-    // refresh on every start. Failure (offline / unauthenticated / local-only
-    // tag) is non-fatal — we fall back to whatever image is present locally.
-    if (!image.empty()) {
-        if (RunCommand("docker pull " + image) == 0) {
-            LOG_DEBUG("ContainerController::StartDockerContainer pulled " << image);
-        } else {
-            LOG_DEBUG("ContainerController::StartDockerContainer pull skipped/failed "
-                      "(using local image): " << image);
-        }
-
-        // If an existing container was created from a different image than the
-        // (freshly pulled) config image, remove it so the docker-run below uses
-        // the new image. Compare image IDs (content), not tags: a mutable tag
-        // updated by the pull keeps its name but gets a new ID, which a plain
-        // `docker start` (reusing the old container filesystem) would ignore.
-        const std::string want = TrimWs(HelperUtils::ExecCommand(
-            "docker image inspect -f '{{.Id}}' " + image + " 2>/dev/null", "", 1));
-        const std::string have = TrimWs(HelperUtils::ExecCommand(
-            "docker inspect -f '{{.Image}}' " + name + " 2>/dev/null", "", 1));
-        if (!have.empty() && !want.empty() && have != want) {
-            LOG_DEBUG("ContainerController::StartDockerContainer image changed for "
-                      << name << " (have=" << have << " want=" << want
-                      << ") — removing stale container to run the new image");
-            RunCommand("docker stop " + name + " 2>/dev/null; docker rm " + name + " 2>/dev/null");
-        }
-    }
+    // NOTE: image pull/update is intentionally NOT done at Start. Container
+    // image updates (pull + container re-create on a new image) are owned by
+    // the OTA Manager, so Start stays fast and deterministic — it only does
+    // docker start/run using whatever image is already present locally. If the
+    // image is absent the docker-run below fails and Start returns false.
 
     // Try to start existing stopped container first, otherwise run a new one
     std::string start_cmd = "docker start " + name + " 2>/dev/null";

@@ -5,9 +5,9 @@
 
 - **설계/경계 근거**: [sils-extension-model.md](sils-extension-model.md) (왜 이런 경계인가)
 - **아키텍처 전체**: [sils-virtual-ecu-architecture-v3.md](sils-virtual-ecu-architecture-v3.md)
-- **간단 퀵스타트**: [service/sils/examples/README.md](../service/sils/examples/README.md)
-- **참조 구현**: [brake-ecu](../service/sils/examples/brake-ecu/) (코드/FMU 플랜트),
-  [brake-ecu-native](../service/sils/examples/brake-ecu-native/) (커스텀 DDS 타입)
+- **간단 퀵스타트**: [service/sils/examples/README.md](../../service/sils/examples/README.md)
+- **참조 구현**: [brake-ecu](../../service/sils/examples/brake-ecu/) (코드/FMU 플랜트),
+  [brake-ecu-native](../../service/sils/examples/brake-ecu-native/) (커스텀 DDS 타입)
 
 이 가이드는 위 문서들을 대체하지 않고, **"처음부터 끝까지 실제로 만드는 절차"**로 엮는다.
 
@@ -54,7 +54,7 @@ int RunProbe(const ProbeConfig& cfg,
 ### Step 0 — 프로젝트 뼈대
 가장 빠른 시작은 `service/sils/examples/brake-ecu/`를 복사하는 것이다.
 
-- **In-tree**(이 레포 안): 디렉터리를 [examples/CMakeLists.txt](../service/sils/examples/CMakeLists.txt)에
+- **In-tree**(이 레포 안): 디렉터리를 [examples/CMakeLists.txt](../../service/sils/examples/CMakeLists.txt)에
   `add_subdirectory(my-ecu)`로 추가. `sils_vecu` 타겟에 직접 링크되어 SDK 경계를 컴파일-검증.
 - **Out-of-tree**(별도 repo): `find_package(sils_vecu)` 후 동일 타겟 링크(T1-B install/export).
 
@@ -102,7 +102,7 @@ FMU 경로는 [sils-fmu-plant.md](sils-fmu-plant.md) 참고. FMU 지원은 `-DSI
 - **내장 VISS/raw** (권장 기본): `sils::MakeWireCodec(cfg.wire_kind, cfg.response_topic_prefix)`.
   DDS 타입·토픽 계약이 기본 probe와 **동일** → 상대편(responder/SUT) 무변경.
 - **커스텀 네이티브 타입**: 자체 IDL + `IWireCodec` 구현
-  ([brake-ecu-native](../service/sils/examples/brake-ecu-native/)).
+  ([brake-ecu-native](../../service/sils/examples/brake-ecu-native/)).
   ⚠️ **이 경우만 DDS 타입/토픽 계약이 바뀌므로 상대편도 그 타입을 알아야 한다.**
 
 ### Step 4 — `main.cc` (~25줄, 전체 프로그램)
@@ -137,7 +137,7 @@ install(TARGETS my_ecu RUNTIME DESTINATION bin)
 
 ### Step 6 — descriptor (env 계약)
 런타임 동작은 **전부 env 구동**이다. 아래는 `ProbeConfig` ↔ `SILS_*` 매핑(핵심 발췌,
-전체는 [config.hpp](../service/sils/vecu/src/config.hpp)):
+전체는 [config.hpp](../../service/sils/vecu/src/config.hpp)):
 
 | env | 필드 | 기본 | 의미 |
 |---|---|---|---|
@@ -154,7 +154,7 @@ install(TARGETS my_ecu RUNTIME DESTINATION bin)
 | `SILS_SCENARIO`/`SILS_SCENARIO_FAULTS` | scenario_* | — | 결함 주입 |
 | (내 ECU 고유) | — | — | 예: `MY_GAIN` — SDK 헬퍼로 직접 읽음 |
 
-`descriptors/my_ecu.yaml`에 이 run 정의를 적어둔다(참고: [brake_probe.yaml](../service/sils/examples/brake-ecu/descriptors/brake_probe.yaml)).
+`descriptors/my_ecu.yaml`에 이 run 정의를 적어둔다(참고: [brake_probe.yaml](../../service/sils/examples/brake-ecu/descriptors/brake_probe.yaml)).
 
 ### Step 7 — 패키징 (단일 프로세스 컨테이너)
 `entrypoint.sh` — 바이너리를 **PID 1로 exec**해 `docker stop`의 SIGTERM이 직접 닿게:
@@ -167,7 +167,7 @@ exec /oss/bin/my_ecu
 ```
 Dockerfile은 `docker/Dockerfile.rel`의 `runtime-mmf-sils-vecu` 스테이지가 정석 예다
 (ubuntu:22.04 + FastDDS 런타임 + 바이너리 + entrypoint, **ROS2 없음**). 자체 예는
-[brake-ecu/Dockerfile](../service/sils/examples/brake-ecu/Dockerfile).
+[brake-ecu/Dockerfile](../../service/sils/examples/brake-ecu/Dockerfile).
 
 ---
 
@@ -184,7 +184,7 @@ MY_GAIN=0.02 ./output/x86_64/Debug/core/bin/my_ecu
 **ROS2 불필요.** 절차:
 
 1. 이미지 빌드 → `docker/build_local.sh`에 타겟 추가하거나 자체 Dockerfile로 `my-ecu:local`
-2. speclist에 등록 — [e2e/config/saved-service-list.yaml](../service/extension/general/adsw_manager/e2e/config/saved-service-list.yaml)
+2. speclist에 등록 — [e2e/config/saved-service-list.yaml](../../service/extension/general/adsw_manager/e2e/config/saved-service-list.yaml)
    형식으로 `containers[].image`/`extra_args`(env)/`services[].recovery` 지정
 3. `adsw_manager_general` + `lifecycle_mgr`를 같은 `MMF_DDS_DOMAIN_ID`에 기동
 
@@ -196,8 +196,8 @@ adsw UpdateServiceList(container 등록)
 ```
 - `recovery: ALWAYS` → 등록만 하면 **자동 기동**(트리거 불필요).
 - `recovery: MANUAL` → 운영자 ctrl 명령(CtrlStartContainer)이 있어야 기동.
-- 참조 e2e: [e2e/run_lifecycle_e2e.sh](../service/extension/general/adsw_manager/e2e/run_lifecycle_e2e.sh)
-  (probe), [e2e/run_brake_e2e.sh](../service/extension/general/adsw_manager/e2e/run_brake_e2e.sh) (brake).
+- 참조 e2e: [e2e/run_lifecycle_e2e.sh](../../service/extension/general/adsw_manager/e2e/run_lifecycle_e2e.sh)
+  (probe), [e2e/run_brake_e2e.sh](../../service/extension/general/adsw_manager/e2e/run_brake_e2e.sh) (brake).
   두 변형은 speclist·이미지·env만 다르고 lifecycle_mgr·adsw·DDS 계약은 무변경.
 
 ---
@@ -207,7 +207,7 @@ adsw UpdateServiceList(container 등록)
 | 레벨 | 무엇 | 어떻게 |
 |---|---|---|
 | 빌드/타입 | 컴파일·링크·DDS 타입 | `./build.sh --build-sils` |
-| L0/L1 | trace 스키마 적합 | [conformance gate](../tools/sils/conformance/gate.py) — schema→fidelity→parity, fail-closed |
+| L0/L1 | trace 스키마 적합 | [conformance gate](../../tools/sils/conformance/gate.py) — schema→fidelity→parity, fail-closed |
 | L2 | behavior 결정성 | golden scenario 재현(같은 틱 입력 → 같은 `value` 열) |
 | L3 | 폐루프 물리 | plant 연동 trace 비교 |
 | 타깃 | ARM64 동등성 | [sils-target-parity.md](sils-target-parity.md) |
@@ -260,11 +260,11 @@ trace 스키마: [sils-trace-schema.md](sils-trace-schema.md) / `config/sils/tra
 
 ### 핵심 조각
 
-- **정규 계약** — [EgoState.idl](../idl/dds/sils/EgoState.idl)(STATE in)·[VehicleControl.idl](../idl/dds/sils/VehicleControl.idl)(ACTUATION out).
+- **정규 계약** — [EgoState.idl](../../idl/dds/sils/EgoState.idl)(STATE in)·[VehicleControl.idl](../../idl/dds/sils/VehicleControl.idl)(ACTUATION out).
   **SI 단위 고정**(m·rad·m/s·m/s²). 시뮬레이터가 자기 메시지를 이 정규 타입으로 **번역**한다
   (anti-corruption layer). **MORAI→DDS 어댑터는 외부 컴포넌트**(SiLS가 만들지 않음); 그 어댑터가
   deg→rad·km/h→m/s 변환을 소유한다. → vECU는 시뮬 종류와 무관하게 정규 타입만 본다.
-- **채널맵** — [config/sils/channelmap/*.yaml](../config/sils/channelmap/). 채널마다
+- **채널맵** — [config/sils/channelmap/*.yaml](../../config/sils/channelmap/). 채널마다
   `name`(VSS path)·`dir`(in/out)·`topic`·`type`. `SILS_CHANNELMAP`로 지정, 비면 비활성.
   **채널을 추가하면 MIMO 확장**(예: Autoware 제어 입력 채널 추가). 파서: `channel_map.hpp`.
 - **코덱** — `vehicle_wire.hpp`의 `VehicleWireCodec`: 생성 DDS 구조체 ↔ SDK POD

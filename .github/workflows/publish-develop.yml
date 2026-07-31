@@ -36,21 +36,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build
-        run: echo "TODO: 프로젝트 빌드 명령"
+        run: 'echo "TODO: 프로젝트 빌드 명령"'
 
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Test
-        run: echo "TODO: 테스트 명령"
+        run: 'echo "TODO: 테스트 명령"'
 
   security-scan:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Secret / dependency scan
-        run: echo "TODO: 시크릿·의존성 취약점 스캔"
+        run: 'echo "TODO: 시크릿·의존성 취약점 스캔"'
 
   publish-approval:
     needs: [build, test, security-scan]
@@ -77,6 +77,47 @@ jobs:
           PB="publish/$(date +%Y%m%d)-${SHORT}"
           echo "branch=$PB" >> "$GITHUB_OUTPUT"
           echo "공개 브랜치: $PB"
+
+      # push 실패(403)의 원인을 즉시 구분한다. 토큰 값은 출력하지 않는다.
+      # 원인 후보: secret 미등록/빈 값 · 토큰 만료·무효 · 대상 repo 접근 미포함 ·
+      #            봇 Write 권한 없음 · 조직 fine-grained PAT 미승인
+      - name: Preflight — 봇 토큰·권한 점검
+        env:
+          PUBLIC_BOT_TOKEN: ${{ secrets.PUBLIC_BOT_TOKEN }}
+        run: |
+          if [ -z "${PUBLIC_BOT_TOKEN}" ]; then
+            echo "::error::secret PUBLIC_BOT_TOKEN 이 비어 있습니다. 사내 저장소 Settings → Secrets and variables → Actions → *Repository secret* 으로 등록하세요 (Environment secret 으로 넣으면 이 job 에서 보이지 않습니다)."
+            exit 1
+          fi
+
+          # 1) 토큰 유효성 + 신원 확인
+          CODE=$(curl -sS -o /tmp/user.json -w '%{http_code}' \
+                   -H "Authorization: Bearer ${PUBLIC_BOT_TOKEN}" \
+                   -H "Accept: application/vnd.github+json" \
+                   https://api.github.com/user || echo 000)
+          if [ "$CODE" != "200" ]; then
+            echo "::error::토큰이 유효하지 않습니다 (GET /user → HTTP $CODE). 만료·오타·조직 승인 대기 여부를 확인하세요."
+            jq -r '.message // empty' /tmp/user.json 2>/dev/null || true
+            exit 1
+          fi
+          echo "봇 계정: $(jq -r '.login' /tmp/user.json)"
+
+          # 2) 대상 공개 저장소에 대한 write(push) 권한 확인
+          CODE=$(curl -sS -o /tmp/repo.json -w '%{http_code}' \
+                   -H "Authorization: Bearer ${PUBLIC_BOT_TOKEN}" \
+                   -H "Accept: application/vnd.github+json" \
+                   "https://api.github.com/repos/${PUBLIC_OWNER}/${PUBLIC_REPO}" || echo 000)
+          if [ "$CODE" != "200" ]; then
+            echo "::error::${PUBLIC_OWNER}/${PUBLIC_REPO} 에 접근할 수 없습니다 (HTTP $CODE). 토큰의 Repository access 에 이 저장소가 포함됐는지, 봇이 조직 멤버인지 확인하세요."
+            exit 1
+          fi
+          PUSH=$(jq -r '.permissions.push // false' /tmp/repo.json)
+          echo "push 권한: ${PUSH}"
+          if [ "$PUSH" != "true" ]; then
+            echo "::error::봇에게 ${PUBLIC_OWNER}/${PUBLIC_REPO} 의 write(push) 권한이 없습니다. 공개 저장소 Settings → Collaborators and teams 에서 봇을 Role: Write 로 추가하고, 토큰 권한에 Contents: Read and write 를 부여하세요."
+            exit 1
+          fi
+          echo "✅ preflight 통과 — push 를 진행합니다."
 
       - name: Push develop to public (temp branch)
         env:

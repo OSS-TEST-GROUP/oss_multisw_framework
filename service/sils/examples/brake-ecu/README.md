@@ -81,4 +81,4 @@ This example ships **both**, proving "only the plant line changes":
 difference. The `.fmu` is built from source (`models/brake-fmu/build.sh`, no binary in
 git); its value references map to `SILS_FMU_INPUT_VR`/`SILS_FMU_OUTPUT_VR`. See
 [models/brake-fmu/README.md](models/brake-fmu/README.md) and
-[extension-model §3.C](../../../../docs/sils-extension-model.md).
+[extension-model §3.C](../../../../docs/sils/sils-extension-model.md).

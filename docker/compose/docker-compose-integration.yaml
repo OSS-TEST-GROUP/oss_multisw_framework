@@ -1,78 +1,461 @@
-# Integration test environment (x86_64, locally built images)
-#
-# Brings up both runtime containers on the host network so that
-#   - any client (e.g. OTA Monitor / Flutter integration_test) running on
-#     the host can reach rosbridge at ws://localhost:9090
-#   - rosbridge_server inside mmf-ext-ros2 sees the DDS traffic published
-#     by services inside mmf-core (FastDDS uses UDP multicast / unicast
-#     scoped to the host's interfaces — network_mode: host avoids the
-#     bridge-network drop that breaks discovery).
-#
-# Images expected to exist locally (built by ./build.sh):
-#   - oss-mmf-core:local      runtime-mmf-core target
-#   - oss-mmf-ext-ros2:local  runtime-mmf-ext-ros2 target (rosbridge included)
-#
-# Usage (from oss_multisw_framework root):
-#   docker compose -f docker/compose/docker-compose-integration.yaml up -d
-#   docker compose -f docker/compose/docker-compose-integration.yaml ps
-#   docker compose -f docker/compose/docker-compose-integration.yaml logs -f mmf-ext-ros2
-#   docker compose -f docker/compose/docker-compose-integration.yaml down
-#
-# Linux only — `network_mode: host` is unsupported on Docker Desktop for
-# macOS/Windows.
-
 services:
   mmf-core:
     container_name: oss-mmf-core
-    image: oss-mmf-core:local
+    image: registry.obigo.com/oss/oss-mmf-core:latest
     privileged: true
-    network_mode: host
+    network_mode: "host"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
     cap_add:
       - NET_RAW
       - NET_ADMIN
-    environment:
-      # ROS_DOMAIN_ID MUST match between mmf-core, mmf-ext-ros2, and any
-      # external consumer (e.g. OTA Monitor) so DDS discovery succeeds.
-      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
-      # F007 — heartbeat publish interval (seconds). Picked up by the
-      # patched diagnostic service when present; harmless otherwise.
-      HEARTBEAT_INTERVAL_SEC: ${HEARTBEAT_INTERVAL_SEC:-3}
-    # /dev/shm is shared so FastDDS shared-memory transport (default for
-    # same-host pubsub) works between mmf-core and mmf-ext-ros2.
     volumes:
       - /dev/shm:/dev/shm
+    #      - /run/user/1000:/run/user/1000
     restart: unless-stopped
+    environment:
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0} # DDS 도메인 격리 (보드별 동일 값 사용)
+      - MMF_DDS_DOMAIN_ID=${ROS_DOMAIN_ID:-0} # raw Fast-DDS (lifecycle_mgr/diagnostics/adsw/ota)
+      - VISS_DDS_DOMAIN_ID=${ROS_DOMAIN_ID:-0} # vehicle_info/viss
+      - HEARTBEAT_INTERVAL_SEC=3
+      - REST_URL=http://172.16.10.47:8080/upload
+    healthcheck:
+      test: [ "CMD-SHELL", "sleep 12" ]
+      interval: 60s
+      timeout: 15s
+      retries: 1
+      start_period: 12s
 
   mmf-ext-ros2:
     container_name: oss-mmf-ext-ros2
-    image: oss-mmf-ext-ros2:local
+    image: registry.obigo.com/oss/oss-mmf-ext-ros2:latest
+    depends_on:
+      mmf-core:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "sleep 2" ]
+      interval: 60s
+      timeout: 5s
+      retries: 1
+      start_period: 2s
     privileged: true
-    network_mode: host
+    network_mode: "host"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
     cap_add:
       - NET_RAW
       - NET_ADMIN
-    environment:
-      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+    group_add:
+      - "${DOCKER_GID:-999}" # adsw_manager가 docker run 실행에 필요
     volumes:
       - /dev/shm:/dev/shm
-      # F013 — adsw_manager's ContainerController shells out to `docker
-      # start/run/stop` from inside this container.  Bind the host docker
-      # daemon socket so those commands hit the same engine that's
-      # running this compose, not a non-existent in-container daemon.
-      - /var/run/docker.sock:/var/run/docker.sock
-    # F013 — grant ossuser (uid 1000) access to /var/run/docker.sock by
-    # joining the host's docker group at runtime.  Override DOCKER_SOCK_GID
-    # if your host's group differs from the common Ubuntu default 999:
-    #   DOCKER_SOCK_GID=$(stat -c '%g' /var/run/docker.sock) \
-    #     docker compose -f docker/compose/docker-compose-integration.yaml up -d
-    group_add:
-      - "${DOCKER_SOCK_GID:-999}"
-    # mmf-core advertises DDS topics first; ext-ros2's rosbridge then
-    # subscribes and re-publishes over WebSocket. Starting the bridge
-    # after the core avoids "no publisher matched yet" warnings on the
-    # first second of operation. depends_on does not wait for readiness
-    # (no healthcheck baked into upstream image yet); external runners
-    # should poll port 9090 to confirm rosbridge is OPEN before testing.
-    depends_on:
-      - mmf-core
+      #      - /run/user/1000:/run/user/1000
+      - /var/run/docker.sock:/var/run/docker.sock # adsw_manager → 컨테이너 기동 필수
+      # SAVED_SERVICE_LIST가 존재할 때만 전체 마운트 구문을 반환하고, 없으면 빈 문자열("")이 됨
+      - ${SAVED_REGISTRY_BACKUP:-/dev/null}:/config
     restart: unless-stopped
+    environment:
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0} # DDS 도메인 격리
+      - MMF_DDS_DOMAIN_ID=${ROS_DOMAIN_ID:-0} # raw Fast-DDS
+      - SAVED_REGISTRY_BACKUP=${SAVED_REGISTRY_BACKUP:+/config} # 서비스목록 백업/설정 디렉토리 경로
+    entrypoint:
+      - /bin/bash
+      - -c
+      - |
+        export LD_LIBRARY_PATH=/oss/lib
+        export SAVED_REGISTRY_BACKUP=$${SAVED_REGISTRY_BACKUP:-\"/oss/bin/config\"}
+
+        # Source ROS2 Humble setup
+        source /opt/ros/humble/setup.bash
+
+        # colcon overlay containing all auto-generated per-module packages
+        # (diagnosticmgr, lifecyclemgr, otamanager, adswmgr, security). Built
+        # in docker/Dockerfile.rel's ros-mmf-base stage via idl_to_msg.py +
+        # colcon. Required so rosbridge_server can resolve `<pkg>/msg/<Type>`
+        # advertise / subscribe requests; without it every typed advertise
+        # fails with "No module named '<pkg>'".
+        if [ -f /opt/ros/humble/share/mmf_interfaces/setup.bash ]; then
+          source /opt/ros/humble/share/mmf_interfaces/setup.bash
+        fi
+
+        # tier4_autoware_msgs overlay (built in same ros-mmf-base stage). Only
+        # needed if any topic uses tier4_*_msgs / autoware_*_msgs types.
+        if [ -f /opt/ros/humble/share/tier4_autoware/setup.bash ]; then
+          source /opt/ros/humble/share/tier4_autoware/setup.bash
+        fi
+
+        # F010: ota_client background launch.
+        # The binary is shipped by Dockerfile.rel runtime-mmf-ext-ros2 (it copies
+        # output/<arch>/<type>/extension/ros2/bin/ → /oss/bin/). We still guard
+        # `-x` for cases where a developer mounts a stripped image and forgets
+        # to rebuild ext-ros2.
+        if [ -x /oss/bin/ota_client ]; then
+          echo "[ros2_entrypoint] launching /oss/bin/ota_client in background"
+          ( /oss/bin/ota_client; rc=$$?
+            echo "[ros2_entrypoint] ota_client exited rc=$$rc (container stays up)"
+          ) &
+        else
+          echo "[ros2_entrypoint] WARN: /oss/bin/ota_client not found, skipping (rebuild ext-ros2 to populate it)" >&2
+        fi
+
+        # dds_bridge: dynamic-IDL adapter that forwards every OtaManager
+        # topic between the raw bare-DDS layer (otamanager::X) and the
+        # ROS-canonical layer (otamanager::msg::dds_::X_) so rosbridge_server
+        # and ota_monitor can talk to the host OtaManager without TypeObject
+        # matching pain. Topic table + design rationale live in
+        # service/extension/ros2/dds_bridge/main.cc.
+        if [ -x /oss/bin/dds_bridge ]; then
+          echo "[ros2_entrypoint] launching /oss/bin/dds_bridge in background"
+          ( /oss/bin/dds_bridge /oss/bin/idl; rc=$$?
+            echo "[ros2_entrypoint] dds_bridge exited rc=$$rc (container stays up)"
+          ) &
+        else
+          echo "[ros2_entrypoint] WARN: /oss/bin/dds_bridge not found, skipping" >&2
+        fi
+
+        # Start rosbridge_server in background
+        ros2 launch rosbridge_server rosbridge_websocket_launch.xml &
+
+        # Start main application
+        exec /oss/bin/adsw_manager
+
+  mmf-ext-agl:
+    container_name: oss-mmf-ext-agl
+    image: ${IMAGE:-registry.obigo.com/oss/oss-mmf-ext-agl:latest}
+    # x86_64에서 hmi_launcher config 를 동적 생성한 뒤 원본 /oss/entrypoint.sh 를 실행
+    # - GPU(nvidia/mesa/none) 는 마운트된 docker.sock 으로 컨테이너 내부에서 감지
+    # - DISPLAY, HMI_RUNTIME_UID 는 아래 environment 에서 주입
+    # - 생성 경로 /oss/bin/config/agl-service-list.x86.yaml 은 entrypoint 가 자동 선택
+    entrypoint:
+      - /bin/bash
+      - -c
+      - |
+        if [ "$$(uname -m)" = "x86_64" ]; then
+          GPU_ARGS=""
+          gpu="$${HMI_GPU:-auto}"
+          if [ "$$gpu" = "auto" ]; then
+            if docker info 2>/dev/null | grep -qiE "Runtimes:.*nvidia|nvidia"; then
+              gpu="nvidia"
+            elif [ -e /dev/dri ]; then
+              gpu="mesa"
+            else
+              gpu="none"
+            fi
+          fi
+          case "$$gpu" in
+            nvidia) GPU_ARGS=$$'  - "--gpus"\n  - "all"' ;;
+            mesa)   GPU_ARGS=$$'  - "--device"\n  - "/dev/dri:/dev/dri"' ;;
+            *)      GPU_ARGS="" ;;
+          esac
+          DISP="$${DISPLAY:-:0}"
+          UIDN="$${HMI_RUNTIME_UID:-1000}"
+          echo "[mmf-ext-agl] x86_64 hmi_launcher config 생성: gpu=$$gpu display=$$DISP uid=$$UIDN"
+          cat > /oss/bin/config/agl-service-list.x86.yaml <<YAML
+        services:
+        - name: adsw_monitor
+          service_type: NORMAL
+          recovery_policy: ALWAYS
+          is_enabled: true
+          mw_type: AGL
+          init_state: NOT_RUNNING
+        - name: ota_monitor
+          service_type: NORMAL
+          recovery_policy: R_DEFAULT
+          is_enabled: true
+          mw_type: AGL
+          init_state: NOT_RUNNING
+        - name: lfc_monitor
+          service_type: NORMAL
+          recovery_policy: R_DEFAULT
+          is_enabled: true
+          mw_type: AGL
+          init_state: NOT_RUNNING
+        - name: hmi_launcher
+          service_type: NORMAL
+          recovery_policy: ALWAYS
+          is_enabled: true
+          mw_type: AGL
+          init_state: NOT_RUNNING
+          image: registry.obigo.com/oss/oss-hmi-launcher:latest
+          extra_args:
+          - "-it"
+          - --net=host
+          - --privileged
+          - --restart
+          - unless-stopped
+          - --cap-add
+          - NET_RAW
+          - --cap-add
+          - NET_ADMIN
+        $${GPU_ARGS}
+          - "-e"
+          - DISPLAY=$${DISP}
+          - "-e"
+          - XDG_RUNTIME_DIR=/run/user/$${UIDN}
+          - "-e"
+          - LAUNCHER_BOT_ENABLED=0
+          - "-v"
+          - /tmp/.X11-unix:/tmp/.X11-unix
+          - "-v"
+          - /run/user/$${UIDN}:/run/user/$${UIDN}
+          - "-v"
+          - /usr/share/fonts:/usr/share/fonts:ro
+          - "-v"
+          - /etc/fonts:/etc/fonts:ro
+        YAML
+        fi
+        exec /oss/entrypoint.sh
+    privileged: true
+    network_mode: "host"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+    group_add:
+      - "${DOCKER_GID:-999}" # adsw_manager가 docker run 실행에 필요
+    volumes:
+      - /dev/shm:/dev/shm
+      - /run/user/${HMI_RUNTIME_UID:-1000}:/run/user/1000
+      - /var/run/docker.sock:/var/run/docker.sock # adsw_manager → hmi_launcher 등 닥커 제어에 필수
+      # AGL 서비스 목록 오버라이드 필요 시 주석 해제
+      # - ${AGL_SERVICE_LIST:-/opt/adsw/config/agl-service-list.yaml}:/oss/bin/config/agl-service-list.yaml:ro
+      # x86_64 전용 hmi_launcher config: compose-up-agl.sh 실행 시 자동 주입됨
+      # 직접 compose up 하는 경우: AGL_X86_CONFIG_GEN=/tmp/agl-service-list.x86.gen.yaml 을 지정
+    restart: unless-stopped
+    environment:
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0} # DDS 도메인 격리
+      - MMF_DDS_DOMAIN_ID=${ROS_DOMAIN_ID:-0} # raw Fast-DDS
+      - HMI_RUNTIME_UID=${HMI_RUNTIME_UID:-1000}
+      - HMI_GPU=${HMI_GPU:-auto}
+      - DISPLAY=${DISPLAY:-:0}
+
+  oss-adsw-decision:
+    container_name: oss-adsw-decision-container
+    image: ghcr.io/oss-test-group/autoware-partition:adsw-decision
+    network_mode: "host"
+    ipc: "host"
+    privileged: true
+    pid: host
+
+    command: /autoware/start_script/adsw-decision.sh
+    # command: bash -c "/exec/adsw-decision.sh && tail -f /dev/null"
+
+    environment:
+      - LOCAL_UID=${LOCAL_UID:-1000} # 실행 환경의 UID (컴포즈 가이드 참고)
+      - LOCAL_GID=${LOCAL_GID:-1000} # 실행 환경의 GID
+      - LOCAL_USER=${LOCAL_USER:-beyhpc} # 실행 환경의 사용자명
+      - LOCAL_GROUP=${LOCAL_GROUP:-beyhpc} # 실행 환경의 그룹명
+      - DISPLAY=${DISPLAY}
+      - FASTDDS_BUILTIN_TRANSPORTS=UDPv4
+      - XAUTHORITY=${XAUTHORITY}
+      - XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      - TZ=Asia/Seoul # 타임존 직접 명시 (또는 호스트 환경에 맞춰 수정)
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0} # DDS 통신용 도메인 ID (필요시 변경)
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
+
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - .:/workspace
+      - ~/autoware_map/KCity_map_251231:/autoware_map:ro
+      - ~/autoware_exec:/exec
+      - /etc/localtime:/etc/localtime:ro
+      #- ~/oss/rosbag:/bag
+
+      # 터미널 인터랙티브 모드 유지 (-it)
+    stdin_open: true
+    tty: true
+
+    restart: unless-stopped
+
+  oss-adsw-control:
+    container_name: oss-adsw-control-container
+    image: ghcr.io/oss-test-group/autoware-partition:adsw-control
+    network_mode: "host"
+    ipc: "host"
+    privileged: true
+    pid: host
+
+    command: /autoware/start_script/adsw-control.sh
+    # command: bash -c "/exec/adsw-decision.sh && tail -f /dev/null"
+
+    environment:
+      - LOCAL_UID=${LOCAL_UID:-1000} # 실행 환경의 UID (컴포즈 가이드 참고)
+      - LOCAL_GID=${LOCAL_GID:-1000} # 실행 환경의 GID
+      - LOCAL_USER=${LOCAL_USER:-beyhpc} # 실행 환경의 사용자명
+      - LOCAL_GROUP=${LOCAL_GROUP:-beyhpc} # 실행 환경의 그룹명
+      - DISPLAY=${DISPLAY}
+      - FASTDDS_BUILTIN_TRANSPORTS=UDPv4
+      - XAUTHORITY=${XAUTHORITY}
+      - XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      - TZ=Asia/Seoul # 타임존 직접 명시 (또는 호스트 환경에 맞춰 수정)
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0} # DDS 통신용 도메인 ID (필요시 변경)
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
+
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - .:/workspace
+      - ~/autoware_map/KCity_map_251231:/autoware_map:ro
+      - ~/autoware_exec:/exec
+      - /etc/localtime:/etc/localtime:ro
+      #- ~/oss/rosbag:/bag
+
+      # 터미널 인터랙티브 모드 유지 (-it)
+    stdin_open: true
+    tty: true
+
+    restart: unless-stopped
+
+  oss-adsw-perception:
+    container_name: oss-adsw-perception-container
+    image: ghcr.io/oss-test-group/autoware-partition:adsw-perception
+    network_mode: "host"
+    ipc: "host"
+    privileged: true
+    pid: host
+
+    command: /autoware/start_script/adsw-perception.sh
+    # command: bash -c "/exec/adsw-decision.sh && tail -f /dev/null"
+
+    environment:
+      - LOCAL_UID=${LOCAL_UID:-1000} # 실행 환경의 UID (컴포즈 가이드 참고)
+      - LOCAL_GID=${LOCAL_GID:-1000} # 실행 환경의 GID
+      - LOCAL_USER=${LOCAL_USER:-beyhpc} # 실행 환경의 사용자명
+      - LOCAL_GROUP=${LOCAL_GROUP:-beyhpc} # 실행 환경의 그룹명
+      - DISPLAY=${DISPLAY}
+      - FASTDDS_BUILTIN_TRANSPORTS=UDPv4
+      - XAUTHORITY=${XAUTHORITY}
+      - XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      - TZ=Asia/Seoul # 타임존 직접 명시 (또는 호스트 환경에 맞춰 수정)
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0} # DDS 통신용 도메인 ID (필요시 변경)
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
+
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - .:/workspace
+      - ~/autoware_map/KCity_map_251231:/autoware_map:ro
+      - ~/autoware_exec:/exec
+      - /etc/localtime:/etc/localtime:ro
+      #- ~/oss/rosbag:/bag
+
+      # 터미널 인터랙티브 모드 유지 (-it)
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+
+  oss-adsw-rviz:
+    container_name: adsw-remote-rviz
+    image: ${PARTITION_IMAGE_REPO:-ghcr.io/oss-test-group/autoware-partition}:adsw-perception
+    network_mode: "host"
+    ipc: "host"
+    privileged: true
+    command: rviz2 -d ${RVIZ_CONFIG:-/opt/autoware/share/obigo_launch/rviz/autoware.rviz}
+    environment:
+      - LOCAL_UID=${LOCAL_UID:-1000}
+      - LOCAL_GID=${LOCAL_GID:-1000}
+      - LOCAL_USER=${LOCAL_USER:-beyhpc}
+      - LOCAL_GROUP=${LOCAL_GROUP:-beyhpc}
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-42}
+      - FASTDDS_BUILTIN_TRANSPORTS=UDPv4
+      - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+      - ROS_LOCALHOST_ONLY=0
+      - ROS_LOG_DIR=/tmp/.ros/log
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
+      - XAUTHORITY=${XAUTHORITY}
+      - XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}
+      - CYCLONEDDS_URI=${CYCLONEDDS_URI}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
+    devices:
+      - /dev/dri:/dev/dri
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - /dev/shm:/dev/shm
+      - /etc/localtime:/etc/localtime:ro
+      - ${XAUTHORITY:-/dev/null}:${XAUTHORITY:-/dev/null}:ro
+      - ${XDG_RUNTIME_DIR:-/dev/null}:${XDG_RUNTIME_DIR:-/dev/null}
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+
+  security_processor:
+    image: ghcr.io/oss-test-group/oss-ids/security_processor:v0.1.0
+    container_name: security_processor
+    restart: unless-stopped
+    network_mode: host
+    ipc: host
+    depends_on:
+      mmf-ext-ros2:
+        condition: service_healthy
+
+  attack_env:
+    image: ghcr.io/oss-test-group/oss-ids/attack_env:v0.1.0
+    container_name: attack_env
+    restart: unless-stopped
+    network_mode: host
+    ipc: host
+    depends_on:
+      mmf-ext-ros2:
+        condition: service_healthy
+
+  security_monitor:
+    image: ghcr.io/oss-test-group/oss-ids/security_monitor:v0.1.0
+    container_name: security_monitor
+    restart: unless-stopped
+    network_mode: host
+    ipc: host
+    volumes:
+      - monitor_db:/app/data
+    depends_on:
+      mmf-ext-ros2:
+        condition: service_healthy
+      attack_env:
+        condition: service_started
+
+volumes:
+  monitor_db:

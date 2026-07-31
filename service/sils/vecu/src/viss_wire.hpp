@@ -2,7 +2,7 @@
 #define SILS_VECU_VISS_WIRE_HPP
 
 // Built-in VISS wire codecs -- the concrete IWireCodec impls over the VissRequestTopic
-// type (libsils_vecu SDK, docs/sils-extension-model.md P4). Split out of wire.hpp so the
+// type (libsils_vecu SDK, docs/sils/sils-extension-model.md P4). Split out of wire.hpp so the
 // PORT header names no DDS type: an ECU that ships its own contract type includes only
 // wire.hpp / run_loop.hpp and never compiles the VISS-generated sources. The default
 // probe (viss_probe_main.cc) and the VISS-envelope example (examples/brake-ecu) include

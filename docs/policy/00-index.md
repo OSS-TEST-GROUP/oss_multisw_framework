@@ -17,6 +17,9 @@
 | `release-deployment-guide.md` | 릴리스 태그(공개에서 생성) → 사내 deploy 배포 | 담당자 |
 | `bot-account-setup-guide.md` | 공개 push용 봇 계정·토큰·secret 설정 | 담당자 |
 | `release-notes-template.md` | 릴리스 노트 템플릿 (다기관 기여·사사 포함) | 담당자 |
+| `issue-template-guide.md` | 이슈 폼 **작성·유지보수** 규칙·문법·repo별 차이 | 담당자 |
+| `how-to-file-an-issue.md` | 이슈를 **등록하는** 방법 (템플릿 선택·작성 요령·보안·제출 후 흐름) | 사용자·기여자 |
+| `tagging-rules-guide.md` | **태깅 룰** — 공개 Git 릴리스 태그(SemVer) + 컨테이너 레지스트리 이미지 태그 | 공동 개발 기관·담당자 |
 
 ---
 

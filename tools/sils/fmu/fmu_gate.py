@@ -3,7 +3,7 @@
 
 A `.fmu` is a ZIP that ships a native `.so`/`.dll`; instantiating it runs that code
 in-process. Loading an untrusted or tampered FMU is therefore arbitrary code
-execution (FMU guide docs/sils-fmu-plant.md §5.6). This gate is the pre-load check
+execution (FMU guide docs/sils/sils-fmu-plant.md §5.6). This gate is the pre-load check
 the Run Coordinator runs BEFORE FmuPlant ever opens the file:
 
   1. compute the FMU's sha256 over its exact bytes

@@ -4,8 +4,8 @@
 예제라면, steer-ecu는 **버스 결합 모델(`RunVehicleProbe`)**의 예제다 — MORAI/AWSIM이 버스에 올리는
 정규 `EgoState`를 구독하고 조향 `VehicleControl`을 발행한다.
 
-- 설계: [../../../../docs/sils-morai-plant-adapter-design.md](../../../../docs/sils-morai-plant-adapter-design.md)
-- 개발 가이드: [../../../../docs/sils-vecu-development-guide.md](../../../../docs/sils-vecu-development-guide.md) §7
+- 설계: [../../../../docs/sils/sils-morai-plant-adapter-design.md](../../../../docs/sils/sils-morai-plant-adapter-design.md)
+- 개발 가이드: [../../../../docs/sils/sils-vecu-development-guide.md](../../../../docs/sils/sils-vecu-development-guide.md) §7
 
 ## 구성
 

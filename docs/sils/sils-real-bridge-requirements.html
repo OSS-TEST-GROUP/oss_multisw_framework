@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SiLS · 실 브리지 요구사항 — MORAI · Autoware 연동</title>
+<style>
+  :root{
+    --bg:#f1f4f5; --surface:#ffffff; --surface-2:#f7f9fa;
+    --ink:#0f1518; --muted:#566871; --faint:#8496a0;
+    --line:#d6dee1; --line-soft:#e6ecee;
+    --state:#0b8f82; --state-ink:#076b61; --state-soft:#d8efec;   /* STATE / MORAI */
+    --ctrl:#b9761a;  --ctrl-ink:#8a5712; --ctrl-soft:#f3e6d1;      /* 명령 · 타깃 · 브리지·MMF */
+    --act:#4f5bc4;   --act-ink:#3d47a3;  --act-soft:#e4e6f7;       /* 우리 SiLS · ACTUATION */
+    --warn:#c23b3b;  --warn-ink:#992d2d; --warn-soft:#f6dede;      /* 리스크 */
+    --grid:rgba(11,143,130,.05);
+    --shadow:0 1px 2px rgba(16,30,34,.04),0 8px 24px -14px rgba(16,30,34,.14);
+    --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0b0f12; --surface:#131b1f; --surface-2:#0f171b;
+      --ink:#e1e9ec; --muted:#8ea0a8; --faint:#63757d;
+      --line:#243036; --line-soft:#1a242a;
+      --state:#34c9b8; --state-ink:#7fe0d4; --state-soft:#12312e;
+      --ctrl:#e0a04a;  --ctrl-ink:#eec079; --ctrl-soft:#3a2c17;
+      --act:#8b9be8;   --act-ink:#aab5f0;  --act-soft:#1e2340;
+      --warn:#e26d6d;  --warn-ink:#f0a6a6; --warn-soft:#3a1c1c;
+      --grid:rgba(52,201,184,.06);
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px -16px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#f1f4f5; --surface:#ffffff; --surface-2:#f7f9fa;
+    --ink:#0f1518; --muted:#566871; --faint:#8496a0; --line:#d6dee1; --line-soft:#e6ecee;
+    --state:#0b8f82; --state-ink:#076b61; --state-soft:#d8efec;
+    --ctrl:#b9761a; --ctrl-ink:#8a5712; --ctrl-soft:#f3e6d1;
+    --act:#4f5bc4; --act-ink:#3d47a3; --act-soft:#e4e6f7;
+    --warn:#c23b3b; --warn-ink:#992d2d; --warn-soft:#f6dede;
+    --grid:rgba(11,143,130,.05);
+    --shadow:0 1px 2px rgba(16,30,34,.04),0 8px 24px -14px rgba(16,30,34,.14);
+  }
+  :root[data-theme="dark"]{
+    --bg:#0b0f12; --surface:#131b1f; --surface-2:#0f171b;
+    --ink:#e1e9ec; --muted:#8ea0a8; --faint:#63757d; --line:#243036; --line-soft:#1a242a;
+    --state:#34c9b8; --state-ink:#7fe0d4; --state-soft:#12312e;
+    --ctrl:#e0a04a; --ctrl-ink:#eec079; --ctrl-soft:#3a2c17;
+    --act:#8b9be8; --act-ink:#aab5f0; --act-soft:#1e2340;
+    --warn:#e26d6d; --warn-ink:#f0a6a6; --warn-soft:#3a1c1c;
+    --grid:rgba(52,201,184,.06);
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px -16px rgba(0,0,0,.6);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6;font-size:16px;
+    background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:26px 26px}
+  .wrap{max-width:1000px;margin:0 auto;padding:clamp(28px,5vw,60px) clamp(18px,4vw,32px) 90px}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--state-ink);font-weight:600}
+  h1{font-size:clamp(26px,4.5vw,40px);line-height:1.1;letter-spacing:-.02em;font-weight:800;margin:.5rem 0 0;text-wrap:balance}
+  .lede{color:var(--muted);font-size:clamp(15px,1.9vw,17px);max-width:70ch;margin:1rem 0 0}
+  h2{font-size:19px;font-weight:750;margin:0 0 1rem;border-bottom:1px solid var(--line);padding-bottom:.6rem}
+  h3{font-size:15.5px;margin:0 0 .5rem}
+  section{margin-top:44px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;box-shadow:var(--shadow)}
+  .card + .card{margin-top:14px}
+  svg{display:block;max-width:100%;height:auto;margin:0 auto}
+  figure{margin:0}
+  figcaption{font-size:12.5px;color:var(--faint);margin-top:.7rem;text-align:center;font-family:var(--mono)}
+  code{font-family:var(--mono);font-size:.9em;background:var(--surface-2);border:1px solid var(--line-soft);border-radius:5px;padding:.05em .35em}
+  p{margin:.2rem 0 0}
+  .sub{color:var(--muted);font-size:14px;margin:-.4rem 0 1rem}
+  .legend{display:flex;flex-wrap:wrap;gap:1rem;margin-top:1rem;font-family:var(--mono);font-size:12.5px}
+  .lg{display:inline-flex;align-items:center;gap:.45rem}
+  .sw{width:22px;height:12px;border-radius:3px;flex:none;border:1px solid rgba(0,0,0,.15)}
+  .sw.dash{background:repeating-linear-gradient(90deg,currentColor 0 6px,transparent 6px 10px)}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th{text-align:left;padding:.5rem .8rem;font-family:var(--mono);font-size:11px;color:var(--faint);text-transform:uppercase;border-bottom:1px solid var(--line)}
+  td{padding:.55rem .8rem;border-bottom:1px solid var(--line-soft);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  .mono{font-family:var(--mono);font-size:12.5px}
+  .ok{color:var(--state-ink);font-weight:700}
+  .badge{font-family:var(--mono);font-size:11px;font-weight:700;padding:.2em .6em;border-radius:999px;letter-spacing:.03em;white-space:nowrap}
+  .badge.rec{background:var(--state-soft);color:var(--state-ink);border:1px solid var(--state)}
+  .badge.no{background:var(--warn-soft);color:var(--warn-ink);border:1px solid var(--warn)}
+  .badge.mid{background:var(--ctrl-soft);color:var(--ctrl-ink);border:1px solid var(--ctrl)}
+  .badge.act{background:var(--act-soft);color:var(--act-ink);border:1px solid var(--act)}
+  .opt-head{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;margin-bottom:.5rem}
+  .risk{margin:.6rem 0 0;padding:.7rem .9rem;background:var(--warn-soft);border:1px solid var(--warn);border-radius:10px;font-size:14px}
+  .risk b{color:var(--warn-ink)}
+  .note{margin:.6rem 0 0;padding:.7rem .9rem;background:var(--ctrl-soft);border:1px solid var(--ctrl);border-radius:10px;font-size:13.5px}
+  .rec-line{margin:.6rem 0 0;padding:.7rem .9rem;background:var(--state-soft);border:1px solid var(--state);border-radius:10px;font-size:14px}
+  ol.q{margin:0;padding-left:1.3rem} ol.q li{margin:.45rem 0;font-size:14px}
+  ol.q b{font-family:var(--mono);font-size:12.5px}
+  footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-family:var(--mono);font-size:12px;color:var(--faint)}
+  footer a{color:var(--state-ink);text-decoration:none} footer a:hover{text-decoration:underline}
+  /* diagram */
+  .zone{fill:none;stroke:var(--line);stroke-width:1.3;stroke-dasharray:3 4}
+  .zone-sils{fill:none;stroke:var(--act);stroke-width:1.5}
+  .box{fill:var(--surface-2);stroke:var(--line);stroke-width:1.4}
+  .box-morai{fill:var(--state-soft);stroke:var(--state);stroke-width:1.6}
+  .box-vecu{fill:var(--act-soft);stroke:var(--act);stroke-width:1.7}
+  .box-bridge{fill:var(--ctrl-soft);stroke:var(--ctrl);stroke-width:1.5;stroke-dasharray:5 4}
+  .bus{stroke:var(--faint);stroke-width:1.5;stroke-dasharray:2 3}
+  .t{fill:var(--ink);font-family:var(--mono);font-size:12.5px;font-weight:700}
+  .ts{fill:var(--muted);font-family:var(--mono);font-size:10.5px}
+  .tt{fill:var(--faint);font-family:var(--mono);font-size:10.5px;letter-spacing:.05em}
+  .ln-state{stroke:var(--state);stroke-width:2.4;fill:none}
+  .ln-ctrl{stroke:var(--ctrl);stroke-width:2.4;fill:none}
+  .ln-act{stroke:var(--act);stroke-width:2.6;fill:none}
+  .ln-faint{stroke:var(--faint);stroke-width:1.7;fill:none;stroke-dasharray:4 3}
+  .cap-state{fill:var(--state-ink);font-family:var(--mono);font-size:10px;font-weight:700}
+  .cap-ctrl{fill:var(--ctrl-ink);font-family:var(--mono);font-size:10px;font-weight:700}
+  .cap-act{fill:var(--act-ink);font-family:var(--mono);font-size:10px;font-weight:700}
+  @media (max-width:760px){ table{font-size:13px} th,td{padding:.45rem .5rem} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">SiLS · libsils_vecu · 실 연동 (#1) — 요구사항</div>
+    <h1>실 브리지 요구사항 — MORAI · Autoware 연동</h1>
+    <p class="lede">SiLS vECU를 <b>실제 MORAI(플랜트) + Autoware(인지·판단)</b>와 닫힌 루프로 연동하기 위한 요구사항. 정규 계약·vECU·판정·요구/시나리오는 <b>이미 완성</b> — 남은 일은 <b>"알려진 ROS2 메시지 ↔ 알려진 정규 계약" 번역 + 기동 배관</b>이다. 브리지 두 개가 몸통, 어디에도 안 속하는 <b>공통층(clock·interop·오케스트레이션)</b>이 소수.</p>
+    <div class="legend">
+      <span class="lg"><span class="sw" style="background:var(--state)"></span>MORAI · 상태(외부)</span>
+      <span class="lg"><span class="sw" style="background:var(--ctrl)"></span>타깃 · 브리지 · MMF</span>
+      <span class="lg"><span class="sw" style="background:var(--act)"></span>우리 SiLS · 명령</span>
+      <span class="lg"><span class="sw dash" style="color:var(--ctrl)"></span>#1 구축 대상 (미완)</span>
+    </div>
+  </header>
+
+  <section>
+    <h2>0 · 토폴로지 — 데이터 평면 + 제어 평면(MMF)</h2>
+    <p class="sub">세 구역: <b>외부</b>(MORAI·Autoware) / <b>브리지</b>(#1, 구축 대상) / <b>우리 SiLS</b>(완료). "우리 SiLS"는 vECU만이 아니라 <b>ClockMaster·conformance 판정·.xosc importer</b>를 포함한다.</p>
+    <div class="card">
+      <figure>
+        <svg viewBox="0 0 900 512" role="img" aria-label="MORAI·Autoware 실 브리지 토폴로지">
+          <defs>
+            <marker id="ah-state" markerWidth="9" markerHeight="9" refX="6.2" refY="3" orient="auto"><path d="M0,0 L6.5,3 L0,6 Z" fill="var(--state)"/></marker>
+            <marker id="ah-ctrl" markerWidth="9" markerHeight="9" refX="6.2" refY="3" orient="auto"><path d="M0,0 L6.5,3 L0,6 Z" fill="var(--ctrl)"/></marker>
+            <marker id="ah-act" markerWidth="9" markerHeight="9" refX="6.2" refY="3" orient="auto"><path d="M0,0 L6.5,3 L0,6 Z" fill="var(--act)"/></marker>
+            <marker id="ah-faint" markerWidth="8" markerHeight="8" refX="5.6" refY="2.6" orient="auto"><path d="M0,0 L5.5,2.6 L0,5.2 Z" fill="var(--faint)"/></marker>
+          </defs>
+
+          <!-- ZONES -->
+          <rect class="zone" x="16" y="16" width="868" height="104" rx="12"/>
+          <text class="tt" x="28" y="34">외부 · ROS2 (그들의 세계)</text>
+          <rect class="zone box-bridge" x="16" y="150" width="868" height="84" rx="12" fill="none"/>
+          <text class="tt" x="28" y="168" fill="var(--ctrl-ink)">#1 · 브리지 (구축 대상)</text>
+          <line class="bus" x1="16" y1="258" x2="884" y2="258"/>
+          <text class="tt" x="884" y="252" text-anchor="end">DDS 정규 버스</text>
+          <rect class="zone-sils" x="16" y="278" width="868" height="218" rx="12"/>
+          <text class="tt" x="28" y="296" fill="var(--act-ink)">우리 SiLS · 완료</text>
+
+          <!-- EXTERNAL boxes -->
+          <rect class="box-morai" x="60" y="48" width="190" height="52" rx="8"/>
+          <text class="t" x="155" y="72" text-anchor="middle">MORAI</text>
+          <text class="ts" x="155" y="89" text-anchor="middle">시뮬 = 플랜트 · 권위</text>
+          <rect class="box" x="600" y="48" width="250" height="52" rx="8"/>
+          <text class="t" x="725" y="72" text-anchor="middle">Autoware</text>
+          <text class="ts" x="725" y="89" text-anchor="middle">인지 · 판단 · 경로</text>
+
+          <!-- BRIDGE boxes -->
+          <rect class="box-bridge" x="60" y="178" width="250" height="44" rx="8"/>
+          <text class="t" x="185" y="205" text-anchor="middle">MORAI ↔ DDS 브리지</text>
+          <rect class="box-bridge" x="560" y="178" width="290" height="44" rx="8"/>
+          <text class="t" x="705" y="205" text-anchor="middle">Autoware ↔ DDS 브리지</text>
+
+          <!-- SiLS boxes -->
+          <rect class="box-vecu" x="310" y="316" width="300" height="58" rx="8"/>
+          <text class="t" x="460" y="340" text-anchor="middle">vECU (VCU / 개발자 ECU)</text>
+          <text class="ts" x="460" y="358" text-anchor="middle">EgoState + ControlTarget → VehicleControl</text>
+          <rect class="box" x="60" y="322" width="180" height="46" rx="8"/>
+          <text class="t" x="150" y="343" text-anchor="middle">ClockMaster</text>
+          <text class="ts" x="150" y="360" text-anchor="middle">lockstep 결정론</text>
+          <rect class="box" x="250" y="410" width="330" height="54" rx="8"/>
+          <text class="t" x="415" y="433" text-anchor="middle">conformance 판정</text>
+          <text class="ts" x="415" y="451" text-anchor="middle">evaluate · gate · requirements</text>
+          <rect class="box" x="600" y="410" width="250" height="54" rx="8"/>
+          <text class="t" x="725" y="433" text-anchor="middle">import_openscenario</text>
+          <text class="ts" x="725" y="451" text-anchor="middle">.xosc → 요구</text>
+
+          <!-- FLOWS: top status -->
+          <path class="ln-state" d="M250,68 H592" marker-end="url(#ah-state)"/>
+          <text class="cap-state" x="425" y="60" text-anchor="middle">EgoVehicleStatus (ROS2)</text>
+
+          <!-- EgoState: MORAI -> bridge -> vECU (left, state) -->
+          <path class="ln-state" d="M120,100 V172" marker-end="url(#ah-state)"/>
+          <text class="cap-state" x="126" y="142">EgoStatus</text>
+          <path class="ln-state" d="M120,222 V345 H304" marker-end="url(#ah-state)"/>
+          <text class="cap-state" x="30" y="300">EgoState (DDS)</text>
+
+          <!-- VehicleControl: vECU -> bridge -> MORAI (CtrlCmd), act, upward -->
+          <path class="ln-act" d="M310,360 H210 V226" marker-end="url(#ah-act)"/>
+          <text class="cap-act" x="216" y="300">VehicleControl</text>
+          <path class="ln-act" d="M210,178 V104" marker-end="url(#ah-act)"/>
+          <text class="cap-act" x="216" y="140">CtrlCmd (ROS2)</text>
+
+          <!-- ControlTarget: Autoware -> bridge -> vECU (right, ctrl) -->
+          <path class="ln-ctrl" d="M725,100 V172" marker-end="url(#ah-ctrl)"/>
+          <text class="cap-ctrl" x="600" y="140">control_cmd · gear_cmd</text>
+          <path class="ln-ctrl" d="M705,222 V345 H616" marker-end="url(#ah-ctrl)"/>
+          <text class="cap-ctrl" x="712" y="300">ControlTarget (DDS)</text>
+
+          <!-- internal: clock tick, trace, importer -->
+          <path class="ln-faint" d="M240,346 H304" marker-end="url(#ah-faint)"/>
+          <text class="tt" x="258" y="338">tick</text>
+          <path class="ln-faint" d="M460,374 V406" marker-end="url(#ah-faint)"/>
+          <text class="tt" x="466" y="393">trace</text>
+          <path class="ln-faint" d="M600,437 H584" marker-end="url(#ah-faint)"/>
+        </svg>
+        <figcaption>데이터 평면 — 닫힌 루프: MORAI 상태 → EgoState → vECU → VehicleControl → CtrlCmd → MORAI. #1 브리지(점선)만 새로 만든다.</figcaption>
+      </figure>
+
+      <div style="margin-top:20px">
+        <figure>
+          <svg viewBox="0 0 900 150" role="img" aria-label="MMF 제어 평면">
+            <defs>
+              <marker id="ah-c2" markerWidth="9" markerHeight="9" refX="6.2" refY="3" orient="auto"><path d="M0,0 L6.5,3 L0,6 Z" fill="var(--ctrl)"/></marker>
+            </defs>
+            <text class="tt" x="450" y="20" text-anchor="middle" fill="var(--ctrl-ink)">▲ 기동 · 수명관리 (제어 평면 — 데이터 아님)</text>
+            <path class="ln-ctrl" style="stroke-dasharray:6 4" d="M450,136 V34" marker-end="url(#ah-c2)"/>
+            <rect class="box-bridge" x="230" y="60" width="440" height="76" rx="10"/>
+            <text class="t" x="450" y="84" text-anchor="middle">MMF — adsw_manager + lifecycle_mgr</text>
+            <text class="ts" x="450" y="103" text-anchor="middle">speclist → StartServiceRequest → docker run</text>
+            <text class="ts" x="450" y="120" text-anchor="middle">이미지: oss-mmf-sils-vecu (경로 B, 실기동 검증)</text>
+          </svg>
+          <figcaption>제어 평면 — MMF가 vECU(및 향후 브리지)를 컨테이너 서비스로 기동·수명관리한다.</figcaption>
+        </figure>
+      </div>
+    </div>
+    <p class="sub" style="margin-top:1rem">권위(authority) = MORAI(공유 세계). 브리지는 <b>ROS2 ↔ 우리 DDS 정규 계약</b> 경계(rclcpp 노드). ClockMaster tick에 MORAI가 물리는지가 결정론을 좌우(<b>BR-C-1</b>). MMF는 배포·수명 관리 평면(데이터 루프 아님).</p>
+  </section>
+
+  <section>
+    <h2>1 · 이미 확정된 것 — 브리지 개발자가 건드리지 않는 경계</h2>
+    <div class="card">
+      <table>
+        <thead><tr><th>자산</th><th>위치</th><th>상태</th></tr></thead>
+        <tbody>
+          <tr><td>정규 계약 IDL</td><td class="mono">idl/dds/sils/{EgoState,VehicleControl,ControlTarget}.idl</td><td class="ok">✅ 필드·단위·프레임 확정</td></tr>
+          <tr><td>vECU(VCU) 소비/발행</td><td class="mono">service/sils/vecu · 예제 vehicle-interface</td><td class="ok">✅ 상태+타깃 소비 → 통합 명령 발행</td></tr>
+          <tr><td>채널 토픽</td><td class="mono">sils/ego/state · autoware/control_target (in) · sils/ego/cmd (out)</td><td class="ok">✅ 채널맵 확정</td></tr>
+          <tr><td>판정 트레이스</td><td class="mono">vECU가 state_received / target_received / control_published emit</td><td class="ok">✅ 버스에 실 데이터만 얹으면 자동 판정</td></tr>
+          <tr><td>요구·시나리오 판정</td><td class="mono">evaluate.py --requirements · import_openscenario.py</td><td class="ok">✅ (a)(b) 완료</td></tr>
+        </tbody>
+      </table>
+      <div class="rec-line"><b>브리지의 유일한 책임 = "실 데이터를 정규 토픽에 얹기".</b> 트레이스 캡처·판정은 공짜로 따라온다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>2 · <span style="color:var(--ctrl-ink)">[BR-M]</span> MORAI 연동 브리지</h2>
+    <p class="sub">형태: rclcpp 노드. MORAI ROS2 토픽 ↔ 우리 DDS 정규 토픽 양방향 번역.</p>
+    <div class="card">
+      <div class="opt-head"><span class="badge mid">BR-M-1</span><h3>상태 IN &nbsp;·&nbsp; <code>morai_msgs/EgoVehicleStatus</code> → <code>EgoState</code> @ <code>sils/ego/state</code></h3></div>
+      <table>
+        <thead><tr><th>정규 EgoState</th><th>단위 / 프레임</th><th>MORAI 소스</th><th>변환</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">position</td><td>map, m</td><td>position</td><td>프레임 정합 <b>[확인]</b></td></tr>
+          <tr><td class="mono">orientation_rpy</td><td>rad</td><td>heading</td><td><b>deg→rad</b></td></tr>
+          <tr><td class="mono">velocity</td><td>vehicle, m/s</td><td>velocity</td><td><b>km/h→m/s</b> [확인]</td></tr>
+          <tr><td class="mono">acceleration</td><td>vehicle, m/s²</td><td>(EgoStatus에 없으면 IMU/미분)</td><td>소스 <b>[확인]</b></td></tr>
+          <tr><td class="mono">yaw_rate</td><td>rad/s</td><td>angular velocity</td><td><b>deg/s→rad/s</b></td></tr>
+          <tr><td class="mono">steering_angle</td><td>rad</td><td>front wheel angle</td><td><b>deg→rad</b></td></tr>
+          <tr><td class="mono">gear</td><td>0=P 1=R 2=N 3=D</td><td>MORAI gear</td><td>enum 매핑 <b>[확인]</b></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card">
+      <div class="opt-head"><span class="badge mid">BR-M-2</span><h3>명령 OUT &nbsp;·&nbsp; <code>VehicleControl</code> @ <code>sils/ego/cmd</code> → <code>morai_msgs/CtrlCmd</code></h3></div>
+      <table>
+        <thead><tr><th>MORAI CtrlCmd</th><th>정규 소스</th><th>변환</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">longCmdType</td><td>(모드 선택)</td><td><b>결정 필요</b>: acceleration 모드 지원 시 직결, 아니면 accel/brake 정규화</td></tr>
+          <tr><td class="mono">steering</td><td>steering_angle (rad)</td><td>단위 정합 (CtrlCmd 조향 단위 [확인])</td></tr>
+          <tr><td class="mono">accel/brake<br><span class="tt">or</span> acceleration</td><td>acceleration (m/s², signed)</td><td>모드별: 직결(m/s²) 또는 <b>+→accel(0~1) / −→brake(0~1)</b> 정규화</td></tr>
+          <tr><td class="mono">gear</td><td>gear (0~3)</td><td>MORAI gear enum 역매핑</td></tr>
+        </tbody>
+      </table>
+      <div class="note"><b>BR-M-2 핵심 결정</b>: MORAI 종방향 명령 방식(<code>longCmdType</code>). 가속도(m/s²) 모드 지원 시 정규 <code>acceleration</code> 직결(무손실). 아니면 accel/brake 0~1 정규화 → <b>차량 파라미터(최대 가감속) 필요</b>, 매핑 손실·튜닝. 이 선택이 OUT 브리지 난이도를 좌우한다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>3 · <span style="color:var(--ctrl-ink)">[BR-A]</span> Autoware 연동 브리지</h2>
+    <p class="sub">형태: rclcpp 노드. Autoware 제어 출력 → 정규 <code>ControlTarget</code>. 단위가 우리와 거의 일치해 가장 쉽다.</p>
+    <div class="card">
+      <div class="opt-head"><span class="badge mid">BR-A-1</span><h3>타깃 IN &nbsp;·&nbsp; Autoware 제어 → <code>ControlTarget</code> @ <code>autoware/control_target</code></h3></div>
+      <table>
+        <thead><tr><th>정규 ControlTarget</th><th>Autoware 소스</th><th>변환</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">steering_angle (rad)</td><td class="mono">Control.lateral.steering_tire_angle (rad)</td><td class="ok"><b>1:1</b></td></tr>
+          <tr><td class="mono">acceleration (m/s²)</td><td class="mono">Control.longitudinal.acceleration (m/s²)</td><td class="ok"><b>1:1</b></td></tr>
+          <tr><td class="mono">gear (0~3)</td><td class="mono">GearCommand (DRIVE=2 / REVERSE=20 / PARK=22 / NEUTRAL=1)</td><td>enum 매핑 (DRIVE→3·REV→1·PARK→0·NEU→2)</td></tr>
+        </tbody>
+      </table>
+      <p class="sub" style="margin:.8rem 0 0"><code>control_cmd</code>(제어)와 <code>gear_cmd</code>(기어)는 별도 토픽 → 최신값 병합해 한 <code>ControlTarget</code>으로. staging은 vECU가 §7.3로 처리.</p>
+      <div class="note" style="margin-top:.9rem"><b>BR-A-2</b> · 차량 상태 피드백: Autoware는 계획을 위해 <code>/vehicle/status/*</code>를 입력받아야 한다(소스=MORAI). <b>결정 필요</b>: MORAI→Autoware 직접(ROS2) vs 상태 브리지가 EgoState 역변환.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>4 · <span style="color:var(--ctrl-ink)">[BR-C]</span> 공통층 (둘 다 아니지만 필수)</h2>
+    <div class="card">
+      <div class="opt-head"><span class="badge no">BR-C-1</span><h3>시간 동기 (clock) — 최우선 리스크</h3></div>
+      <p class="sub" style="margin:0 0 .3rem"><b>[확인]</b> MORAI가 외부 스텝/동기 제어(네트워크 sync·<code>step</code> API)를 지원하는가?</p>
+      <div class="risk">
+        <b>지원 O</b> → MORAI를 ClockMaster barrier 참가자로 → 실 루프도 <b>L3 bit-재현 결정론 유지</b>.<br>
+        <b>지원 X</b> → MORAI wall-free-run → 실 루프는 <b>"동작 검증"(루프 닫힘·안전)까지, 결정론은 포기</b>(evaluate wall=L0). 결정론 판정은 fixture 경로에만.<br>
+        <span style="color:var(--warn-ink);font-weight:700">이 한 항목이 #1의 성격(검증완료 수준)을 가른다 — 가장 먼저 답할 것.</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="opt-head"><span class="badge mid">BR-C-2</span><h3>ROS2 ↔ 우리 DDS interop</h3></div>
+      <p class="sub" style="margin:0">브리지 = <b>rclcpp 노드</b>가 ROS2를 받아 <b>FastDDS 정규 타입</b>으로 재발행(ROS2 type-hash 회피). 도메인: 정규 DDS는 <code>VISS_DDS_DOMAIN_ID</code>(기본 0), ROS2 rmw 도메인과 분리·매핑. QoS: 제어 평면 RELIABLE.</p>
+    </div>
+    <div class="card">
+      <div class="opt-head"><span class="badge mid">BR-C-3</span><h3>실행 오케스트레이션 (MMF로 수렴)</h3></div>
+      <p class="sub" style="margin:0"><b>SiLS 측 서비스(vECU·브리지·ClockMaster)는 MMF가 기동·관리</b>(adsw_manager/lifecycle_mgr, speclist) — 경로 B가 vECU로 실증. 브리지를 MMF 서비스로 추가하면 오케스트레이션이 speclist 하나로 수렴. MORAI·Autoware는 외부 기동. 시나리오는 <code>.xosc</code>를 MORAI 러너/scenario_simulator_v2에 로드 → <b>(b) importer가 같은 .xosc에서 요구를 뽑아 자극과 판정이 한 소스</b>.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>5 · 인수 기준 (Acceptance)</h2>
+    <div class="card">
+      <table>
+        <thead><tr><th>레벨</th><th>확인 방법</th></tr></thead>
+        <tbody>
+          <tr><td><b>연결</b></td><td>브리지 기동 시 vECU가 <code>state_received</code>·<code>target_received</code> emit(실 데이터)</td></tr>
+          <tr><td><b>폐루프</b></td><td><code>control_published</code>가 실 상태에 반응 → <code>gate.py</code> <b class="ok">FIDELITY PASS</b>(closed_loop=true)</td></tr>
+          <tr><td><b>요구 판정</b></td><td><code>.xosc</code> → <code>import_openscenario.py</code> → <code>gate.py --requirements</code> → 요구별 pass/fail</td></tr>
+          <tr><td><b>결정론(L3)</b></td><td>(BR-C-1 지원 시) 두 실행 <code>control_published</code> bit-동일</td></tr>
+          <tr><td><b>parity(L4)</b></td><td>(후속) MORAI ground-truth 별도 캡처 + <code>parity.py</code></td></tr>
+        </tbody>
+      </table>
+      <div class="rec-line"><b>최소 성공 = 연결 + 폐루프 + 요구 판정.</b> 결정론(L3)은 BR-C-1에 종속.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>6 · 열린 결정 (팀이 답할 것)</h2>
+    <div class="card">
+      <ol class="q">
+        <li><b>[BR-C-1]</b> MORAI 스텝 제어 지원 여부 — 결정론 L3의 생사. <span class="badge no">최우선</span></li>
+        <li><b>[BR-M-2]</b> MORAI 종방향 명령 모드 — 가속도 직결 vs accel/brake 정규화(차량 파라미터 필요).</li>
+        <li><b>[BR-A-2]</b> Autoware 상태 피드백 경로 — MORAI 직접 vs 상태 브리지.</li>
+        <li><b>메시지 필드·단위 [확인]</b> — <code>morai_msgs</code>/<code>autoware_*_msgs</code> 실제 정의로 §2·§3 표 확정.</li>
+        <li><b>좌표 프레임 정합</b> — MORAI map 프레임 ↔ 정규 EgoState map 프레임(원점·축).</li>
+      </ol>
+    </div>
+  </section>
+
+  <section>
+    <h2>7 · 범위 요약</h2>
+    <div class="card">
+      <table>
+        <thead><tr><th>버킷</th><th>요구</th><th>규모</th></tr></thead>
+        <tbody>
+          <tr><td><b>BR-M</b> MORAI 브리지</td><td>상태 IN + 명령 OUT 번역</td><td><span class="badge mid">중</span> (OUT 종방향 모드가 변수)</td></tr>
+          <tr><td><b>BR-A</b> Autoware 브리지</td><td>타깃 IN(거의 1:1) + 상태 피드백 경로</td><td><span class="badge rec">소~중</span></td></tr>
+          <tr><td><b>BR-C</b> 공통</td><td>clock 확인 + interop + 오케스트레이션</td><td><span class="badge rec">소</span> (BR-C-1은 리스크)</td></tr>
+          <tr><td class="mono" style="text-decoration:line-through;color:var(--faint)">계약·vECU·판정·요구·시나리오</td><td>—</td><td class="ok">✅ 완료</td></tr>
+        </tbody>
+      </table>
+      <div class="rec-line"><b>두 브리지 + clock 확인 1 + interop/오케스트레이션 2 = #1 요구사항 닫힘.</b> 번역 대상(양쪽 메시지·정규 계약)이 다 확정돼 범위가 명확하며, <b>BR-C-1(MORAI 스텝 제어)만 먼저 답하면</b> 나머지는 순수 번역·배관이다.</div>
+    </div>
+  </section>
+
+  <footer>
+    원본: <a href="sils-real-bridge-requirements.md">sils-real-bridge-requirements.md</a> ·
+    관련: <a href="sils-morai-plant-adapter-design.html">플랜트결합 설계</a> ·
+    <a href="sils-vehicle-interface-autoware.html">VCU/Autoware 설계</a> ·
+    <a href="sils-functional-verification-interop.md">기능검증·상호운용</a>
+  </footer>
+</div>
+</body>
+</html>

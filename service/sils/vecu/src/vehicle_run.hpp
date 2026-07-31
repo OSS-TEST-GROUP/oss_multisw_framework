@@ -6,7 +6,7 @@
 // it owns DDS participant/channel-map readers+writers, the free-run tick loop, the JSONL
 // trace, and teardown, and calls an INJECTED IVehicleBehavior each tick (state in ->
 // control out). A developer's plant-coupled ECU builds its behavior and hands it in --
-// same shape as RunProbe taking IBehavior. docs/sils-morai-plant-adapter-design.md §5.
+// same shape as RunProbe taking IBehavior. docs/sils/sils-morai-plant-adapter-design.md §5.
 //
 // S1 scope: wall clock (free-run), polling take each tick, no lockstep (S3). S2 adds
 // OPTIONAL per-tick input staging (SILS_STAGE_INPUT=1, §7.3): the in-channels then feed

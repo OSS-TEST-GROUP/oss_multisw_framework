@@ -1,8 +1,8 @@
 # SiLS Conformance Kit
 
 Checks a vECU **run trace** against the published boundary — the
-[trace schema](../../../docs/sils-trace-schema.md) and the fidelity/parity contracts.
-It consumes only the JSONL trace (`docs/sils-extension-model.md §2`), so it runs
+[trace schema](../../../docs/sils/sils-trace-schema.md) and the fidelity/parity contracts.
+It consumes only the JSONL trace (`docs/sils/sils-extension-model.md §2`), so it runs
 **outside** the vECU: no build, no DDS, no source — just Python 3 and a captured
 `trace.jsonl`. A developer runs it on their own ECU's output; CI runs the same tools.
 

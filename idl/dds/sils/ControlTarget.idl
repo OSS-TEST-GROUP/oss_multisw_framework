@@ -1,5 +1,5 @@
 // Canonical control TARGET -- Autoware control mirror for the Vehicle Interface (VCU),
-// SiLS plant-coupling (Option 2). docs/sils-vehicle-interface-autoware.md.
+// SiLS plant-coupling (Option 2). docs/sils/sils-vehicle-interface-autoware.md.
 //
 // What Autoware WANTS (target), the input side of the VCU. An external Autoware<->DDS
 // bridge (anti-corruption layer, NOT SiLS) translates autoware_control_msgs/Control +

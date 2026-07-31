@@ -1,6 +1,6 @@
 # SiLS 가상 ECU (vECU) 도구 계층
 
-MMF(oss_multisw_framework) 위에서 **SiLS(Software-in-the-Loop) 가상 ECU** 를 컴파일·실행·판정·회귀검사하는 도구 모음이다. 아키텍처 확정본은 **v3 Final** 문서(`docs/sils-virtual-ecu-architecture-v3.md`)이며, 아래 코드의 `§n` 주석은 모두 그 문서의 절 번호를 가리킨다.
+MMF(oss_multisw_framework) 위에서 **SiLS(Software-in-the-Loop) 가상 ECU** 를 컴파일·실행·판정·회귀검사하는 도구 모음이다. 아키텍처 확정본은 **v3 Final** 문서(`docs/sils/sils-virtual-ecu-architecture-v3.md`)이며, 아래 코드의 `§n` 주석은 모두 그 문서의 절 번호를 가리킨다.
 
 > **검증 상태 (중요).** 이 디렉터리의 Python/shell 도구 계층은 **샌드박스에서 실제 실행·테스트까지 완료**되어 있다(아래 "테스트" 참조). `service/sils/` 의 C++ vECU 본체는 FastDDS 툴체인이 있는 Linux(x86_64)에서 **컴파일 + 실제 DDS 왕복이 검증**되었고, fidelity **L0·L2·L3 를 실런타임 trace 로 판정 완료**(2026-07 실측): local·docker 두 백엔드 `run_pass`, 병렬 격리·Fleet(vECU 3개), lockstep 결정론(§8), 입력 스테이징·replay(§7), 행동 상태기계(§11 L2), **플랜트 폐루프(§11 L3, AnalyticPlant)를 두 번 독립 실행해 sim_time·궤적이 소수점까지 재현**(compare_golden MATCH). 실행이라 드러난 결함 3건도 수정: docker `--ipc=host`(SHM), late-join verifier 용 `TRANSIENT_LOCAL`, lockstep golden 의 벽시계 latency 스킵. 도구 계층은 바이너리 없이도 dry-run·사전 캡처 trace 로 전 구간을 검증할 수 있게 설계되었다.
 
@@ -176,7 +176,7 @@ Reference-FMU)를 로드해 `SetInputs→fmiX_setReal`, `Step→fmiX_doStep`, `o
 판정. doStep 실패/비유한 출력은 NaN 으로 §14 fail-fast. 빌드 옵션 `-DSILS_ENABLE_FMU=ON`
 (없으면 fmi4c FetchContent), 미빌드 시 `SILS_PLANT=fmu` 는 런타임에 명확히 실패.
 FMI/FMU/fmi4c 개념·현황·주의사항(ARM64 바이너리·변수매핑·실패정책·보안·MORAI 상태
-소유권)은 [docs/sils-fmu-plant.md](../../docs/sils-fmu-plant.md) 참조.
+소유권)은 [docs/sils/sils-fmu-plant.md](../../docs/sils/sils-fmu-plant.md) 참조.
 **x86 실런타임에서 두 번 독립 실행 → sim_time·궤적 소수점까지 동일(compare_golden MATCH)로
 재현성 확인**; FMI co-sim 이 3번째 구현.
 
@@ -224,7 +224,7 @@ SiLS run 이 실제 target-like 구성요소(arch=aarch64·real gateway·real pr
 값이 맞아도 x86·stub gateway 면 **PARITY_UNATTESTED(최대 L3)** — §11 "ARM64 는 L4 구성
 요소이지 L4 전체를 자동 충족하지 않는다" 를 코드로 강제. 판정: PARITY=L4 / PARITY_UNATTESTED /
 DIVERGENCE. evaluate 는 단일 trace 로 L4 를 주지 않고 attestation 만 기록(교차-trace 판정은
-parity.py 의 몫). 정의·플로우는 [docs/sils-target-parity.md](../../docs/sils-target-parity.md).
+parity.py 의 몫). 정의·플로우는 [docs/sils/sils-target-parity.md](../../docs/sils/sils-target-parity.md).
 **남은 것**: 실 타깃 ECU 레퍼런스 trace 캡처 + arm64/real-gateway 실행(실측 계열).
 
 **남은 것**: L1 C++ 실런타임 trace 판정(도구 계약은 완료, 빌드 후 왕복 실측), arm64 실행 검증(arm64 머신/에뮬), 실제 VISS SUT 와의 폐루프(현재는 responder 스탠드인으로 왕복 확인), 물리적 timing 충실도 실측(§0A Contract Spike), per-instance fleet 의 **x86 실런타임 실측**(컴파일 검증 + 런타임 배선 완료 — `ownership: per-instance` + `{instance_id}` 템플릿으로 replica 가 distinct topic 을 소유해 §9.5-valid; `resolved_to_shell`→`SILS_TOPIC`→probe 로 각 인스턴스가 자기 topic 에 publish; C++ 빌드 후 다중 topic 왕복 실측 남음), FmuPlant 의 **실 `.fmu` 실런타임 검증**(어댑터·빌드옵션 완료 — fmi4c + Reference-FMU 로 실측 남음)과 **MORAI 등 외부 시뮬 UDP–ROS2 브리지 트랙**(별도 Topology, §4.1). L4(target parity)는 **판정 도구·계약·attestation 게이트 완료**(`parity.py`) — 실 타깃 ECU 레퍼런스 trace 캡처 + arm64/real-gateway 실행만 남음(실측 계열).

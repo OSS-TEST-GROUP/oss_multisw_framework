@@ -891,6 +891,30 @@ docs/
   sils-virtual-ecu-architecture-v3.md
 ```
 
+### 16.1 제안 vs 현재(as-built) 대조
+
+위 레이아웃은 **설계 시점의 목표(target)**다. 실제 구현은 P4(earned-abstraction: 소비자가 ≥2가 될 때까지 폴더/포트를 미리 쪼개지 않음)와 문서 이후의 기능 진화를 따라 아래와 같이 갈라져 있다. 파트너 핸드오프 시 **아래 as-built 열**을 기준으로 코드를 찾을 것.
+
+| §16 제안 | 현재 as-built | 상태 |
+|---|---|---|
+| `tools/sils/topology_compiler/` | `tools/sils/topology_compiler/` | ✅ 일치 |
+| `tools/sils/run_coordinator/` | `tools/sils/run_coordinator/`(domain_lease.py) + `service/sils/run_coordinator/`(run_phase1.sh, test_fleet.sh) | ⚠️ 두 곳에 분산 |
+| `service/sils/vecu/{kernel,tick_inbox,ports,adapters,behaviors,scenarios}/` | 전부 **flat** `service/sils/vecu/src/*.hpp` — ports=`clock_source.hpp`·`behavior.hpp`, behaviors=`vehicle_behavior.hpp`·`vehicle_fmu_behavior.hpp`, tick_inbox=`tick_inbox.hpp`, scenarios=`scenario.hpp` | ⚠️ 구조만 다름(내용 존재) |
+| `service/sils/vecu/descriptors/` | `service/sils/vecu/descriptors/` | ✅ 일치 |
+| `service/sils/clock_master/` | `service/sils/vecu/src/sils_clock_master.cc` (vecu 하위 실행 타깃 `sils_clock_master`) | ⚠️ 위치 다름 |
+| `service/sils/relay_gateway/` | 없음 | ❌ 미구현(선택 기능) |
+| `service/sils/external_integration/{bridge_supervisor,contract_adapter}/` | 없음 | ❌ 미구현(= 실 브리지, deferred) |
+| `config/sils/{contracts,qos,topologies}` | + `channelmap`·`fmu`·`parity`·`regression`·`trace-schema` | ➕ 확장 |
+| `idl/dds/sils/{Tick,RunControl,VecuReport,ScenarioControl}.idl` | `TickControl.idl` + `EgoState.idl`·`VehicleControl.idl`·`ControlTarget.idl` | ⚠️ 이름·구성 다름 |
+| `docker/compose/docker-compose-sils.yaml` | 없음 | ❌ 미생성 |
+| (§16에 없음) | `tools/sils/conformance/`(validate·evaluate·gate·compare_golden·parity·to_junit·import_openscenario), `tools/sils/{contracts,fmu,ci}/` | ➕ 문서 이후 추가 |
+
+**차이의 원인 3종:**
+
+1. **Earned-abstraction (구조)** — vecu는 6개 폴더로 미리 분리하지 않고 `src/` 평면을 유지한다. 제안된 조각들(ports/behaviors/tick_inbox/scenarios)은 폴더가 아니라 **헤더 파일**로 존재하며 기능은 모두 구현되어 있다.
+2. **문서 이후 진화 (추가)** — conformance kit, 버스결합 정규 IDL(`EgoState`/`VehicleControl`/`ControlTarget`), fmu·parity·regression·channelmap 설정은 §16 작성 이후 도입.
+3. **미구현 (기능 부재)** — 실제로 빠진 것은 `relay_gateway`, `external_integration`(실 브리지, 보류), compose 생성물뿐이다. 별도 `RunControl`/`VecuReport`/`ScenarioControl.idl`은 만들지 않았고, tick 제어는 `TickControl.idl`로 통합, vECU 리포트는 별도 IDL 대신 **JSONL trace**(§trace-schema)로 처리한다.
+
 ---
 
 ## 17. 단계별 구현 계획

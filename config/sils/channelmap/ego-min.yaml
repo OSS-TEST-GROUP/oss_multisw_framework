@@ -1,5 +1,5 @@
 # SiLS channel map -- MORAI/AWSIM plant coupling (Option 2, bus-coupled external world).
-# See docs/sils-morai-plant-adapter-design.md and service/sils/vecu/src/channel_map.hpp.
+# See docs/sils/sils-morai-plant-adapter-design.md and service/sils/vecu/src/channel_map.hpp.
 #
 # Minimal S1 (free-run bring-up) example, canonical STRUCTURED contract (Option b):
 # one STATE message the sim broadcasts, one ACTUATION message the vECU publishes back.

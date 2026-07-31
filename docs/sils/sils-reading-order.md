@@ -2,6 +2,8 @@
 
 > SiLS 문서가 많아 **읽는 순서**를 잡기 위한 인덱스.
 > `.md` = 본문(정확), `.html` = 시각 요약(다이어그램). **빠른 파악은 html, 정확한 내용은 md.**
+>
+> 모든 SiLS 문서는 **`docs/sils/`** 에 모여 있다 — 아래 파일명은 이 디렉터리 기준이다.
 
 ---
 
@@ -15,11 +17,13 @@
 | `sils-extension-model.md` | ADR·경계 | 왜 이 확장 경계인가(core 무수정 원칙) |
 | `sils-vecu-development-guide` (.md/.html) | **실무** | 내 vECU 작성→패키징→배포 (§7 = 플랜트 결합 모드) |
 | `sils-trace-schema.md` | 계약 | vECU 가 내는 trace = 공개 conformance 경계(v1) |
+| `sils-clock-master` (.md/.html) | 심화 | lockstep 시간 권위 — TickGrant/TickComplete barrier |
 | `sils-fmu-plant` (.md/.html) | 심화 | FMU(in-process) 폐루프 결합 |
 | `sils-target-parity.md` | 심화 | L4 ARM64 타깃 동등성 |
 | `sils-morai-autoware-topology.html` | 시각 | MORAI/rosbag ↔ Autoware ↔ vECU 데이터 흐름 |
 | `sils-morai-simulator-integration-review` (.md/.html) | 연동 검토 | MORAI 연동 authority·시간·프로토콜 사전검토 |
 | `sils-morai-plant-adapter-design` (.md/.html) | **최신 설계** | MORAI/AWSIM 버스 결합(Option 2) — 채널맵·정규 계약 |
+| `sils-agent-automation` (.md/.html) | 제안·운영 | LLM 에이전트로 검증 자동화 — 판정은 kit, 에이전트는 앞뒤(트리아지·리포트) |
 
 **구버전(참고만, v3 로 대체됨):** `sils-virtual-ecu-architecture.md/.html`(v2), `sils-virtual-ecu-architecture-review.md`.
 
@@ -52,7 +56,11 @@
 → `vecu-development-guide.md §7`(실제 만드는 법)
 
 ### ✅ conformance/검증
-**`trace-schema.md`**(계약) → `understanding.md` 6장(trace→verdict) → `target-parity.md`(L4)
+**`trace-schema.md`**(계약) → `understanding.md` 6장(trace→verdict) → **`clock-master`**(lockstep 시간 권위) → `target-parity.md`(L4)
+
+### 🤖 검증 자동화·CI
+`tool-confidence.md` §1(판정 경계) → **`agent-automation.md`**(에이전트 경계·단계별 계획)
+→ `tools/sils/README.md`(도구 인덱스·`sils-ci.sh`)
 
 ### 🏛️ 아키텍트/의사결정 리뷰
 `architecture-v3` → `extension-model`(ADR) → `morai-plant-adapter-design`(3안 비교)

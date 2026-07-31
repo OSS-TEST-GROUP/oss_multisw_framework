@@ -2,7 +2,7 @@
 #define SILS_VECU_VEHICLE_WIRE_HPP
 
 // Vehicle plant-coupling codec -- (de)serializes the canonical STATE/ACTUATION structs
-// for MORAI/AWSIM (Option 2, bus-coupled external world). docs/sils-morai-plant-adapter-
+// for MORAI/AWSIM (Option 2, bus-coupled external world). docs/sils/sils-morai-plant-adapter-
 // design.md; types in idl/dds/sils/{EgoState,VehicleControl}.idl.
 //
 // This is NOT an IWireCodec. IWireCodec (wire.hpp) is the VISS single-type request model:

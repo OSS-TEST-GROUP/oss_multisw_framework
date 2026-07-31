@@ -288,5 +288,5 @@ link_libraries(gtest gmock)
 ### 설계 · 검토 문서 (참고)
 | 문서 | 설명 |
 |---|---|
-| [`docs/sils-virtual-ecu-architecture-v3.md`](./docs/sils-virtual-ecu-architecture-v3.md) | SiLS 가상 ECU(vECU) 아키텍처 (v3) |
+| [`docs/sils/sils-virtual-ecu-architecture-v3.md`](./docs/sils/sils-virtual-ecu-architecture-v3.md) | SiLS 가상 ECU(vECU) 아키텍처 (v3) |
 | [`docs/diagnostics-integration-expansion-review.md`](./docs/diagnostics-integration-expansion-review.md) | Diagnostics 연동 확장 및 Monitor UI 분리 검토 |

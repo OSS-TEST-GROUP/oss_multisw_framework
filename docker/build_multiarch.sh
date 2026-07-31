@@ -32,6 +32,38 @@ BUILD_TYPE="${BUILD_TYPE:-Release}"
 REGISTRY_ADDRESS="${REGISTRY}"
 source "$(dirname "$0")/registry-auth.sh"
 
+# ── 소스 스냅샷 메타 ────────────────────────────────────────────────────────
+# 이미지를 :latest 와 함께 불변 스냅샷 태그(<branch>-<date>-<shortsha>)로도 push 하고,
+# 소스 정보를 OCI 라벨로 baked 한다. 재현성 보장을 위해 커밋되지 않은(tracked) 변경이
+# 있으면 push 를 차단한다 (untracked 빌드 산출물 output/ 등은 무시).
+if ! git diff --quiet HEAD 2>/dev/null; then
+  echo "ERROR: 커밋되지 않은 변경이 있습니다 — 커밋 후 다시 실행하세요 (스냅샷 태그/재현성 보장)." >&2
+  git status --short --untracked-files=no >&2 || true
+  exit 1
+fi
+GIT_REV="$(git rev-parse HEAD)"
+GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD | sed 's/[^A-Za-z0-9._-]/-/g')"
+GIT_SHORT="$(git rev-parse --short HEAD)"
+
+# 배포 정책: :latest + 스냅샷 태그 push 는 default 브랜치(develop)에서만 허용한다.
+# feature/기타 브랜치에서 실수로 :latest 를 덮어쓰는 것을 방지. 정책상 default
+# 브랜치 이외의 빌드는 여기서 중단한다 (필요 시 DEFAULT_BRANCH 로 정책 조정).
+DEFAULT_BRANCH="${DEFAULT_BRANCH:-develop}"
+if [ "${GIT_BRANCH}" != "${DEFAULT_BRANCH}" ]; then
+  echo "ERROR: 현재 브랜치 '${GIT_BRANCH}' — :latest + 스냅샷 push 는 default 브랜치 '${DEFAULT_BRANCH}' 에서만 허용됩니다." >&2
+  echo "       '${DEFAULT_BRANCH}' 로 머지 후 그 브랜치에서 빌드하세요." >&2
+  exit 1
+fi
+BUILD_DATE_UTC="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+SNAP="${GIT_BRANCH}-$(date -u +%Y%m%d)-${GIT_SHORT}"
+OCI_LABELS=(
+  --label "org.opencontainers.image.revision=${GIT_REV}"
+  --label "org.opencontainers.image.source=github.com/obigo-gov/oss_multisw_framework"
+  --label "org.opencontainers.image.ref.name=${GIT_BRANCH}"
+  --label "org.opencontainers.image.created=${BUILD_DATE_UTC}"
+  --label "org.opencontainers.image.version=${SNAP}"
+)
+
 # Maps Docker auto-fill arch (amd64/arm64) → SUT kernel-arch stage suffix.
 declare -A ARCH_MAP=( [amd64]=x86_64 [arm64]=aarch64 )
 ARCHS=(amd64 arm64)
@@ -41,6 +73,7 @@ echo "=== OSS Multi-Middleware Framework Multi-arch Build ==="
 echo "Architectures: ${ARCHS[*]}"
 echo "Build Type:    ${BUILD_TYPE}"
 echo "Registry:      ${REGISTRY}"
+echo "Snapshot tag:  ${SNAP}"
 echo ""
 
 # Create buildx builder if not exists.
@@ -50,12 +83,12 @@ docker buildx create --name mmf-buildx --driver docker-container --use 2>/dev/nu
 
 build_target() {
   local tgt="$1"
-  local manifest_tag="${REGISTRY}/oss/oss-mmf-${tgt}:latest"
-  local platform_tags=()
+  local base="${REGISTRY}/oss/oss-mmf-${tgt}"
+  local snap_tags=()
 
   for arch in "${ARCHS[@]}"; do
     local kernel_arch="${ARCH_MAP[$arch]}"
-    local platform_tag="${manifest_tag}-${arch}"
+    local snap_arch="${base}:${SNAP}-${arch}"
 
     echo ""
     echo "=== Building runtime-mmf-${tgt} for linux/${arch} (TARGETARCH=${kernel_arch}) ==="
@@ -63,19 +96,21 @@ build_target() {
       --platform="linux/${arch}" \
       --build-arg "BUILD_TYPE=${BUILD_TYPE}" \
       --build-arg "TARGETARCH=${kernel_arch}" \
+      "${OCI_LABELS[@]}" \
       -f docker/Dockerfile.rel \
       --target "runtime-mmf-${tgt}" \
       --push \
-      -t "${platform_tag}" \
+      -t "${snap_arch}" \
       .
-    platform_tags+=("${platform_tag}")
+    snap_tags+=("${snap_arch}")
   done
 
   echo ""
-  echo "=== Assembling multi-arch manifest ${manifest_tag} ==="
+  echo "=== Assembling multi-arch manifests (:latest + :${SNAP}) for ${tgt} ==="
   docker buildx imagetools create \
-    -t "${manifest_tag}" \
-    "${platform_tags[@]}"
+    -t "${base}:latest" \
+    -t "${base}:${SNAP}" \
+    "${snap_tags[@]}"
 }
 
 # ossuser 로그인 (pull·push 공용). 실패 시 중단.
@@ -87,7 +122,7 @@ done
 
 echo ""
 echo "=== Build Complete ==="
-echo "Multi-arch manifests pushed:"
+echo "Multi-arch manifests pushed (:latest + :${SNAP}):"
 for tgt in "${TARGETS[@]}"; do
-  echo "  - ${REGISTRY}/oss/oss-mmf-${tgt}:latest  (linux/amd64 + linux/arm64)"
+  echo "  - ${REGISTRY}/oss/oss-mmf-${tgt}:latest  +  :${SNAP}   (linux/amd64 + linux/arm64)"
 done
