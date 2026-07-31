@@ -16,13 +16,15 @@
 |---|---|---|---|
 | 릴리스 **Git 태그** | **공개** 저장소 (GitHub Releases) | `vMAJOR.MINOR.PATCH` | `v0.0.1`, `v1.2.0` |
 | 사전 릴리스 Git 태그 | 공개 저장소 (pre-release 체크) | `vX.Y.Z-rcN` | `v1.2.0-rc1` |
-| 컨테이너 **이미지 태그** | 사내 레지스트리 | `<의미있는 버전>` + `latest` | `3.32.12`, `latest` |
-| 변종(variant) 이미지 태그 | 사내 레지스트리 | `<변종명>` | `touch`, `autoware` |
+| 컨테이너 **불변 스냅샷 태그** | 사내 레지스트리 | `<branch>-<date>-<shortsha>` | `develop-20260731-9e4a5b6` |
+| 컨테이너 **이동식 포인터** | 사내 레지스트리 | `latest` (+ 변종 `touch` 등) | `latest`, `touch` |
 
 핵심 3원칙:
 1. **Git 릴리스 태그는 공개 저장소에서만 찍는다** (사내는 동기화로 받는다).
 2. **태그는 불변(immutable)** — 한번 배포된 `vX.Y.Z` 는 절대 옮기지 않는다.
-3. **컨테이너 `latest` 는 이동식 포인터** — 재현성이 필요한 곳엔 고정 태그를 쓴다.
+3. **컨테이너 이미지는 항상 `<branch>-<date>-<shortsha>` 불변 스냅샷 태그로 push** 하고,
+   `latest` 는 그 스냅샷을 가리키는 **이동식 포인터로만** 함께 붙인다.
+   배포·재현·롤백은 **스냅샷 태그로** 한다.
 
 ---
 
@@ -119,58 +121,167 @@ registry.obigo.com/oss/<컴포넌트명>:<태그>
 - 컴포넌트명은 **소문자 + 하이픈**. 예: `oss-mmf-core`, `oss-mmf-ext-ros2`,
   `oss-mmf-ext-agl`, `oss-hmi-launcher`, `oss-adsw-monitor`, `rviz2-agl`.
 
-### 2-2. 태그 종류
+### 2-2. 태그 체계 — 불변 스냅샷 + 이동식 포인터
+
+이미지는 **반드시 불변 스냅샷 태그로 push** 하고, 편의용 `latest` 를 **추가로** 붙인다.
+스냅샷 태그가 정본이고, `latest` 는 그 스냅샷을 가리키는 별칭에 불과하다.
 
 | 태그 유형 | 형식 | 성격 | 용도 |
 |---|---|---|---|
-| **버전** | `3.32.12` (앱 버전) 또는 `vX.Y.Z` (릴리스 연동) | **불변 권장** | 재현 가능한 배포·롤백 |
-| **`latest`** | `latest` | **이동식** | 최신 개발본 편의 pull |
-| **변종(variant)** | `touch`, `autoware` | 이동식 | 기능 변종 이미지 |
-| **검증용** | `multiarch-verify` 등 | 임시 | 실험·검증 후 폐기 |
+| **불변 스냅샷** (필수) | `<branch>-<date>-<shortsha>` | **불변** — 절대 덮어쓰지 않음 | 배포·재현·롤백·이슈 추적 |
+| **`latest`** (선택·권장) | `latest` | **이동식** 포인터 | 최신 개발본 편의 pull |
+| **변종(variant)** | `<변종명>` 또는 `<변종>-<date>-<shortsha>` | 이동식 / 불변 | `touch`, `autoware` 등 기능 변종 |
+| **릴리스 연동** (선택) | `vX.Y.Z` | 불변 | 공개 Git 릴리스 태그와 대응 (§3) |
 
-> **`latest` 는 "최신"만 의미하며 특정 버전을 보장하지 않는다.** 보드 배포·이슈 재현·
-> 릴리스 검증에는 **반드시 버전 태그**를 쓴다.
+#### 스냅샷 태그 형식
+```
+<branch>-<date>-<shortsha>
+   │        │         └─ 소스 커밋 short SHA (git rev-parse --short HEAD)
+   │        └─ 빌드 날짜 YYYYMMDD (UTC)
+   └─ 빌드한 소스 브랜치명 (Docker 태그 비허용 문자 → 하이픈 치환)
+```
+
+| 규칙 | 내용 |
+|---|---|
+| 문자 | 영숫자 + `-` + `.` + `_` 만 (Docker 태그 제약). **슬래시(`/`) 금지** |
+| 브랜치 치환 | 비허용 문자를 모두 `-` 로: `sed 's/[^A-Za-z0-9._-]/-/g'`<br>예) `feature/rviz2-ext-agl` → `feature-rviz2-ext-agl` |
+| 날짜 | `YYYYMMDD` **UTC** (`date -u +%Y%m%d`). 하루 여러 번 빌드해도 SHA 로 구분된다 |
+| SHA | `git rev-parse --short HEAD` (기본 7자). 앞에 `g` 같은 접두어를 붙이지 않는다 |
+| 길이 | 128자 제한 — 브랜치명이 길면 앞 40자로 잘라 쓴다 |
+
+> 형식은 **빌드 스크립트가 자동 계산**한다 (§2-4). 손으로 조립하지 않는다.
+
+**예시**
+```
+develop-20260731-9e4a5b6              ← develop 빌드 (정상 경로)
+touch-20260731-acef2eb                ← 변종(touch) 빌드
+```
+
+> **왜 스냅샷 태그인가**: `latest` 만으로는 "그때 보드에 올라간 이미지"를 다시 만들 수 없다.
+> 스냅샷 태그는 **어느 브랜치의 어느 커밋을 언제 빌드했는지**가 태그 자체에 남아, 이슈 재현·
+> 롤백·기관 간 검증 조합 공유가 가능해진다.
+
+#### 🔒 레지스트리 push 는 default 브랜치(`develop`)에서만
+
+**기능 브랜치에서는 레지스트리 push 자체가 차단된다.** `latest` 뿐 아니라 스냅샷 태그도
+push 하지 않는다 — 빌드 스크립트가 현재 브랜치를 확인해 `develop` 이 아니면 **중단**한다.
+
+```
+ERROR: 현재 브랜치 'feature-xxx' — :latest + 스냅샷 push 는
+       default 브랜치 'develop' 에서만 허용됩니다.
+       'develop' 로 머지 후 그 브랜치에서 빌드하세요.
+```
+
+| 왜 | 내용 |
+|---|---|
+| `latest` 오염 방지 | 기능 브랜치 빌드가 정본 `latest` 를 덮어쓰는 사고를 원천 차단 |
+| 레지스트리 위생 | 머지되지 않은(사라질) 브랜치의 이미지가 쌓이지 않는다 |
+| 추적성 | 레지스트리의 모든 이미지가 `develop` 히스토리에 존재하는 커밋을 가리킨다 |
+
+- **기능 브랜치를 검증**해야 하면 로컬 빌드(`build_local.sh` 등)를 쓰거나, 정책 조정이
+  필요한 예외 상황에서만 `DEFAULT_BRANCH` 환경변수로 우회한다 (권장하지 않음).
+- **커밋되지 않은 변경(dirty)** 이 있으면 역시 push 가 차단된다 — SHA 가 실제 내용을
+  대표하지 못하므로 재현성이 깨진다.
+
+#### 태그 선택 기준
+
+| 상황 | 사용할 태그 |
+|---|---|
+| 보드·운영 배포 | **스냅샷 태그** (필수) |
+| 이슈 재현·회귀 확인 | **스냅샷 태그** |
+| 릴리스 검증 | **스냅샷 태그** (+ `vX.Y.Z` 대응) |
+| 개발 PC 에서 최신 편의 pull | `latest` 허용 |
+| 기관 간 "무엇으로 검증했나" 공유 | **스냅샷 태그** (문서·이슈에 그대로 기재) |
 
 ### 2-3. 멀티아키텍처(amd64 + arm64) 규칙
 하나의 태그에 두 아키텍처를 묶은 **manifest list** 를 만든다. 그러면 x86 개발 PC 는 amd64 를,
 Orin/AGL 보드(aarch64)는 arm64 를 **자동 선택**해 받는다.
+**스냅샷 태그와 `latest` 둘 다 manifest list 로 만든다.**
 
 ```bash
-# MMF
+# MMF (repo 루트에서) — 스냅샷 태그는 스크립트가 자동 계산한다
 BUILD_TYPE=Release ./docker/build_multiarch.sh
-# HMI
-TAG=latest ./docker/script/build_multiarch.sh
+
+# HMI (apps/ 에서)
+./docker/script/build_multiarch.sh
+APP=hmi_launcher ./docker/script/build_multiarch.sh
 ```
+- **스냅샷 태그를 손으로 넘기지 않는다.** 스크립트가 브랜치·UTC 날짜·short SHA 로 계산해
+  `:latest` 와 `:<snap>` 두 manifest list 를 함께 push 한다.
 - 아키별로 각각 빌드·push 후 manifest list 로 결합한다 (런타임 이미지는 아키별 사전 빌드
   번들·Dockerfile 을 쓰므로 단일 `--platform=a,b` 빌드가 불가능하다).
-- 아키별 개별 태그가 필요하면 접미사를 쓴다: `:latest-arm64`, `:latest-amd64`.
+- 중간 산출물인 아키별 태그는 스크립트가 `:<snap>-amd64` / `:<snap>-arm64` 로 push 한 뒤
+  manifest list 로 묶는다.
+- 이미지에는 OCI 라벨이 baked 된다: `image.revision`(전체 SHA), `image.ref.name`(브랜치),
+  `image.created`(UTC), `image.version`(스냅샷 태그). → `docker inspect` 로 출처 확인 가능.
 
 **push 결과 검증 (pull 없이)**
 ```bash
-docker buildx imagetools inspect registry.obigo.com/oss/oss-hmi-launcher:latest
-docker manifest inspect  registry.obigo.com/oss/oss-hmi-launcher:3.32.12   # arm64 포함 확인
+docker buildx imagetools inspect registry.obigo.com/oss/oss-hmi-launcher:develop-20260731-9e4a5b6
+docker manifest inspect  registry.obigo.com/oss/oss-hmi-launcher:develop-20260731-9e4a5b6  # arm64 포함 확인
 ```
 
-### 2-4. 태그 부여 · push 절차
+### 2-4. push 절차 — 빌드 스크립트를 쓴다
+
+태그 부여·push 는 **빌드 스크립트가 수행한다.** `docker tag`/`docker push` 를 손으로 조합하지
+않는다 (스냅샷 규칙·가드가 스크립트에 구현되어 있다).
+
 ```bash
-docker login registry.obigo.com -u <계정>          # 자격증명은 secret 으로 주입 (하드코딩 금지)
+# 0) 전제: develop 브랜치 + 커밋 완료(clean) 상태
+git checkout develop && git pull && git status   # clean 확인
 
-# 로컬 이미지 → 레지스트리 태그 2개(버전 + latest) 부여
-docker tag oss-hmi-launcher:3.32.12 registry.obigo.com/oss/oss-hmi-launcher:3.32.12
-docker tag oss-hmi-launcher:3.32.12 registry.obigo.com/oss/oss-hmi-launcher:latest
-
-docker push --all-tags registry.obigo.com/oss/oss-hmi-launcher
+# 1) 빌드 + push  (:latest + :<snap> 을 함께 push)
+#    MMF
+BUILD_TYPE=Release ./docker/build_multiarch.sh
+#    HMI (apps/ 에서)
+./docker/script/build_multiarch.sh
 ```
+
+스크립트가 자동으로 하는 일:
+
+| 단계 | 내용 |
+|---|---|
+| 가드 ① | **default 브랜치(`develop`) 아니면 중단** — 레지스트리 push 불가 |
+| 가드 ② | **커밋되지 않은 tracked 변경 있으면 중단** (untracked 빌드 산출물은 무시) |
+| 태그 계산 | `<branch>-<date(UTC)>-<shortsha>` |
+| push | 아키별 이미지 → manifest list `:latest` + `:<snap>` |
+| 라벨 | OCI `revision`/`ref.name`/`created`/`version` baked |
 
 > **CI 자격증명**: Jenkins/Actions 에서는 계정·비밀번호를 **credentials/secret 으로 주입**한다.
 > 스크립트·Jenkinsfile 에 평문으로 적지 않는다.
 
-### 2-5. 금지 · 주의
+> **검증 목적의 임시 태그**가 필요하면 `:latest` 를 건드리지 않는 이름을 쓴다
+> (예: HMI `TAG=multiarch-verify ./docker/script/build_multiarch.sh`). 검증 후 정리한다.
+
+### 2-5. 배포 · 재현 (스냅샷 태그 사용)
+
+```bash
+# 보드에서 스냅샷 태그로 pull (arm64 자동 선택)
+docker pull registry.obigo.com/oss/oss-hmi-launcher:develop-20260731-9e4a5b6
+
+# run 스크립트에 스냅샷 태그를 명시
+IMAGE=registry.obigo.com/oss/oss-hmi-launcher:develop-20260731-9e4a5b6 \
+  APP_VER=3.32.5 sh run-on-board-arm64.sh
+```
+
+**역추적**: 태그에서 소스 커밋을 바로 찾을 수 있다.
+```bash
+git show 9e4a5b6            # develop-20260731-9e4a5b6 의 소스 커밋
+git log --oneline -1 9e4a5b6
+```
+
+### 2-6. 금지 · 주의
 
 | ❌ 금지 | 이유 |
 |---|---|
-| 이미 배포된 **버전 태그를 다른 이미지로 덮어쓰기** | 같은 태그가 다른 내용 → 재현 불가 |
+| **스냅샷 태그를 다른 이미지로 덮어쓰기** | 불변성 위반 — 재현·롤백 불가 |
 | 보드·운영 배포에 `latest` 사용 | 언제 무엇이 바뀌는지 추적 불가 |
+| 스냅샷 태그 없이 `latest` 만 push | 그 시점 이미지를 다시 지정할 수 없다 |
+| **기능 브랜치에서 레지스트리 push** | 스크립트가 차단 (`latest` 오염·레지스트리 위생) |
+| 가드 우회 (`DEFAULT_BRANCH` 임의 변경) | 정본 `latest` 와 레지스트리 추적성이 깨진다 |
+| `docker tag`/`push` 를 손으로 조합 | 가드·태그 규칙을 건너뛴다 — 스크립트를 쓴다 |
+| 태그에 슬래시(`/`)·공백 등 비허용 문자 | Docker 태그 규칙 위반 → push 실패 |
+| 커밋 없이(dirty) 빌드해 push | SHA 가 실제 내용과 불일치 (스크립트가 차단) |
 | 아키 확인 없이 보드에 pull | amd64 이미지가 arm64 보드에서 기동 실패 |
 | 임시 검증 태그 방치 | 레지스트리 오염 — 검증 후 정리 |
 
@@ -182,19 +293,24 @@ docker push --all-tags registry.obigo.com/oss/oss-hmi-launcher
 |---|---|---|
 | 대상 | **소스 커밋** | **빌드된 이미지** |
 | 위치 | 공개 GitHub 저장소 | 사내 `registry.obigo.com` |
-| 형식 | `vX.Y.Z` (SemVer, `v` 접두) | `3.32.12` / `latest` / `touch` |
+| 형식 | `vX.Y.Z` (SemVer, `v` 접두) | `<branch>-<date>-<shortsha>` (+ `latest`) |
 | 누가 | 릴리스 담당자 | 빌드 담당자 · CI |
 | 공개 여부 | **공개** (외부 기여자가 봄) | **사내 전용** |
-| 불변성 | 항상 불변 | 버전 태그는 불변, `latest` 는 이동 |
-| 개수 | 릴리스당 1개 | 이미지당 여러 개 가능 |
+| 불변성 | 항상 불변 | **스냅샷 태그는 불변**, `latest` 는 이동 |
+| 개수 | 릴리스당 1개 | 빌드마다 스냅샷 1개 (+ 포인터) |
 
-**연결 규칙 (권장)**: 릴리스 `vX.Y.Z` 를 찍을 때, 그 커밋으로 빌드한 이미지에도
-**대응하는 버전 태그**를 부여해 소스↔이미지 추적성을 확보한다.
+**연결 규칙 (권장)**: 릴리스 `vX.Y.Z` 를 찍을 때, **그 커밋으로 빌드한 스냅샷 이미지에
+`vX.Y.Z` 태그를 추가로 부여**한다. 스냅샷 태그는 그대로 남겨 추적성을 유지한다.
 
 ```
-공개 소스 태그      v0.2.0
-사내 이미지 태그    registry.obigo.com/oss/oss-hmi-launcher:0.2.0   (+ :latest)
+공개 소스 태그      v0.2.0                            (커밋 9e4a5b6)
+사내 이미지 태그    oss-hmi-launcher:develop-20260731-9e4a5b6   ← 정본 스냅샷
+                   oss-hmi-launcher:v0.2.0                     ← 릴리스 별칭 (같은 이미지)
+                   oss-hmi-launcher:latest                     ← 포인터
 ```
+
+> 스냅샷 태그의 `<shortsha>` 가 곧 Git 커밋이므로, **이미지 → 소스 역추적이 태그만으로 가능**하다.
+> 릴리스 노트에는 스냅샷 태그를 함께 적어 기관 간 검증 조합을 명확히 한다.
 
 ---
 
@@ -209,9 +325,13 @@ docker push --all-tags registry.obigo.com/oss/oss-hmi-launcher
 - [ ] `sync-release` 로 사내 `deploy` 반영 확인
 
 **컨테이너 이미지**
-- [ ] 버전 태그 + `latest` 두 개 부여
+- [ ] **`develop` 브랜치**에서 빌드 (기능 브랜치는 스크립트가 차단)
+- [ ] 커밋 완료 상태(clean)에서 빌드 — dirty 트리 아님 (스크립트가 차단)
+- [ ] 빌드 스크립트로 push — `:latest` + **불변 스냅샷 태그** 동시 생성
+- [ ] (릴리스면) 같은 이미지에 `vX.Y.Z` 태그 추가 부여
 - [ ] 멀티아키(manifest list) push 및 `imagetools inspect` 로 arm64 포함 확인
-- [ ] 보드 pull·기동 검증 (`latest` 가 arm64 를 자동 선택하는지)
+- [ ] 보드에서 **스냅샷 태그로** pull·기동 검증 (arm64 자동 선택 확인)
+- [ ] 배포·검증에 사용한 **스냅샷 태그를 문서·이슈·릴리스 노트에 기재**
 - [ ] 자격증명이 secret 으로 주입되었는지 (평문 없음)
 - [ ] 임시 검증 태그 정리
 
@@ -224,12 +344,39 @@ docker push --all-tags registry.obigo.com/oss/oss-hmi-launcher
 사내가 먼저 찍으면 정본(공개) 원칙이 깨진다.
 
 **Q. `latest` 만 쓰면 안 되나?**
-개발 편의로는 괜찮지만, **배포·재현·롤백에는 부적합**하다. 문제가 생겼을 때 "그때의 latest"를
-복원할 수 없다. 버전 태그를 함께 부여한다.
+개발 PC 편의로는 괜찮지만 **배포·재현·롤백에는 금지**다. 문제가 생겼을 때 "그때의 latest"를
+복원할 수 없다. **스냅샷 태그를 항상 함께 push** 하고, 배포엔 스냅샷 태그를 쓴다.
 
-**Q. Git 태그와 이미지 태그 버전을 꼭 같게 맞춰야 하나?**
-필수는 아니다 (앱 자체 버전 체계가 있을 수 있다). 다만 §3 의 연결 규칙처럼 **대응 관계를
-남기면** 소스↔이미지 추적이 쉬워진다.
+**Q. 하루에 여러 번 빌드하면 태그가 겹치지 않나?**
+겹치지 않는다. 날짜가 같아도 **커밋 SHA 가 다르면 다른 태그**다
+(`develop-20260731-9e4a5b6` vs `develop-20260731-f450dc9`).
+같은 커밋을 재빌드하면 같은 태그가 되는데, 이때는 **덮어쓰지 않는다**
+(내용이 같아야 정상이며, 다르다면 빌드 환경 차이를 먼저 조사한다).
+
+**Q. 기존 `3.32.12` 같은 앱 버전 태그는 어떻게 되나?**
+앱 자체 버전 표기로는 계속 쓸 수 있으나, **배포 지정은 스냅샷 태그로 통일**한다.
+앱 버전은 `APP_VER` 등 런타임 인자·릴리스 노트로 표현한다.
+
+**Q. Git 태그와 이미지 태그를 꼭 맞춰야 하나?**
+스냅샷 태그의 `<shortsha>` 가 이미 Git 커밋을 가리키므로 자동으로 연결된다.
+릴리스 시에는 §3 처럼 같은 이미지에 `vX.Y.Z` 를 **추가** 부여한다.
 
 **Q. 사전 릴리스(rc)도 이미지를 올리나?**
-올려도 되지만 태그로 구분한다 (`1.2.0-rc1`). `latest` 는 **정식 릴리스에만** 옮긴다.
+올린다. 스냅샷 태그로 push 하고, 필요하면 `v1.2.0-rc1` 별칭을 추가한다.
+`latest` 는 **정식 릴리스(기본 브랜치)에만** 옮긴다.
+
+**Q. 태그에 브랜치명을 넣으면 브랜치 삭제 후 의미가 없어지지 않나?**
+브랜치명은 **"어느 흐름에서 나온 빌드인지"** 를 알려주는 라벨이고, 재현의 근거는 SHA 다.
+브랜치가 삭제돼도 SHA 로 소스를 찾을 수 있으므로 추적성은 유지된다.
+정상 경로에서는 `develop` 만 push 되므로 대부분 `develop-…` 형태다.
+
+**Q. 기능 브랜치에서 만든 이미지를 보드에서 테스트하려면?**
+레지스트리 push 는 막혀 있으므로 **로컬 빌드**(`docker/build_local.sh` 등)로 이미지를 만들어
+`docker save`/`load` 로 보드에 옮기거나, 먼저 `develop` 에 머지한 뒤 정상 경로로 빌드한다.
+`DEFAULT_BRANCH` 로 가드를 우회하는 것은 권장하지 않는다.
+
+**Q. 스냅샷 태그가 실제로 붙었는지 어떻게 확인하나?**
+```bash
+docker buildx imagetools inspect registry.obigo.com/oss/oss-mmf-core:<snap>   # manifest·아키 확인
+docker inspect --format '{{json .Config.Labels}}' <이미지> | jq   # OCI 라벨(revision/version)
+```
