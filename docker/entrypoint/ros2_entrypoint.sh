@@ -13,7 +13,7 @@
 # log without propagating.
 
 export LD_LIBRARY_PATH=/oss/lib
-export SAVED_REGISTRY_BACKUP=/oss/bin/config
+export SAVED_REGISTRY_BACKUP=${SAVED_REGISTRY_BACKUP:-/oss/bin/config}
 
 # Source ROS2 Humble setup
 source /opt/ros/humble/setup.bash

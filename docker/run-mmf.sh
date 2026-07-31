@@ -91,7 +91,7 @@ docker run -d --name oss-mmf-ext-ros2 \
   --group-add "$DOCKER_GID" \
   -v /dev/shm:/dev/shm \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  "${SVC_MOUNT[@]}" \
+  ${SVC_MOUNT[@]+"${SVC_MOUNT[@]}"} \
   -e ROS_DOMAIN_ID="$DOMAIN" \
   -e MMF_DDS_DOMAIN_ID="$DOMAIN" \
   "$EXTROS2_IMG"

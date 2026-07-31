@@ -1,5 +1,6 @@
 #include "Logger.hpp"
-
+#include <iostream>
+#include <filesystem>
 
 
 Logger::Logger(LogLevel level, const std::string& filename)
@@ -8,6 +9,8 @@ Logger::Logger(LogLevel level, const std::string& filename)
     if (!filename.empty()) {
         fileStream.open(filename, std::ios::app);
         useFile = fileStream.is_open();
+        std::cout << "[adsw_manager Logger] log file full path: "
+                  << std::filesystem::absolute(filename).string() << ", useFile: "<< useFile << std::endl;        
     }
 }
 
