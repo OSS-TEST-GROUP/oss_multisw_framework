@@ -1,8 +1,9 @@
 # 태깅 룰 가이드 (Git 태그 · 컨테이너 레지스트리 태그)
 
 > **대상**: 공동 개발 기관 · 내부 개발자 · 릴리스 담당자
-> **범위**: ① 공개 저장소(GitHub)에서 찍는 **Git 릴리스 태그**, ② 사내 컨테이너
-> 레지스트리(`registry.obigo.com`)의 **이미지 태그**.
+> **범위**: ① 공개 저장소(GitHub)에서 찍는 **Git 릴리스 태그**, ② 컨테이너 레지스트리
+> `registry.obigo.com`(Harbor)의 **이미지 태그**.
+> 두 태그 모두 **공개 대상**이다 — 이미지는 공동 기관·외부 이용자가 pull 한다.
 > **원칙**: 두 태그는 **다른 체계**다. 혼동하지 않도록 §3 대비표를 먼저 본다.
 >
 > 관련 문서: [release-deployment-guide.md](./release-deployment-guide.md) (태그→배포 흐름),
@@ -16,8 +17,8 @@
 |---|---|---|---|
 | 릴리스 **Git 태그** | **공개** 저장소 (GitHub Releases) | `vMAJOR.MINOR.PATCH` | `v0.0.1`, `v1.2.0` |
 | 사전 릴리스 Git 태그 | 공개 저장소 (pre-release 체크) | `vX.Y.Z-rcN` | `v1.2.0-rc1` |
-| 컨테이너 **불변 스냅샷 태그** (필수) | 사내 레지스트리 | `<branch>-<date>-<shortsha>` | `develop-20260731-9e4a5b6` |
-| 컨테이너 **이동식 포인터** (필수) | 사내 레지스트리 | `latest` (+ 변종 `touch` 등) | `latest`, `touch` |
+| 컨테이너 **불변 스냅샷 태그** (필수) | `registry.obigo.com` | `<branch>-<date>-<shortsha>` | `develop-20260731-9e4a5b6` |
+| 컨테이너 **이동식 포인터** (필수) | `registry.obigo.com` | `latest` (+ 변종 `touch` 등) | `latest`, `touch` |
 
 핵심 3원칙:
 1. **Git 릴리스 태그는 공개 저장소에서만 찍는다** (사내는 동기화로 받는다).
@@ -113,6 +114,13 @@ git tag -d v0.0.1                   # 로컬 태그 삭제
 
 ## 2. 컨테이너 레지스트리 태그 (`registry.obigo.com`)
 
+> **이 레지스트리의 이미지는 공개 대상이다.** 공개 저장소의 README·가이드가 외부 이용자에게
+> `docker pull registry.obigo.com/oss/…` 를 안내하며, 공동 개발 기관도 같은 태그로 받는다.
+> pull 은 **read-only 계정**으로 하고, push 는 담당자·CI 만 수행한다.
+>
+> 따라서 **이미지명·태그명은 외부에 노출되는 공개 식별자**다. 내부 정보가 드러나는 이름을
+> 쓰지 않는다 (정상 경로에서는 `develop-…` 스냅샷만 push 되므로 문제되지 않는다 — §2-2).
+
 ### 2-1. 이미지 이름 규칙
 ```
 registry.obigo.com/oss/<컴포넌트명>:<태그>
@@ -120,6 +128,7 @@ registry.obigo.com/oss/<컴포넌트명>:<태그>
 - 프로젝트 네임스페이스는 **`oss/`** 로 고정.
 - 컴포넌트명은 **소문자 + 하이픈**. 예: `oss-mmf-core`, `oss-mmf-ext-ros2`,
   `oss-mmf-ext-agl`, `oss-hmi-launcher`, `oss-adsw-monitor`, `rviz2-agl`.
+- 이름은 공개 문서에 그대로 실리므로 **한번 정하면 바꾸지 않는다** (외부 pull 경로가 깨진다).
 
 ### 2-2. 태그 체계 — 불변 스냅샷 + 이동식 포인터
 
@@ -296,10 +305,10 @@ git log --oneline -1 9e4a5b6
 | 항목 | Git 릴리스 태그 | 컨테이너 이미지 태그 |
 |---|---|---|
 | 대상 | **소스 커밋** | **빌드된 이미지** |
-| 위치 | 공개 GitHub 저장소 | 사내 `registry.obigo.com` |
+| 위치 | 공개 GitHub 저장소 | `registry.obigo.com` (Harbor) |
 | 형식 | `vX.Y.Z` (SemVer, `v` 접두) | `<branch>-<date>-<shortsha>` (+ `latest`) |
 | 누가 | 릴리스 담당자 | 빌드 담당자 · CI |
-| 공개 여부 | **공개** (외부 기여자가 봄) | **사내 전용** |
+| 공개 여부 | **공개** (외부 기여자가 봄) | **공개** (공동 기관·외부에서 pull) |
 | 불변성 | 항상 불변 | **스냅샷 태그는 불변**, `latest` 는 이동 |
 | 개수 | 릴리스당 1개 | 빌드마다 스냅샷 1개 (+ 포인터) |
 
