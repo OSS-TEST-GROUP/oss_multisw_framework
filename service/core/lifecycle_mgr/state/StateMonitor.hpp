@@ -50,8 +50,14 @@ class StateMonitor : public ManagerBase {
 
     // Polling interval (DESIGN-3): use named constants so the values are
     // visible and can be moved to config in the future.
-    static constexpr int32_t kPollIntervalMs     = 10000; // state-query period
-    static constexpr int32_t kDiagReportInterval = 3;     // send diag every N polls
+    //
+    // Latency: since updateServices() now publishes a diag report the moment a
+    // service actually transitions (publish-on-change), the periodic report is a
+    // reconciliation heartbeat rather than the primary path — so the poll can be
+    // tighter (fallback for services that don't push NotifyServiceState) without
+    // the monitor depending on it for responsiveness. 5s poll x 3 = 15s heartbeat.
+    static constexpr int32_t kPollIntervalMs     = 5000;  // state-query period (non-push fallback)
+    static constexpr int32_t kDiagReportInterval = 3;     // heartbeat diag every N polls
 
   private:
     std::set<std::shared_ptr<Service>> udpated_service_list_;
@@ -60,6 +66,11 @@ class StateMonitor : public ManagerBase {
     std::atomic<bool> stop_thread_{false};
 
     std::mutex lock_mutex_;
+    // Serializes NotifyLifecycleDiagnosticInfo: it is now called from BOTH the
+    // periodic RunThread AND the DDS receive thread (on-change publish), and it
+    // reuses the diag_report_/container_report_ member buffers as the SendMessage
+    // payload, so concurrent calls would otherwise race on those buffers.
+    std::mutex publish_mutex_;
 
     lifecyclemgr::GetServiceStateRequest get_request_;
     lifecyclemgr::LifecycleDiagReport diag_report_;

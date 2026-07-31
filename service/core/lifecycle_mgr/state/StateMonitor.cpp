@@ -90,6 +90,11 @@ std::set<std::shared_ptr<Service>> StateMonitor::GetUpdateServiceList(){
 
 void StateMonitor::NotifyLifecycleDiagnosticInfo(bool all){
 
+    // Guard the shared diag_report_/container_report_ buffers: this now runs on
+    // the periodic thread AND (via updateServices) on the DDS receive thread, so
+    // concurrent calls would race on the reused SendMessage payload buffers.
+    std::lock_guard<std::mutex> publish_guard(publish_mutex_);
+
     std::shared_ptr<DDSTransmitter> transmitter = GetTransmitter();
     int32_t running_cnt = 0;
 
@@ -255,15 +260,22 @@ void StateMonitor::updateServices(std::vector<std::string>* slist, std::vector<l
     std::set<std::shared_ptr<Service>> service_list;
     size_t count = std::min(slist->size(), statelist->size());
 
+    bool any_state_changed = false;
     for (size_t idx=0; idx < count; ++idx){
-            
+
         std::string sname = slist->at(idx);
         lifecyclemgr::ServiceState state = statelist->at(idx);
 
         std::shared_ptr<Service> service = GetService(sname);
 
         if (service){
+            // SetServiceState only mutates when the value differs, so comparing
+            // the state before/after tells us whether this was a real transition.
+            auto prev_state = service->GetServiceState();
             service->SetServiceState(TypeConvert::ToServiceState(state));
+            if (service->GetServiceState() != prev_state){
+                any_state_changed = true;
+            }
             SetUpdateStateFlag(service);
             service_list.insert(service);
         }
@@ -272,6 +284,16 @@ void StateMonitor::updateServices(std::vector<std::string>* slist, std::vector<l
     if (service_list.size() > 0){
         std::shared_ptr<StateManager> manager = GetStateManager();
         manager->ProcessServiceHandling(service_list);
+    }
+
+    // Latency: publish a fresh diag/container snapshot the moment a service
+    // actually transitions (e.g. autoware becomes RUNNING right after Start),
+    // instead of waiting up to one heartbeat (kPollIntervalMs * kDiagReportInterval)
+    // for the periodic report. Gated on a real transition, so steady-state polls
+    // that re-report the same state add no extra traffic. The monitor merges
+    // per-service (lfc_monitor _onDiagReport), so sending a full snapshot is safe.
+    if (any_state_changed){
+        NotifyLifecycleDiagnosticInfo(true);
     }
 }
 
