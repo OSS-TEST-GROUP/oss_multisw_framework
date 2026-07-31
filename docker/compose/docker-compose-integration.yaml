@@ -37,6 +37,12 @@ services:
     depends_on:
       mmf-core:
         condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "sleep 2" ]
+      interval: 60s
+      timeout: 5s
+      retries: 1
+      start_period: 2s
     privileged: true
     network_mode: "host"
     deploy:
@@ -423,6 +429,9 @@ services:
     restart: unless-stopped
     network_mode: host
     ipc: host
+    depends_on:
+      mmf-ext-ros2:
+        condition: service_healthy
 
   attack_env:
     image: ghcr.io/oss-test-group/oss-ids/attack_env:v0.1.0
@@ -430,6 +439,9 @@ services:
     restart: unless-stopped
     network_mode: host
     ipc: host
+    depends_on:
+      mmf-ext-ros2:
+        condition: service_healthy
 
   security_monitor:
     image: ghcr.io/oss-test-group/oss-ids/security_monitor:v0.1.0
@@ -440,7 +452,10 @@ services:
     volumes:
       - monitor_db:/app/data
     depends_on:
-      - attack_env
+      mmf-ext-ros2:
+        condition: service_healthy
+      attack_env:
+        condition: service_started
 
 volumes:
   monitor_db:
