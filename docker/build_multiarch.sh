@@ -44,6 +44,16 @@ fi
 GIT_REV="$(git rev-parse HEAD)"
 GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD | sed 's/[^A-Za-z0-9._-]/-/g')"
 GIT_SHORT="$(git rev-parse --short HEAD)"
+
+# 배포 정책: :latest + 스냅샷 태그 push 는 default 브랜치(develop)에서만 허용한다.
+# feature/기타 브랜치에서 실수로 :latest 를 덮어쓰는 것을 방지. 정책상 default
+# 브랜치 이외의 빌드는 여기서 중단한다 (필요 시 DEFAULT_BRANCH 로 정책 조정).
+DEFAULT_BRANCH="${DEFAULT_BRANCH:-develop}"
+if [ "${GIT_BRANCH}" != "${DEFAULT_BRANCH}" ]; then
+  echo "ERROR: 현재 브랜치 '${GIT_BRANCH}' — :latest + 스냅샷 push 는 default 브랜치 '${DEFAULT_BRANCH}' 에서만 허용됩니다." >&2
+  echo "       '${DEFAULT_BRANCH}' 로 머지 후 그 브랜치에서 빌드하세요." >&2
+  exit 1
+fi
 BUILD_DATE_UTC="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 SNAP="${GIT_BRANCH}-$(date -u +%Y%m%d)-${GIT_SHORT}"
 OCI_LABELS=(
