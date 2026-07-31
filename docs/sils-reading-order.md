@@ -21,6 +21,7 @@
 | `sils-morai-autoware-topology.html` | 시각 | MORAI/rosbag ↔ Autoware ↔ vECU 데이터 흐름 |
 | `sils-morai-simulator-integration-review` (.md/.html) | 연동 검토 | MORAI 연동 authority·시간·프로토콜 사전검토 |
 | `sils-morai-plant-adapter-design` (.md/.html) | **최신 설계** | MORAI/AWSIM 버스 결합(Option 2) — 채널맵·정규 계약 |
+| `sils-agent-automation` (.md/.html) | 제안·운영 | LLM 에이전트로 검증 자동화 — 판정은 kit, 에이전트는 앞뒤(트리아지·리포트) |
 
 **구버전(참고만, v3 로 대체됨):** `sils-virtual-ecu-architecture.md/.html`(v2), `sils-virtual-ecu-architecture-review.md`.
 
@@ -54,6 +55,10 @@
 
 ### ✅ conformance/검증
 **`trace-schema.md`**(계약) → `understanding.md` 6장(trace→verdict) → **`clock-master`**(lockstep 시간 권위) → `target-parity.md`(L4)
+
+### 🤖 검증 자동화·CI
+`tool-confidence.md` §1(판정 경계) → **`agent-automation.md`**(에이전트 경계·단계별 계획)
+→ `tools/sils/README.md`(도구 인덱스·`sils-ci.sh`)
 
 ### 🏛️ 아키텍트/의사결정 리뷰
 `architecture-v3` → `extension-model`(ADR) → `morai-plant-adapter-design`(3안 비교)
