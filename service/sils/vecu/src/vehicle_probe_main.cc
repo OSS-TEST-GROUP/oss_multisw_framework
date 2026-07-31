@@ -1,7 +1,7 @@
 // sils_vecu_vehicle_probe -- the DEFAULT plant-coupling probe (Option 2), the bus-coupled
 // counterpart of sils_vecu_viss_probe. Reads env, builds the reference LongitudinalBehavior,
 // and hands it to RunVehicleProbe (vehicle_run.hpp) which owns DDS/channel-map/tick-loop/
-// trace. docs/sils-morai-plant-adapter-design.md §5.
+// trace. docs/sils/sils-morai-plant-adapter-design.md §5.
 //
 // This is the SDK's reference probe (like viss_probe uses the built-in VissRequestBehavior).
 // A developer's own plant-coupled ECU authors its own IVehicleBehavior and calls

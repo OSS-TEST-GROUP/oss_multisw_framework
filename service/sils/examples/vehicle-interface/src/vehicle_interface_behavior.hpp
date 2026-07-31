@@ -3,7 +3,7 @@
 
 // VehicleInterfaceBehavior -- a developer-authored IVehicleBehavior implementing the VCU
 // (Vehicle Interface) role (libsils_vecu example, Option 2 plant coupling / Profile B).
-// docs/sils-vehicle-interface-autoware.md.
+// docs/sils/sils-vehicle-interface-autoware.md.
 //
 // Unlike steer/brake (which CONTROL a single axis from state), the VCU sits between
 // Autoware and the plant: it consumes the upstream control TARGET (ctx.target, from

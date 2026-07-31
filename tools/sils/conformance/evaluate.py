@@ -422,7 +422,7 @@ VEHICLE_GEARS = {0, 1, 2, 3}
 
 def analyze_vehicle(events: list[dict]) -> tuple[dict, list[str]]:
     """Check bus-coupled plant-coupling closed-loop integrity (Option 2, MORAI/AWSIM,
-    docs/sils-morai-plant-adapter-design.md). Returns (vehicle_info, violations).
+    docs/sils/sils-morai-plant-adapter-design.md). Returns (vehicle_info, violations).
 
     A run is bus-coupled iff it carries `control_published` events -- each is one tick of
     the loop: the vECU consumed the bus STATE (`state_received`) and/or an upstream control
@@ -609,7 +609,7 @@ def _check_requirement(req: dict, events: list[dict], dt_s: float | None) -> tup
 
 def analyze_requirements(events: list[dict], spec) -> tuple[dict, list[str]]:
     """Check developer-authored FUNCTIONAL requirements against the trace -- the '검증완료'
-    layer (docs/sils-functional-verification-interop.md). Where analyze_vehicle/analyze_plant
+    layer (docs/sils/sils-functional-verification-interop.md). Where analyze_vehicle/analyze_plant
     judge whether the loop is SOUND, this judges whether the control MEETS THE DEVELOPER'S
     SPEC. `spec` is the parsed requirements file ({"requirements": [...]}) or None.
 

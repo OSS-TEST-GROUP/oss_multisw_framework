@@ -6,7 +6,7 @@ FmuPlant (service/sils/vecu/src/plant.hpp) addresses the FMU's input/output by r
 modelDescription.xml and pasting integers. This tool resolves a variable by NAME and
 validates it (causality, data type, unit) against what FmuPlant can drive, then emits
 the value references so a descriptor / Run Coordinator can bind the FMU by variable
-name instead of a brittle integer (FMU guide docs/sils-fmu-plant.md §5.2).
+name instead of a brittle integer (FMU guide docs/sils/sils-fmu-plant.md §5.2).
 
 FmuPlant drives Float64 co-simulation I/O only:
   - FMI 3.0: <Float64 name=.. valueReference=.. causality=.. unit=../>

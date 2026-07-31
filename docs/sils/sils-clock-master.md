@@ -2,7 +2,7 @@
 
 > lockstep 결정론을 구동하는 **독립 프로세스**. TickGrant/TickComplete barrier로 참가자들의 tick을 동기 전진시킨다.
 >
-> 근거 코드: [`service/sils/vecu/src/sils_clock_master.cc`](../service/sils/vecu/src/sils_clock_master.cc) · 참가자 측 [`clock_source.hpp`](../service/sils/vecu/src/clock_source.hpp) · 계약 [`idl/dds/sils/TickControl.idl`](../idl/dds/sils/TickControl.idl)
+> 근거 코드: [`service/sils/vecu/src/sils_clock_master.cc`](../../service/sils/vecu/src/sils_clock_master.cc) · 참가자 측 [`clock_source.hpp`](../../service/sils/vecu/src/clock_source.hpp) · 계약 [`idl/dds/sils/TickControl.idl`](../../idl/dds/sils/TickControl.idl)
 >
 > 📊 시각 요약: [sils-clock-master.html](sils-clock-master.html)
 
@@ -28,7 +28,7 @@ Clock Master는 **TickGrant 발행자 + TickComplete 구독자**다. 참가자(v
 | grant | `sils/tick/grant` | `TickGrant` | Clock Master → 참가자 N |
 | complete | `sils/tick/complete` | `TickComplete` | 참가자 N → Clock Master |
 
-**계약** ([TickControl.idl](../idl/dds/sils/TickControl.idl)):
+**계약** ([TickControl.idl](../../idl/dds/sils/TickControl.idl)):
 
 ```idl
 struct TickGrant    { string run_id; unsigned long long tick_seq; long long sim_time_ns; long long dt_ns; };

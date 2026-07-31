@@ -4,7 +4,7 @@
 **Autoware 제어 target을 받아 아비트·안전·통합**해 plant가 받는 단일 명령을 낸다. steer/brake-ecu가
 "상태→단일 축 제어"라면, VCU는 "**상위 명령 + 상태 → 통합 명령**"(입력 2개 = 프로파일 B).
 
-- 설계: [../../../../docs/sils-vehicle-interface-autoware.md](../../../../docs/sils-vehicle-interface-autoware.md)
+- 설계: [../../../../docs/sils/sils-vehicle-interface-autoware.md](../../../../docs/sils/sils-vehicle-interface-autoware.md)
 - Autoware 인터페이스 근거: `/Volumes/DATAPart/AUTOWARE` (control_cmd/gear_cmd, /vehicle/status/*)
 
 ## 구성

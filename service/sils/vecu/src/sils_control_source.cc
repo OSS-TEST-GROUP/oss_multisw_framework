@@ -1,5 +1,5 @@
 // SiLS ControlTarget source -- test fixture for the Vehicle Interface (VCU) probe (Option 2
-// / Profile B, docs/sils-vehicle-interface-autoware.md).
+// / Profile B, docs/sils/sils-vehicle-interface-autoware.md).
 //
 // Stand-in for the Autoware<->DDS bridge's control output: publishes canonical ControlTarget
 // samples on the target topic (default autoware/control_target). Lets the VCU be exercised

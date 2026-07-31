@@ -140,7 +140,7 @@ FROM runtime-mmf-core-${TARGETARCH} AS runtime-mmf-core
 #
 # BUILD_SILS builds under the same output tree as core (service/CMakeLists.txt
 # adds sils/ unconditionally, outside the BUILD_EXTENSION switch -- see
-# docs/sils-virtual-ecu-architecture-v3.md §18-C), so this stage mirrors
+# docs/sils/sils-virtual-ecu-architecture-v3.md §18-C), so this stage mirrors
 # runtime-mmf-core-${TARGETARCH} but ships only the two sils_vecu_* binaries
 # and a single-process entrypoint instead of the full core service fan-out.
 ###################################################################################

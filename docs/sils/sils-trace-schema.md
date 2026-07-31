@@ -6,7 +6,7 @@
 > API, are what must stay stable across versions (see
 > [sils-extension-model.md §2](sils-extension-model.md)).
 >
-> Machine-readable source of truth: [`config/sils/trace-schema/v1.json`](../config/sils/trace-schema/v1.json).
+> Machine-readable source of truth: [`config/sils/trace-schema/v1.json`](../../config/sils/trace-schema/v1.json).
 > This document is its human companion.
 >
 > **Scope note (updated 2026-07, S4):** the MORAI/AWSIM bus-coupling probe
@@ -128,7 +128,7 @@ python3 tools/sils/conformance/validate_trace.py <trace.jsonl>          # lenien
 python3 tools/sils/conformance/validate_trace.py <trace.jsonl> --strict # every line must be an event
 cat trace.jsonl | python3 .../validate_trace.py - --producer vecu       # only vecu events
 ```
-Fail-closed: any violation → exit 1. See [conformance README](../tools/sils/conformance/README.md).
+Fail-closed: any violation → exit 1. See [conformance README](../../tools/sils/conformance/README.md).
 
 ## Versioning
 

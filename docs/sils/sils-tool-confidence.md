@@ -12,7 +12,7 @@
 
 ## 1. 증거 체인 — 트레이스가 유일한 판정 경계
 
-이 kit의 근본 설계는 **"실행이 남긴 JSONL 트레이스가 공개 conformance 경계"**(docs/sils-extension-model.md §2)라는 것이다. 판정 도구는 오직 이 트레이스만 소비하며, vECU 내부 상태나 소스에 접근하지 않는다. 따라서 판정은 **관찰 가능한 증거에만 근거**하고, 제3자가 같은 트레이스로 같은 결론을 재생산할 수 있다.
+이 kit의 근본 설계는 **"실행이 남긴 JSONL 트레이스가 공개 conformance 경계"**(docs/sils/sils-extension-model.md §2)라는 것이다. 판정 도구는 오직 이 트레이스만 소비하며, vECU 내부 상태나 소스에 접근하지 않는다. 따라서 판정은 **관찰 가능한 증거에만 근거**하고, 제3자가 같은 트레이스로 같은 결론을 재생산할 수 있다.
 
 ```
    실행(vECU + 하네스) ──emit──▶  트레이스(JSONL)  ◀── 유일한 판정 입력
@@ -160,4 +160,4 @@ kit 자체의 정확성은 단위 테스트로 회귀 보호된다(`tools/sils/c
 - 이 문서는 **정식 도구 자격이 아니라 그 입력**이다. TCL 분류·자격은 도구를 쓰는 조직이 자기 맥락에서 수행한다.
 - 최대 미검증 가정은 **실 MORAI/Autoware와의 폐루프**(현재 fixture로만 실증) — 실 브리지 연동 시 재검증 대상.
 
-관련: [conformance kit README](../tools/sils/conformance/README.md) · [트레이스 스키마](../config/sils/trace-schema/v1.json) · [플랜트결합 설계](sils-morai-plant-adapter-design.md) · [확장 모델](sils-extension-model.md)
+관련: [conformance kit README](../../tools/sils/conformance/README.md) · [트레이스 스키마](../../config/sils/trace-schema/v1.json) · [플랜트결합 설계](sils-morai-plant-adapter-design.md) · [확장 모델](sils-extension-model.md)

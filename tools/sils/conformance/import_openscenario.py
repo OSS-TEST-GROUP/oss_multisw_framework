@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """import_openscenario.py -- import an ASAM OpenSCENARIO (.xosc) file into the SiLS
-functional-requirements format (docs/sils-functional-verification-interop.md §4/§6 b).
+functional-requirements format (docs/sils/sils-functional-verification-interop.md §4/§6 b).
 
 The reuse thesis: a person who authored driving scenarios in another tool (CarMaker,
 MORAI, Autoware scenario_simulator_v2, Simulink) should bring their .xosc with MINIMAL

@@ -212,7 +212,7 @@ FMU와 MORAI가 **동시에 같은 차량 동역학**을 계산하면 안 된다
 
 현재 계획대로 MORAI가 차량 상태 authority면 FMU는 **미사용**하거나 MORAI가 소유하지 않는
 보조 모델(타이어·브레이크 등)로 범위를 제한한다. (FMU 트랙 vs MORAI 브리지 트랙은 별개 —
-[README](../tools/sils/README.md) "남은 것" 참조.)
+[README](../../tools/sils/README.md) "남은 것" 참조.)
 
 ### 5.6 보안 — FMU는 native code
 `.fmu` 안의 `.so`/`.dll`은 실제 native 코드다. **신뢰하지 않는 FMU 로드 = 임의 코드 실행

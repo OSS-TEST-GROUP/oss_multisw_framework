@@ -107,7 +107,7 @@ tolerance 완화를 커밋하면 그걸로 끝이다. `.clang-tidy`를 리포에
 | **1층** | `.claude/settings.json` (커밋) | **가드레일.** 실수·무심한 편집을 막고, 우회하려면 **git diff에 보이게** 만든다. 즉시·무료 |
 | **2층** | `.github/CODEOWNERS` + 해당 경로 리뷰 필수 | **진짜 보증.** Bash 우회까지 막는 유일한 지점 |
 
-현재 CODEOWNERS가 없다. 다만 [publish-develop.yml](../.github/workflows/publish-develop.yml)에
+현재 CODEOWNERS가 없다. 다만 [publish-develop.yml](../../.github/workflows/publish-develop.yml)에
 "공개 develop 직접 push 금지(정책 §6), PR 필수" 규약이 이미 있어 문화는 존재한다 — SiLS 판정
 경로만 지정하면 붙는다.
 
@@ -131,7 +131,7 @@ config/sils/{contracts,qos,topologies}  +  service/sils/vecu/descriptors/
      gate.py (위 3개 fail-closed 체이닝) → 단일 exit code + junit.xml
 ```
 
-상세는 [tools/sils/README.md](../tools/sils/README.md), [sils-tool-confidence.md](sils-tool-confidence.md) §1.
+상세는 [tools/sils/README.md](../../tools/sils/README.md), [sils-tool-confidence.md](sils-tool-confidence.md) §1.
 
 ### 3.1 에이전트가 소비하는 계약면
 
@@ -281,7 +281,7 @@ FAIL 하나에 사람이 수천 줄 JSONL을 훑는 일을 대체한다. **효�
 
 ```
 config/sils/trace-schema/v1.json   ← 기계 판독 source of truth
-docs/sils-trace-schema.md          ← 사람용 companion
+docs/sils/sils-trace-schema.md          ← 사람용 companion
 evaluate.py 가 실제로 판정하는 이벤트 집합  ← 실효 구현
 ```
 
@@ -290,7 +290,7 @@ evaluate.py 가 실제로 판정하는 이벤트 집합  ← 실효 구현
 
 | 항목 | 내용 |
 |---|---|
-| **검사** | ① 스키마 ↔ 문서 표 ↔ analyzer 지원 이벤트 3자 일치 ② `.md`/`.html` 짝 내용 동기 ③ `docs/sils-reading-order.md` 인덱스 누락 |
+| **검사** | ① 스키마 ↔ 문서 표 ↔ analyzer 지원 이벤트 3자 일치 ② `.md`/`.html` 짝 내용 동기 ③ `docs/sils/sils-reading-order.md` 인덱스 누락 |
 | **출력** | 불일치 목록 + 제안 패치 (커밋은 사람) |
 | **주기** | `config/sils/trace-schema/`·`tools/sils/conformance/` 변경 시 |
 
@@ -399,7 +399,7 @@ FMU를 올림 = in-process 네이티브 코드 실행)와 `CODEOWNERS`(외부 �
 
 - **설계 제안.** 구현된 에이전트 계층은 없다(§7 "현재" 열).
 - 감싸는 대상(§3 파이프라인)은 존재하며 도구 계층은 실행·테스트 완료
-  ([tools/sils/README.md](../tools/sils/README.md) 검증 상태 참고).
+  ([tools/sils/README.md](../../tools/sils/README.md) 검증 상태 참고).
 - **Phase 1(사내)이 현재 단계.** 실행 주체는 사내 Jenkins로 정해졌다(§4.2) — Tier A/B 분리는
   Phase 2 사항이므로 지금 구현하지 않는다.
 - 선행 결정 필요: artifact 보존 기간·위치, golden 디렉터리 경로(§7.1).
@@ -409,4 +409,4 @@ FMU를 올림 = in-process 네이티브 코드 실행)와 `CODEOWNERS`(외부 �
 *관련: [sils-tool-confidence.md](sils-tool-confidence.md)(판정 신뢰 근거) ·
 [sils-trace-schema.md](sils-trace-schema.md)(계약면) ·
 [sils-extension-model.md](sils-extension-model.md) §2(경계) ·
-[tools/sils/README.md](../tools/sils/README.md)(도구 인덱스)*
+[tools/sils/README.md](../../tools/sils/README.md)(도구 인덱스)*

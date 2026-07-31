@@ -1,6 +1,6 @@
 // Canonical vehicle CONTROL / actuation -- SiLS sim-agnostic plant-coupling contract
 // (Option 2). The vECU publishes this back to the sim; a sim adapter translates it into
-// the native command (MORAI morai_msgs/CtrlCmd). docs/sils-morai-plant-adapter-design.md,
+// the native command (MORAI morai_msgs/CtrlCmd). docs/sils/sils-morai-plant-adapter-design.md,
 // sils-morai-simulator-integration-review.md (§3.2 P0, control-mode note).
 //
 // Longitudinal command is a SINGLE fixed mode -- signed acceleration (m/s^2). The

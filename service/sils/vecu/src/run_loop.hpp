@@ -2,10 +2,10 @@
 #define SILS_VECU_RUN_LOOP_HPP
 
 // sils::RunProbe -- the SiLS vECU tick loop as a reusable library entry point
-// (libsils_vecu SDK, docs/sils-extension-model.md P1). It owns the whole run:
+// (libsils_vecu SDK, docs/sils/sils-extension-model.md P1). It owns the whole run:
 // DDS participant/writer setup on the resolved contract endpoint, the clock ->
 // behavior -> (scenario fault) -> publish -> plant closed loop, the JSONL trace
-// contract (docs/sils-understanding.md ch.6), and teardown.
+// contract (docs/sils/sils-understanding.md ch.6), and teardown.
 //
 // The most-customized ports -- IBehavior (the control logic), IPlant (the physical
 // model), and IWireCodec (the DDS wire type/payload) -- are INJECTED by the caller, so a
@@ -21,7 +21,7 @@
 // Header-only: globals/helpers are `inline` so this compiles into whichever single
 // executable includes it (each ECU is its own TU). Extracting RunProbe into a
 // compiled library object is a later step; API stability (not ABI) is what the SDK
-// contract needs (docs/sils-extension-model.md §2).
+// contract needs (docs/sils/sils-extension-model.md §2).
 
 #include <algorithm>
 #include <atomic>
@@ -84,7 +84,7 @@ inline long long WallTimeMs() {
 
 // Trace line per architecture v3 Final §7.1/§12.2 (publish_intent/publish_result,
 // run_id, wall time) -- deliberately minimal JSONL. This is the public trace contract
-// the conformance kit (evaluate.py/parity.py) consumes; docs/sils-understanding.md ch.6.
+// the conformance kit (evaluate.py/parity.py) consumes; docs/sils/sils-understanding.md ch.6.
 inline void TraceEvent(const std::string& run_id, const std::string& event, int seq,
                        const std::string& extra_json_fields = "") {
     std::cout << "{\"run_id\":\"" << run_id << "\",\"instance_id\":\"" << g_instance_id
