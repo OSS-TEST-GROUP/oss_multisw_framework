@@ -10,7 +10,7 @@ version: 0.1
 #
 # 아래는 parted Autoware (인지/판단/제어) 3 역할 — 각 이미지가 자기 역할
 # start_script(/autoware/start_script/adsw-*.sh → sample_adsw_*_run.launch.xml)
-# 를 CMD 로 실행한다. 이미지: junohb/autoware-partition:sample-adsw-* (2026-07 파티션
+# 를 CMD 로 실행한다. 이미지: ghcr.io/oss-test-group/autoware-partition:adsw-* (2026-07 파티션
 # 샘플). domain 42 로 격리(ROS_DOMAIN_ID=42)하여
 # MMF(domain 0)와 분리. 맵은 보드의 /home/goasp/autoware_map 를 마운트.
 # recovery: MANUAL — 운영자가 lfc_monitor 에서 start/stop/restart 를 명시적으로
@@ -19,7 +19,7 @@ specs:
   - containers:
       # ── 인지 (perception) — 시뮬레이터 + rviz(:1) ──────────────────────────
       - name: autoware-perception
-        image: "junohb/autoware-partition:sample-adsw-perception"
+        image: "ghcr.io/oss-test-group/autoware-partition:adsw-perception"
         container-type: "docker"
         extra_args:
           - "--network"
@@ -56,7 +56,7 @@ specs:
 
       # ── 판단 (decision) — 헤드리스 ────────────────────────────────────────
       - name: autoware-decision
-        image: "junohb/autoware-partition:sample-adsw-decision"
+        image: "ghcr.io/oss-test-group/autoware-partition:adsw-decision"
         container-type: "docker"
         extra_args:
           - "--network"
@@ -85,7 +85,7 @@ specs:
 
       # ── 제어 (control) — 시뮬레이터, 헤드리스 ─────────────────────────────
       - name: autoware-control
-        image: "junohb/autoware-partition:sample-adsw-control"
+        image: "ghcr.io/oss-test-group/autoware-partition:adsw-control"
         container-type: "docker"
         extra_args:
           - "--network"
