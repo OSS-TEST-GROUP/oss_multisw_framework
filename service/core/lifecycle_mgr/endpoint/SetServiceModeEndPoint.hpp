@@ -20,11 +20,11 @@ class SetServiceModeEndPoint : public DDSMessageEndPoint {
     using Callback = std::function<void(SetServiceModeRequest*)>;
 
     SetServiceModeEndPoint(MessageType msgtype, std::string topic, Callback cb = nullptr);
-    virtual ~SetServiceModeEndPoint();
+    ~SetServiceModeEndPoint() override;
 
-    virtual void  OnDataAvailable() override;
+    void OnDataAvailable() override;
 
-    virtual void OnDataPublished(bool ret) override;
+    void OnDataPublished(bool ret) override;
 
   private:
     SetServiceModeRequest data_;

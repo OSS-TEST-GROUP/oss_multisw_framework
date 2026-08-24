@@ -1,13 +1,14 @@
 #include "LifecycleDiagReportEndPoint.hpp"
 
+#include <utility>
+
 #include "lifecycle/LifecycleDiagReport.hpp"
 #include "logger/Log.hpp"
 
 namespace lifecycle_manager {
 
-
-LifecycleDiagReportEndPoint::LifecycleDiagReportEndPoint(MessageType msgtype, std::string topic) 
-    : DDSMessageEndPoint(topic){
+LifecycleDiagReportEndPoint::LifecycleDiagReportEndPoint(MessageType msgtype, std::string topic)
+    : DDSMessageEndPoint(std::move(topic)) {
 
     if (msgtype == MessageType::LIFECYCLE_DIAG_REPORT){
         SetTypeSupport(std::make_shared<TypeSupport>(new LifecycleDiagReportPubSubType()));
@@ -23,7 +24,7 @@ LifecycleDiagReportEndPoint::~LifecycleDiagReportEndPoint() {
 void LifecycleDiagReportEndPoint::OnDataAvailable(){
     LOG_DEBUG("Message Delivery for " << GetTopic() );
 
-    if (Read<LifecycleDiagReport>(data_) == true){
+    if (Read<LifecycleDiagReport>(data_)) {
 
         LifecycleDiagReport* message = reinterpret_cast<LifecycleDiagReport*>(&data_);
 
@@ -36,7 +37,6 @@ void LifecycleDiagReportEndPoint::OnDataAvailable(){
                         << ", " << static_cast<bool>(svc->is_enabled()));
         }
     }
-
 }
 
 void LifecycleDiagReportEndPoint::OnDataPublished(bool ret){

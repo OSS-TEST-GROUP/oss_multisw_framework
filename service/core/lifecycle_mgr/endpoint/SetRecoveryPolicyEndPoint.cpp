@@ -1,5 +1,7 @@
 #include "SetRecoveryPolicyEndPoint.hpp"
 
+#include <utility>
+
 #include "lifecycle/SetRecoveryPolicyRequest.hpp"
 #include "logger/Log.hpp"
 
@@ -7,7 +9,7 @@ namespace lifecycle_manager {
 
 SetRecoveryPolicyEndPoint::SetRecoveryPolicyEndPoint(
     MessageType msgtype, std::string topic, Callback cb)
-    : DDSMessageEndPoint(topic), on_data_cb_(std::move(cb)) {
+    : DDSMessageEndPoint(std::move(topic)), on_data_cb_(std::move(cb)) {
     if (msgtype == MessageType::SET_RECOVERY_POLICY_REQUEST) {
         SetTypeSupport(std::make_shared<TypeSupport>(
             new SetRecoveryPolicyRequestPubSubType()));
@@ -17,12 +19,11 @@ SetRecoveryPolicyEndPoint::SetRecoveryPolicyEndPoint(
     }
 }
 
-SetRecoveryPolicyEndPoint::~SetRecoveryPolicyEndPoint() {}
 
 void SetRecoveryPolicyEndPoint::OnDataAvailable() {
     LOG_DEBUG("Message Delivery for " << GetTopic());
 
-    if (Read<SetRecoveryPolicyResponse>(resp_) == true) {
+    if (Read<SetRecoveryPolicyResponse>(resp_)) {
         SetRecoveryPolicyResponse* msg =
             reinterpret_cast<SetRecoveryPolicyResponse*>(&resp_);
         if (on_data_cb_) {

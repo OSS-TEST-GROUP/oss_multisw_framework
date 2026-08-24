@@ -1,0 +1,257 @@
+# SiLS loop B -- scenario_simulator_v2 bring-up (step 1 of docs/sils/sils-ss2-bringup.md).
+#
+# Step 1 is the WIRING check, not a closed loop: the simulator runs, the adapter
+# (not built yet) would republish EgoState, and the vECU observes. No control is
+# fed back. That is deliberate -- it needs neither the concealer decision (B1-2)
+# nor the simulator frame-drive patch (W3/B2-2), so it can run today and settle
+# the interop unknowns first.
+#
+# Build the image first:  docker/sils/build-ss2.sh
+#
+# Services:
+#   ss2-probe     one-shot  -- B1-3 interop measurement, writes runs/ss2-probe/
+#   ss2-mock      long-run  -- cpp_mock_scenarios, simulator WITHOUT Autoware
+#   ss2-scenario  long-run  -- scenario_test_runner on a .xosc
+#   ss2-shell     manual    -- interactive poke-around
+#
+# Why network_mode/ipc host everywhere: the rest of this stack does the same
+# (docker-compose-integration.yaml), and DDS SIMPLE discovery + multicast has to
+# reach the vECU running outside compose. Diverging here would measure a topology
+# we do not deploy -- which would make the B1-3 numbers worthless.
+#
+# ROS_DOMAIN_ID must equal the vECU's VISS_DDS_DOMAIN_ID: ROS 2 maps its domain id
+# 1:1 onto the DDS domain. Override both together:
+#   SILS_DOMAIN=7 docker compose -f docker/compose/docker-compose-sils-ss2.yaml up ss2-mock
+
+x-ss2-common: &ss2-common
+  image: ${SILS_SS2_IMAGE:-sils-ss2:humble}
+  # These images are built locally (docker/sils/build-ss2.sh, build-ss2-adapter.sh) and
+  # are not in any registry. Without this, a missing image makes compose try to PULL it,
+  # and the error you get is "pull access denied / repository does not exist" -- which
+  # reads like an auth problem rather than "you have not built it yet".
+  pull_policy: never
+  network_mode: "host"
+  ipc: "host"
+  environment: &ss2-env
+    ROS_DOMAIN_ID: "${SILS_DOMAIN:-0}"
+    # Fast DDS by default (see docker/sils/Dockerfile.ss2 for why, and for how to
+    # flip to Cyclone). Both columns of the BR-C-2a matrix need measuring, so this
+    # is a starting point, not a conclusion.
+    RMW_IMPLEMENTATION: "${SILS_RMW:-rmw_fastrtps_cpp}"
+    FASTDDS_DEFAULT_PROFILES_FILE: /opt/sils/fastdds-profile.xml
+    FASTRTPS_DEFAULT_PROFILES_FILE: /opt/sils/fastdds-profile.xml
+    # Must stay 0: the vECU is a separate participant, often a separate container.
+    ROS_LOCALHOST_ONLY: "0"
+
+services:
+
+  # --- B1-3: measure, then decide ------------------------------------------
+  # Run this WHILE ss2-mock or ss2-scenario is up. On its own it will report
+  # zero topics and exit 3, which is the honest answer, not a crash.
+  ss2-probe:
+    <<: *ss2-common
+    container_name: sils-ss2-probe
+    environment:
+      <<: *ss2-env
+      SILS_PROBE_OUT: /out
+    volumes:
+      - ../../runs/ss2-probe:/out
+    command: ["/opt/sils/probe_interop.sh", "--wait", "30"]
+
+  # --- simulator WITHOUT Autoware ------------------------------------------
+  # cpp_mock_scenarios drives traffic_simulator + simple_sensor_simulator directly
+  # from C++, with no concealer/Autoware in the loop. That makes it the cheapest
+  # way to get EgoState onto a bus, and it is the natural base for B-det later.
+  #
+  # Upstream builds these only with -DBUILD_CPP_MOCK_SCENARIOS=ON, which their
+  # Dockerfile sets. If this service fails with "package not found", that flag is
+  # the first thing to check -- record the finding in the bring-up report.
+  ss2-mock:
+    <<: *ss2-common
+    container_name: sils-ss2-mock
+    command:
+      - ros2
+      - launch
+      - cpp_mock_scenarios
+      - mock_test.launch.py
+      - "scenario:=${SILS_SS2_MOCK_SCENARIO:-traffic_simulation_demo}"
+      - "launch_rviz:=false"
+      - "timeout:=${SILS_SS2_TIMEOUT:-60}"
+
+  # --- simulator WITH a .xosc ----------------------------------------------
+  # scenario_test_runner is the documented entry point. Put scenarios in
+  # scenarios/ss2/ and pass a path relative to /scenarios -- or point
+  # SILS_SS2_SCENARIO at an ABSOLUTE in-image path to use an upstream sample
+  # without mounting anything.
+  #
+  # THIS IS ALSO THE B1-2 TEST BED, and the only one available.
+  #
+  # The question B1-2 has left is whether an EgoEntity can exist without
+  # Autoware -- because EgoEntity is what brings the vehicle model and the
+  # AutowareUniverse command adapter into simple_sensor_simulator
+  # (docs/sils/evidence/ss2-concealer-survey-2026-08-07.md).
+  #
+  # cpp_mock_scenarios CANNOT answer it: upstream's mock/cpp_mock_scenarios/
+  # CMakeLists.txt leaves the only EgoEntity scenario out of the build --
+  #     # The scenarios recorded in this directory are commented out as they
+  #     # require EgoEntity and cannot be used for CI.
+  #     # add_subdirectory(src/respawn_ego)
+  # -- so every scenario that IS built spawns a VehicleEntity, even the ones
+  # that name it "ego". That is why our probe saw 'ego'(type=1).
+  #
+  # openscenario_interpreter (this service) does spawn a real EgoEntity, and
+  # its launch file takes launch_autoware. Hence the default below.
+  ss2-scenario:
+    <<: *ss2-common
+    container_name: sils-ss2-scenario
+    volumes:
+      - ../../scenarios/ss2:/scenarios:ro
+      - ../../runs/ss2-scenario:/out
+      # Bind-mounted rather than only baked in, so editing the wrapper does not need an
+      # image rebuild. The Dockerfile COPYs it too -- that copy is what a machine without
+      # this checkout gets.
+      - ../../tools/sils/ss2/stage_and_launch.sh:/opt/sils/stage_and_launch.sh:ro
+    # NOT `ros2 launch` directly. openscenario_preprocessor rewrites the scenario IN PLACE
+    # (moves the original to a sibling raw/, saves the parameter-substituted one back), so
+    # a scenario on the :ro mount above makes it throw EROFS -- and scenario_test_runner.py
+    # never reads Load's has_succeeded, so the whole run just exits after ~6 s saying
+    # nothing at all. The wrapper copies the scenario to /out/staging first.
+    # docs/sils/evidence/ss2-clock-survey-2026-08-11.md §4.
+    command:
+      - /opt/sils/stage_and_launch.sh
+      - "scenario:=${SILS_SS2_SCENARIO:-/scenarios/sample.xosc}"
+      # DEFAULT false, unlike upstream's true.
+      #
+      # We have no Autoware image, and with `true` the EgoEntity constructor
+      # runs concealer::ros2_launch() -> execvp of `ros2 launch autoware_launch
+      # ...`, which fails or hangs here for a reason unrelated to what is being
+      # measured. Flip it to `true` only once a real Autoware is present
+      # (stage 3 / B-full).
+      - "launch_autoware:=${SILS_SS2_LAUNCH_AUTOWARE:-false}"
+      - "launch_rviz:=false"
+      - "output_directory:=/out"
+      # 20 Hz, NOT upstream's 30. The simulated step is realtime_factor / frame_rate
+      # (SimulationClock::getStepTime), so this is 50 ms -- the same step every SiLS
+      # measurement so far has been taken at, because cpp_mock_scenarios defaults to 20
+      # and that is what stage 1's V3 measured. Upstream's own CI also overrides to 20
+      # (.github/workflows/BuildAndRun.yaml). Leaving the runner's 30 Hz default would
+      # silently change the step between stage 1 and stage 2 and make the traces
+      # incomparable for no gain.
+      - "global_frame_rate:=${SILS_SS2_FRAME_RATE:-20}"
+      # Scenario wall-clock budget. The default 180 s is right for a scenario that is
+      # meant to finish; for a handshake check nothing needs that long.
+      - "global_timeout:=${SILS_SS2_GLOBAL_TIMEOUT:-180}"
+      # OFF, unlike upstream's default true.
+      #
+      # rosbag2 records EVERY topic on the domain, and domain 42 is shared with the whole
+      # MMF stack (/mmf/lifecyclemgr, /mmf/otamanager, ...) plus rosbridge. Every topic
+      # whose type is not built into this image produces a WARN carrying the entire ament
+      # prefix path -- thousands of characters each, re-emitted on every rescan. On the
+      # first B1-4 run that buried the scenario's own output completely: 30 lines of tail
+      # were 30 lines of rosbag2. The bag would also be wrong data (another project's
+      # topics) that nothing consumes.
+      #
+      # Turn it back on deliberately when a bag is the point, and give it a topic filter.
+      - "record:=${SILS_SS2_RECORD:-false}"
+      # The interpreter <-> simple_sensor_simulator ZeroMQ port. Every service here runs
+      # network_mode: host, so this is the HOST's port -- and a simulator left over from a
+      # killed run keeps holding it. The next interpreter then connects to the OLD
+      # simulator: ESTABLISHED socket, healthy-looking `ss` output, two processes talking
+      # about different maps. It hangs with no error anywhere.
+      - "port:=${SILS_SS2_ZMQ_PORT:-5555}"
+      # ★ THIS IS WHAT DECIDES WHETHER OUR ACCELERATION COMMAND IS READ AT ALL.
+      #
+      # simple_sensor_simulator picks its vehicle model with
+      #   getParameter<std::string>("vehicle_model_type", "IDEAL_STEER_VEL")
+      # and IDEAL_STEER_VEL feeds `input(0) = control_command.longitudinal.velocity`.
+      # Our canonical VehicleControl carries acceleration only, so we publish velocity
+      # 0.0 -- which that model reads as "stop". The car then sits perfectly still while
+      # every counter in the pipeline reports full health.
+      #
+      # Nobody sets vehicle_model_type directly. The launch derives it from
+      #   <vehicle_model>_description/config/simulator_model.param.yaml
+      # and skips that entirely when vehicle_model is empty, which is the default here and
+      # was our first stage-2 result: a stationary ego with 755 commands delivered.
+      #
+      # Left EMPTY by default so the B1-4 handshake run keeps reproducing exactly.
+      # run_closed_loop.sh sets it, and verifies the model it resolves to.
+      - "vehicle_model:=${SILS_SS2_VEHICLE_MODEL:-}"
+
+  # --- the adapter (B2-1) ---------------------------------------------------
+  # SS_v2 /entity/status (ROS 2) -> canonical EgoState on sils/ego/state (DDS).
+  # Stage 1: state only, open loop -- no control feedback to the simulator.
+  #
+  # Needs its own image (docker/sils/build-ss2-adapter.sh); it is NOT in sils-ss2:humble.
+  #
+  # VISS_DDS_DOMAIN_ID must equal the vECU's, and ROS_DOMAIN_ID must equal the
+  # simulator's. They are the same value here because SS_v2 and the vECU currently share
+  # a domain -- split them only if you also split the adapter's two sides.
+  ss2-adapter:
+    <<: *ss2-common
+    image: ${SILS_SS2_ADAPTER_IMAGE:-sils-ss2-adapter:humble}
+    container_name: sils-ss2-adapter
+    environment:
+      <<: *ss2-env
+      VISS_DDS_DOMAIN_ID: "${SILS_DOMAIN:-0}"
+      SILS_RUN_ID: "${SILS_RUN_ID:-ss2-wire}"
+      # Must track the vECU's setting: a TRANSIENT_LOCAL reader against a VOLATILE
+      # writer does not match, and RxO mismatch is silent.
+      SILS_DURABILITY: "${SILS_DURABILITY:-transient-local}"
+      # Empty = pick the first EGO-typed entity. Set when a scenario has more than one.
+      SS2_EGO_NAME: "${SILS_SS2_EGO_NAME:-}"
+    command:
+      - ros2
+      - run
+      - ss2_ego_bridge
+      - ss2_ego_bridge
+      - --ros-args
+      # ⚠ THE TOPIC NAME DEPENDS ON WHICH LAUNCHER IS RUNNING, and both are ours.
+      #
+      # traffic_simulator publishes "entity/status" as a RELATIVE name
+      # (entity_manager.hpp:70), so it resolves against the publishing node's namespace:
+      #
+      #   mock_test.launch.py          cpp_scenario_node has NO namespace
+      #                                -> /entity/status              (stage 1, ss2-mock)
+      #   scenario_test_runner.launch  openscenario_interpreter_node is namespace=simulation
+      #                                -> /simulation/entity/status   (stage 2, ss2-scenario)
+      #
+      # The default stays the stage-1 name because that verdict is a published artefact and
+      # must keep reproducing. run_closed_loop.sh sets the namespaced one.
+      # Getting this wrong is SILENT: the subscription simply never matches.
+      - -p
+      - "ss2_topic:=${SILS_SS2_STATE_TOPIC:-/entity/status}"
+
+  # --- the return path (B2-3) ----------------------------------------------
+  # Canonical VehicleControl (DDS) -> /control/command/control_cmd + gear_cmd (ROS 2).
+  # This is what CLOSES THE LOOP: until it runs, the ego does not move no matter what the
+  # vECU computes, because nothing feeds its command back to the vehicle model.
+  #
+  # Same image as ss2-adapter -- one package, two executables (adapters/ss2/CMakeLists.txt).
+  #
+  # Needs NO Autoware. concealer's data plane (AutowareUniverse) is a plain topic->struct
+  # adapter with no handshake, so these two topics move the ego whether the lifecycle side
+  # is autoware_stub (stage 2) or a real Autoware (stage 3).
+  ss2-control:
+    <<: *ss2-common
+    image: ${SILS_SS2_ADAPTER_IMAGE:-sils-ss2-adapter:humble}
+    container_name: sils-ss2-control
+    environment:
+      <<: *ss2-env
+      # Must equal the vECU's: this reads the vECU's `out` channel.
+      VISS_DDS_DOMAIN_ID: "${SILS_DOMAIN:-0}"
+    command:
+      - ros2
+      - run
+      - ss2_ego_bridge
+      - ss2_control_bridge
+
+  # --- manual ---------------------------------------------------------------
+  ss2-shell:
+    <<: *ss2-common
+    container_name: sils-ss2-shell
+    stdin_open: true
+    tty: true
+    volumes:
+      - ../../scenarios/ss2:/scenarios:ro
+      - ../../runs/ss2-probe:/out
+    command: ["bash"]

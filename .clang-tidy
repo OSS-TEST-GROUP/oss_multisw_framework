@@ -1,4 +1,16 @@
 ---
+# bugprone-easily-swappable-parameters 를 뺀 이유 (P1 → 제외)
+#
+# 이름은 bugprone-* 이지만 실제 결함이 아니라 "같은 타입 인자가 인접해 있어 순서를
+# 바꿔 넣기 쉽다" 는 설계 지적이다. 두 모듈에서 15건이 나왔는데 (P1 43건 중 최대
+# 덩어리), 고치려면 함수 시그니처와 모든 호출부를 바꾸거나 인자마다 strong typedef
+# 를 도입해야 한다. 이 코드베이스는 (name, image, deploy_file, namespace) 처럼
+# 문자열 여러 개를 받는 생성자가 도메인상 자연스러워서, 검사를 켜 두면 새 함수가
+# 생길 때마다 계속 잡힌다.
+#
+# bugprone-* 는 WarningsAsErrors 이므로 남겨두면 실제 결함(narrowing, DeadStores,
+# branch-clone)이 이 소음에 묻힌다. 그래서 켜 두되 무시하는 대신 아예 제외한다.
+# 되살리려면 아래 한 줄을 지우면 된다.
 Checks: >
   modernize-use-override,
   modernize-use-nullptr,
@@ -7,6 +19,7 @@ Checks: >
   readability-*,
   performance-*,
   bugprone-*,
+  -bugprone-easily-swappable-parameters,
   clang-analyzer-*,
   misc-*,
   cppcoreguidelines-*,
@@ -28,8 +41,63 @@ CheckOptions:
     value:           'NULL'
   - key:             modernize-use-override.IgnoreDestructors
     value:           '1'
+  # ── 명명 규칙 ──────────────────────────────────────────────────────────
+  # 아래 값들은 이 코드베이스의 실제 관례를 세어서 맞춘 것이다 (service/ 기준).
+  # 규칙과 코드가 어긋날 때 어느 쪽이 틀렸는지는 다수결로 판단했다.
+  #
+  #   함수      PascalCase 245개 / 반례 0    → 설정이 틀렸었다 (camelBack)
+  #   멤버변수  lower_case_ 831개 / 반례 4   → 접미사 '_' 규칙이 빠져 있었다
+  #   지역변수  lower_case 3024개 / 반례 612 → 설정이 맞다. 반례를 고친다
+  #
+  # 함수를 camelBack 으로 강제하면 245개 전부가 걸린다. 이건 프레임워크의
+  # 공개 API 이름이라 바꿀 수 없고, 바꿔서 얻을 것도 없다.
+  - key:             readability-identifier-naming.FunctionCase
+    value:           CamelCase
   - key:             readability-identifier-naming.VariableCase
     value:           lower_case
-  - key:             readability-identifier-naming.FunctionCase
-    value:           camelBack
+  # 멤버는 lower_case 에 '_' 접미사. private/protected/public 을 따로 주지 않으면
+  # MemberSuffix 만으로는 private 멤버에 적용되지 않는다.
+  - key:             readability-identifier-naming.MemberSuffix
+    value:           '_'
+  - key:             readability-identifier-naming.PrivateMemberSuffix
+    value:           '_'
+  - key:             readability-identifier-naming.ProtectedMemberSuffix
+    value:           '_'
+  # 상수는 두 갈래로 쓰이고 있다: 파일 스코프 k 접두사(kPollIntervalMs)와
+  # 전역 UPPER_CASE(ADSW_ROS2_CONTAINER_NAME). 둘 다 인정한다.
+  - key:             readability-identifier-naming.StaticConstantCase
+    value:           CamelCase
+  - key:             readability-identifier-naming.StaticConstantPrefix
+    value:           'k'
+  - key:             readability-identifier-naming.GlobalConstantCase
+    value:           UPPER_CASE
+  # constexpr 은 관례가 갈린다: kCamelCase 9개 vs lower_case 14개.
+  # 다수결로 lower_case 를 택했지만 사실상 동률이라, 팀이 한쪽으로 정하면
+  # 그때 바꾸는 게 맞다. (k 접두사로 정하면 아래 두 줄을
+  #   ConstexprVariableCase: CamelCase / ConstexprVariablePrefix: 'k' 로)
+  - key:             readability-identifier-naming.ConstexprVariableCase
+    value:           lower_case
+  # ── 짧은 이름 ────────────────────────────────────────────────────────────
+  # 관용적으로 뜻이 고정된 것만 허용한다. it=iterator, os=ostream, lk=lock_guard,
+  # kv=key-value pair, fp=FILE*, ec=error_code, ss=stringstream, cb=callback,
+  # ep=endpoint(이 도메인의 1급 개념), ns=namespace.
+  # v/t/c/s/p/a/r/e/n 처럼 뜻이 없는 이름은 허용하지 않는다 — 그건 고쳐야 한다.
+  - key:             readability-identifier-length.IgnoredVariableNames
+    value:           '^(it|os|lk|kv|fp|ec|ss|cb|ep|ns)$'
+  - key:             readability-identifier-length.IgnoredParameterNames
+    value:           '^(it|os|lk|kv|fp|ec|ss|cb|ep|ns)$'
+  # ── 포인터·정수의 bool 변환 ──────────────────────────────────────────────
+  # 88건 중 81건이 포인터→bool 이다 (ADSWManager*, FILE*, DataWriter*,
+  # DDS 메시지 포인터 …). `if (ptr)` 는 C++ 의 관용구지 결함이 아니고,
+  # 전부 `if (ptr != nullptr)` 로 바꿔도 읽기 쉬워지지 않는다.
+  # 정수→bool 은 7건뿐인데 이쪽은 실수하기 쉬우므로 계속 잡는다.
+  - key:             readability-implicit-bool-conversion.AllowPointerConditions
+    value:           '1'
+  # ── 소멸자만 있는 클래스의 Rule of Five ──────────────────────────────────
+  # 94건 중 93건이 "소멸자는 있는데 복사/이동 4종이 없다" 이고, 그중 87곳이
+  # 몸통이 빈 `~X() {}` 다. 이걸 `= default` 로 바꾸면 (의미는 동일)
+  # 아래 옵션이 걸려 검사에서 빠진다. 인터페이스 클래스에 쓰지도 않을
+  # 복사/이동 4종을 나열하는 건 잡음만 늘린다.
+  - key:             cppcoreguidelines-special-member-functions.AllowSoleDefaultDtor
+    value:           '1'
 

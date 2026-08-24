@@ -1,14 +1,15 @@
 #include "GetServiceStateEndPoint.hpp"
 
+#include <utility>
+
 #include "lifecycle/GetServiceStateRequest.hpp"
 #include "logger/Log.hpp"
 #include "manager/LifecycleFactory.hpp"
 
 namespace lifecycle_manager {
 
-
 GetServiceStateEndPoint::GetServiceStateEndPoint(MessageType msgtype, std::string topic, Callback cb)
-    : DDSMessageEndPoint(topic), on_data_cb_(std::move(cb)){
+    : DDSMessageEndPoint(std::move(topic)), on_data_cb_(std::move(cb)) {
 
     if (msgtype == MessageType::GET_SERVICE_STATE_REQUEST){
         SetTypeSupport(std::make_shared<TypeSupport>(new GetServiceStateRequestPubSubType()));
@@ -24,7 +25,7 @@ GetServiceStateEndPoint::~GetServiceStateEndPoint() {
 
 void GetServiceStateEndPoint::OnDataAvailable(){
 
-    if (Read<GetServiceStateResponse>(resp_) == true){
+    if (Read<GetServiceStateResponse>(resp_)) {
 
         // Same phantom-publisher guard as the other response handlers. A
         // stray GetServiceStateResponse with NOT_RUNNING flips lifecycle_mgr's

@@ -2,11 +2,22 @@
 #include <cstdlib>  // for setenv, unsetenv
 #include <fstream>  // for creating test files
 #include <cstdio>   // for std::remove
+#include <filesystem>  // Save/Load 왕복 테스트의 임시 디렉토리
+#include <map>
+#include <set>
+#include <utility>
+#include <yaml-cpp/yaml.h>  // 저장된 파일을 직접 열어 검증한다
 // Unit tests for DDSTransmitter class using Google Test and Google Mock
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
 #include "service/ServiceRegistry.hpp"
+// ServiceRegistry.hpp 는 GetServiceStateRequest 만 끌어온다. Write() 로
+// 넘어온 요청 내용물을 검사하려면 이쪽도 필요하다.
+#include "lifecycle/UpdateServiceListRequest.hpp"
+#include "service/Container.hpp"
+#include "control/ContainerController.hpp"
+#include "service/TypeConvert.hpp"
 
 #include "mock/MockADSWManager.hpp"
 #include "mock/MockService.hpp"
@@ -1395,6 +1406,688 @@ TEST_F(ServiceRegistryTest, ProcessUpdateServiceListRequest_MultipleServices_TC0
     Mock_ADSWManager = nullptr;
     Mock_DDSTransmitter = nullptr;
     Mock_DDSMessageEndpoint = nullptr;
+}
+
+// ============================================================================
+// Save() → LoadServiceSaved() 왕복
+//
+// 위쪽 TC010/TC011/TC045 도 Save/LoadServiceSaved 를 부르긴 하는데 전부
+// `EXPECT_TRUE(result || !result)` 라 아무것도 검증하지 않고, 더 중요하게는
+// 컨테이너 메타데이터 직렬화 블록에 **도달하지 못한다**:
+//
+//   - Save() 는 cc->GetContainer(group) 이 널이 아닐 때만 image/container-type/
+//     deploy-filepath/extra_args/command_args 를 쓴다. 기존 픽스처는
+//     MockContainerController 의 GetContainer 에 기본값이 없어 항상 nullptr 다.
+//   - 진짜 Container 를 물려주려 해도 예전 MockContainer.hpp 는 Mock_Container
+//     를 무조건 역참조했고 이 저장소의 어떤 테스트도 그걸 세팅하지 않아서
+//     널 역참조로 죽었다. (그래서 심에 널 폴백을 넣었다.)
+//
+// 결과적으로 Save 의 컨테이너 메타 블록과 LoadServiceSaved 의 extra_args/
+// command_args 루프, enum 문자열 파싱 분기가 전부 실행 0회였다.
+//
+// Mock_Service / Mock_Container 를 세팅하지 않는 게 이 픽스처의 핵심이다.
+// 둘 다 널이면 링크 심이 생성자가 채운 실제 멤버를 그대로 돌려주므로
+// 진짜 왕복을 검증할 수 있다.
+// ============================================================================
+
+class RegistrySaveRoundTripTest : public ::testing::Test {
+  protected:
+    void SetUp() override {
+        Mock_Logger = new MockLogger();
+        ON_CALL(*Mock_Logger, Get()).WillByDefault(Return(Mock_Logger));
+
+        // 실제 필드를 쓰게 두 심 모두 널로 둔다.
+        Mock_Service = nullptr;
+        Mock_Container = nullptr;
+
+        mock_adsw_manager_ = std::make_shared<MockADSWManager>();
+        mock_service_controller_ = std::make_shared<MockROSServiceController>();
+        mock_container_controller_ = std::make_shared<MockContainerController>();
+        ON_CALL(*mock_adsw_manager_, GetServiceController())
+            .WillByDefault(Return(mock_service_controller_));
+        ON_CALL(*mock_service_controller_, GetContainer())
+            .WillByDefault(Return(mock_container_controller_));
+        ON_CALL(*mock_adsw_manager_, GetTopic(_)).WillByDefault(Return("mock_topic"));
+        Mock_ADSWManager = mock_adsw_manager_.get();
+        Mock_ROSServiceController = mock_service_controller_.get();
+        Mock_ContainerController = mock_container_controller_.get();
+        ADSWManager::SetShared(mock_adsw_manager_);
+
+        // Save() 가 쓰는 yaml_path_ 는 생성자가 아니라 LoadServiceList() 가
+        // SAVED_REGISTRY_BACKUP 을 읽어 확정한다. 그래서 env 를 먼저 세팅하고
+        // LoadServiceList() 를 한 번 불러줘야 Save() 가 목적지를 갖는다.
+        // (안 부르면 yaml_path_ 가 빈 문자열이라 Save() 가 조용히 false 를 낸다.)
+        old_env_ = std::getenv("SAVED_REGISTRY_BACKUP")
+                       ? std::string(std::getenv("SAVED_REGISTRY_BACKUP")) : std::string();
+        dir_ = "/tmp/adsw_reg_roundtrip";
+        std::filesystem::create_directories(dir_);
+        saved_path_ = dir_ + "/saved-service-list.yaml";
+        std::remove(saved_path_.c_str());
+        setenv("SAVED_REGISTRY_BACKUP", dir_.c_str(), 1);
+
+        registry_ = std::make_unique<ServiceRegistry>();
+        // 두 후보 파일이 다 없으니 false 를 낸다 — 그게 정상이고, 여기서
+        // 필요한 건 yaml_path_ 확정뿐이다. 폴백 경로도 함께 지나간다.
+        EXPECT_FALSE(registry_->LoadServiceList());
+    }
+
+    void TearDown() override {
+        registry_.reset();
+        std::remove(saved_path_.c_str());
+        if (old_env_.empty()) unsetenv("SAVED_REGISTRY_BACKUP");
+        else setenv("SAVED_REGISTRY_BACKUP", old_env_.c_str(), 1);
+
+        ADSWManager::SetShared(nullptr);
+        Mock_ADSWManager = nullptr;
+        Mock_ROSServiceController = nullptr;
+        Mock_ContainerController = nullptr;
+        mock_adsw_manager_.reset();
+        mock_service_controller_.reset();
+        mock_container_controller_.reset();
+        delete Mock_Logger;
+        Mock_Logger = nullptr;
+    }
+
+    // 그룹 이름으로 조회되는 진짜 Container 를 등록한다.
+    std::shared_ptr<Container> RegisterContainer(
+            const std::string& group, const std::string& image,
+            const std::string& deploy_file, ContainerType type,
+            const std::vector<std::string>& extra = {},
+            const std::vector<std::string>& command = {}) {
+        auto c = std::make_shared<Container>(group, image, deploy_file, "ns-" + group, type);
+        c->SetExtraArgs(extra);
+        c->SetCommandArgs(command);
+        ON_CALL(*mock_container_controller_, GetContainer(group)).WillByDefault(Return(c));
+        containers_.push_back(c);
+        return c;
+    }
+
+    std::shared_ptr<Service> AddSvc(const std::string& group, const std::string& name,
+                                    ServiceType type, RecoveryPolicy policy, bool enabled) {
+        auto s = std::make_shared<Service>(name, type, policy, enabled);
+        s->SetPackage("pkg_" + name);
+        s->SetLaunchFile("lf_" + name + ".launch.py");
+        registry_->AddService(s, group);
+        return s;
+    }
+
+    // Save 한 뒤 두 번째 레지스트리로 되읽는다. LoadServiceSaved 가 넘기는
+    // Container 를 붙잡아 컨테이너 메타데이터 왕복을 확인한다.
+    std::unique_ptr<ServiceRegistry> SaveAndReload(
+            std::vector<std::shared_ptr<Container>>* loaded = nullptr) {
+        EXPECT_TRUE(registry_->Save());
+        auto reloaded = std::make_unique<ServiceRegistry>();
+        ON_CALL(*mock_container_controller_, AddContainer(_))
+            .WillByDefault([loaded](std::shared_ptr<Container> c) {
+                if (loaded) loaded->push_back(c);
+                return true;
+            });
+        EXPECT_TRUE(reloaded->LoadServiceSaved(saved_path_));
+        return reloaded;
+    }
+
+    std::unique_ptr<ServiceRegistry> registry_;
+    std::shared_ptr<MockADSWManager> mock_adsw_manager_;
+    std::shared_ptr<MockROSServiceController> mock_service_controller_;
+    std::shared_ptr<MockContainerController> mock_container_controller_;
+    std::vector<std::shared_ptr<Container>> containers_;
+    std::string dir_, saved_path_, old_env_;
+};
+
+TEST_F(RegistrySaveRoundTripTest, SaveWritesContainerMetadata_TC070) {
+    RegisterContainer("grp", "repo/img:1.2", "/etc/adsw/grp.yaml", ContainerType::DOCKER,
+                      {"--network", "host"}, {"/bin/run.sh", "--role=perception"});
+    AddSvc("grp", "svcA", ServiceType::NORMAL, RecoveryPolicy::ALWAYS, true);
+
+    ASSERT_TRUE(registry_->Save());
+
+    YAML::Node cfg = YAML::LoadFile(saved_path_);
+    ASSERT_TRUE(cfg["specs"] && cfg["specs"].IsSequence());
+    auto ndc = cfg["specs"][0]["containers"][0];
+    EXPECT_EQ(ndc["name"].as<std::string>(), "grp");
+    EXPECT_EQ(ndc["image"].as<std::string>(), "repo/img:1.2");
+    EXPECT_EQ(ndc["container-type"].as<std::string>(), "docker");
+    EXPECT_EQ(ndc["deploy-filepath"].as<std::string>(), "/etc/adsw/grp.yaml");
+    ASSERT_TRUE(ndc["extra_args"].IsSequence());
+    EXPECT_EQ(ndc["extra_args"].size(), 2u);
+    EXPECT_EQ(ndc["extra_args"][1].as<std::string>(), "host");
+    ASSERT_TRUE(ndc["command_args"].IsSequence());
+    EXPECT_EQ(ndc["command_args"][1].as<std::string>(), "--role=perception");
+}
+
+TEST_F(RegistrySaveRoundTripTest, ContainerMetadataRoundTrips_TC071) {
+    RegisterContainer("grp", "repo/img:1.2", "/etc/adsw/grp.yaml", ContainerType::DOCKER,
+                      {"-e", "FOO=1"}, {"/bin/run.sh"});
+    AddSvc("grp", "svcA", ServiceType::NORMAL, RecoveryPolicy::ALWAYS, true);
+
+    std::vector<std::shared_ptr<Container>> loaded;
+    SaveAndReload(&loaded);
+
+    ASSERT_EQ(loaded.size(), 1u);
+    EXPECT_EQ(loaded[0]->GetName(), "grp");
+    EXPECT_EQ(loaded[0]->GetImage(), "repo/img:1.2");
+    EXPECT_EQ(loaded[0]->GetDeployFile(), "/etc/adsw/grp.yaml");
+    EXPECT_EQ(loaded[0]->GetContainerType(), ContainerType::DOCKER);
+    EXPECT_EQ(loaded[0]->GetExtraArgs(), (std::vector<std::string>{"-e", "FOO=1"}));
+    EXPECT_EQ(loaded[0]->GetCommandArgs(), (std::vector<std::string>{"/bin/run.sh"}));
+}
+
+TEST_F(RegistrySaveRoundTripTest, ContainerTypeK3sRoundTrips_TC072) {
+    RegisterContainer("grp", "img", "", ContainerType::K3S);
+    AddSvc("grp", "svcA", ServiceType::NORMAL, RecoveryPolicy::MANUAL, true);
+
+    std::vector<std::shared_ptr<Container>> loaded;
+    SaveAndReload(&loaded);
+
+    ASSERT_EQ(loaded.size(), 1u);
+    EXPECT_EQ(loaded[0]->GetContainerType(), ContainerType::K3S);
+    // deploy-filepath 가 비면 Save 가 키 자체를 쓰지 않는다.
+    YAML::Node cfg = YAML::LoadFile(saved_path_);
+    EXPECT_FALSE(cfg["specs"][0]["containers"][0]["deploy-filepath"]);
+}
+
+TEST_F(RegistrySaveRoundTripTest, ContainerTypeComposeRoundTrips_TC073) {
+    RegisterContainer("grp", "img", "/tmp/compose.yaml", ContainerType::DOCKER_COMPOSE);
+    AddSvc("grp", "svcA", ServiceType::NORMAL, RecoveryPolicy::MANUAL, true);
+
+    std::vector<std::shared_ptr<Container>> loaded;
+    SaveAndReload(&loaded);
+
+    ASSERT_EQ(loaded.size(), 1u);
+    EXPECT_EQ(loaded[0]->GetContainerType(), ContainerType::DOCKER_COMPOSE);
+}
+
+TEST_F(RegistrySaveRoundTripTest, EmptyImageSkipsContainerCreationOnLoad_TC074) {
+    // image 가 비면 Save 는 image 키를 생략하고, Load 는
+    // `!groupname.empty() && !image.empty()` 에서 걸려 컨테이너를 만들지 않는다.
+    // 그래도 그룹과 서비스는 살아야 한다.
+    RegisterContainer("grp", "", "/tmp/d.yaml", ContainerType::DOCKER);
+    AddSvc("grp", "svcA", ServiceType::NORMAL, RecoveryPolicy::MANUAL, true);
+
+    std::vector<std::shared_ptr<Container>> loaded;
+    auto reloaded = SaveAndReload(&loaded);
+
+    EXPECT_TRUE(loaded.empty());
+    EXPECT_TRUE(reloaded->IsGroup("grp"));
+    EXPECT_NE(reloaded->GetService("svcA"), nullptr);
+}
+
+TEST_F(RegistrySaveRoundTripTest, NoContainerRegisteredStillSavesServices_TC075) {
+    // GetContainer 가 널이면(= 컨테이너 등록 없음) 메타데이터 블록을 통째로
+    // 건너뛴다. 서비스 목록만 왕복해야 한다.
+    AddSvc("grp", "svcA", ServiceType::NORMAL, RecoveryPolicy::ALWAYS, true);
+
+    std::vector<std::shared_ptr<Container>> loaded;
+    auto reloaded = SaveAndReload(&loaded);
+
+    EXPECT_TRUE(loaded.empty());
+    auto s = reloaded->GetService("svcA");
+    ASSERT_NE(s, nullptr);
+    EXPECT_EQ(s->GetPackage(), "pkg_svcA");
+}
+
+TEST_F(RegistrySaveRoundTripTest, ServiceTypeRoundTrips_TC076) {
+    RegisterContainer("grp", "img", "", ContainerType::DOCKER);
+    AddSvc("grp", "normalSvc", ServiceType::NORMAL, RecoveryPolicy::MANUAL, true);
+    AddSvc("grp", "oneshotSvc", ServiceType::ONESHOT, RecoveryPolicy::MANUAL, true);
+
+    auto reloaded = SaveAndReload();
+
+    ASSERT_NE(reloaded->GetService("normalSvc"), nullptr);
+    ASSERT_NE(reloaded->GetService("oneshotSvc"), nullptr);
+    EXPECT_EQ(reloaded->GetService("normalSvc")->GetServiceType(), ServiceType::NORMAL);
+    EXPECT_EQ(reloaded->GetService("oneshotSvc")->GetServiceType(), ServiceType::ONESHOT);
+}
+
+TEST_F(RegistrySaveRoundTripTest, EveryRecoveryPolicyRoundTrips_TC077) {
+    // Save 가 정수 enum 을 쓰던 시절엔 Load 의 문자열 비교가 전부 빗나가
+    // 조용히 기본값으로 떨어졌다(주석에 적힌 폭주 재시작 사고). 다섯 정책이
+    // 모두 문자열로 왕복하는지 한 번에 고정한다.
+    RegisterContainer("grp", "img", "", ContainerType::DOCKER);
+    const std::vector<std::pair<std::string, RecoveryPolicy>> cases = {
+        {"always",   RecoveryPolicy::ALWAYS},
+        {"onfail",   RecoveryPolicy::ON_FAILURE},
+        {"onsucc",   RecoveryPolicy::ON_SUCCESS},
+        {"onnotres", RecoveryPolicy::ON_NOT_RESPONDING},
+        {"manual",   RecoveryPolicy::MANUAL},
+    };
+    for (const auto& kv : cases) {
+        AddSvc("grp", kv.first, ServiceType::NORMAL, kv.second, true);
+    }
+
+    auto reloaded = SaveAndReload();
+
+    for (const auto& kv : cases) {
+        auto s = reloaded->GetService(kv.first);
+        ASSERT_NE(s, nullptr) << kv.first;
+        EXPECT_EQ(s->GetRecoveryPolicy(), kv.second) << kv.first;
+    }
+}
+
+TEST_F(RegistrySaveRoundTripTest, RDefaultSavesAsManual_TC078) {
+    // R_DEFAULT 와 MANUAL 은 같은 "MANUAL" 문자열로 떨어진다 (의도된 동작 —
+    // recovery_to_str 이 두 라벨을 묶어놨다). 되읽으면 MANUAL 이 된다.
+    RegisterContainer("grp", "img", "", ContainerType::DOCKER);
+    AddSvc("grp", "defSvc", ServiceType::NORMAL, RecoveryPolicy::R_DEFAULT, true);
+
+    auto reloaded = SaveAndReload();
+
+    auto s = reloaded->GetService("defSvc");
+    ASSERT_NE(s, nullptr);
+    EXPECT_EQ(s->GetRecoveryPolicy(), RecoveryPolicy::MANUAL);
+}
+
+TEST_F(RegistrySaveRoundTripTest, DisabledFlagRoundTrips_TC079) {
+    RegisterContainer("grp", "img", "", ContainerType::DOCKER);
+    AddSvc("grp", "onSvc", ServiceType::NORMAL, RecoveryPolicy::MANUAL, true);
+    AddSvc("grp", "offSvc", ServiceType::NORMAL, RecoveryPolicy::MANUAL, false);
+
+    auto reloaded = SaveAndReload();
+
+    ASSERT_NE(reloaded->GetService("onSvc"), nullptr);
+    ASSERT_NE(reloaded->GetService("offSvc"), nullptr);
+    EXPECT_TRUE(reloaded->GetService("onSvc")->IsEnabled());
+    EXPECT_FALSE(reloaded->GetService("offSvc")->IsEnabled());
+}
+
+TEST_F(RegistrySaveRoundTripTest, MatchPatternAndExecTypeRoundTrip_TC080) {
+    RegisterContainer("grp", "img", "", ContainerType::DOCKER);
+    auto direct = AddSvc("grp", "binSvc", ServiceType::NORMAL, RecoveryPolicy::MANUAL, true);
+    direct->SetDirectExec(true);
+    direct->SetProcessMatchPattern("bin/worker --daemon");
+    auto workload = AddSvc("grp", "ctnSvc", ServiceType::NORMAL, RecoveryPolicy::MANUAL, true);
+    workload->SetContainerWorkload(true);
+    AddSvc("grp", "plainSvc", ServiceType::NORMAL, RecoveryPolicy::MANUAL, true);
+
+    auto reloaded = SaveAndReload();
+
+    auto b = reloaded->GetService("binSvc");
+    ASSERT_NE(b, nullptr);
+    EXPECT_TRUE(b->IsDirectExec());
+    EXPECT_FALSE(b->IsContainerWorkload());
+    EXPECT_EQ(b->GetProcessMatchPattern(), "bin/worker --daemon");
+
+    auto c = reloaded->GetService("ctnSvc");
+    ASSERT_NE(c, nullptr);
+    EXPECT_TRUE(c->IsContainerWorkload());
+    EXPECT_FALSE(c->IsDirectExec());
+
+    // 아무 표시도 없는 서비스는 둘 다 꺼진 채로 와야 하고, match_pattern 키도
+    // 파일에 없어야 한다 (Save 가 빈 문자열이면 생략한다).
+    auto p = reloaded->GetService("plainSvc");
+    ASSERT_NE(p, nullptr);
+    EXPECT_FALSE(p->IsDirectExec());
+    EXPECT_FALSE(p->IsContainerWorkload());
+    EXPECT_EQ(p->GetProcessMatchPattern(), "");
+}
+
+TEST_F(RegistrySaveRoundTripTest, ContainerNameStampedOnLoad_TC081) {
+    // F013: 되읽은 서비스는 자기가 속한 컨테이너 이름을 달고 있어야 한다.
+    RegisterContainer("grp", "img", "", ContainerType::DOCKER);
+    AddSvc("grp", "svcA", ServiceType::NORMAL, RecoveryPolicy::MANUAL, true);
+
+    auto reloaded = SaveAndReload();
+
+    auto s = reloaded->GetService("svcA");
+    ASSERT_NE(s, nullptr);
+    EXPECT_EQ(s->GetContainerName(), "grp");
+}
+
+TEST_F(RegistrySaveRoundTripTest, MultipleGroupsRoundTrip_TC082) {
+    RegisterContainer("alpha", "img-a", "/tmp/a.yaml", ContainerType::DOCKER, {"-v", "/a:/a"});
+    RegisterContainer("beta", "img-b", "", ContainerType::K3S, {}, {"serve"});
+    AddSvc("alpha", "a1", ServiceType::NORMAL, RecoveryPolicy::ALWAYS, true);
+    AddSvc("alpha", "a2", ServiceType::ONESHOT, RecoveryPolicy::ON_FAILURE, false);
+    AddSvc("beta", "b1", ServiceType::NORMAL, RecoveryPolicy::ON_SUCCESS, true);
+
+    std::vector<std::shared_ptr<Container>> loaded;
+    auto reloaded = SaveAndReload(&loaded);
+
+    EXPECT_EQ(reloaded->GetServicesNum(), 3u);
+    EXPECT_EQ(reloaded->GetGroupNum(), 2u);
+    EXPECT_EQ(reloaded->GetServiceNumInGroup("alpha"), 2u);
+    EXPECT_EQ(reloaded->GetServiceNumInGroup("beta"), 1u);
+    ASSERT_EQ(loaded.size(), 2u);
+
+    std::map<std::string, std::shared_ptr<Container>> by_name;
+    for (const auto& c : loaded) by_name[c->GetName()] = c;
+    ASSERT_EQ(by_name.count("alpha"), 1u);
+    ASSERT_EQ(by_name.count("beta"), 1u);
+    EXPECT_EQ(by_name["alpha"]->GetExtraArgs(), (std::vector<std::string>{"-v", "/a:/a"}));
+    EXPECT_TRUE(by_name["alpha"]->GetCommandArgs().empty());
+    EXPECT_TRUE(by_name["beta"]->GetExtraArgs().empty());
+    EXPECT_EQ(by_name["beta"]->GetCommandArgs(), (std::vector<std::string>{"serve"}));
+    EXPECT_EQ(by_name["beta"]->GetContainerType(), ContainerType::K3S);
+}
+
+TEST_F(RegistrySaveRoundTripTest, PackageAndLaunchFileRoundTrip_TC083) {
+    RegisterContainer("grp", "img", "", ContainerType::DOCKER);
+    AddSvc("grp", "svcA", ServiceType::NORMAL, RecoveryPolicy::MANUAL, true);
+
+    auto reloaded = SaveAndReload();
+
+    auto s = reloaded->GetService("svcA");
+    ASSERT_NE(s, nullptr);
+    EXPECT_EQ(s->GetPackage(), "pkg_svcA");
+    EXPECT_EQ(s->GetLaunchFile(), "lf_svcA.launch.py");
+}
+
+// ── UpdateServiceListRequest 의 컨테이너 목록과 recovery 스냅샷 ─────────────
+//
+// 위 TC022/TC067 등은 전송 성공/실패만 본다. 그래서 (a) 컨테이너 목록을 싣는
+// F013 블록, (b) UpdateLastSentRecovery(), (c) HasRecoveryChanged() 의
+// "값이 바뀌었다" 쪽 분기, (d) GetServicesByGroup("") 의 전체 로스터 경로가
+// 전부 실행 0회였다. 넷 다 lifecycle_mgr 로 나가는 내용물을 좌우한다.
+
+class RegistryUpdateRequestTest : public RegistrySaveRoundTripTest {
+  protected:
+    void SetUp() override {
+        RegistrySaveRoundTripTest::SetUp();
+        endpoint_ = std::make_shared<MockDDSMessageEndpoint>();
+        transmitter_ = std::make_shared<MockDDSTransmitter>();
+        Mock_DDSTransmitter = transmitter_.get();
+        Mock_DDSMessageEndpoint = endpoint_.get();
+
+        ON_CALL(*mock_adsw_manager_, GetTransmitter()).WillByDefault(Return(transmitter_));
+        ON_CALL(*transmitter_, GetMessageEndpoint(_)).WillByDefault(Return(endpoint_));
+        // Write 로 넘어온 메시지를 붙잡아 내용물을 검사한다.
+        ON_CALL(*endpoint_, Write(_)).WillByDefault([this](void* p) {
+            sent_ = *static_cast<lifecyclemgr::UpdateServiceListRequest*>(p);
+            ++writes_;
+            return true;
+        });
+    }
+    void TearDown() override {
+        Mock_DDSTransmitter = nullptr;
+        Mock_DDSMessageEndpoint = nullptr;
+        endpoint_.reset();
+        transmitter_.reset();
+        RegistrySaveRoundTripTest::TearDown();
+    }
+
+    // ready_service_list_ 는 private 이고 세터가 없다. LoadServiceList(path) 가
+    // 성공해야 켜지므로 최소 스펙 파일을 하나 읽혀서 켠다.
+    void MakeReady() {
+        const std::string f = dir_ + "/spec.yaml";
+        std::ofstream ofs(f);
+        ofs << "spec:\n"
+               "  containers:\n"
+               "    - name: c1\n"
+               "      args:\n"
+               "        - \"ros2 launch pkg1 launch1.py\"\n";
+        ofs.close();
+        ASSERT_TRUE(registry_->LoadServiceList(f));
+    }
+
+    std::shared_ptr<MockDDSMessageEndpoint> endpoint_;
+    std::shared_ptr<MockDDSTransmitter> transmitter_;
+    lifecyclemgr::UpdateServiceListRequest sent_;
+    int writes_ = 0;
+};
+
+TEST_F(RegistryUpdateRequestTest, ContainerListIsShippedAlongsideServices_TC092) {
+    // F013: lifecycle_mgr 가 containers_ 맵을 채우려면 컨테이너가 요청에
+    // 실려야 한다. 안 실리면 lfc_monitor 에서 서비스가 컨테이너 밑으로
+    // 묶이지 않는다.
+    MakeReady();
+    auto c1 = std::make_shared<Container>("alpha", "img-a", "/tmp/a.yaml", "ns-a",
+                                          ContainerType::DOCKER);
+    auto c2 = std::make_shared<Container>("beta", "img-b", "", "ns-b", ContainerType::K3S);
+    ON_CALL(*mock_container_controller_, GetAllContainers())
+        .WillByDefault(Return(std::vector<std::shared_ptr<Container>>{c1, c2}));
+
+    ASSERT_TRUE(registry_->ProcessUpdateServiceListRequest());
+
+    ASSERT_EQ(writes_, 1);
+    ASSERT_EQ(sent_.container_list().size(), 2u);
+    std::map<std::string, const lifecyclemgr::Container*> by_name;
+    for (const auto& c : sent_.container_list()) by_name[c.name()] = &c;
+    ASSERT_EQ(by_name.count("alpha"), 1u);
+    EXPECT_EQ(by_name["alpha"]->image(), "img-a");
+    EXPECT_EQ(by_name["alpha"]->deploy_file(), "/tmp/a.yaml");
+    EXPECT_EQ(by_name["alpha"]->container_namespace(), "ns-a");
+    ASSERT_EQ(by_name.count("beta"), 1u);
+    EXPECT_EQ(by_name["beta"]->image(), "img-b");
+    EXPECT_TRUE(by_name["beta"]->deploy_file().empty());
+}
+
+TEST_F(RegistryUpdateRequestTest, NullContainerInListIsSkipped_TC093) {
+    MakeReady();
+    auto c1 = std::make_shared<Container>("alpha", "img-a", "", "ns", ContainerType::DOCKER);
+    ON_CALL(*mock_container_controller_, GetAllContainers())
+        .WillByDefault(Return(std::vector<std::shared_ptr<Container>>{nullptr, c1, nullptr}));
+
+    ASSERT_TRUE(registry_->ProcessUpdateServiceListRequest());
+
+    ASSERT_EQ(sent_.container_list().size(), 1u);
+    EXPECT_EQ(sent_.container_list()[0].name(), "alpha");
+}
+
+TEST_F(RegistryUpdateRequestTest, NoContainerControllerStillSends_TC094) {
+    MakeReady();
+    ON_CALL(*mock_service_controller_, GetContainer())
+        .WillByDefault(Return(std::shared_ptr<ContainerController>{}));
+
+    ASSERT_TRUE(registry_->ProcessUpdateServiceListRequest());
+
+    EXPECT_TRUE(sent_.container_list().empty());
+}
+
+TEST_F(RegistryUpdateRequestTest, UpdateLastSentRecoverySuppressesResend_TC095) {
+    // 스냅샷은 전송 시점이 아니라 lifecycle_mgr 의 응답 수신 시점에 찍힌다
+    // (ConfirmUpdateServiceList → UpdateLastSentRecovery). 그래서 찍기 전에는
+    // 몇 번을 불러도 계속 보내야 하고, 찍고 나면 멈춰야 한다.
+    MakeReady();
+    AddSvc("grp", "svcA", ServiceType::NORMAL, RecoveryPolicy::ALWAYS, true);
+
+    ASSERT_TRUE(registry_->ProcessUpdateServiceListRequest());
+    ASSERT_TRUE(registry_->ProcessUpdateServiceListRequest());
+    EXPECT_EQ(writes_, 2) << "확인 전에는 재전송이 멈추면 안 된다";
+
+    registry_->UpdateLastSentRecovery();
+
+    ASSERT_TRUE(registry_->ProcessUpdateServiceListRequest());
+    EXPECT_EQ(writes_, 2) << "확인 후에는 변경이 없으면 보내지 않는다";
+}
+
+TEST_F(RegistryUpdateRequestTest, ChangedRecoveryPolicyResumesSending_TC096) {
+    // 스냅샷을 찍은 뒤 정책이 바뀌면 HasRecoveryChanged() 의
+    // `it->second != current` 쪽이 살아나 다시 보내야 한다.
+    MakeReady();
+    auto svc = AddSvc("grp", "svcA", ServiceType::NORMAL, RecoveryPolicy::MANUAL, true);
+    ASSERT_TRUE(registry_->ProcessUpdateServiceListRequest());
+    registry_->UpdateLastSentRecovery();
+    ASSERT_TRUE(registry_->ProcessUpdateServiceListRequest());
+    ASSERT_EQ(writes_, 1);
+
+    // SetRecoveryPolicy() 는 MockService.hpp 에 링크 심이 없다(프로덕션
+    // Service.cpp 는 이 바이너리에 없다). -fno-access-control 이 켜져 있으니
+    // 멤버를 직접 바꾼다 — GetRecoveryPolicy() 심이 그대로 읽어간다.
+    svc->recovery_policy_ = RecoveryPolicy::ALWAYS;
+
+    ASSERT_TRUE(registry_->ProcessUpdateServiceListRequest());
+    EXPECT_EQ(writes_, 2);
+    // MakeReady() 의 스펙이 만든 서비스(pkg1)까지 함께 실린다. 바뀐 정책이
+    // 실제로 전선에 올라갔는지가 핵심이다 — 안 올라가면 lifecycle_mgr 은
+    // 옛 정책으로 계속 재시작 판단을 한다.
+    const lifecyclemgr::Service* a = nullptr;
+    for (const auto& s : sent_.service_list()) if (s.name() == "svcA") a = &s;
+    ASSERT_NE(a, nullptr);
+    EXPECT_EQ(a->recovery_policy(), TypeConvert::ToRecoveryPolicy(RecoveryPolicy::ALWAYS));
+    // container_name 은 비어 있는 게 맞다 — LoadServiceSaved 만 찍고
+    // AddService 로 직접 넣은 서비스에는 안 찍힌다 (그 경로는 TC081).
+    EXPECT_TRUE(a->container_name().empty());
+}
+
+TEST_F(RegistryUpdateRequestTest, NewServiceAfterSnapshotResumesSending_TC097) {
+    // HasRecoveryChanged() 의 다른 쪽 — 스냅샷에 아예 없는 이름.
+    MakeReady();
+    AddSvc("grp", "svcA", ServiceType::NORMAL, RecoveryPolicy::MANUAL, true);
+    ASSERT_TRUE(registry_->ProcessUpdateServiceListRequest());
+    registry_->UpdateLastSentRecovery();
+    ASSERT_TRUE(registry_->ProcessUpdateServiceListRequest());
+    ASSERT_EQ(writes_, 1);
+
+    AddSvc("grp", "svcB", ServiceType::NORMAL, RecoveryPolicy::MANUAL, true);
+
+    ASSERT_TRUE(registry_->ProcessUpdateServiceListRequest());
+    EXPECT_EQ(writes_, 2);
+    std::set<std::string> names;
+    for (const auto& s : sent_.service_list()) names.insert(s.name());
+    // MakeReady() 의 스펙이 만든 pkg1 + 우리가 넣은 둘.
+    EXPECT_EQ(names, (std::set<std::string>{"pkg1", "svcA", "svcB"}));
+}
+
+TEST_F(RegistrySaveRoundTripTest, EmptyGroupReturnsEveryService_TC098) {
+    // 빈 그룹 = "전체" 규약. NotifyServiceState()/UpdateServiceState() 가 ""
+    // 로 부르는데, 컨테이너 워크로드 서비스는 자기 컨테이너 그룹에 들어 있어서
+    // group_.find("") 로는 하나도 안 잡힌다. 그러면 RUNNING 승격이
+    // lifecycle_mgr 까지 못 가고 lfc_monitor 에 NOT_RUNNING 으로 박힌다.
+    AddSvc("alpha", "a1", ServiceType::NORMAL, RecoveryPolicy::MANUAL, true);
+    AddSvc("beta", "b1", ServiceType::NORMAL, RecoveryPolicy::MANUAL, true);
+    AddSvc("beta", "b2", ServiceType::NORMAL, RecoveryPolicy::MANUAL, true);
+
+    auto all = registry_->GetServicesByGroup("");
+
+    EXPECT_EQ(all.size(), 3u);
+    std::set<std::string> names;
+    for (const auto& s : all) names.insert(s->GetName());
+    EXPECT_EQ(names, (std::set<std::string>{"a1", "b1", "b2"}));
+}
+
+TEST_F(RegistrySaveRoundTripTest, EmptyGroupOnEmptyRegistryIsEmpty_TC099) {
+    EXPECT_TRUE(registry_->GetServicesByGroup("").empty());
+}
+
+// ── LoadServiceSaved 를 직접 만든 YAML 로 (Save 가 절대 만들지 않는 입력) ──
+// 숫자 토큰 하위호환 분기와 방어 분기는 Save 왕복으로는 못 만든다.
+
+class LoadServiceSavedInputTest : public RegistrySaveRoundTripTest {
+  protected:
+    // 파일을 쓰고 되읽는다.
+    std::unique_ptr<ServiceRegistry> LoadFrom(const std::string& yaml,
+            std::vector<std::shared_ptr<Container>>* loaded = nullptr, bool expect_ok = true) {
+        std::ofstream f(saved_path_);
+        f << yaml;
+        f.close();
+        auto r = std::make_unique<ServiceRegistry>();
+        ON_CALL(*mock_container_controller_, AddContainer(_))
+            .WillByDefault([loaded](std::shared_ptr<Container> c) {
+                if (loaded) loaded->push_back(c);
+                return true;
+            });
+        EXPECT_EQ(r->LoadServiceSaved(saved_path_), expect_ok);
+        return r;
+    }
+};
+
+TEST_F(LoadServiceSavedInputTest, NumericTypeAndRecoveryTokens_TC084) {
+    // 구버전 Save 는 enum 정수를 문자열로 썼다. 하위호환 분기가 살아 있어야
+    // 낡은 saved-service-list.yaml 이 기본값으로 뭉개지지 않는다.
+    auto r = LoadFrom(R"(
+specs:
+  - containers:
+      - name: grp
+        image: img
+        services:
+          - {name: s0, type: "0", recovery: "0"}
+          - {name: s1, type: "1", recovery: "1"}
+          - {name: s2, recovery: "2"}
+          - {name: s3, recovery: "3"}
+          - {name: s4, recovery: "4"}
+          - {name: s5, recovery: "5"}
+)");
+    ASSERT_NE(r->GetService("s0"), nullptr);
+    EXPECT_EQ(r->GetService("s0")->GetServiceType(), ServiceType::NORMAL);
+    EXPECT_EQ(r->GetService("s0")->GetRecoveryPolicy(), RecoveryPolicy::R_DEFAULT);
+    EXPECT_EQ(r->GetService("s1")->GetServiceType(), ServiceType::ONESHOT);
+    EXPECT_EQ(r->GetService("s1")->GetRecoveryPolicy(), RecoveryPolicy::ALWAYS);
+    EXPECT_EQ(r->GetService("s2")->GetRecoveryPolicy(), RecoveryPolicy::ON_FAILURE);
+    EXPECT_EQ(r->GetService("s3")->GetRecoveryPolicy(), RecoveryPolicy::ON_SUCCESS);
+    EXPECT_EQ(r->GetService("s4")->GetRecoveryPolicy(), RecoveryPolicy::ON_NOT_RESPONDING);
+    EXPECT_EQ(r->GetService("s5")->GetRecoveryPolicy(), RecoveryPolicy::MANUAL);
+}
+
+TEST_F(LoadServiceSavedInputTest, DefaultStringMapsToRDefault_TC085) {
+    auto r = LoadFrom(R"(
+specs:
+  - containers:
+      - name: grp
+        image: img
+        services:
+          - {name: sDef, recovery: "DEFAULT"}
+          - {name: sUnknown, recovery: "NOPE"}
+          - {name: sMissing}
+)");
+    ASSERT_NE(r->GetService("sDef"), nullptr);
+    EXPECT_EQ(r->GetService("sDef")->GetRecoveryPolicy(), RecoveryPolicy::R_DEFAULT);
+    // 모르는 값과 아예 없는 값은 둘 다 MANUAL 로 떨어진다 (auto-restart 안 함).
+    EXPECT_EQ(r->GetService("sUnknown")->GetRecoveryPolicy(), RecoveryPolicy::MANUAL);
+    EXPECT_EQ(r->GetService("sMissing")->GetRecoveryPolicy(), RecoveryPolicy::MANUAL);
+}
+
+TEST_F(LoadServiceSavedInputTest, ExplicitNamespaceIsKept_TC086) {
+    // namespace 를 명시하면 그대로, 없으면 "default".
+    std::vector<std::shared_ptr<Container>> loaded;
+    LoadFrom(R"(
+specs:
+  - containers:
+      - {name: withNs, image: img, namespace: my-ns, services: []}
+      - {name: noNs, image: img, services: []}
+)", &loaded);
+    ASSERT_EQ(loaded.size(), 2u);
+    std::map<std::string, std::string> ns;
+    for (const auto& c : loaded) ns[c->GetName()] = c->GetNamespace();
+    EXPECT_EQ(ns["withNs"], "my-ns");
+    EXPECT_EQ(ns["noNs"], "default");
+}
+
+TEST_F(LoadServiceSavedInputTest, ArgsPresentButNotSequenceIsIgnored_TC087) {
+    // extra_args/command_args 가 시퀀스가 아니면 IsSequence() 가드에 걸려
+    // 무시돼야 한다 — 예외로 터지면 안 된다.
+    std::vector<std::shared_ptr<Container>> loaded;
+    LoadFrom(R"(
+specs:
+  - containers:
+      - {name: grp, image: img, extra_args: "notalist", command_args: 42, services: []}
+)", &loaded);
+    ASSERT_EQ(loaded.size(), 1u);
+    EXPECT_TRUE(loaded[0]->GetExtraArgs().empty());
+    EXPECT_TRUE(loaded[0]->GetCommandArgs().empty());
+}
+
+TEST_F(LoadServiceSavedInputTest, ServiceWithoutNameIsSkipped_TC088) {
+    auto r = LoadFrom(R"(
+specs:
+  - containers:
+      - name: grp
+        image: img
+        services:
+          - {package: orphan, launchfile: x.py}
+          - {name: kept}
+)");
+    EXPECT_EQ(r->GetServicesNum(), 1u);
+    EXPECT_NE(r->GetService("kept"), nullptr);
+}
+
+TEST_F(LoadServiceSavedInputTest, MissingSpecsSequenceFails_TC089) {
+    LoadFrom("version: \"0.1\"\n", nullptr, /*expect_ok=*/false);
+    LoadFrom("specs: notasequence\n", nullptr, /*expect_ok=*/false);
+}
+
+TEST_F(LoadServiceSavedInputTest, SpecWithoutContainersIsSkipped_TC090) {
+    // containers 가 없는 spec 은 continue — 뒤따르는 정상 spec 은 살아야 한다.
+    auto r = LoadFrom(R"(
+specs:
+  - {other: 1}
+  - containers:
+      - {name: grp, image: img, services: [{name: survivor}]}
+)");
+    EXPECT_NE(r->GetService("survivor"), nullptr);
+}
+
+TEST_F(LoadServiceSavedInputTest, MalformedYamlIsCaught_TC091) {
+    LoadFrom("specs: [ {unclosed: \n", nullptr, /*expect_ok=*/false);
 }
 
 int main(int argc, char **argv) {

@@ -69,10 +69,10 @@ bool ROSServiceController::ProcessServiceStartRequest(lifecyclemgr::StartService
 bool ROSServiceController::ProcessServiceStopRequest(lifecyclemgr::StopServiceRequest* message) {
     return Mock_ROSServiceController->ProcessServiceStopRequest(message);
 }
-bool ROSServiceController::GetNodeLists(std::shared_ptr<Service> service) {
+bool ROSServiceController::GetNodeLists(const std::shared_ptr<Service>& service) {
     return Mock_ROSServiceController->GetNodeLists(service);
 }
-uint64_t ROSServiceController::GetPID(std::shared_ptr<Service> service) {
+uint64_t ROSServiceController::GetPID(const std::shared_ptr<Service>& service) {
     return Mock_ROSServiceController->GetPID(service);
 }
 

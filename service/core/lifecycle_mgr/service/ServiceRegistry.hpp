@@ -19,25 +19,24 @@ using namespace lifecyclemgr;
 class ServiceRegistry {
   public:
     ServiceRegistry();
-    virtual ~ServiceRegistry();
-
+    virtual ~ServiceRegistry() = default;
     bool UpdateServiceList(UpdateServiceListRequest* update);
 
-    void AddGroup(std::string name);
-    void RemoveGroup(std::string name);
+    void AddGroup(const std::string& name);
+    void RemoveGroup(const std::string& name);
     bool IsGroup(std::string name);
 
-    bool AddService(std::shared_ptr<Service> service, std::string group);
-    void RemoveService(std::string name);
+    bool AddService(const std::shared_ptr<Service>& service, std::string group);
+    void RemoveService(const std::string& name);
 
-    std::shared_ptr<Service> GetService(std::string name);
-    std::vector<std::shared_ptr<Service>> GetServicesByGroup(std::string group);
-    std::vector<std::string> GetServicesNameByGroup(std::string group);
-    std::string GetGroupNameByService(std::shared_ptr<Service> service);
+    std::shared_ptr<Service> GetService(const std::string& name);
+    std::vector<std::shared_ptr<Service>> GetServicesByGroup(const std::string& group);
+    std::vector<std::string> GetServicesNameByGroup(const std::string& group);
+    std::string GetGroupNameByService(const std::shared_ptr<Service>& service);
     std::vector<std::string> GetGroupList();
 
     uint64_t GetServiceNum();
-    uint64_t GetServiceNumInGroup(std::string group);
+    uint64_t GetServiceNumInGroup(const std::string& group);
     uint64_t GetGroupNum();
 
     // ── F013: Container registry surface ────────────────────────────────
@@ -47,7 +46,10 @@ class ServiceRegistry {
     std::shared_ptr<Container> GetContainer(const std::string& name);
     std::vector<std::shared_ptr<Container>> GetAllContainers();
     void UpsertContainer(const std::shared_ptr<Container>& c);
-    void UpdateContainerState(const std::string& name,
+    // Returns true if the stored state actually changed (or the container was
+    // seen for the first time), so callers can publish an aggregated report
+    // on-change only — mirror of the service publish-on-change path.
+    bool UpdateContainerState(const std::string& name,
                               ContainerState state,
                               int32_t exit_code);
     // Returns the names of services known to live in the given container.
@@ -55,15 +57,15 @@ class ServiceRegistry {
     std::vector<std::string> GetServicesInContainer(const std::string& name);
 
   private:
-    bool hasGroup(std::string name);
-    std::shared_ptr<std::vector<std::string>> getGroup(std::string name);
+    bool hasGroup(const std::string& name);
+    std::shared_ptr<std::vector<std::string>> getGroup(const std::string& name);
 
-    bool vectorAdd(std::vector<std::string>& vec, std::string item);
-    bool vectorRemove(std::vector<std::string>& vec, std::string item);
-    bool vectorHas(std::vector<std::string> vec, std::string item);
+    bool vectorAdd(std::vector<std::string>& vec, const std::string& item);
+    bool vectorRemove(std::vector<std::string>& vec, const std::string& item);
+    bool vectorHas(std::vector<std::string> vec, const std::string& item);
 
-    bool hasService(std::string name);
-    std::shared_ptr<Service> getService(std::string name);
+    bool hasService(const std::string& name);
+    std::shared_ptr<Service> getService(const std::string& name);
     std::string newGroup();
 
   private:

@@ -1,0 +1,64 @@
+# GPU 없는 장비용 오버라이드 — base 의 nvidia 예약만 지운다.
+#
+#   docker compose -f docker/compose/docker-compose-integration.yaml \
+#                  -f docker/compose/docker-compose-nogpu.override.yaml \
+#                  up -d mmf-core
+#
+# ── 왜 필요한가 ──────────────────────────────────────────────────────────────
+#
+# base 의 서비스들이 nvidia GPU 를 예약한다. 그 device driver 가 등록돼 있지 않은
+# 장비(실측: `docker info` 의 Runtimes = runc 뿐)에서는 **컨테이너 생성 자체가** 거부된다:
+#
+#   Error response from daemon: could not select device driver "nvidia" with capabilities: [[gpu]]
+#
+# `devices: []` 로는 안 지워진다 — compose 가 빈 시퀀스를 "미설정" 으로 보고 base 값을
+# 유지한다. `!reset` 이 이 용도의 공식 문법이다(Compose 2.24+). 같은 수법을
+# docker-compose-agl-board.override.yaml 이 mmf-ext-agl 에 이미 쓰고 있고, 이 파일은
+# 그것을 SiLS rig 에서 쓰는 서비스로 넓힌 것이다.
+#
+# ── 무엇을 바꾸지 않는가 ────────────────────────────────────────────────────
+#
+# 도메인·이미지·볼륨·명령은 base 그대로다. GPU 예약 하나만 지운다. GPU 가 있는
+# 장비는 이 파일을 쓰지 않으면 종전과 완전히 동일하다.
+#
+# ⚠ Autoware 파티션(oss-adsw-*)은 **여기에 넣지 않았다.** 그쪽은 GPU 를 실제로 쓸 수
+#    있고, 반쪽만 띄운 Autoware 의 ADAPI 목록은 대조 근거가 되지 못한다
+#    (docker-compose-sils-autoware.override.yaml 의 같은 경고). SiLS rig 는 파티션을
+#    compose 가 아니라 스크립트로 띄운다 — docs/sils/sils-docker-runbook.md §2.
+#
+# ⚠ `mmf-core` 이미지는 멀티아치다. arm64 만 로컬에 받아져 있으면 qemu 로 느리게 돌거나
+#    조용히 이상하게 군다. 확인:  docker inspect <img> --format '{{.Architecture}}'
+#    x86 호스트에서 받는 법:  docker pull --platform linux/amd64 <img>
+#
+# 배경: docs/sils/sils-docker-runbook.md · docs/sils/sils-configuration-map.md
+
+services:
+  mmf-core:
+    deploy: !reset null
+    # ⚠ 미패치 이미지를 Autoware 파티션과 같은 도메인에 띄우면 파티션 로그가 오염된다.
+    #
+    # MMF 의 Fast DDS 참가자가 TypeObject 를 전파하고 Cyclone 이 그것을 못 삼킨다.
+    # 실측 2026-08-12, 도메인 42: 파티션 3종에 invalid type object 1260줄. 없으면 0줄.
+    # ⚠ **죽지는 않는다** — 이 주석의 초판은 "4.2초 뒤 전멸" 이라고 적었는데 틀렸다.
+    #   진짜 사망 원인은 중복된 run_partitions.sh 의 EXIT 트랩이었다.
+    #   → docs/sils/evidence/mmf-typeobject-2026-08-12.md §4
+    #
+    # 아래 프로파일 마운트는 **그 시도이고, 통하지 않았다.** DDSProvider.cpp 가
+    # PARTICIPANT_QOS_DEFAULT 를 복사해서 쓰는데 Fast DDS 는 그 상수를 주소로 식별하므로,
+    # 복사하는 순간 XML 기본 프로파일 경로를 잃는다. 파일은 들어가지만 적용은 안 되고
+    # **아무 경고도 없다.** 대조군으로 남겨 둔다 — 지우지 말 것.
+    #
+    # 진짜 고침은 소스다(evidence §4-(d)): DDSProvider.cpp · dds_transport.cpp ·
+    # DDSProtocol.cpp 세 곳에 fastdds.type_propagation=disabled. 표기는
+    # service/core/ota_mgr/otam_common/otam_dds_impl.h 에 이미 있다.
+    #
+    # 고쳤다(9e79fd1). 단 **공유 제품 이미지라 재빌드가 필요**하다:
+    #   ./build.sh && ./docker/build_local.sh --core-only     → oss-mmf-core:local
+    #   CORE_IMG=oss-mmf-core:local docker compose -f ... -f ... up -d mmf-core
+    # 레지스트리의 :latest 는 아직 미패치다.
+    volumes:
+      - /dev/shm:/dev/shm
+      - ../build_environment/fastdds-profile-notypeprop.xml:/oss/fastdds-profile.xml:ro
+
+  mmf-ext-ros2:
+    deploy: !reset null

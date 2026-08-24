@@ -22,8 +22,9 @@ class HelperUtils{
         int8_t line = 0;
         FILE* pipe = popen(cmd.c_str(), "r");
 
-        if (!pipe)
+        if (!pipe) {
             throw std::runtime_error("popen() failed!");
+        }
 
         while (fgets(buffer.data(), buffer.size(), pipe) != nullptr) {
             if (!keyword.empty()){
@@ -49,8 +50,9 @@ class HelperUtils{
         int8_t line = 0;
         FILE* pipe = popen(cmd.c_str(), "r");
 
-        if (!pipe)
+        if (!pipe) {
             throw std::runtime_error("popen() failed!");
+        }
 
         while (fgets(buffer.data(), buffer.size(), pipe) != nullptr) {
             result = buffer.data();

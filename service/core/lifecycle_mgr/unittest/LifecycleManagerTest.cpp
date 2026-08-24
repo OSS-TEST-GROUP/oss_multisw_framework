@@ -609,6 +609,242 @@ TEST_F(LifecycleManagerTest, Initialize_CreateEndPointsFails_StillReturnsTrue) {
     Mock_MWServiceManager = nullptr;
 }
 
+// ============================================================================
+// Initialize() 가 등록하는 엔드포인트 핸들러
+//
+// 왜 필요했나:
+//   LifecycleManager.cpp 의 미커버 62줄이 전부 이 람다들의 본문이었다 (라인
+//   51~166). Initialize() 는 EndPointHandlers 를 채워 EndPointFactory 로
+//   넘기는데, 람다가 실행되려면 DDS 메시지가 도착해야 해서 유닛 레인에서는
+//   한 번도 불리지 않았다.
+//
+//   CreateEndPoints 의 두 번째 인자를 SaveArg 로 가로채면 DDS 없이 직접 부를
+//   수 있다. 각 람다가 하는 일은 두 가지뿐이다 — (a) 협력자 포인터 null 가드,
+//   (b) 해당 협력자로 위임. 두 경로를 모두 고정한다.
+// ============================================================================
+
+class LifecycleManagerHandlerTest : public LifecycleManagerTest {
+  protected:
+    void SetUp() override {
+        LifecycleManagerTest::SetUp();
+
+        dds_transmitter_    = std::make_shared<MockDDSTransmitter>();
+        endpoint_factory_   = new MockEndPointFactory();
+        mw_service_manager_ = std::make_shared<MockMWServiceManager>();
+
+        Mock_DDSTransmitter   = dds_transmitter_.get();
+        Mock_EndPointFactory  = endpoint_factory_;
+        Mock_MWServiceManager = mw_service_manager_.get();
+        // Initialize() 이후에는 LifecycleManager 가 소유한다.
+        testing::Mock::AllowLeak(endpoint_factory_);
+
+        ON_CALL(*mw_service_manager_, Initialize()).WillByDefault(Return(true));
+        ON_CALL(*dds_transmitter_, Initialize()).WillByDefault(Return(true));
+        ON_CALL(*endpoint_factory_, Initialize()).WillByDefault(Return(0));
+        EXPECT_CALL(*endpoint_factory_, CreateEndPoints(_, _))
+            .WillOnce(DoAll(SaveArg<1>(&handlers_), Return(0)));
+
+        mgr_ = std::make_unique<TestableLifecycleManager>();
+        ASSERT_TRUE(mgr_->Initialize());
+
+        // Initialize() 가 만든 것은 실제 객체다. 그 메서드들은 링크 심을 통해
+        // 아래 전역 mock 으로 흘러간다.
+        state_manager_    = std::make_shared<::testing::NiceMock<MockStateManager>>(*mgr_);
+        state_monitor_    = std::make_shared<::testing::NiceMock<MockStateMonitor>>(*mgr_);
+        service_registry_ = std::make_shared<::testing::NiceMock<MockServiceRegistry>>();
+        Mock_StateManager    = state_manager_.get();
+        Mock_StateMonitor    = state_monitor_.get();
+        Mock_ServiceRegistry = service_registry_.get();
+    }
+
+    void TearDown() override {
+        mgr_.reset();
+        Mock_DDSTransmitter   = nullptr;
+        Mock_EndPointFactory  = nullptr;
+        Mock_MWServiceManager = nullptr;
+        LifecycleManagerTest::TearDown();
+    }
+
+    std::shared_ptr<MockDDSTransmitter>    dds_transmitter_;
+    MockEndPointFactory*                   endpoint_factory_ = nullptr;
+    std::shared_ptr<MockMWServiceManager>  mw_service_manager_;
+    std::unique_ptr<TestableLifecycleManager> mgr_;
+    EndPointHandlers                       handlers_;
+
+    std::shared_ptr<::testing::NiceMock<MockStateManager>>    state_manager_;
+    std::shared_ptr<::testing::NiceMock<MockStateMonitor>>    state_monitor_;
+    std::shared_ptr<::testing::NiceMock<MockServiceRegistry>> service_registry_;
+};
+
+// Initialize() 가 핸들러를 하나도 빠짐없이 채웠는지부터 본다. 비어 있는
+// std::function 을 호출하면 std::bad_function_call 이므로, 엔드포인트가 새로
+// 늘었는데 배선을 빠뜨리면 여기서 걸린다.
+TEST_F(LifecycleManagerHandlerTest, AllHandlersAreWired) {
+    EXPECT_TRUE(static_cast<bool>(handlers_.on_start));
+    EXPECT_TRUE(static_cast<bool>(handlers_.on_stop));
+    EXPECT_TRUE(static_cast<bool>(handlers_.on_set_mode));
+    EXPECT_TRUE(static_cast<bool>(handlers_.on_get_state_resp));
+    EXPECT_TRUE(static_cast<bool>(handlers_.on_notify_state));
+    EXPECT_TRUE(static_cast<bool>(handlers_.on_update_list));
+    EXPECT_TRUE(static_cast<bool>(handlers_.on_notify_container_state));
+    EXPECT_TRUE(static_cast<bool>(handlers_.on_start_container_resp));
+    EXPECT_TRUE(static_cast<bool>(handlers_.on_stop_container_resp));
+    EXPECT_TRUE(static_cast<bool>(handlers_.on_ctrl_start_service));
+    EXPECT_TRUE(static_cast<bool>(handlers_.on_ctrl_stop_service));
+    EXPECT_TRUE(static_cast<bool>(handlers_.on_ctrl_set_service_mode));
+    EXPECT_TRUE(static_cast<bool>(handlers_.on_ctrl_start_container));
+    EXPECT_TRUE(static_cast<bool>(handlers_.on_ctrl_stop_container));
+    EXPECT_TRUE(static_cast<bool>(handlers_.on_set_recovery_policy_resp));
+    EXPECT_TRUE(static_cast<bool>(handlers_.on_ctrl_set_recovery_policy));
+}
+
+// ── StateManager 로 가는 것들 ────────────────────────────────────────────────
+// 메시지 포인터는 그대로 통과만 하므로 nullptr 로도 배선을 확인할 수 있다.
+
+TEST_F(LifecycleManagerHandlerTest, ServiceResponsesForwardToStateManager) {
+    EXPECT_CALL(*state_manager_, OnStart(nullptr));
+    EXPECT_CALL(*state_manager_, OnStop(nullptr));
+    EXPECT_CALL(*state_manager_, SetServiceMode(nullptr)).WillOnce(Return(true));
+
+    handlers_.on_start(nullptr);
+    handlers_.on_stop(nullptr);
+    handlers_.on_set_mode(nullptr);
+}
+
+TEST_F(LifecycleManagerHandlerTest, ContainerResponsesForwardToStateManager) {
+    EXPECT_CALL(*state_manager_, OnStartContainer(nullptr));
+    EXPECT_CALL(*state_manager_, OnStopContainer(nullptr));
+    EXPECT_CALL(*state_manager_, OnSetRecoveryPolicy(nullptr));
+
+    handlers_.on_start_container_resp(nullptr);
+    handlers_.on_stop_container_resp(nullptr);
+    handlers_.on_set_recovery_policy_resp(nullptr);
+}
+
+TEST_F(LifecycleManagerHandlerTest, CtrlRequestsForwardToStateManager) {
+    EXPECT_CALL(*state_manager_, HandleCtrlStartService(nullptr));
+    EXPECT_CALL(*state_manager_, HandleCtrlStopService(nullptr));
+    EXPECT_CALL(*state_manager_, HandleCtrlSetServiceMode(nullptr));
+    EXPECT_CALL(*state_manager_, HandleCtrlStartContainer(nullptr));
+    EXPECT_CALL(*state_manager_, HandleCtrlStopContainer(nullptr));
+    EXPECT_CALL(*state_manager_, HandleCtrlSetRecoveryPolicy(nullptr));
+
+    handlers_.on_ctrl_start_service(nullptr);
+    handlers_.on_ctrl_stop_service(nullptr);
+    handlers_.on_ctrl_set_service_mode(nullptr);
+    handlers_.on_ctrl_start_container(nullptr);
+    handlers_.on_ctrl_stop_container(nullptr);
+    handlers_.on_ctrl_set_recovery_policy(nullptr);
+}
+
+// ── StateMonitor / ServiceRegistry 로 가는 것들 ──────────────────────────────
+
+TEST_F(LifecycleManagerHandlerTest, StateReportsForwardToStateMonitor) {
+    EXPECT_CALL(*state_monitor_,
+                UpdateServicesState(::testing::A<lifecyclemgr::GetServiceStateResponse*>()));
+    EXPECT_CALL(*state_monitor_,
+                UpdateServicesState(::testing::A<lifecyclemgr::NotifyServiceState*>()));
+
+    handlers_.on_get_state_resp(nullptr);
+    handlers_.on_notify_state(nullptr);
+}
+
+TEST_F(LifecycleManagerHandlerTest, UpdateServiceListForwardsToRegistry) {
+    EXPECT_CALL(*service_registry_, UpdateServiceList(nullptr)).WillOnce(Return(true));
+    handlers_.on_update_list(nullptr);
+}
+
+// ── null 가드 ───────────────────────────────────────────────────────────────
+// 협력자가 사라진 뒤에 메시지가 도착해도 (종료 순서상 실제로 가능하다)
+// 어떤 핸들러도 역참조하면 안 된다.
+
+TEST_F(LifecycleManagerHandlerTest, HandlersAreNoOpWhenCollaboratorsAreGone) {
+    mgr_->SetStateManager(nullptr);
+    mgr_->SetStateMonitor(nullptr);
+    mgr_->SetServiceRegistry(nullptr);
+
+    EXPECT_CALL(*state_manager_, OnStart(_)).Times(0);
+    EXPECT_CALL(*state_monitor_,
+                UpdateServicesState(::testing::A<lifecyclemgr::NotifyServiceState*>())).Times(0);
+    EXPECT_CALL(*service_registry_, UpdateServiceList(_)).Times(0);
+
+    EXPECT_NO_THROW({
+        handlers_.on_start(nullptr);
+        handlers_.on_stop(nullptr);
+        handlers_.on_set_mode(nullptr);
+        handlers_.on_get_state_resp(nullptr);
+        handlers_.on_notify_state(nullptr);
+        handlers_.on_update_list(nullptr);
+        handlers_.on_notify_container_state(nullptr);
+        handlers_.on_start_container_resp(nullptr);
+        handlers_.on_stop_container_resp(nullptr);
+        handlers_.on_ctrl_start_service(nullptr);
+        handlers_.on_ctrl_stop_service(nullptr);
+        handlers_.on_ctrl_set_service_mode(nullptr);
+        handlers_.on_ctrl_start_container(nullptr);
+        handlers_.on_ctrl_stop_container(nullptr);
+        handlers_.on_set_recovery_policy_resp(nullptr);
+        handlers_.on_ctrl_set_recovery_policy(nullptr);
+    });
+}
+
+// ── NotifyContainerState — 유일하게 본문 로직이 있는 핸들러 ──────────────────
+
+TEST_F(LifecycleManagerHandlerTest, NotifyContainerStateIgnoresNullMessage) {
+    EXPECT_CALL(*service_registry_, UpdateContainerState(_, _, _)).Times(0);
+    EXPECT_NO_THROW(handlers_.on_notify_container_state(nullptr));
+}
+
+TEST_F(LifecycleManagerHandlerTest, NotifyContainerStatePublishesOnRealTransition) {
+    lifecyclemgr::NotifyContainerState msg;
+    msg.container_list({"web", "db"});
+    msg.container_state_list({lifecyclemgr::ContainerState::CONTAINER_RUNNING,
+                              lifecyclemgr::ContainerState::CONTAINER_STOPPED});
+    msg.exit_code_list({0, 137});
+
+    EXPECT_CALL(*service_registry_,
+                UpdateContainerState("web", lifecycle_manager::ContainerState::CONTAINER_RUNNING, 0))
+        .WillOnce(Return(false));
+    EXPECT_CALL(*service_registry_,
+                UpdateContainerState("db", lifecycle_manager::ContainerState::CONTAINER_STOPPED, 137))
+        .WillOnce(Return(true));
+    // 하나라도 실제로 바뀌었으면 하트비트를 기다리지 않고 즉시 발행한다.
+    EXPECT_CALL(*state_monitor_, NotifyLifecycleDiagnosticInfo(true));
+
+    handlers_.on_notify_container_state(&msg);
+}
+
+TEST_F(LifecycleManagerHandlerTest, NotifyContainerStateStaysQuietWhenNothingChanged) {
+    lifecyclemgr::NotifyContainerState msg;
+    msg.container_list({"web"});
+    msg.container_state_list({lifecyclemgr::ContainerState::CONTAINER_RUNNING});
+    msg.exit_code_list({0});
+
+    EXPECT_CALL(*service_registry_, UpdateContainerState(_, _, _)).WillOnce(Return(false));
+    EXPECT_CALL(*state_monitor_, NotifyLifecycleDiagnosticInfo(_)).Times(0);
+
+    handlers_.on_notify_container_state(&msg);
+}
+
+// 세 배열은 병렬이라고 약속돼 있지만 길이가 어긋난 채로 올 수 있다 (송신 측
+// 버그, 부분 직렬화). 짧은 쪽을 인덱싱하지 않고 기본값으로 메우는지 본다.
+TEST_F(LifecycleManagerHandlerTest, NotifyContainerStateToleratesShorterParallelArrays) {
+    lifecyclemgr::NotifyContainerState msg;
+    msg.container_list({"web", "db"});
+    msg.container_state_list({lifecyclemgr::ContainerState::CONTAINER_RUNNING}); // 1개뿐
+    msg.exit_code_list({});                                                      // 비어 있음
+
+    EXPECT_CALL(*service_registry_,
+                UpdateContainerState("web", lifecycle_manager::ContainerState::CONTAINER_RUNNING, 0))
+        .WillOnce(Return(false));
+    // 상태·종료코드가 없는 두 번째는 CS_UNKNOWN / 0 으로 채워져야 한다.
+    EXPECT_CALL(*service_registry_,
+                UpdateContainerState("db", lifecycle_manager::ContainerState::CS_UNKNOWN, 0))
+        .WillOnce(Return(false));
+
+    EXPECT_NO_THROW(handlers_.on_notify_container_state(&msg));
+}
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

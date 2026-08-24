@@ -106,16 +106,21 @@ class TypeConvert {
             case lifecyclemgr::MwType::ROS2 : return MwType::ROS2;
             case lifecyclemgr::MwType::AGL : return MwType::AGL;
             case lifecyclemgr::MwType::AUTOSAR : return MwType::AUTOSAR;
+            case lifecyclemgr::MwType::MW_NATIVE : return MwType::MW_NATIVE;
+            case lifecyclemgr::MwType::MW_UNKNOWN : return MwType::MW_UNKNOWN;
         }
-        return MwType::ROS2;
+        // 모르는 값은 ROS2 로 떨어뜨리지 않는다 -- 그러면 '모른다' 가 '라우팅 대상이다' 로 바뀐다.
+        return MwType::MW_UNKNOWN;
     }
     static lifecyclemgr::MwType ToMwType(MwType os){
         switch (os) {
             case MwType::ROS2 : return lifecyclemgr::MwType::ROS2;
             case MwType::AGL : return lifecyclemgr::MwType::AGL;
             case MwType::AUTOSAR : return lifecyclemgr::MwType::AUTOSAR;
+            case MwType::MW_NATIVE : return lifecyclemgr::MwType::MW_NATIVE;
+            case MwType::MW_UNKNOWN : return lifecyclemgr::MwType::MW_UNKNOWN;
         }
-        return lifecyclemgr::MwType::ROS2;
+        return lifecyclemgr::MwType::MW_UNKNOWN;
     }
 
     // ── F013: Container enums ───────────────────────────────────────────

@@ -11,7 +11,7 @@
 디지털 트윈(DT)의 고질적 약점은 기능이 아니라 **신뢰**다 — "이 트윈을 실물 대신 믿어도 되나?"에 대부분의 DT가 답하지 못한다. SiLS는 그 신뢰를 **선언하고 기계로 검증**하는 계층을 이미 갖고 있다.
 
 > **SiLS는 "또 하나의 시뮬레이터"가 아니라 검증 가능한(verifiable) 디지털 트윈 코어다.**
-> 충실도 L0~L4(선언+시험) · conformance 게이트(fail-closed, 161 테스트) · 결정론(lockstep) · Tool Confidence 도시에 — "믿어달라"가 아니라 **증거로 검증된 트윈**.
+> 충실도 L0~L4(선언+시험) · conformance 게이트(fail-closed, 224 테스트) · 결정론(lockstep) · Tool Confidence 도시에 — "믿어달라"가 아니라 **증거로 검증된 트윈**.
 
 ---
 
@@ -34,7 +34,7 @@ DT는 하나가 아니라 동기(sync) 정도에 따른 스펙트럼이다.
 | 계층 | 무엇 | 코드 근거 |
 |---|---|---|
 | **충실도 L0~L4** | 실물과의 동등성을 등급으로 **선언하고 시험으로 증명**. SiLS 상한 L3(폐루프 결정론), L4=실타깃 parity | `evaluate.py` `FIDELITY_RANK{none:0…L4:5}` |
-| **Conformance 게이트** | 트윈이 내는 trace = 공개 계약. SCHEMA→FIDELITY→PARITY 3단 **fail-closed**, 161 테스트 | `gate.py` · `validate_trace.py` |
+| **Conformance 게이트** | 트윈이 내는 trace = 공개 계약. SCHEMA→FIDELITY→PARITY 3단 **fail-closed**, 224 테스트 | `gate.py` · `validate_trace.py` |
 | **결정론 (lockstep)** | 동일 입력 = 동일 trace → 트윈 실행을 **재현·회귀** 가능 | ClockMaster grant/complete · TickInbox |
 | **Tool Confidence 도시에** | 판정 도구 자체의 신뢰 근거를 코드로 명시(안전팀이 얹을 기술 근거) | `docs/sils/sils-tool-confidence.md` |
 
@@ -44,7 +44,7 @@ DT는 하나가 아니라 동기(sync) 정도에 따른 스펙트럼이다.
 
 ## 4. 파트너에게 주는 것
 
-- **선언되고 기계-검증되는 충실도** — "우리 트윈은 정확합니다"가 아니라 "L3로 선언, 게이트 PASS, 161 테스트 green"으로 제시.
+- **선언되고 기계-검증되는 충실도** — "우리 트윈은 정확합니다"가 아니라 "L3로 선언, 게이트 PASS, 224 테스트 green"으로 제시.
 - **CI에 물리는 회귀** — 동일 trace 재현 → 트윈이 조용히 틀어지는 드리프트를 게이트가 차단.
 - **표준 접점** — FMI·OpenSCENARIO·(예정)MF4 로 기존 DT 툴체인과 접속, 자산 재작성 없이 이관.
 

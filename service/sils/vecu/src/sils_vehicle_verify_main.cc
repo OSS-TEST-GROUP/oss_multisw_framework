@@ -39,6 +39,7 @@
 #include <fastdds/dds/topic/TypeSupport.hpp>
 
 #include "VehicleControlPubSubTypes.hpp"
+#include "sils_participant_qos.hpp"
 
 namespace {
 
@@ -168,6 +169,7 @@ int main() {
     TraceEvent(run_id, "verify_start", "\"domain_id\":" + std::to_string(domain_id));
 
     DomainParticipantQos pqos;
+    sils::ApplySilsParticipantQos(pqos);   // see sils_participant_qos.hpp
     pqos.name("sils_vecu_vehicle_verify:" + run_id);
     DomainParticipant* participant =
         DomainParticipantFactory::get_instance()->create_participant(

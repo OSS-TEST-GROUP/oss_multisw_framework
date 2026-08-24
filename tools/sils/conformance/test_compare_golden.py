@@ -341,6 +341,55 @@ def test_control_published_gear_diff_regresses():
     assert any(d["field"] == "gear" for d in r["field_diffs"]), r["field_diffs"]
 
 
+# --- plant isolation (two-loop operation: MORAI vs scenario_simulator_v2) ------------
+
+def _golden_with_plant(plant):
+    """A minimal golden whose golden_meta declares (or omits) a plant."""
+    meta = {"event": "golden_meta", "source_run_id": "g", "source_verdict": "PASSED"}
+    if plant is not None:
+        meta["plant"] = plant
+    return [meta, {"event": "run_start", "run_id": "g", "wall_time_ms": 0}]
+
+
+def test_plant_match_is_allowed():
+    reason, warn = cg.gate_plant(_golden_with_plant("morai"), "morai")
+    assert reason is None and warn is None
+
+
+def test_plant_mismatch_is_rejected():
+    reason, _ = cg.gate_plant(_golden_with_plant("morai"), "scenario_simulator_v2")
+    assert reason is not None
+    assert "morai" in reason and "scenario_simulator_v2" in reason
+
+
+def test_plant_undeclared_on_both_sides_warns_but_allows():
+    reason, warn = cg.gate_plant(_golden_with_plant(None), None)
+    assert reason is None and "not enforced" in warn
+
+
+def test_plant_declared_on_one_side_only_warns_but_allows():
+    reason, warn = cg.gate_plant(_golden_with_plant("morai"), None)
+    assert reason is None and "not enforced" in warn
+    reason, warn = cg.gate_plant(_golden_with_plant(None), "morai")
+    assert reason is None and "not enforced" in warn
+
+
+def test_golden_plant_reads_the_meta_event():
+    assert cg.golden_plant(_golden_with_plant("fmu")) == "fmu"
+    assert cg.golden_plant(_golden_with_plant(None)) is None
+    assert cg.golden_plant([{"event": "run_start"}]) is None      # no meta at all
+
+
+def test_main_refuses_cross_plant_with_exit_2():
+    d = Path(tempfile.mkdtemp(prefix="sils-plant-"))
+    g, c = d / "g.jsonl", d / "c.jsonl"
+    g.write_text("\n".join(json.dumps(e) for e in _golden_with_plant("morai")) + "\n")
+    c.write_text(json.dumps({"event": "run_start", "run_id": "c", "wall_time_ms": 0}) + "\n")
+    rc = cg.main(["--golden", str(g), "--candidate", str(c),
+                  "--plant", "scenario_simulator_v2", "--quiet"])
+    assert rc == 2, f"expected policy reject (2), got {rc}"
+
+
 def main() -> int:
     tests = [v for k, v in globals().items() if k.startswith("test_") and callable(v)]
     failed = 0

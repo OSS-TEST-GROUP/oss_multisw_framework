@@ -13,7 +13,6 @@ MWService::MWService(int32_t code, const std::string& name, const std::string& e
 
 }
 
-MWService::~MWService() {}
 
 bool MWService::IsActive(){
     return active_;

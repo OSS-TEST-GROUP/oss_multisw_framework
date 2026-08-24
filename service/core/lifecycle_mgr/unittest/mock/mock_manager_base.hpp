@@ -24,7 +24,9 @@ public:
 inline MockManagerBase* Mock_ManagerBase = nullptr;
 
 ManagerBase::ManagerBase(LifecycleManager& lifecycle) : lifecycle_(lifecycle) {}
-ManagerBase::~ManagerBase() {}
+// ManagerBase::~ManagerBase() 정의는 제거했다. 프로덕션 헤더가 `= default` 로 바뀌어
+// 아웃오브라인 정의가 위법(explicitly-defaulted 함수의 재정의)이 되고,
+// defaulted 소멸자는 컴파일러가 각 TU 에 만들어주므로 링크 심이 필요 없다.
 std::shared_ptr<DDSTransmitter> ManagerBase::GetTransmitter() {
     return Mock_ManagerBase->GetTransmitter();
 }

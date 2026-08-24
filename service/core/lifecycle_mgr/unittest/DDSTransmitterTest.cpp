@@ -1,4 +1,5 @@
 // Unit tests for DDSTransmitter class using Google Test and Google Mock
+#include <cstdlib>   // setenv/unsetenv/getenv
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
@@ -489,6 +490,66 @@ TEST_F(DDSTransmitterTest, GetMessageEndPoint_BeforeAddingAny_TC012) {
 // END Enhanced Coverage Tests
 // ============================================================================
 
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MMF_DDS_DOMAIN_ID 오버라이드
+//
+// 왜 미커버였나: 도메인 결정은 익명 네임스페이스의 MmfDdsDomainId() 가 하고,
+// 그 안의 `if (const char* e = std::getenv("MMF_DDS_DOMAIN_ID"))` 는 참 쪽이
+// 실행 0회였다. 기존 Initialize 테스트들이 env 를 세팅하지 않아 항상 기본값
+// 0 으로만 지나갔기 때문이다.
+//
+// 왜 중요한가: Raw Fast-DDS 는 ROS_DOMAIN_ID 를 무시하므로 MMF 는 이 변수로
+// 보드별 도메인을 가른다. 한 보드의 모든 MMF 참가자(lifecycle_mgr /
+// adsw_manager / ota / diagnostics / dds_bridge)가 같은 값을 써야 하고,
+// 어긋나면 core↔adsw DDS 가 **조용히** 연결되지 않는다 — 에러도 로그도 없이
+// 그냥 상대를 못 찾는다. 그래서 값이 실제로 participant 에 반영되는지까지 본다.
+// ═══════════════════════════════════════════════════════════════════════════
+
+class DdsDomainIdTest : public DDSTransmitterTest {
+  protected:
+    void SetUp() override {
+        const char* prev = std::getenv("MMF_DDS_DOMAIN_ID");
+        had_env_ = (prev != nullptr);
+        if (had_env_) prev_env_ = prev;
+        DDSTransmitterTest::SetUp();
+    }
+    void TearDown() override {
+        DDSTransmitterTest::TearDown();
+        if (had_env_) setenv("MMF_DDS_DOMAIN_ID", prev_env_.c_str(), 1);
+        else unsetenv("MMF_DDS_DOMAIN_ID");
+    }
+    bool had_env_ = false;
+    std::string prev_env_;
+};
+
+TEST_F(DdsDomainIdTest, EnvOverrideLandsOnTheParticipant) {
+    // 다른 테스트의 기본 도메인 0 과 겹치지 않는 값을 쓴다.
+    setenv("MMF_DDS_DOMAIN_ID", "91", 1);
+
+    ASSERT_TRUE(ins->Initialize());
+    ASSERT_NE(ins->GetDomain(), nullptr);
+    EXPECT_EQ(ins->GetDomain()->get_domain_id(), 91u);
+}
+
+TEST_F(DdsDomainIdTest, NoEnvMeansDomainZero) {
+    unsetenv("MMF_DDS_DOMAIN_ID");
+
+    ASSERT_TRUE(ins->Initialize());
+    ASSERT_NE(ins->GetDomain(), nullptr);
+    EXPECT_EQ(ins->GetDomain()->get_domain_id(), 0u);
+}
+
+TEST_F(DdsDomainIdTest, GarbageEnvFallsBackToZero) {
+    // std::atoi 는 숫자가 아니면 0 을 낸다. 오타 난 설정이 프로세스를
+    // 죽이지는 않고 기본 도메인으로 떨어져야 한다.
+    setenv("MMF_DDS_DOMAIN_ID", "not-a-number", 1);
+
+    ASSERT_TRUE(ins->Initialize());
+    ASSERT_NE(ins->GetDomain(), nullptr);
+    EXPECT_EQ(ins->GetDomain()->get_domain_id(), 0u);
+}
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);

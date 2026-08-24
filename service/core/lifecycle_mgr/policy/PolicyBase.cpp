@@ -1,10 +1,11 @@
 #include "PolicyBase.hpp"
 
+#include <utility>
+
 namespace lifecycle_manager {
 
-PolicyBase::PolicyBase(RecoveryPolicy policy, std::string name ) : policy_(policy), name_(name) {
+PolicyBase::PolicyBase(RecoveryPolicy policy, std::string name) : policy_(policy), name_(std::move(name)) {
 }
-PolicyBase::~PolicyBase() {}
 
 
 RecoveryPolicy PolicyBase::GetPolicy(){

@@ -1,15 +1,15 @@
 #include "AdswServiceStatusEndPoint.hpp"
 
+#include <utility>
+
 #include "ros2/AdswServiceStatus.hpp"
 #include "logger/Log.hpp"
 
 namespace general {
 namespace adsw_manager {
 
-ADSWServiceStatusEndPoint::ADSWServiceStatusEndPoint(MessageType msgtype, std::string topic)
-    : DDSMessageEndpoint() {
-        
-    topic_ = topic;
+ADSWServiceStatusEndPoint::ADSWServiceStatusEndPoint(MessageType msgtype, std::string topic) : topic_(std::move(topic)) {
+
     if (msgtype == MessageType::ADSW_SERVICE_STATUS){
         type_support_ = std::make_shared<TypeSupport>(new AdswServiceStatusPubSubType());
     }

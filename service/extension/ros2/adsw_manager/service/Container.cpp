@@ -15,7 +15,6 @@ Container::Container(const std::string& name, const std::string& image,
 {
 }
 
-Container::~Container() {}
 
 std::string Container::GetName() const {
     return name_;

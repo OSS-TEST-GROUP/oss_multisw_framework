@@ -1,13 +1,15 @@
 #include "StopServiceEndPoint.hpp"
 
+#include <utility>
+
 #include "lifecycle/StopServiceRequest.hpp"
 #include "logger/Log.hpp"
 #include "manager/LifecycleFactory.hpp"
 
 namespace lifecycle_manager {
 
-StopServiceEndPoint::StopServiceEndPoint(MessageType msgtype, std::string topic, Callback cb) 
-    : DDSMessageEndPoint(topic), on_data_cb_(std::move(cb)){
+StopServiceEndPoint::StopServiceEndPoint(MessageType msgtype, std::string topic, Callback cb)
+    : DDSMessageEndPoint(std::move(topic)), on_data_cb_(std::move(cb)) {
 
     if (msgtype == MessageType::STOP_SERVICE_REQUEST){
         SetTypeSupport(std::make_shared<TypeSupport>(new StopServiceRequestPubSubType()));
@@ -25,7 +27,7 @@ StopServiceEndPoint::~StopServiceEndPoint() {
 void StopServiceEndPoint::OnDataAvailable(){
     LOG_DEBUG("Message Delivery for " << GetTopic() );
 
-    if (Read<StopServiceResponse>(resp_) == true){
+    if (Read<StopServiceResponse>(resp_)) {
 
         // Same phantom guard as StartServiceEndPoint — see commentary there.
         if (!LifecycleFactory::GetInstance()
@@ -41,7 +43,6 @@ void StopServiceEndPoint::OnDataAvailable(){
             on_data_cb_(message);
         }
     }
-
 }
 
 

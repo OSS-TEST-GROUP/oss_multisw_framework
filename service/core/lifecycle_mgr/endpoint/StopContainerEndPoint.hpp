@@ -21,10 +21,9 @@ class StopContainerEndPoint : public DDSMessageEndPoint {
 
     StopContainerEndPoint(MessageType msgtype, std::string topic,
                            Callback cb = nullptr);
-    virtual ~StopContainerEndPoint();
-
-    virtual void OnDataAvailable() override;
-    virtual void OnDataPublished(bool ret) override;
+    ~StopContainerEndPoint() override= default;
+    void OnDataAvailable() override;
+    void OnDataPublished(bool ret) override;
 
   private:
     StopContainerRequest  req_;

@@ -1,0 +1,23 @@
+# SiLS 도구 계층 Python 의존성.
+#
+#   python3 -m pip install -r tools/sils/requirements.txt
+#
+# 무엇이 무엇을 필요로 하는가 (README "테스트" 절과 함께 읽을 것):
+#
+#   PyYAML  필수 — YAML 을 읽거나 쓰는 모든 경로.
+#           * topology_compiler/compile.py, resolved_to_shell.py  (top-level import → 없으면 즉시 실패)
+#           * conformance/evaluate.py --requirements, gate.py --requirements/--rules
+#           * conformance/compare_golden.py --rules, parity.py --contract
+#           * conformance/import_openscenario.py  (YAML 렌더)
+#           * contracts/lint_catalog.py, fmu/fmu_gate.py, fmu/fmu_map.py
+#           * ci/sils-ci.sh (compile 스테이지를 타므로 전 구간)
+#
+#   pytest  테스트 실행용. 일부 테스트가 tmp_path fixture 를 쓰므로
+#           `python3 -m pytest tools/sils` 가 정식 실행 경로다.
+#
+# PyYAML 없이도 되는 경로 (Tier A — trace 만 제출받아 판정):
+#   python3 tools/sils/conformance/gate.py <trace.jsonl>
+#   python3 tools/sils/conformance/validate_trace.py <trace.jsonl>
+#   → requirements/rules/resolved 를 안 넘기면 stdlib 만으로 동작한다.
+PyYAML>=6.0
+pytest>=7.0

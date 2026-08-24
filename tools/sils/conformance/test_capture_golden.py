@@ -93,6 +93,45 @@ def test_meta_event_present_and_custom_meta():
     assert cg.compare(events, cand, replay_rules())["verdict"] == "MATCH"
 
 
+def test_plant_is_stamped_into_golden_meta():
+    rc, gpath = capture_to_file(passing_events(), extra_args=["--plant", "scenario_simulator_v2"])
+    assert rc == capg.EXIT_OK
+    events, _ = ev.parse_trace(gpath)
+    assert events[0]["plant"] == "scenario_simulator_v2"
+    # ...and compare_golden can read it back for the isolation gate.
+    assert cg.golden_plant(events) == "scenario_simulator_v2"
+
+
+def test_plant_absent_is_recorded_as_none_not_omitted():
+    # An explicit null keeps "captured before --plant existed" distinguishable from
+    # "captured with a plant" without needing a key-presence check downstream.
+    rc, gpath = capture_to_file(passing_events())
+    assert rc == capg.EXIT_OK
+    events, _ = ev.parse_trace(gpath)
+    assert "plant" in events[0] and events[0]["plant"] is None
+    assert cg.golden_plant(events) is None
+
+
+def test_plant_via_meta_is_equivalent_to_the_flag():
+    rc, gpath = capture_to_file(passing_events(), extra_args=["--meta", "plant=morai"])
+    assert rc == capg.EXIT_OK
+    events, _ = ev.parse_trace(gpath)
+    assert events[0]["plant"] == "morai"
+
+
+def test_captured_golden_refuses_a_cross_plant_candidate_end_to_end():
+    rc, gpath = capture_to_file(passing_events(), extra_args=["--plant", "morai"])
+    assert rc == capg.EXIT_OK
+    cand = write_trace(passing_events(), name="cand.trace.jsonl")
+    rc = cg.main(["--golden", str(gpath), "--candidate", str(cand),
+                  "--plant", "scenario_simulator_v2", "--quiet"])
+    assert rc == 2, f"cross-plant compare must be a policy reject, got {rc}"
+    # same plant -> the comparison actually runs
+    rc = cg.main(["--golden", str(gpath), "--candidate", str(cand),
+                  "--plant", "morai", "--quiet"])
+    assert rc in (0, 1), f"same-plant compare should produce a verdict, got {rc}"
+
+
 def test_refuses_non_conformant_run():
     truncated = passing_events()[:6]  # no terminal event -> INCOMPLETE
     src = write_trace(truncated, name="trunc.trace.jsonl")

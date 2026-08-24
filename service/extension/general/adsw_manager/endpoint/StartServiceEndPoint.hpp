@@ -17,13 +17,13 @@ using namespace lifecyclemgr;
 class StartServiceEndPoint : public DDSMessageEndpoint {
   public:
     StartServiceEndPoint(MessageType msgtype, std::string topic);
-    virtual ~StartServiceEndPoint();
+    ~StartServiceEndPoint() override;
 
-    virtual std::string GetTopic();
-    virtual std::string GetTypeName();
-    virtual std::shared_ptr<TypeSupport> GetTypeSupport();
+    std::string GetTopic() override;
+    std::string GetTypeName() override;
+    std::shared_ptr<TypeSupport> GetTypeSupport() override;
 
-    virtual void OnDataAvailable();
+    void OnDataAvailable() override;
 
   private:
     std::string topic_;

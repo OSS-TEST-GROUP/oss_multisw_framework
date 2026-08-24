@@ -11,9 +11,11 @@ pipeline {
         IMAGE_REGISTRY = "registry.obigo.com"
         IMAGE_NAMESPACE = "oss"
         APP_NAME = "oss-mmf"
-        // ossuser 단일 계정으로 pull·push 모두 수행 (builder 등 관리자 계정 사용 금지).
-        REGISTRY_ID = "ossuser"
-        REGISTRY_PWD = "Ossuser1234"
+        // Harbor 자격증명은 Jenkins Credentials(Username with password)에서 주입한다.
+        // 저장소에 비밀번호를 하드코딩하지 않는다 (공개 저장소로 전달되는 파일).
+        // 등록 대상: Harbor 로봇 계정 oss-ci (pull+push, oss 프로젝트 한정)
+        //   → REGISTRY_USR / REGISTRY_PSW 환경변수가 자동 생성되고 로그에서 마스킹된다.
+        REGISTRY = credentials('harbor-oss-ci')
 
         // Dockerfile Path
         DOCKERFILE_PATH = "docker/Dockerfile" 
@@ -67,7 +69,8 @@ pipeline {
                             docker logout "${IMAGE_REGISTRY}:80"
                         fi
                         if ! cat ${HOME}/.docker/config.json | grep "${IMAGE_REGISTRY}"; then
-                            echo "${REGISTRY_PWD}" | docker login ${IMAGE_REGISTRY} -u ${REGISTRY_ID} --password-stdin
+                            # 로봇 계정명에 '$' 가 포함되므로(robot$oss+oss-ci) 반드시 변수 참조로 넘긴다.
+                            printf '%s' "${REGISTRY_PSW}" | docker login "${IMAGE_REGISTRY}" -u "${REGISTRY_USR}" --password-stdin
                         fi
                     '''
                 }
@@ -127,12 +130,12 @@ pipeline {
                     sh '''
                         #!/bin/bash
                         set -e
-                        if ! curl -u "${REGISTRY_ID}:${REGISTRY_PWD}" -s https://${IMAGE_REGISTRY}/v2/_catalog 2>/dev/null \
+                        if ! curl -u "${REGISTRY_USR}:${REGISTRY_PSW}" -s https://${IMAGE_REGISTRY}/v2/_catalog 2>/dev/null \
                             | grep -q "${APP_NAME}-builder"; then
                             docker build -t ${BUILDER_IMAGE} \
                                 -f ${PWD}/docker/Dockerfile .
-                            # push 는 ossuser 단일 계정 (pull·push 공용).
-                            echo "${REGISTRY_PWD}" | docker login ${IMAGE_REGISTRY} -u "${REGISTRY_ID}" --password-stdin
+                            # push 는 Harbor 로봇 계정(oss-ci) 자격증명으로 수행.
+                            printf '%s' "${REGISTRY_PSW}" | docker login "${IMAGE_REGISTRY}" -u "${REGISTRY_USR}" --password-stdin
                             docker push ${BUILDER_IMAGE}
                         else
                             if [ -z $(docker images -q "${BUILDER_IMAGE}") ]; then

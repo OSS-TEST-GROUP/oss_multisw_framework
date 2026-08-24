@@ -1,7 +1,8 @@
 #include "ADSWManager.hpp"
-#include "logger/Log.hpp"
 #include "endpoint/MessageTypes.hpp"
+#include "logger/Log.hpp"
 #include <cstdio>
+#include <utility>
 
 namespace general {
 namespace adsw_manager {
@@ -10,7 +11,6 @@ static std::shared_ptr<ADSWManager> shared_instance_;
 
 ADSWManager::ADSWManager() {}
 
-ADSWManager::~ADSWManager() {}
 
 bool ADSWManager::Initialize() {
 
@@ -191,8 +191,10 @@ bool ADSWManager::IsKnownLifecyclePublisher(
     // identified via UpdateServiceListResponse. lifecycle_mgr's own
     // PolicyManager never publishes a Start before the handshake completes,
     // so refusing pre-handshake doesn't drop any legitimate traffic.
-    if (lifecycle_trusted_prefixes_.empty()) return false;
-    bool known = lifecycle_trusted_prefixes_.count(prefix) > 0;
+    if (lifecycle_trusted_prefixes_.empty()) {
+        return false;
+    }
+    bool known = lifecycle_trusted_prefixes_.contains(prefix);
     if (!known) {
         char hex[kGuidPrefixBytes * 3 + 1]{};
         for (std::size_t i = 0; i < kGuidPrefixBytes; ++i) {
@@ -242,7 +244,7 @@ std::shared_ptr<ADSWManager> ADSWManager::getShared()
 }
 
 void ADSWManager::SetShared(std::shared_ptr<ADSWManager> instance) {
-    shared_instance_ = instance;
+    shared_instance_ = std::move(instance);
 }
 
 } // namespace adsw_manager

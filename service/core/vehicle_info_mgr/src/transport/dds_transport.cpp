@@ -301,8 +301,20 @@ DDSTransport::~DDSTransport() {
 }
 
 void DDSTransport::start() {
-    DomainParticipantQos pqos;
+    // ★ get_default_participant_qos(), not a default-constructed QoS.
+    //
+    // A bare `DomainParticipantQos pqos;` never sees the XML profile at all -- Fast DDS
+    // applies it only when create_participant() is handed PARTICIPANT_QOS_DEFAULT BY ADDRESS
+    // (3.2.2, DomainParticipantFactory.cpp:160). This participant was therefore running
+    // without the transport / data-sharing settings the shipped profile intends.
+    DomainParticipantQos pqos = DomainParticipantFactory::get_instance()->get_default_participant_qos();
     pqos.name("viss_dds_transport");
+    // ★ DO NOT PROPAGATE TypeObject. Cyclone participants on the same domain cannot ingest
+    // it and log `invalid type object` -- 1260 lines across the three Autoware partitions,
+    // measured 2026-08-12 on domain 42. They do not crash. The failure lands on the reader,
+    // so this protects the neighbours' logs, not this process.
+    // docs/sils/evidence/mmf-typeobject-2026-08-12.md
+    pqos.properties().properties().emplace_back("fastdds.type_propagation", "disabled");
 
     int domain_id = 0; // Default domain ID
     const char* domain_id_env = std::getenv("VISS_DDS_DOMAIN_ID");

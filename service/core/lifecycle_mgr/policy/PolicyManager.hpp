@@ -13,15 +13,14 @@ namespace lifecycle_manager {
 class PolicyManager {
   public:
     PolicyManager();
-    virtual ~PolicyManager();
-
+    virtual ~PolicyManager() = default;
     bool Start();
     void Stop();
 
     std::shared_ptr<PolicyBase> GetPolicy(RecoveryPolicy policy);
-    
-    std::shared_ptr<PolicyBase> GetPolicy(std::string name);
-    ServiceControlAction Evaluate(std::shared_ptr<Service> service);
+
+    std::shared_ptr<PolicyBase> GetPolicy(const std::string& name);
+    ServiceControlAction Evaluate(const std::shared_ptr<Service>& service);
 
   private:
     std::map<RecoveryPolicy, std::shared_ptr<PolicyBase>> policies_;

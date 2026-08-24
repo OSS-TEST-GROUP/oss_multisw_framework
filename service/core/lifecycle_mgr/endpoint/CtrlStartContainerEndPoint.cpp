@@ -1,5 +1,7 @@
 #include "CtrlStartContainerEndPoint.hpp"
 
+#include <utility>
+
 #include "lifecycle/LifecycleCtrlRequest.hpp"
 #include "logger/Log.hpp"
 
@@ -7,7 +9,7 @@ namespace lifecycle_manager {
 
 CtrlStartContainerEndPoint::CtrlStartContainerEndPoint(
     MessageType msgtype, std::string topic, Callback cb)
-    : DDSMessageEndPoint(topic), on_data_cb_(std::move(cb)) {
+    : DDSMessageEndPoint(std::move(topic)), on_data_cb_(std::move(cb)) {
     if (msgtype == MessageType::CTRL_START_CONTAINER_REQUEST) {
         SetTypeSupport(std::make_shared<TypeSupport>(
             new CtrlStartContainerRequestPubSubType()));
@@ -17,12 +19,11 @@ CtrlStartContainerEndPoint::CtrlStartContainerEndPoint(
     }
 }
 
-CtrlStartContainerEndPoint::~CtrlStartContainerEndPoint() {}
 
 void CtrlStartContainerEndPoint::OnDataAvailable() {
     LOG_DEBUG("Message Delivery for " << GetTopic());
 
-    if (Read<CtrlStartContainerRequest>(req_) == true) {
+    if (Read<CtrlStartContainerRequest>(req_)) {
         CtrlStartContainerRequest* msg =
             reinterpret_cast<CtrlStartContainerRequest*>(&req_);
         if (on_data_cb_) {

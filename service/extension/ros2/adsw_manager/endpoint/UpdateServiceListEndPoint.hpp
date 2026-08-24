@@ -17,13 +17,13 @@ using namespace lifecyclemgr;
 class UpdateServiceListEndPoint : public DDSMessageEndpoint {
   public:
     UpdateServiceListEndPoint(MessageType msgtype, std::string topic);
-    virtual ~UpdateServiceListEndPoint();
+    ~UpdateServiceListEndPoint() override;
 
-    virtual std::string GetTopic();
-    virtual std::string GetTypeName();
-    virtual std::shared_ptr<TypeSupport> GetTypeSupport();
+    std::string GetTopic() override;
+    std::string GetTypeName() override;
+    std::shared_ptr<TypeSupport> GetTypeSupport() override;
 
-    virtual void OnDataAvailable();
+    void OnDataAvailable() override;
 
   private:
     std::string topic_;

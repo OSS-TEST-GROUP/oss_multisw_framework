@@ -10,7 +10,6 @@ ContainerController::ContainerController() {
     LOG_DEBUG("ContainerController create");
 }
 
-ContainerController::~ContainerController() {}
 
 bool ContainerController::Initialize() {
     return true;
@@ -25,7 +24,9 @@ void ContainerController::Finalize() {}
 bool ContainerController::StartContainer(const std::string& container_name) {
     LOG_DEBUG("ContainerController::StartContainer " << container_name);
     std::shared_ptr<Container> container = GetContainer(container_name);
-    if (!container) return false;
+    if (!container) {
+        return false;
+    }
 
     switch (container->GetContainerType()) {
         case ContainerType::K3S:            return StartK3sContainer(container);
@@ -40,7 +41,9 @@ bool ContainerController::StartContainer(const std::string& container_name) {
 bool ContainerController::StopContainer(const std::string& container_name) {
     LOG_DEBUG("ContainerController::StopContainer " << container_name);
     std::shared_ptr<Container> container = GetContainer(container_name);
-    if (!container) return false;
+    if (!container) {
+        return false;
+    }
 
     switch (container->GetContainerType()) {
         case ContainerType::K3S:            return StopK3sContainer(container);
@@ -55,7 +58,9 @@ bool ContainerController::StopContainer(const std::string& container_name) {
 bool ContainerController::RestartContainer(const std::string& container_name) {
     LOG_DEBUG("ContainerController::RestartContainer " << container_name);
     std::shared_ptr<Container> container = GetContainer(container_name);
-    if (!container) return false;
+    if (!container) {
+        return false;
+    }
 
     switch (container->GetContainerType()) {
         case ContainerType::K3S:            return RestartK3sContainer(container);
@@ -69,7 +74,9 @@ bool ContainerController::RestartContainer(const std::string& container_name) {
 
 bool ContainerController::GetContainerStatus(const std::string& container_name) {
     std::shared_ptr<Container> container = GetContainer(container_name);
-    if (!container) return false;
+    if (!container) {
+        return false;
+    }
 
     std::string cmd;
     switch (container->GetContainerType()) {
@@ -90,7 +97,9 @@ bool ContainerController::GetContainerStatus(const std::string& container_name) 
 
 bool ContainerController::GetContainerLogs(const std::string& container_name) {
     std::shared_ptr<Container> container = GetContainer(container_name);
-    if (!container) return false;
+    if (!container) {
+        return false;
+    }
 
     std::string cmd;
     switch (container->GetContainerType()) {
@@ -113,7 +122,7 @@ bool ContainerController::GetContainerLogs(const std::string& container_name) {
 // k3s (kubectl) implementations
 // ─────────────────────────────────────────────────────────────
 
-bool ContainerController::StartK3sContainer(std::shared_ptr<Container> container) {
+bool ContainerController::StartK3sContainer(const std::shared_ptr<Container>& container) {
     std::string cmd = "kubectl apply -f " + container->GetDeployFile();
     if (RunCommand(cmd) == 0) {
         LOG_DEBUG("ContainerController::StartK3sContainer success " << container->GetName());
@@ -123,7 +132,7 @@ bool ContainerController::StartK3sContainer(std::shared_ptr<Container> container
     return false;
 }
 
-bool ContainerController::StopK3sContainer(std::shared_ptr<Container> container) {
+bool ContainerController::StopK3sContainer(const std::shared_ptr<Container>& container) {
     std::string cmd = "kubectl delete pod " + container->GetName()
                     + " -n " + container->GetNamespace() + " --ignore-not-found";
     if (RunCommand(cmd) == 0) {
@@ -134,9 +143,11 @@ bool ContainerController::StopK3sContainer(std::shared_ptr<Container> container)
     return false;
 }
 
-bool ContainerController::RestartK3sContainer(std::shared_ptr<Container> container) {
+bool ContainerController::RestartK3sContainer(const std::shared_ptr<Container>& container) {
     // k3s pods are immutable: delete + re-apply
-    if (!StopK3sContainer(container)) return false;
+    if (!StopK3sContainer(container)) {
+        return false;
+    }
     return StartK3sContainer(container);
 }
 
@@ -144,7 +155,7 @@ bool ContainerController::RestartK3sContainer(std::shared_ptr<Container> contain
 // docker run/stop implementations
 // ─────────────────────────────────────────────────────────────
 
-bool ContainerController::StartDockerContainer(std::shared_ptr<Container> container) {
+bool ContainerController::StartDockerContainer(const std::shared_ptr<Container>& container) {
     const std::string name  = container->GetName();
 
     // NOTE: image pull/update is intentionally NOT done at Start. Container
@@ -191,7 +202,7 @@ bool ContainerController::StartDockerContainer(std::shared_ptr<Container> contai
     return false;
 }
 
-bool ContainerController::StopDockerContainer(std::shared_ptr<Container> container) {
+bool ContainerController::StopDockerContainer(const std::shared_ptr<Container>& container) {
     std::string cmd = "docker stop " + container->GetName()
                     + " && docker rm " + container->GetName();
     if (RunCommand(cmd) == 0) {
@@ -202,7 +213,7 @@ bool ContainerController::StopDockerContainer(std::shared_ptr<Container> contain
     return false;
 }
 
-bool ContainerController::RestartDockerContainer(std::shared_ptr<Container> container) {
+bool ContainerController::RestartDockerContainer(const std::shared_ptr<Container>& container) {
     std::string cmd = "docker restart " + container->GetName();
     if (RunCommand(cmd) == 0) {
         LOG_DEBUG("ContainerController::RestartDockerContainer success " << container->GetName());
@@ -216,7 +227,7 @@ bool ContainerController::RestartDockerContainer(std::shared_ptr<Container> cont
 // docker compose implementations
 // ─────────────────────────────────────────────────────────────
 
-bool ContainerController::StartDockerComposeContainer(std::shared_ptr<Container> container) {
+bool ContainerController::StartDockerComposeContainer(const std::shared_ptr<Container>& container) {
     std::string cmd = "docker compose -f " + container->GetDeployFile() + " up -d";
     if (RunCommand(cmd) == 0) {
         LOG_DEBUG("ContainerController::StartDockerComposeContainer success " << container->GetName());
@@ -226,7 +237,7 @@ bool ContainerController::StartDockerComposeContainer(std::shared_ptr<Container>
     return false;
 }
 
-bool ContainerController::StopDockerComposeContainer(std::shared_ptr<Container> container) {
+bool ContainerController::StopDockerComposeContainer(const std::shared_ptr<Container>& container) {
     std::string cmd = "docker compose -f " + container->GetDeployFile() + " down";
     if (RunCommand(cmd) == 0) {
         LOG_DEBUG("ContainerController::StopDockerComposeContainer success " << container->GetName());
@@ -236,7 +247,7 @@ bool ContainerController::StopDockerComposeContainer(std::shared_ptr<Container> 
     return false;
 }
 
-bool ContainerController::RestartDockerComposeContainer(std::shared_ptr<Container> container) {
+bool ContainerController::RestartDockerComposeContainer(const std::shared_ptr<Container>& container) {
     std::string cmd = "docker compose -f " + container->GetDeployFile() + " restart";
     if (RunCommand(cmd) == 0) {
         LOG_DEBUG("ContainerController::RestartDockerComposeContainer success " << container->GetName());
@@ -251,10 +262,14 @@ bool ContainerController::RestartDockerComposeContainer(std::shared_ptr<Containe
 // ─────────────────────────────────────────────────────────────
 
 std::string ContainerController::BaseCommand(const std::string& container_name) {
-    if (container_name == ADSW_ROS2_CONTAINER_NAME) return "";
+    if (container_name == ADSW_ROS2_CONTAINER_NAME) {
+        return "";
+    }
 
     std::shared_ptr<Container> container = GetContainer(container_name);
-    if (!container) return "";
+    if (!container) {
+        return "";
+    }
 
     switch (container->GetContainerType()) {
         case ContainerType::K3S:
@@ -269,21 +284,20 @@ std::string ContainerController::BaseCommand(const std::string& container_name) 
 }
 
 std::string ContainerController::BaseRos2Command(const std::string& container_name) {
-    if (container_name == ADSW_ROS2_CONTAINER_NAME) return "";
+    if (container_name == ADSW_ROS2_CONTAINER_NAME) {
+        return "";
+    }
 
     std::string base = BaseCommand(container_name);
-    if (base.empty()) return "";
-
-    std::shared_ptr<Container> container = GetContainer(container_name);
-    switch (container->GetContainerType()) {
-        case ContainerType::K3S:
-            return base + "bash -c \"source /opt/ros/humble/setup.bash && ";
-        case ContainerType::DOCKER:
-        case ContainerType::DOCKER_COMPOSE:
-            return base + "bash -c \"source /opt/ros/humble/setup.bash && ";
-        default:
-            return "";
+    if (base.empty()) {
+        return "";
     }
+
+    // 원래 여기 container type 별 switch 가 있었는데 K3S / DOCKER / DOCKER_COMPOSE
+    // 세 분기가 전부 같은 문자열을 반환했다 (bugprone-branch-clone). default 분기도
+    // 도달하지 않는다 — 알 수 없는 타입이면 BaseCommand 가 이미 "" 를 주고 바로 위
+    // 조기 반환에 걸린다. 타입에 따라 갈릴 이유가 생기면 그때 다시 나누면 된다.
+    return base + "bash -c \"source /opt/ros/humble/setup.bash && ";
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -292,7 +306,9 @@ std::string ContainerController::BaseRos2Command(const std::string& container_na
 
 std::string ContainerController::GetContainerStatusStr(const std::string& container_name) {
     std::shared_ptr<Container> container = GetContainer(container_name);
-    if (!container) return "unknown";
+    if (!container) {
+        return "unknown";
+    }
 
     std::string cmd;
     switch (container->GetContainerType()) {
@@ -309,24 +325,22 @@ std::string ContainerController::GetContainerStatusStr(const std::string& contai
             return "unknown";
     }
 
-    FILE* pipe = popen(cmd.c_str(), "r");
-    if (!pipe) return "unknown";
-    char buf[64] = {};
-    fgets(buf, sizeof(buf), pipe);
-    pclose(pipe);
-
-    std::string result(buf);
+    std::string result = CaptureCommand(cmd, 64);
     // strip trailing newline and surrounding single-quotes added by shell
-    while (!result.empty() && (result.back() == '\n' || result.back() == '\'' || result.back() == '\r'))
+    while (!result.empty() && (result.back() == '\n' || result.back() == '\'' || result.back() == '\r')) {
         result.pop_back();
-    if (!result.empty() && result.front() == '\'')
+    }
+    if (!result.empty() && result.front() == '\'') {
         result.erase(0, 1);
+    }
     return result.empty() ? "unknown" : result;
 }
 
 int32_t ContainerController::GetContainerExitCode(const std::string& container_name) {
     std::shared_ptr<Container> container = GetContainer(container_name);
-    if (!container) return -1;
+    if (!container) {
+        return -1;
+    }
 
     std::string cmd;
     switch (container->GetContainerType()) {
@@ -343,14 +357,8 @@ int32_t ContainerController::GetContainerExitCode(const std::string& container_n
             return -1;
     }
 
-    FILE* pipe = popen(cmd.c_str(), "r");
-    if (!pipe) return -1;
-    char buf[32] = {};
-    fgets(buf, sizeof(buf), pipe);
-    pclose(pipe);
-
     try {
-        return static_cast<int32_t>(std::stoi(std::string(buf)));
+        return static_cast<int32_t>(std::stoi(CaptureCommand(cmd, 32)));
     } catch (...) {
         return -1;
     }
@@ -379,7 +387,7 @@ std::shared_ptr<Container> ContainerController::GetContainer(const std::string& 
     return nullptr;
 }
 
-bool ContainerController::AddContainer(std::shared_ptr<Container> container) {
+bool ContainerController::AddContainer(const std::shared_ptr<Container>& container) {
     if (!container) {
         LOG_ERROR("ContainerController::AddContainer received null container.");
         return false;
@@ -407,6 +415,26 @@ bool ContainerController::ContainerSupported() {
 int ContainerController::RunCommand(const std::string& cmd) {
     LOG_DEBUG("ContainerController::RunCommand: " << cmd);
     return system(cmd.c_str());
+}
+
+// popen 으로 stdout 첫 줄을 max_len-1 바이트까지 읽는다.
+// popen 실패나 빈 출력은 모두 빈 문자열로 접힌다 — 호출부가
+// "unknown"(status) / -1(exit code) 로 변환한다.
+std::string ContainerController::CaptureCommand(const std::string& cmd, size_t max_len) {
+    LOG_DEBUG("ContainerController::CaptureCommand: " << cmd);
+
+    FILE* pipe = popen(cmd.c_str(), "r");
+    if (!pipe) {
+        return "";
+    }
+
+    std::vector<char> buf(max_len, '\0');
+    if (fgets(buf.data(), static_cast<int>(max_len), pipe) == nullptr) {
+        buf[0] = '\0';
+    }
+    pclose(pipe);
+
+    return std::string(buf.data());
 }
 
 } // namespace adsw_manager

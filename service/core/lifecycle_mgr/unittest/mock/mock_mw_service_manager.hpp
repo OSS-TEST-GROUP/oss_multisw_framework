@@ -24,7 +24,9 @@ public:
 inline MockMWServiceManager* Mock_MWServiceManager = nullptr;
 
 MWServiceManager::MWServiceManager() {}
-MWServiceManager::~MWServiceManager() {}
+// MWServiceManager::~MWServiceManager() 정의는 제거했다. 프로덕션 헤더가 `= default` 로 바뀌어
+// 아웃오브라인 정의가 위법(explicitly-defaulted 함수의 재정의)이 되고,
+// defaulted 소멸자는 컴파일러가 각 TU 에 만들어주므로 링크 심이 필요 없다.
 
 bool MWServiceManager::Initialize() {
     return Mock_MWServiceManager->Initialize();
@@ -38,7 +40,7 @@ void MWServiceManager::Stop() {
     Mock_MWServiceManager->Stop();
 }
 
-bool MWServiceManager::LoadMWConfig(std::string path) {
+bool MWServiceManager::LoadMWConfig(const std::string& path) {
     return Mock_MWServiceManager->LoadMWConfig(path);
 }
 

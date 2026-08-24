@@ -280,7 +280,7 @@
       <div class="srow"><span class="dot mk"></span><div><div class="t">FMI 버전 자동 감지 (2.0/3.0)</div><div class="s">구현</div></div></div>
       <div class="srow"><span class="dot mk"></span><div><div class="t">fmi4c 정적 링크 (런타임 .so 없음)</div><div class="s">구현</div></div></div>
       <div class="srow"><span class="dot p mk"></span><div><div class="t">FMI 2.0 Co-Simulation 실 FMU</div><div class="s p">코드 경로 · 미실측</div></div></div>
-      <div class="srow"><span class="dot p mk"></span><div><div class="t">Descriptor 변수·단위 매핑</div><div class="s p">미구현 · raw VR</div></div></div>
+      <div class="srow"><span class="dot p mk"></span><div><div class="t">변수 이름→VR 해석·검증</div><div class="s p">fmu_map.py 완료(FMI 2.0/3.0 · causality·type·unit) · Descriptor 통합은 미완</div></div></div>
       <div class="srow"><span class="dot p mk"></span><div><div class="t">ARM64 실 FMU 실행</div><div class="s p">미검증</div></div></div>
       <div class="srow"><span class="dot p mk"></span><div><div class="t">Model Exchange · Scheduled Exec</div><div class="s p">미지원</div></div></div>
       <div class="srow"><span class="dot p mk"></span><div><div class="t">set/get 반환 status 검사</div><div class="s p">미구현 · doStep만 검사</div></div></div>
@@ -424,5 +424,7 @@
     }
   })();
 </script>
+
+<div id="sils-doc-stamp" style="max-width:1100px;margin:2rem auto 1.5rem;padding:.75rem 1rem;border-left:3px solid #f0a800;background:rgba(240,168,0,.08);font:13px/1.6 system-ui,-apple-system,sans-serif;color:inherit;opacity:.9"><strong>이 HTML 은 손으로 만든 시각 요약이며 생성 스크립트가 없다 — 정본은 짝이 되는 <code>.md</code> 다.</strong> 내용이 충돌하면 <code>.md</code> 를 믿을 것. 기준 commit: <code>3c61230</code> · 정합성 점검 2026-08-04.</div>
 </body>
 </html>

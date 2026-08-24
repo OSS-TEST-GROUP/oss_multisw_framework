@@ -31,7 +31,34 @@ EXTROS2_IMG="${EXTROS2_IMG:-registry.obigo.com/oss/oss-mmf-ext-ros2:latest}"
 # 보드별 DDS 도메인 격리. ROS_DOMAIN_ID 는 ROS2 노드/rmw 만 격리하므로, raw Fast-DDS
 # 를 쓰는 lifecycle_mgr/diagnostics/adsw/ota(MMF_DDS_DOMAIN_ID) 와 vehicle_info/viss
 # (VISS_DDS_DOMAIN_ID) 도 같은 값으로 맞춰야 전 스택이 실제로 한 도메인에 격리된다.
-DOMAIN="${ROS_DOMAIN_ID:-0}"
+#
+# 도메인 결정 우선순위: ① 명시한 ROS_DOMAIN_ID env  ② 도메인 파일  ③ 기본값 42.
+# 도메인 파일(`ROS_DOMAIN_ID=<n>` 한 줄, compose `--env-file` 과 같은 형식)은
+# HMI 런처 Settings 가 기록한다 → **다음 기동 때** 반영된다(ROS_DOMAIN_ID 는 프로세스
+# 시작 시점에만 읽히므로 실행 중 변경은 불가).
+# 기본값 42 인 이유: Autoware adsw 파티션(saved-service-list.yaml)이 42 를 쓰므로,
+# 기본이 0 이면 adsw_monitor 가 구독만 하고 발행자가 없어 화면이 전부 null 이 된다(실측).
+MMF_DOMAIN_ENV_FILE="${MMF_DOMAIN_ENV_FILE:-/opt/mmf/config/domain.env}"
+_file_domain=""
+if [ -f "$MMF_DOMAIN_ENV_FILE" ]; then
+  _file_domain="$(sed -n 's/^[[:space:]]*ROS_DOMAIN_ID[[:space:]]*=[[:space:]]*\([0-9]\{1,3\}\).*/\1/p' \
+                    "$MMF_DOMAIN_ENV_FILE" | tail -1)"
+fi
+DOMAIN="${ROS_DOMAIN_ID:-${_file_domain:-42}}"
+# ROS 2 도메인 유효 범위는 0~232. 벗어나면 조용히 잘못 도는 대신 기본값으로 되돌린다.
+if ! [ "$DOMAIN" -ge 0 ] 2>/dev/null || [ "$DOMAIN" -gt 232 ]; then
+  echo "[run-mmf] ⚠️ 잘못된 도메인 '$DOMAIN' → 42 사용 (유효 범위 0~232)" >&2
+  DOMAIN=42
+fi
+
+# ContainerController 등이 `docker compose -f <file> up -d` 를 `--env-file` 없이
+# 호출하면 compose 는 **compose 파일 옆의 `.env`** 만 읽는다. 도메인 파일이 있으면
+# 그 심링크를 만들어 두 경로(run 스크립트/compose)가 같은 값을 쓰게 한다(best-effort).
+_compose_dir="$(cd "$(dirname "$0")/compose" 2>/dev/null && pwd || true)"
+if [ -f "$MMF_DOMAIN_ENV_FILE" ] && [ -n "$_compose_dir" ] && [ -w "$_compose_dir" ]; then
+  ln -sfn "$MMF_DOMAIN_ENV_FILE" "$_compose_dir/.env" 2>/dev/null \
+    && echo "[run-mmf] compose .env → $MMF_DOMAIN_ENV_FILE"
+fi
 DOCKER_GID="$(getent group docker | cut -d: -f3)"
 
 echo "[run-mmf] core=$CORE_IMG"

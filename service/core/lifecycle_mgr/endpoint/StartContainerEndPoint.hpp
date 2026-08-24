@@ -22,10 +22,9 @@ class StartContainerEndPoint : public DDSMessageEndPoint {
 
     StartContainerEndPoint(MessageType msgtype, std::string topic,
                             Callback cb = nullptr);
-    virtual ~StartContainerEndPoint();
-
-    virtual void OnDataAvailable() override;
-    virtual void OnDataPublished(bool ret) override;
+    ~StartContainerEndPoint() override= default;
+    void OnDataAvailable() override;
+    void OnDataPublished(bool ret) override;
 
   private:
     StartContainerRequest  req_;

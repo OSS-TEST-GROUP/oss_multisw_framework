@@ -1,0 +1,18 @@
+# adaptive ECU — MULTI-vECU 버스 구성.
+#
+# 단일 ECU 예제(adaptive-min.yaml)와 다른 점은 OUT 토픽 하나뿐이다.
+# 그 예제들은 서로의 "대안"이라 전부 sils/ego/cmd 에 쓰는데, 한 버스에 같이 올리면
+# 라이터가 넷이 되고 플랜트는 발행 순서로 승자가 정해진다 -- 아무도 오류를 안 낸다.
+#
+# 규칙(sils-integration-topology.md §3): 종축 액추에이션 채널 sils/ego/cmd 는
+# **VCU(vehicle-interface) 하나만** 쓴다. 나머지 ECU 는 자기 채널로 내고, 통합은 VCU 가 한다.
+# steer-ecu 가 원래부터 sils/ego/steer_cmd 로 갈라져 있는 것과 같은 이유다.
+channels:
+  - name: Vehicle.EgoState
+    dir: in
+    topic: sils/ego/state
+    type: canonical/ego-state
+  - name: Vehicle.Control
+    dir: out
+    topic: sils/ego/cmd_adaptive
+    type: canonical/vehicle-control

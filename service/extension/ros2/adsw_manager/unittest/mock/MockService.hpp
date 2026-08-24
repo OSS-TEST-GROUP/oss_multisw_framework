@@ -42,10 +42,11 @@ MockService* Mock_Service;
 Service::Service(const std::string& name, ServiceType service_type, RecoveryPolicy recovery_policy, bool is_enable)
     : name_(name), service_type_(service_type), recovery_policy_(recovery_policy), is_enabled_(is_enable),
       service_state_(ServiceState::NOT_RUNNING), launch_file_(""), max_nodes_(0), current_nodes_(0), pid_(0),
-      exit_code_(0), is_direct_exec_(false){
+      exit_code_(0), is_direct_exec_(false), is_container_workload_(false){
 }
-Service::~Service() {
-}
+// ~Service() 정의는 제거했다. 프로덕션 헤더가 `= default` 로 바뀌어
+// 아웃오브라인 정의가 위법(explicitly-defaulted 함수의 재정의)이 되고,
+// defaulted 소멸자는 컴파일러가 각 TU 에 만들어주므로 링크 심이 필요 없다.
 
 std::string Service::GetName() {
     // Return the stored name directly instead of forwarding to mock
@@ -81,7 +82,7 @@ void Service::SetPackage(const std::string& package) {
     if (Mock_Service) Mock_Service->SetPackage(package);
     packag_name_ = package;
 }
-const std::string Service::GetPackage() {
+std::string Service::GetPackage() {
     if (Mock_Service) return Mock_Service->GetPackage();
     return packag_name_;
 }
@@ -126,6 +127,16 @@ void Service::SetDirectExec(bool direct) {
 }
 bool Service::IsDirectExec() const {
     return is_direct_exec_;
+}
+
+// container-workload accessor — 위와 같은 이유로 실제 멤버를 그대로 쓴다.
+// ServiceRegistry::Save / LoadServiceSaved 가 호출하므로 없으면
+// ADSWServiceRegistryTest 가 링크되지 않는다.
+void Service::SetContainerWorkload(bool v) {
+    is_container_workload_ = v;
+}
+bool Service::IsContainerWorkload() const {
+    return is_container_workload_;
 }
 
 }

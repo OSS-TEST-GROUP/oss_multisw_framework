@@ -1,0 +1,8 @@
+# Resolved upstream scenario_simulator_v2 commit for the loop-B image.
+# Written by docker/sils/build-ss2.sh on a successful build. Commit this file:
+# it is what makes a B1-3 interop measurement reproducible.
+repo=https://github.com/tier4/scenario_simulator_v2.git
+ref=master
+commit=3370c817efc5458fbe69cc3c02a9bc8956cb8a81
+image=sils-ss2-upstream:humble
+dev_image=sils-ss2-dev:humble

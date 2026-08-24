@@ -6,10 +6,9 @@
 
 namespace lifecycle_manager {
 
-Service::Service() : name_(""), service_type_(ServiceType::ONESHOT), recovery_policy_(RecoveryPolicy::R_DEFAULT), is_enabled_(false),
-    service_mode_(ServiceMode::NORMAL), service_state_(ServiceState::NOT_RUNNING),
-    service_state_last_(ServiceState::NOT_RUNNING), recovered_count_(0), exit_code_(-1), mw_type_(MwType::ROS2)
-{}
+Service::Service() : service_type_(ServiceType::ONESHOT), recovery_policy_(RecoveryPolicy::R_DEFAULT), is_enabled_(false),
+                     service_mode_(ServiceMode::NORMAL), service_state_(ServiceState::NOT_RUNNING),
+                     service_state_last_(ServiceState::NOT_RUNNING), recovered_count_(0), exit_code_(-1), mw_type_(MwType::ROS2) {}
 
 Service::Service(const std::string& name, const ServiceType type, const RecoveryPolicy policy, const bool enabled, const MwType os)
     : name_(name), service_type_(type), recovery_policy_(policy), is_enabled_(enabled),
@@ -19,7 +18,6 @@ Service::Service(const std::string& name, const ServiceType type, const Recovery
 
 }
 
-Service::~Service() {}
 
 
 std::string Service::GetName(){
@@ -76,7 +74,9 @@ ServiceState Service::GetLastServiceState(){
 }
 
 int32_t Service::GetRecoveredCount(){
-    return recovered_count_;
+    // 멤버는 uint32_t, 인터페이스는 int32_t 다. 재시작 횟수라 int32 범위를
+    // 넘길 일이 없다 — 축소를 명시해 둔다.
+    return static_cast<int32_t>(recovered_count_);
 }
 
 void Service::IncreaseRecoveredCount(){

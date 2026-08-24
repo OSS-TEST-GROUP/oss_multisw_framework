@@ -563,8 +563,36 @@ DDSProvider::DDSProvider()
     }
 
     // Create Participant
-    DomainParticipantQos pqos = PARTICIPANT_QOS_DEFAULT;
+    //
+    // ★ get_default_participant_qos(), NOT PARTICIPANT_QOS_DEFAULT.
+    //
+    // create_participant() decides whether to apply the XML default profile by comparing
+    // ADDRESSES (Fast DDS 3.2.2, DomainParticipantFactory.cpp:160):
+    //     const DomainParticipantQos& pqos =
+    //         (&qos == &PARTICIPANT_QOS_DEFAULT) ? default_participant_qos_ : qos;
+    // Copying the constant into a local loses that identity, so the profile loaded from
+    // FASTDDS_DEFAULT_PROFILES_FILE was silently dropped for this participant -- transport,
+    // data sharing AND type propagation. get_default_participant_qos() (line 306) returns
+    // that same profile-populated QoS, so copying THAT is safe.
+    DomainParticipantQos pqos = DomainParticipantFactory::get_instance()->get_default_participant_qos();
     pqos.name("VISS_Participant");
+    // ★ DO NOT PROPAGATE TypeObject -- the floor under the XML profile.
+    //
+    // A Fast DDS participant that propagates TypeObject makes every Cyclone participant on
+    // the same domain log
+    //     dq.builtin: ... ddsi_xt_type_init_impl with invalid type object
+    // MEASURED 2026-08-12, domain 42: 1260 such lines across the three Autoware partitions
+    // within seconds of mmf-core starting; 0 without it, 0 with this line. The partitions do
+    // NOT crash -- an earlier version of this comment said they did, and that was wrong (the
+    // deaths came from a duplicated run_partitions.sh EXIT trap). Log hygiene and config
+    // correctness, not availability. The failure lands on the READER, so this protects other
+    // people's logs, not this process -- "we look fine" is not evidence it is set.
+    // docs/sils/evidence/mmf-typeobject-2026-08-12.md
+    //
+    // Same rule, same spelling, as service/core/ota_mgr/otam_common/otam_dds_impl.h and
+    // service/sils/vecu/src/sils_participant_qos.hpp. Kept here as well as in the XML so
+    // that deleting the profile block cannot silently remove the protection.
+    pqos.properties().properties().emplace_back("fastdds.type_propagation", "disabled");
     participant_ = DomainParticipantFactory::get_instance()->create_participant(domain_id, pqos, discovery_listener_.get(), StatusMask::none());
     if (participant_ == nullptr) {
         LOG_ERROR << "Failed to create DDS Participant on domain " << domain_id;
@@ -591,9 +619,16 @@ DDSProvider::DDSProvider()
         true, 
         [this](DataReader* reader) { handleVehicleKinematics(reader); });
 
-    registerSubscription("rt/api/vehicle/status", 
-        TypeSupport(new autoware_adapi_v1_msgs::msg::VehicleStatusPubSubType()), 
-        false, 
+    // best_effort=true: MEASURED 2026-08-10 against a real Autoware Control partition --
+    // /api/vehicle/status is offered BEST_EFFORT (like /api/vehicle/kinematics above).
+    // A RELIABLE reader NEVER matches a BEST_EFFORT writer, and DDS declines that pairing
+    // in SILENCE: the topic still shows up in discovery, so the only visible symptom was
+    // `ros2 topic info` reporting "Subscription count: 0" while the publisher ran at 10 Hz.
+    // The cost was the whole message -- SelectedGear and steering_tire_angle both come from
+    // here and were simply never populated.
+    registerSubscription("rt/api/vehicle/status",
+        TypeSupport(new autoware_adapi_v1_msgs::msg::VehicleStatusPubSubType()),
+        true,
         [this](DataReader* reader) { handleVehicleStatus(reader); });
 
     registerSubscription("rt/api/routing/state", 
@@ -1476,6 +1511,25 @@ void DDSProvider::handleVehicleStatus(DataReader* reader)
                     }
                     pushToDataChannel("Vehicle.Body.Lights.Hazard.IsSignaling", hazard_val, ms_since_epoch);
                 }
+
+                // Steering. VehicleStatus has carried steering_tire_angle all along; it was
+                // simply never published to the tree, so every consumer saw a vehicle whose
+                // wheels were unknown.
+                //
+                // UNITS: Autoware gives RADIANS, VSS declares this leaf in DEGREES
+                // (Vehicle.Chassis.Axle.Row1.SteeringAngle, float, degrees). Publishing the
+                // raw value would be wrong by 57.3x -- the same trap documented for MORAI in
+                // idl/dds/sils/EgoState.idl. Convert here, at the anti-corruption boundary.
+                //
+                // Row1 (front axle road-wheel angle) rather than Chassis.SteeringWheel.Angle:
+                // steering_tire_angle is the ROAD WHEEL angle, and the steering-wheel leaf
+                // would need an unknown steering ratio to be honest.
+                // (handleVehicleKinematics has its own copy of this constant; it is a local
+                // there, so it is not in scope here.)
+                const double kRadToDeg = 180.0 / 3.14159265358979323846;
+                pushToDataChannel("Vehicle.Chassis.Axle.Row1.SteeringAngle",
+                                  std::to_string(sample.steering_tire_angle() * kRadToDeg),
+                                  ms_since_epoch);
 
             } catch (const std::exception& e) {
                 LOG_ERROR << "Exception in VehicleStatus parsing: " << e.what();

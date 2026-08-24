@@ -1,0 +1,40 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>ss2_ego_bridge</name>
+  <version>0.1.0</version>
+  <description>
+    Anti-corruption layer between scenario_simulator_v2 and SiLS, BOTH directions.
+    Lives outside service/sils/ so swapping the simulator never touches SiLS itself.
+      ss2_ego_bridge      (B2-1) SS_v2 entity status  -> canonical EgoState on DDS
+      ss2_control_bridge  (B2-3) canonical VehicleControl -> Autoware control topics
+    Together they close the loop: the ego moves because of what our vECU decided.
+  </description>
+  <maintainer email="jane.kim@obigo.com">OBIGO SiLS</maintainer>
+  <license>Proprietary</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>traffic_simulator_msgs</depend>
+  <!-- The return path (ss2_control_bridge) publishes exactly what
+       concealer::AutowareUniverse subscribes to. -->
+  <depend>autoware_control_msgs</depend>
+  <depend>autoware_vehicle_msgs</depend>
+  <!-- Stage 3. aw_ego_state_bridge reads the ADAPI vehicle-state surface; the localization
+       bridge fills what simple_planning_simulator vacates, which is plain ROS 2 types:
+       /localization/kinematic_state is nav_msgs/Odometry and /localization/acceleration is
+       geometry_msgs/AccelWithCovarianceStamped. -->
+  <depend>autoware_adapi_v1_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>tf2_ros</depend>
+
+  <!-- Fast DDS is found directly by CMakeLists.txt (fastrtps on Humble, fastdds on 3.x)
+       rather than declared here: the package name differs across versions and rosdep
+       would pin us to one. See adapters/ss2/README.md "Fast DDS 버전". -->
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

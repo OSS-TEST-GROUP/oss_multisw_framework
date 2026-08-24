@@ -3,8 +3,19 @@
 Checks a vECU **run trace** against the published boundary — the
 [trace schema](../../../docs/sils/sils-trace-schema.md) and the fidelity/parity contracts.
 It consumes only the JSONL trace (`docs/sils/sils-extension-model.md §2`), so it runs
-**outside** the vECU: no build, no DDS, no source — just Python 3 and a captured
+**outside** the vECU: no build, no DDS, no source — just Python and a captured
 `trace.jsonl`. A developer runs it on their own ECU's output; CI runs the same tools.
+
+> **Dependencies — read this before quoting "just Python 3".**
+> * **stdlib only** for the trace-only path: `gate.py <trace.jsonl>` and
+>   `validate_trace.py <trace.jsonl>` with no extra arguments. This is the Phase 2
+>   Tier A path (judge a submitted trace without running anyone's code).
+> * **PyYAML required** the moment a YAML file enters: `--requirements`, `--rules`,
+>   `--contract`, `--resolved`, `import_openscenario.py`, and anything that goes through
+>   `topology_compiler/compile.py` (i.e. all of `sils-ci.sh`).
+> * **pytest required** to run the test suites (`python3 -m pytest tools/sils`).
+>
+> `python3 -m pip install -r ../requirements.txt` installs both.
 
 ## The gate (one command)
 
@@ -73,5 +84,10 @@ trace. No part of the vECU build is required.
 ## Tests
 
 ```bash
-python3 -m pytest tools/sils/conformance/        # validate/evaluate/parity/compare/junit
+python3 -m pip install -r ../requirements.txt    # PyYAML + pytest (once)
+python3 -m pytest tools/sils/conformance/ -q     # 8 suites · 179 tests
+python3 -m pytest tools/sils -q                  # whole tool layer · 242 tests
 ```
+
+Per-suite counts (2026-08-06): evaluate 80 · compare_golden 27 · import_openscenario 14 ·
+capture_golden 12 · to_junit 12 · validate_trace 12 · parity 12 · gate 10.

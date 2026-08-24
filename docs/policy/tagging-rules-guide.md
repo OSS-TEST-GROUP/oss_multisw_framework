@@ -179,10 +179,11 @@ registry.obigo.com/oss/<컴포넌트명>:<태그>
 
 #### 스냅샷 태그 형식
 ```
-<branch>-<date>-<shortsha>
-   │        │         └─ 소스 커밋 short SHA (git rev-parse --short HEAD)
-   │        └─ 빌드 날짜 YYYYMMDD (UTC)
-   └─ 빌드한 소스 브랜치명 (Docker 태그 비허용 문자 → 하이픈 치환)
+[<prefix>-]<branch>-<date>-<shortsha>
+     │         │        │         └─ 소스 커밋 short SHA (git rev-parse --short HEAD)
+     │         │        └─ 빌드 날짜 YYYYMMDD (UTC)
+     │         └─ 빌드한 소스 브랜치명 (Docker 태그 비허용 문자 → 하이픈 치환)
+     └─ (선택) 변종 구분 prefix — 아래 "변종 prefix" 참고
 ```
 
 | 규칙 | 내용 |
@@ -191,14 +192,64 @@ registry.obigo.com/oss/<컴포넌트명>:<태그>
 | 브랜치 치환 | 비허용 문자를 모두 `-` 로: `sed 's/[^A-Za-z0-9._-]/-/g'`<br>예) `feature/rviz2-ext-agl` → `feature-rviz2-ext-agl` |
 | 날짜 | `YYYYMMDD` **UTC** (`date -u +%Y%m%d`). 하루 여러 번 빌드해도 SHA 로 구분된다 |
 | SHA | `git rev-parse --short HEAD` (기본 7자). 앞에 `g` 같은 접두어를 붙이지 않는다 |
+| prefix | 선택. 브랜치와 같은 규칙으로 치환된다. 지정하지 않으면 붙지 않는다 |
 | 길이 | 128자 제한 — 브랜치명이 길면 앞 40자로 잘라 쓴다 |
 
 > 형식은 **빌드 스크립트가 자동 계산**한다 (§2-4). 손으로 조립하지 않는다.
 
+#### ⚠️ 변종 prefix — 같은 소스로 다른 이미지를 만들 때
+
+**같은 커밋에서 여러 변종 이미지를 만들어 같은 리포지토리에 push 하면 스냅샷 태그가 서로
+덮어쓴다.** 브랜치·날짜·SHA 가 모두 같아 태그가 동일해지기 때문이다.
+
+```
+# prefix 없이 두 변종을 빌드하면 — 나중 것이 앞의 것을 덮어쓴다
+oss/rviz2-agl:develop-20260801-e0399cc   ← 표준 빌드
+oss/rviz2-agl:develop-20260801-e0399cc   ← autoware 변종 (같은 태그! 덮어씀)
+```
+
+이를 막기 위해 **`SNAP_PREFIX` 환경변수로 변종을 구분**한다.
+
+```bash
+SNAP_PREFIX=touch    ./docker/script/build_rviz2_multiarch.sh
+# → oss/rviz2-agl:touch-develop-20260801-e0399cc
+
+SNAP_PREFIX=debug BUILD_TYPE=Debug ./docker/build_multiarch.sh
+# → oss/oss-mmf-core:debug-develop-20260801-abc1234
+```
+
+| 언제 쓰나 | prefix 예 |
+|---|---|
+| 기능 변종 (터치본·Autoware 연동 등) | `touch`, `autoware`, `base` |
+| 빌드 타입이 다른 이미지 (Debug/Release 를 같은 repo 에) | `debug` |
+| 그 외 같은 소스·같은 repo 로 나뉘는 산출물 | 구분되는 짧은 이름 |
+
+- **변종이 서로 다른 리포지토리로 가면 prefix 가 필요 없다** (예: `oss-mmf-core` /
+  `oss-mmf-ext-ros2` / `oss-mmf-ext-agl` 는 repo 가 달라 충돌하지 않는다).
+#### 스크립트별 기본 prefix
+
+`SNAP_PREFIX` 를 명시하면 항상 그 값이 우선한다. 명시하지 않았을 때의 기본값은 다음과 같다.
+
+| 스크립트 | 기본 prefix | 결과 |
+|---|---|---|
+| MMF `docker/build_multiarch.sh` | 없음 | `develop-20260801-abc1234` |
+| HMI `build_multiarch.sh` | 없음 | `develop-20260801-abc1234` |
+| HMI `build_rviz2_multiarch.sh` | **`TAG` 값** (단 `latest` 면 없음) | `TAG=touch` → `touch-develop-…` |
+| HMI `build_rviz2_autoware.sh` | **`autoware`** | `autoware-develop-…` |
+
+- rviz2 계열은 **한 리포지토리(`oss/rviz2-agl`)를 여러 변종이 공유**하므로 기본값을 두어
+  깜빡해도 덮어쓰지 않게 했다. 기본값은 레지스트리의 기존 관행(`touch-…`, `base-…`)과 같다.
+- 강제로 prefix 를 없애려면 `SNAP_PREFIX=""` 를 명시한다.
+- prefix 는 **접두**로 붙인다. 아키별 중간 태그가 `-arm64`/`-amd64` **접미**를 쓰므로,
+  접미로 붙이면 둘이 섞여 읽기 어려워진다.
+
 **예시**
 ```
-develop-20260731-9e4a5b6              ← develop 빌드 (정상 경로)
-touch-20260731-acef2eb                ← 변종(touch) 빌드
+develop-20260731-9e4a5b6                 ← develop 표준 빌드
+touch-develop-20260801-e0399cc           ← 터치 변종
+autoware-develop-20260801-e0399cc        ← Autoware 변종
+debug-develop-20260801-abc1234           ← Debug 빌드
+touch-develop-20260801-e0399cc-arm64     ← 변종 + 아키별 중간 태그
 ```
 
 > **왜 스냅샷 태그인가**: `latest` 만으로는 "그때 보드에 올라간 이미지"를 다시 만들 수 없다.
@@ -324,6 +375,7 @@ git log --oneline -1 9e4a5b6
 | 보드·운영 배포에 `latest` 사용 | 언제 무엇이 바뀌는지 추적 불가 |
 | 스냅샷 태그 없이 `latest` 만 push | 그 시점 이미지를 다시 지정할 수 없다 |
 | `latest` 없이 스냅샷 태그만 push | 두 태그는 함께 push 한다 (§2-2) — 최신 포인터가 끊긴다 |
+| **변종 이미지를 prefix 없이 같은 repo 에 push** | 스냅샷 태그가 서로 덮어써 재현이 깨진다 (§2-2 변종 prefix) |
 | **기능 브랜치에서 레지스트리 push** | 스크립트가 차단 (`latest` 오염·레지스트리 위생) |
 | 가드 우회 (`DEFAULT_BRANCH` 임의 변경) | 정본 `latest` 와 레지스트리 추적성이 깨진다 |
 | `docker tag`/`push` 를 손으로 조합 | 가드·태그 규칙을 건너뛴다 — 스크립트를 쓴다 |
@@ -376,6 +428,7 @@ git log --oneline -1 9e4a5b6
 - [ ] **`develop` 브랜치**에서 빌드 (기능 브랜치는 스크립트가 차단)
 - [ ] 커밋 완료 상태(clean)에서 빌드 — dirty 트리 아님 (스크립트가 차단)
 - [ ] 빌드 스크립트로 push — `:latest` + **불변 스냅샷 태그** 동시 생성
+- [ ] 같은 소스로 만든 **변종 이미지면 `SNAP_PREFIX` 지정** (touch/autoware/debug 등)
 - [ ] (릴리스면) 같은 이미지에 `vX.Y.Z` 태그 추가 부여
 - [ ] 멀티아키(manifest list) push 및 `imagetools inspect` 로 arm64 포함 확인
 - [ ] 보드에서 **스냅샷 태그로** pull·기동 검증 (arm64 자동 선택 확인)

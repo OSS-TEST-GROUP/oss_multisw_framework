@@ -42,6 +42,20 @@ class ContainerHealthMonitor {
                                                  bool is_running,
                                                  int32_t exit_code);
 
+    // 컨테이너 안 프로세스 조회 seam.
+    //
+    // 둘 다 `docker exec ... pgrep` 을 popen 으로 돌린다. 원래는 익명 네임스페이스
+    // 자유 함수라 테스트에서 가로챌 방법이 없었고, 그래서 PollServicesInContainer
+    // (90여 줄의 PID 재수화·생사판정·상태승격 로직)가 통째로 미커버였다.
+    // 프로덕션 동작은 그대로다.
+    virtual bool     IsServiceAliveInContainer(const std::string& container,
+                                               const std::string& token);
+    virtual uint64_t LookupServicePidInContainer(const std::string& container,
+                                                 const std::string& token);
+
+    // PollLoop 한 사이클. 루프/sleep 과 분리해 테스트가 스레드 없이 직접 부른다.
+    void PollOnce();
+
   protected:
     std::map<std::string, bool> prev_state_;  // container_name -> was_running
 
@@ -52,7 +66,11 @@ class ContainerHealthMonitor {
 
   private:
     void PollLoop();
+
+  protected:
     void PollServicesInContainer(const std::string& container_name);
+
+  private:
 
     std::thread       poll_thread_;
     std::atomic<bool> running_{false};

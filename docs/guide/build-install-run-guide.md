@@ -74,16 +74,25 @@ done
 > 멀티아키(amd64+arm64) 매니페스트 + registry push 를 한 번에 하려면
 > `BUILD_TYPE=Release ./docker/build_multiarch.sh` 사용.
 
-> **레지스트리 계정 — `ossuser` 단일 계정으로 pull·push**
-> registry.obigo.com(Harbor) 는 **`ossuser` 계정 하나로 pull·push 를 모두** 수행한다.
-> build.sh / build_multiarch.sh / Jenkins 모두 `REGISTRY_ID=ossuser` 로 로그인한다
-> (`docker/registry-auth.sh` 의 `registry_login`, `docker login … --password-stdin`).
-> - **builder 등 관리자 권한 계정은 쓰지 않는다.**
-> - 자격증명은 `docker/build.sh` 의 `REGISTRY_ID`/`REGISTRY_PWD` 참조. push 시 별도 로그인/전환 불필요:
+> **레지스트리 접근 — pull 은 인증 불필요, push 만 인증 필요**
+> `registry.obigo.com`(Harbor) 의 `oss` 프로젝트는 **public** 이다.
+>
+> - **pull (이용자·개발자·보드)**: 로그인 없이 그대로 받는다.
 >   ```bash
->   BUILD_TYPE=Release ./docker/build_multiarch.sh   # ossuser 로그인 → 멀티아키 빌드 → push
+>   docker pull registry.obigo.com/oss/oss-mmf-core:latest
 >   ```
-> - **Jenkins**: `REGISTRY_ID`/`REGISTRY_PWD`(ossuser) 로 로그인 후 그대로 push. Jenkinsfile 에 평문 비밀번호 노출은 지양(자격증명 주입 권장).
+> - **push (담당자·CI)**: 인증이 필요하다. 자격증명은 **저장소에 두지 않는다.**
+>   - **로컬**: 최초 1회만 로그인하면 이후 유지된다.
+>     ```bash
+>     docker login registry.obigo.com          # 개인 계정 또는 로봇 계정
+>     BUILD_TYPE=Release ./docker/build_multiarch.sh
+>     ```
+>   - **CI(Jenkins)**: Harbor **로봇 계정**(`oss-ci`, pull+push)을 Credentials 로 주입한다.
+>     Jenkinsfile 은 `credentials('harbor-oss-ci')` 를 사용하며 평문 비밀번호를 담지 않는다.
+>   - `docker/registry-auth.sh` 의 `registry_login` 은 **이미 로그인돼 있으면 아무것도 하지 않고**,
+>     자격증명이 없으면 안내 후 중단한다 (하드코딩 fallback 없음).
+> - 관리자 권한 계정(`builder` 등)은 쓰지 않는다. 로봇 계정 발급·설정은
+>   [registry-robot-account-guide.md](../policy/registry-robot-account-guide.md) 참조.
 
 ### 2-3. 설치 (보드로 전달 — 둘 중 하나)
 ```bash

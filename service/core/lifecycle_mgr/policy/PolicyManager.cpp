@@ -10,10 +10,7 @@
 
 namespace lifecycle_manager {
 
-constexpr const char* const policy_always = "lifecyclemgr";
-
 PolicyManager::PolicyManager() {}
-PolicyManager::~PolicyManager() {}
 
 bool PolicyManager::Start() {
     LOG_DEBUG("PolicyManager::Start " );
@@ -42,8 +39,7 @@ std::shared_ptr<PolicyBase> PolicyManager::GetPolicy(RecoveryPolicy policy){
     return nullptr;
 }
 
-    
-std::shared_ptr<PolicyBase> PolicyManager::GetPolicy(std::string name){
+std::shared_ptr<PolicyBase> PolicyManager::GetPolicy(const std::string& name) {
 
     for (auto& iter : policies_){
 
@@ -56,7 +52,7 @@ std::shared_ptr<PolicyBase> PolicyManager::GetPolicy(std::string name){
     return nullptr;
 }
 
-ServiceControlAction PolicyManager::Evaluate(std::shared_ptr<Service> service){
+ServiceControlAction PolicyManager::Evaluate(const std::shared_ptr<Service>& service) {
 
     RecoveryPolicy recovery = service->GetRecoveryPolicy();
 
@@ -68,6 +64,5 @@ ServiceControlAction PolicyManager::Evaluate(std::shared_ptr<Service> service){
 
     return ServiceControlAction::NONE;
 }
-
 
 } // namespace lifecycle_manager

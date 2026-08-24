@@ -8,7 +8,6 @@ LifecycleFactory::LifecycleFactory() :lifecycle_manager_(nullptr)
     LOG_INFO("Create LifecycleFactory");
 }
 
-LifecycleFactory::~LifecycleFactory() {}
 
 LifecycleFactory* LifecycleFactory::GetInstance(){
    return getShared().get();
@@ -106,8 +105,10 @@ bool LifecycleFactory::IsKnownAdswPublisher(
     // the monitor. adsw_manager publishes UpdateServiceListRequest very
     // early in its own boot (right after CreateEndPoints), so no
     // legitimate response can arrive before the trust anchor is in place.
-    if (known_adsw_prefixes_.empty()) return false;
-    return known_adsw_prefixes_.count(make_prefix(handle)) > 0;
+    if (known_adsw_prefixes_.empty()) {
+        return false;
+    }
+    return known_adsw_prefixes_.contains(make_prefix(handle));
 }
 
 bool LifecycleFactory::KnownAdswPublisherSet() {

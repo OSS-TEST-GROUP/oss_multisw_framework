@@ -87,7 +87,7 @@ void ROSServiceController::Finalize(){
 
 bool ROSServiceController::StartGroup(const std::string& group){
     if (!group.empty()){
-        if (GetContainer()->ContainerSupported() == true){
+        if (GetContainer()->ContainerSupported()) {
             return GetContainer()->StartContainer(group);
         }
     }
@@ -96,7 +96,7 @@ bool ROSServiceController::StartGroup(const std::string& group){
 
 bool ROSServiceController::StopGroup(const std::string& group){
     if (!group.empty()){
-        if (GetContainer()->ContainerSupported() == true){
+        if (GetContainer()->ContainerSupported()) {
             return GetContainer()->StopContainer(group);
         }
     }
@@ -253,14 +253,14 @@ bool ROSServiceController::StartService(std::shared_ptr<Service> service){
             return true;
         }
         // Then try container format
-        else if (std::regex_search(trimmedResult, match, re_container)) {
+        if (std::regex_search(trimmedResult, match, re_container)) {
             uint64_t pid = std::stoi(match[1].str());
             service->SetServiceState(ServiceState::RUNNING);
             service->SetPID(pid);
             LOG_DEBUG("StartService for :: " << service->GetPackage() << ", pid = " << pid << " (container)");
             return true;
         }
-        
+
         // Also try to split by lines and check each line (fallback for multi-line output)
         std::vector<std::string> lines = HelperUtils::SplitLines(exeresult);
         LOG_DEBUG("Number of output lines after SplitLines: " << lines.size());
@@ -274,7 +274,7 @@ bool ROSServiceController::StartService(std::shared_ptr<Service> service){
                 LOG_DEBUG("StartService for :: " << service->GetPackage() << ", pid = " << pid << " (direct from line)");
                 return true;
             }
-            else if (std::regex_search(lines[i], match, re_container)) {
+            if (std::regex_search(lines[i], match, re_container)) {
                 uint64_t pid = std::stoi(match[1].str());
                 service->SetServiceState(ServiceState::RUNNING);
                 service->SetPID(pid);
@@ -404,9 +404,8 @@ bool ROSServiceController::StopService(std::shared_ptr<Service> service){
         service->SetServiceState(ServiceState::NOT_RUNNING);
         service->SetPID(0); // Clear the PID
         return true;
-    }else{
-        LOG_ERROR("StopService error : " << command);
     }
+    LOG_ERROR("StopService error : " << command);
 
 #if 0    
     std::string keyword = "process has finished cleanly";
@@ -429,7 +428,7 @@ bool ROSServiceController::StopService(std::shared_ptr<Service> service){
     return false;
 }
 
-bool ROSServiceController::GetNodeLists(std::shared_ptr<Service> service){
+bool ROSServiceController::GetNodeLists(const std::shared_ptr<Service>& service) {
     if (service == nullptr) {
         LOG_ERROR("Received null service in GetNodeLists.");
         return false;
@@ -457,9 +456,9 @@ bool ROSServiceController::GetNodeLists(std::shared_ptr<Service> service){
     return true;
 }
 
-uint64_t ROSServiceController::GetPID(std::shared_ptr<Service> service){
+uint64_t ROSServiceController::GetPID(const std::shared_ptr<Service>& service) {
 
-     if (service == nullptr) {
+    if (service == nullptr) {
         LOG_ERROR("Received null service in GetPID.");
         return 0;
     }
@@ -494,7 +493,6 @@ uint64_t ROSServiceController::GetPID(std::shared_ptr<Service> service){
     return 0;
 }
 
-
 bool ROSServiceController::ProcessServiceStartRequest(lifecyclemgr::StartServiceRequest* message){
     if (message == nullptr) {
         LOG_ERROR("Received null message in ProcessServiceStartRequest.");
@@ -502,13 +500,22 @@ bool ROSServiceController::ProcessServiceStartRequest(lifecyclemgr::StartService
     }
 
     LOG_DEBUG("Processing service start request for " << message->service_list().size() << " services.");
-    if (TypeConvert::ToMwType(message->mw_type()) == MwType::ROS2) {
+    // 이 판(ros2)은 ROS2 만 맡는다. MW_NATIVE 는 general 판 소관이다.
+    const MwType req_mw_start = TypeConvert::ToMwType(message->mw_type());
+    if (req_mw_start == MwType::ROS2) {
         std::vector<std::string> service_list = message->service_list();
-        bool is_group = message->is_group();
         bool result = false;
 
-        // Check if running on x86_64 (native) - groups only supported in container environments
-        is_group = false;
+        // 그룹 시작/정지는 컨테이너 환경에서만 지원한다는 전제로 항상 개별 처리한다.
+        //
+        // 원래는 message->is_group() 을 읽은 뒤 두 줄 아래에서 무조건 false 로
+        // 덮어써서, 요청 필드가 읽히자마자 버려지고 있었다
+        // (clang-analyzer-deadcode.DeadStores). 동작은 그대로 두고 죽은 저장만
+        // 없앤다 — 요청의 is_group 은 이 판에서 쓰지 않는다는 뜻이다.
+        //
+        // 결과적으로 아래 `if (is_group)` 그룹 분기는 도달하지 않는다.
+        // 지우거나 실제 환경 판정을 붙이는 건 동작 변경이라 별도 이슈로 둔다.
+        const bool is_group = false;
 
         if (service_list.empty()) {
             LOG_ERROR("No services provided to start.");
@@ -535,11 +542,17 @@ bool ROSServiceController::ProcessServiceStartRequest(lifecyclemgr::StartService
                 std::set<std::string> handled_containers;
                 for (const auto& svc_name : service_list) {
                     std::shared_ptr<Service> svc = registry->GetService(svc_name);
-                    if (!svc) continue;
+                    if (!svc) {
+                        continue;
+                    }
                     std::string container_name =
                         registry->GetGroupNameByService(svc);
-                    if (container_name.empty()) continue;
-                    if (handled_containers.count(container_name)) continue;
+                    if (container_name.empty()) {
+                        continue;
+                    }
+                    if (handled_containers.contains(container_name)) {
+                        continue;
+                    }
                     handled_containers.insert(container_name);
 
                     if (container_controller_->IsContainerRunning(container_name)) {
@@ -576,13 +589,17 @@ bool ROSServiceController::ProcessServiceStartRequest(lifecyclemgr::StartService
             }
 
             auto container_failed = [&](const std::string& svc_name) -> bool {
-                if (failed_containers.empty() || !registry) return false;
+                if (failed_containers.empty() || !registry) {
+                    return false;
+                }
                 auto svc = registry->GetService(svc_name);
-                if (!svc) return false;
+                if (!svc) {
+                    return false;
+                }
                 const std::string container_name =
                     registry->GetGroupNameByService(svc);
                 return !container_name.empty() &&
-                       failed_containers.count(container_name) > 0;
+                       failed_containers.contains(container_name);
             };
 
             // Idempotency guard: if a service is already RUNNING /
@@ -601,12 +618,20 @@ bool ROSServiceController::ProcessServiceStartRequest(lifecyclemgr::StartService
             // do NOT skip in that case; let StartService below actually
             // launch the docker exec.
             auto already_running = [&](const std::string& svc_name) -> bool {
-                if (!registry) return false;
+                if (!registry) {
+                    return false;
+                }
                 auto svc = registry->GetService(svc_name);
-                if (!svc) return false;
+                if (!svc) {
+                    return false;
+                }
                 ServiceState s = svc->GetServiceState();
-                if (s == ServiceState::RUNNING) return true;
-                if (s == ServiceState::INITIALIZING && svc->GetPID() != 0) return true;
+                if (s == ServiceState::RUNNING) {
+                    return true;
+                }
+                if (s == ServiceState::INITIALIZING && svc->GetPID() != 0) {
+                    return true;
+                }
                 return false;
             };
 
@@ -637,7 +662,7 @@ bool ROSServiceController::ProcessServiceStartRequest(lifecyclemgr::StartService
                         count++;
                         continue;
                     }
-                    if (StartGroup(service) == true) {
+                    if (StartGroup(service)) {
                         count++;
                     }
                 }
@@ -654,16 +679,12 @@ bool ROSServiceController::ProcessServiceStartRequest(lifecyclemgr::StartService
                         count++;
                         continue;
                     }
-                    if (StartService(service) == true){
+                    if (StartService(service)) {
                         count++;
                     }
                 }
             }
-            if (count > 0){
-                result = true;
-            }else{
-                result = false; 
-            }
+            result = count > 0;
         }
 
         /* send message via message queue.. do not use local variable --> calss variable */
@@ -688,9 +709,20 @@ bool ROSServiceController::ProcessServiceStartRequest(lifecyclemgr::StartService
 
         std::shared_ptr<DDSTransmitter> transmitter = ADSWManager::Get()->GetTransmitter();
 
-        return transmitter->SendMessage(MessageType::START_SERVICE_RESPONSE,
+        // 트랜스미터가 아직 없거나 이미 내려간 상태면 여기서 널 역참조로 죽는다.
+    // 이 함수 안의 다른 모든 협력자(registry / monitor)는 널 검사를 하는데
+    // 여기만 빠져 있었다. 응답을 못 보내는 건 실패로 보고한다.
+    if (transmitter == nullptr) {
+        LOG_ERROR("No transmitter — cannot send START_SERVICE_RESPONSE");
+        return false;
+    }
+
+    return transmitter->SendMessage(MessageType::START_SERVICE_RESPONSE,
                                         reinterpret_cast<void*>(&start_service_response_));
     }
+    // 응답하지 않는 것은 맞다. 다만 흔적 없이 사라지면 안 된다.
+    LOG_DEBUG("StartServiceRequest ignored: mw_type " << static_cast<int>(req_mw_start)
+              << " is not handled by this adsw_manager (ROS2)");
     return true;
 }
 
@@ -701,13 +733,22 @@ bool ROSServiceController::ProcessServiceStopRequest(lifecyclemgr::StopServiceRe
     }
 
     LOG_DEBUG("Processing service stop request for " << message->service_list().size() << " services.");
-    if (TypeConvert::ToMwType(message->mw_type()) == MwType::ROS2) {
+    // 이 판(ros2)은 ROS2 만 맡는다. MW_NATIVE 는 general 판 소관이다.
+    const MwType req_mw_stop = TypeConvert::ToMwType(message->mw_type());
+    if (req_mw_stop == MwType::ROS2) {
         std::vector<std::string> service_list = message->service_list();
-        bool is_group = message->is_group();
         bool result = false;
 
-        // Check if running on x86_64 (native) - groups only supported in container environments
-        is_group = false;
+        // 그룹 시작/정지는 컨테이너 환경에서만 지원한다는 전제로 항상 개별 처리한다.
+        //
+        // 원래는 message->is_group() 을 읽은 뒤 두 줄 아래에서 무조건 false 로
+        // 덮어써서, 요청 필드가 읽히자마자 버려지고 있었다
+        // (clang-analyzer-deadcode.DeadStores). 동작은 그대로 두고 죽은 저장만
+        // 없앤다 — 요청의 is_group 은 이 판에서 쓰지 않는다는 뜻이다.
+        //
+        // 결과적으로 아래 `if (is_group)` 그룹 분기는 도달하지 않는다.
+        // 지우거나 실제 환경 판정을 붙이는 건 동작 변경이라 별도 이슈로 둔다.
+        const bool is_group = false;
 
         if (service_list.empty()) {
             LOG_ERROR("No services provided to stop.");
@@ -719,22 +760,18 @@ bool ROSServiceController::ProcessServiceStopRequest(lifecyclemgr::StopServiceRe
             int32_t count = 0;
             if (is_group) {
                 for (const auto& service : service_list) {
-                    if (StopGroup(service) == true) {
+                    if (StopGroup(service)) {
                         count++;
                     }
                 }
             } else {
                 for (const auto& service : service_list) {
-                    if (StopService(service) == true) {
+                    if (StopService(service)) {
                         count++;
                     }
                 }
             }
-            if (count > 0) {
-                result = true;
-            } else {
-                result = false;
-            }
+            result = count > 0;
         }
 
         /* send message via message queue.. do not use local variable --> calss variable */
@@ -756,9 +793,20 @@ bool ROSServiceController::ProcessServiceStopRequest(lifecyclemgr::StopServiceRe
 
         std::shared_ptr<DDSTransmitter> transmitter = ADSWManager::Get()->GetTransmitter();
 
-        return transmitter->SendMessage(MessageType::STOP_SERVICE_RESPONSE,
+        // 트랜스미터가 아직 없거나 이미 내려간 상태면 여기서 널 역참조로 죽는다.
+    // 이 함수 안의 다른 모든 협력자(registry / monitor)는 널 검사를 하는데
+    // 여기만 빠져 있었다. 응답을 못 보내는 건 실패로 보고한다.
+    if (transmitter == nullptr) {
+        LOG_ERROR("No transmitter — cannot send STOP_SERVICE_RESPONSE");
+        return false;
+    }
+
+    return transmitter->SendMessage(MessageType::STOP_SERVICE_RESPONSE,
                                         reinterpret_cast<void*>(&stop_service_response_));
     }
+    // 응답하지 않는 것은 맞다. 다만 흔적 없이 사라지면 안 된다.
+    LOG_DEBUG("StopServiceRequest ignored: mw_type " << static_cast<int>(req_mw_stop)
+              << " is not handled by this adsw_manager (ROS2)");
     return true;
 }
 
@@ -825,8 +873,10 @@ bool ROSServiceController::DetectContainer() {
 }
 
 bool ROSServiceController::KillProcessAndChildren(uint64_t pid) {
-    if (pid == 0) return false;
-    
+    if (pid == 0) {
+        return false;
+    }
+
     // First, try to kill child processes
     std::string kill_children_cmd = "pkill -TERM -P " + std::to_string(pid) + " 2>/dev/null || true";
     system(kill_children_cmd.c_str());

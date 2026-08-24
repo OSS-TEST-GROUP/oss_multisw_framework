@@ -40,6 +40,7 @@
 #include <fastdds/dds/topic/TypeSupport.hpp>
 
 #include "TickControlPubSubTypes.hpp"
+#include "sils_participant_qos.hpp"
 
 using namespace eprosima::fastdds::dds;
 
@@ -133,6 +134,7 @@ int main(int argc, char** argv) {
     }
 
     DomainParticipantQos pqos;
+    sils::ApplySilsParticipantQos(pqos);   // see sils_participant_qos.hpp
     pqos.name("sils_clock_master:" + g_run_id);
     DomainParticipant* participant =
         DomainParticipantFactory::get_instance()->create_participant(

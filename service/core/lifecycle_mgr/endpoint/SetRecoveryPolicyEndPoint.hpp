@@ -23,10 +23,9 @@ class SetRecoveryPolicyEndPoint : public DDSMessageEndPoint {
 
     SetRecoveryPolicyEndPoint(MessageType msgtype, std::string topic,
                                Callback cb = nullptr);
-    virtual ~SetRecoveryPolicyEndPoint();
-
-    virtual void OnDataAvailable() override;
-    virtual void OnDataPublished(bool ret) override;
+    ~SetRecoveryPolicyEndPoint() override= default;
+    void OnDataAvailable() override;
+    void OnDataPublished(bool ret) override;
 
   private:
     SetRecoveryPolicyRequest  req_;

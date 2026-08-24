@@ -11,14 +11,15 @@ namespace adsw_manager {
 namespace {
 // Per-board DDS domain isolation (default 0). Raw Fast-DDS ignores ROS_DOMAIN_ID,
 // so MMF reads MMF_DDS_DOMAIN_ID. Must match lifecycle_mgr's value on the board.
-static int MmfDdsDomainId() {
-    if (const char* e = std::getenv("MMF_DDS_DOMAIN_ID")) return std::atoi(e);
+int MmfDdsDomainId() {
+    if (const char* e = std::getenv("MMF_DDS_DOMAIN_ID")) {
+        return std::atoi(e);
+    }
     return 0;
 }
 } // namespace
 
 DDSTransmitter::DDSTransmitter() {}
-DDSTransmitter::~DDSTransmitter() {}
 
 bool DDSTransmitter::Initialize(){
     LOG_DEBUG("DDSTransmitter Start");
@@ -88,8 +89,7 @@ void DDSTransmitter::Finalize(){
     }
 }
 
-
-bool DDSTransmitter::AddMessageEndpoint(std::shared_ptr<DDSMessageEndpoint> endpoint){
+bool DDSTransmitter::AddMessageEndpoint(const std::shared_ptr<DDSMessageEndpoint>& endpoint) {
 
     if (!endpoint){
         return false;
@@ -97,10 +97,9 @@ bool DDSTransmitter::AddMessageEndpoint(std::shared_ptr<DDSMessageEndpoint> endp
 
     endpoints_[endpoint->GetTopic()] = endpoint;
     return true;
-
 }
 
-std::shared_ptr<DDSMessageEndpoint> DDSTransmitter::GetMessageEndpoint(std::string topic){
+std::shared_ptr<DDSMessageEndpoint> DDSTransmitter::GetMessageEndpoint(const std::string& topic) {
 
     auto search = endpoints_.find(topic);
 
@@ -108,11 +107,10 @@ std::shared_ptr<DDSMessageEndpoint> DDSTransmitter::GetMessageEndpoint(std::stri
 
         LOG_DEBUG("Found " << search->first  );
         return search->second;
-    } else{ 
-        std::cout << "Not found\n";
     }
+    std::cout << "Not found\n";
+
     return nullptr;
-    
 }
 
 DomainParticipant* DDSTransmitter::GetDomain() {

@@ -1,0 +1,25 @@
+---
+# policy/ 디렉토리 한정 설정. 루트 .clang-tidy 를 그대로 물려받고 한 가지만 뺀다.
+#
+# bugprone-branch-clone 을 끄는 이유
+#
+# 이 디렉토리의 정책 클래스들은 ServiceState 를 하나도 빠짐없이 열거하는
+# switch 를 갖고 있고, 각 case 에 "왜 그 동작인지" 개별 주석이 붙어 있다.
+# 결과 action 이 같은 상태가 여럿이라 (특히 PolicyManual 은 5개 전부 NONE)
+# 검사가 중복 분기로 잡지만, 합치면 안 된다.
+#
+#   - 같은 NONE 이라도 이유가 다르다: "초기화 대기" / "정상 동작 중" /
+#     "종료 대기" 는 각각 다른 판단이고 언제든 갈릴 수 있다.
+#   - default 나 라벨 묶음으로 접으면 ServiceState 에 값이 추가될 때 조용히
+#     흡수되어 정책 검토 없이 동작이 정해진다. exhaustive switch 가 그걸 막는
+#     장치이고, 이 검사와 정면으로 상충한다.
+#
+# NOLINT 로 처리하지 않는 이유: 진단이 switch 문이 아니라 "첫 번째 중복 case"
+# 줄에 붙어서, 억제 주석을 switch 한가운데 case 사이에 끼워 넣어야 한다.
+# 파일마다 위치도 다르다. 디렉토리 전체가 같은 이유로 같은 지적을 받으므로
+# 여기서 한 번에 끄는 편이 읽기에도 낫다.
+#
+# 되살리려면 이 파일을 지우면 된다.
+InheritParentConfig: true
+Checks: >
+  -bugprone-branch-clone

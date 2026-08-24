@@ -23,6 +23,7 @@
 #include <fastdds/dds/topic/TypeSupport.hpp>
 
 #include "VissRequestPubSubTypes.hpp"
+#include "sils_participant_qos.hpp"
 
 using namespace eprosima::fastdds::dds;
 
@@ -56,6 +57,7 @@ int main(int argc, char** argv) {
     if (!denv.empty()) { try { domain_id = std::stoi(denv); } catch (...) {} }
 
     DomainParticipantQos pqos;
+    sils::ApplySilsParticipantQos(pqos);   // see sils_participant_qos.hpp
     pqos.name("sils_input_source:" + run_id);
     DomainParticipant* participant =
         DomainParticipantFactory::get_instance()->create_participant(

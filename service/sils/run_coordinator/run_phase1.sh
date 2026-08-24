@@ -13,11 +13,11 @@
 #                        satisfying the Scope Gate's "Docker backend 하나" bullet.
 #
 # Both backends still use the SAME independent verify step (the host-side
-# sils_vecu_viss_verify binary) -- for the docker backend this relies on
+# sils_vecu_viss_verify binary) -- for the docker backend this REQUIRES
 # `--network host` (shared net namespace, so a host-run verify reaches the same
-# DDS domain and endpoints match) AND `--ipc=host` (shared /dev/shm, so Fast DDS's
-# shared-memory transport actually delivers samples across the container boundary
-# -- without it endpoints match but no data arrives; see start_docker).
+# DDS domain and endpoints match). `--ipc=host` is also passed, but as a DEFENSIVE
+# measure only: it matters when the SHM transport is live, and the canonical image
+# disables SHM outright (UDPv4-only profile, see start_docker).
 # adsw_manager/lifecycle_mgr registration (StartContainerRequest instead of a
 # direct `docker run`) is Topology Compiler / Fleet Runtime territory (§11) --
 # not this script; see service/sils/vecu/examples/saved-service-list.viss_probe.yaml
@@ -330,13 +330,24 @@ start_docker() {
 
     # --network host: shares the host net namespace so UDP discovery reaches the
     #   host-side verify (endpoints match) and both sit on the same DDS domain.
-    # --ipc=host: REQUIRED for data, not just discovery. Fast DDS negotiates its
-    #   shared-memory transport for peers it sees as same-host (which --network host
-    #   makes them). Without a shared IPC namespace the container has its own
-    #   /dev/shm, so the writer's SHM segment is invisible to the host reader:
-    #   endpoints match but ZERO samples arrive (verified 2026-07 -- the classic
-    #   "matched but no data" symptom). Sharing the host IPC namespace opens the SHM
-    #   data path. (Alternative would be disabling the SHM transport to force UDP.)
+    # --ipc=host: DEFENSIVE, not required by the canonical image. Rationale, in two
+    #   parts -- keep them separate:
+    #   (1) Observed symptom (2026-07): where the SHM transport is live, Fast DDS
+    #       negotiates it for peers it sees as same-host (which --network host makes
+    #       them). Without a shared IPC namespace the container has its own /dev/shm,
+    #       so the writer's SHM segment is invisible to the host reader: endpoints
+    #       match but ZERO samples arrive -- the classic "matched but no data".
+    #   (2) Current deployment contract: the canonical image does NOT use SHM at all.
+    #       docker/build_environment/fastdds-profile.xml registers UDPv4 as the only
+    #       userTransport with useBuiltinTransports=false, and sets data_sharing OFF on
+    #       the default reader/writer profiles. Dockerfile.rel's `runtime` stage pins it
+    #       via ENV FASTDDS_DEFAULT_PROFILES_FILE, and the SiLS vECU stages are
+    #       `FROM runtime`, so they inherit it. The data path there is UDP.
+    #       (The profile predates this flag: b3340f6 2026-04-25 vs 724eeee 2026-07-14.)
+    #   So this flag only earns its keep for custom images that do NOT load that
+    #   profile. Sharing the host IPC namespace weakens isolation; if the image
+    #   contract can be pinned, drop it -- but re-verify on Linux + FastDDS first.
+    #   See docs/sils/sils-understanding.md §4.7.1.
     # §9.2: rebuild -e flags for the Descriptor-derived port env. cmd_start already
     # eval'd resolved_to_shell (exporting SILS_* + setting RESOLVED_ENV_KEYS); read each
     # name's exported value via indirect expansion so the container drives the same ports.
@@ -606,8 +617,8 @@ fleet_start_member_local() {
     return 0
 }
 
-# Start one docker member. --ipc=host is required for the SHM data path across the
-# container boundary (see start_docker's note); --network host for discovery.
+# Start one docker member. --network host is REQUIRED for discovery; --ipc=host is
+# defensive only (the canonical image is UDP-only -- see start_docker's note).
 fleet_start_member_docker() {
     local run_id="$1" member_run_id="$2" domain="$3" image="$4" instance_id="$5" idx="$6"
     local from_resolved="${7:-}"

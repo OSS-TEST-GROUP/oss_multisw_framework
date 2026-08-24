@@ -1,3 +1,11 @@
+// NOTE (2026-08-10): the @unit annotations that ROS 2's rosidl_adapter emits here were
+// REMOVED. fastddsgen 4.3.0 mis-generates them into TypeObjectSupport as a bare identifier
+// (`unit_altitude = m;` instead of `= "m";`), which does not compile -- it broke the whole
+// idl_types target and therefore viss-server. The annotations are documentation-only
+// metadata: the wire format, the field order and the type name are all unchanged without
+// them, so removing them costs nothing a consumer can observe. Units for these fields are
+// the ROS 2 standard ones (degrees / m / m^2 / rad) and are handled at the mapping layer
+// in src/providers/DDSProvider.cpp.
 // generated from rosidl_adapter/resource/msg.idl.em
 // with input from autoware_sensing_msgs/msg/GnssInsOrientation.msg
 // generated code does not contain a copyright notice
@@ -9,7 +17,6 @@ module autoware_sensing_msgs {
     struct GnssInsOrientation {
       geometry_msgs::msg::Quaternion orientation;
 
-      @unit (value="rad")
       float rmse_rotation_x;
 
       float rmse_rotation_y;

@@ -208,7 +208,7 @@ adsw UpdateServiceList(container 등록)
 |---|---|---|
 | 빌드/타입 | 컴파일·링크·DDS 타입 | `./build.sh --build-sils` |
 | L0/L1 | trace 스키마 적합 | [conformance gate](../../tools/sils/conformance/gate.py) — schema→fidelity→parity, fail-closed |
-| L2 | behavior 결정성 | golden scenario 재현(같은 틱 입력 → 같은 `value` 열) |
+| L2 | behavior 결정성 | golden scenario 재현(같은 틱 입력 → 같은 `value` 열). **gate 밖 스테이지** — `compare_golden` 의 `MATCH` 가 증거이고 `fidelity_evidenced` 에 L2 는 안 뜬다 |
 | L3 | 폐루프 물리 | plant 연동 trace 비교 |
 | 타깃 | ARM64 동등성 | [sils-target-parity.md](sils-target-parity.md) |
 
@@ -283,11 +283,20 @@ SILS_CHANNELMAP=config/sils/channelmap/ego-min.yaml <bin>/sils_vecu_vehicle_prob
 ```
 프로브에 `state_received`(vx가 오름) → `control_published`(제어가 반응)가 흐르면 왕복 성립.
 
-### 성숙도 (2026-07 현재)
+### 성숙도 (2026-08 현재)
 
-- **S1 free-run 완료·머지** — 채널맵·정규 계약·코덱·프로브·fixture, 폐루프 왕복 검증.
-- **예정**: S2 tick 경계 staging(결정론 — free-run은 최신 샘플만 채택), S3 lockstep(시뮬 tick 동기),
-  Autoware 제어 입력(스키마 확인 후 채널 추가).
-- 현재 제어 로직은 **stand-in P-controller** — 전용 behavior 포트(`IVehicleBehavior`)는
-  두 번째 실소비자가 생기기 전엔 도입하지 않는다(earned-abstraction). 실제 ECU는
-  `vehicle_probe_main.cc`의 `ComputeControl` 자리에 제어 로직을 넣는다.
+**S1~S5 전부 완료·머지**([plant-adapter §5](sils-morai-plant-adapter-design.md)):
+
+- **S1 free-run** — 채널맵·정규 계약(EgoState/VehicleControl)·`VehicleWireCodec`·`RunVehicleProbe`·fixture, 폐루프 왕복 검증.
+- **S2 MIMO staged 읽기** — `SILS_STAGE_INPUT=1` 로 tick 경계 freeze + `BehaviorContext` 다중 채널 접근자.
+- **S3 lockstep** — `SILS_CLOCK_MODE=lockstep` 으로 `RunVehicleProbe` 가 ClockMaster barrier 참가.
+- **S4 conformance** — 버스 결합 trace 이벤트가 **trace schema v1 에 등록됨**(producer `vecu`/`sim_fixture`),
+  `evaluate.py` 의 `analyze_vehicle` 가 폐루프·결정론을 판정. 전용 bus verifier `sils_vecu_vehicle_verify`.
+- **S5 결함 주입** — `SILS_INPUT_FAULTS` (`drop`/`nan`/`oor`)를 tick 스케줄로 주입, `analyze_fault` 가 안전 저하를 판정.
+
+**behavior 포트는 도입됐다** — `IVehicleBehavior`([vehicle_behavior.hpp](../../service/sils/vecu/src/vehicle_behavior.hpp))가
+제어 포트이고 `LongitudinalBehavior` 가 기본 구현이다. `RunVehicleProbe` 는 매 tick 주입된
+`IVehicleBehavior` 를 호출한다(state in → control out). 실제 ECU 는 이 인터페이스를 구현해 주입한다.
+
+**남은 항목**: Autoware 제어 입력(`control_cmd`→`ControlTarget`)과 실 브리지 #1 —
+[real-bridge-requirements](sils-real-bridge-requirements.md) 의 BR-C-1(clock) 답 확인 후 착수.

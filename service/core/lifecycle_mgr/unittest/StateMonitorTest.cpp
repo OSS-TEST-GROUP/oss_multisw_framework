@@ -462,6 +462,229 @@ TEST_F(StateMonitorTest, NotifyLifecycleDiagnosticInfo_AllServices) {
     EXPECT_NO_THROW(monitor.NotifyLifecycleDiagnosticInfo(true));
 }
 
+// F008 컨테이너 집계 리포트의 *내용물*
+//
+// 위 AllServices 테스트는 CONTAINER_STATE_REPORT 가 나가는 것까지만 본다.
+// GetAllContainers() 에 기본값이 없어 빈 벡터가 돌아오므로 적재 루프 본문은
+// 실행 0회였다 — 즉 세 병렬 리스트를 채우는 코드에 아무도 닿지 않았다.
+//
+// 왜 중요한가: lifecycle_mgr 이 CONTAINER_STATE_REPORT 의 유일한 발행자다.
+// container_list / container_state_list / exit_code_list 는 인덱스로 짝지어진
+// 병렬 배열이라 하나라도 어긋나면 모니터가 A 컨테이너의 상태로 B 를 표시한다.
+// 정렬이 맞는지 고정한다.
+TEST_F(StateMonitorTest, ContainerReportCarriesEveryContainerAligned) {
+    MockLifecycleManager mgr;
+    StateMonitor monitor(mgr);
+
+    auto mockTransmitter = std::make_shared<MockDDSTransmitter>();
+    auto mockRegistry = std::make_shared<MockServiceRegistry>();
+
+    auto running = std::make_shared<lifecycle_manager::Container>(
+        "web", "img-web", "/tmp/web.yaml", "ns", lifecycle_manager::ContainerType::DOCKER);
+    running->SetState(lifecycle_manager::ContainerState::CONTAINER_RUNNING);
+    running->SetExitCode(0);
+    auto stopped = std::make_shared<lifecycle_manager::Container>(
+        "db", "img-db", "/tmp/db.yaml", "ns", lifecycle_manager::ContainerType::DOCKER);
+    stopped->SetState(lifecycle_manager::ContainerState::CONTAINER_STOPPED);
+    stopped->SetExitCode(137);
+
+    EXPECT_CALL(*Mock_ManagerBase, GetTransmitter()).WillRepeatedly(Return(mockTransmitter));
+    EXPECT_CALL(*Mock_ManagerBase, GetRegistry()).WillRepeatedly(Return(mockRegistry));
+    EXPECT_CALL(*Mock_ServiceRegistry, GetServiceNum()).WillRepeatedly(Return(0));
+    EXPECT_CALL(*Mock_ServiceRegistry, GetServicesByGroup(""))
+        .WillRepeatedly(Return(std::vector<std::shared_ptr<lifecycle_manager::Service>>{}));
+    EXPECT_CALL(*Mock_ServiceRegistry, GetAllContainers())
+        .WillRepeatedly(Return(
+            std::vector<std::shared_ptr<lifecycle_manager::Container>>{running, stopped}));
+
+    const lifecyclemgr::NotifyContainerState* report = nullptr;
+    EXPECT_CALL(*Mock_DDSTransmitter, SendMessage(MessageType::LIFECYCLE_DIAG_REPORT, _))
+        .WillRepeatedly(Return(true));
+    EXPECT_CALL(*Mock_DDSTransmitter, SendMessage(MessageType::CONTAINER_STATE_REPORT, _))
+        .WillRepeatedly(::testing::DoAll(
+            ::testing::Invoke([&report](MessageType, void* p) {
+                report = static_cast<const lifecyclemgr::NotifyContainerState*>(p);
+            }),
+            Return(true)));
+
+    monitor.NotifyLifecycleDiagnosticInfo(true);
+
+    ASSERT_NE(report, nullptr);
+    ASSERT_EQ(report->container_list().size(), 2u);
+    ASSERT_EQ(report->container_state_list().size(), 2u);
+    ASSERT_EQ(report->exit_code_list().size(), 2u);
+    // 세 리스트가 같은 순서로 짝지어져야 한다.
+    for (size_t i = 0; i < report->container_list().size(); ++i) {
+        if (report->container_list()[i] == "web") {
+            EXPECT_EQ(report->container_state_list()[i],
+                      lifecyclemgr::ContainerState::CONTAINER_RUNNING);
+            EXPECT_EQ(report->exit_code_list()[i], 0);
+        } else {
+            EXPECT_EQ(report->container_list()[i], "db");
+            EXPECT_EQ(report->container_state_list()[i],
+                      lifecyclemgr::ContainerState::CONTAINER_STOPPED);
+            EXPECT_EQ(report->exit_code_list()[i], 137);
+        }
+    }
+}
+
+TEST_F(StateMonitorTest, ContainerReportIsRebuiltNotAppended) {
+    // container_report_ 는 멤버 버퍼다. 매 호출 앞에서 clear() 하지 않으면
+    // 주기 리포트가 돌 때마다 목록이 무한히 자란다.
+    MockLifecycleManager mgr;
+    StateMonitor monitor(mgr);
+
+    auto mockTransmitter = std::make_shared<MockDDSTransmitter>();
+    auto mockRegistry = std::make_shared<MockServiceRegistry>();
+    auto c = std::make_shared<lifecycle_manager::Container>(
+        "web", "img", "/tmp/w.yaml", "ns", lifecycle_manager::ContainerType::DOCKER);
+    c->SetState(lifecycle_manager::ContainerState::CONTAINER_RUNNING);
+
+    EXPECT_CALL(*Mock_ManagerBase, GetTransmitter()).WillRepeatedly(Return(mockTransmitter));
+    EXPECT_CALL(*Mock_ManagerBase, GetRegistry()).WillRepeatedly(Return(mockRegistry));
+    EXPECT_CALL(*Mock_ServiceRegistry, GetServiceNum()).WillRepeatedly(Return(0));
+    EXPECT_CALL(*Mock_ServiceRegistry, GetServicesByGroup(""))
+        .WillRepeatedly(Return(std::vector<std::shared_ptr<lifecycle_manager::Service>>{}));
+    EXPECT_CALL(*Mock_ServiceRegistry, GetAllContainers())
+        .WillRepeatedly(Return(
+            std::vector<std::shared_ptr<lifecycle_manager::Container>>{c}));
+
+    const lifecyclemgr::NotifyContainerState* report = nullptr;
+    EXPECT_CALL(*Mock_DDSTransmitter, SendMessage(MessageType::LIFECYCLE_DIAG_REPORT, _))
+        .WillRepeatedly(Return(true));
+    EXPECT_CALL(*Mock_DDSTransmitter, SendMessage(MessageType::CONTAINER_STATE_REPORT, _))
+        .WillRepeatedly(::testing::DoAll(
+            ::testing::Invoke([&report](MessageType, void* p) {
+                report = static_cast<const lifecyclemgr::NotifyContainerState*>(p);
+            }),
+            Return(true)));
+
+    monitor.NotifyLifecycleDiagnosticInfo(true);
+    monitor.NotifyLifecycleDiagnosticInfo(true);
+    monitor.NotifyLifecycleDiagnosticInfo(true);
+
+    ASSERT_NE(report, nullptr);
+    EXPECT_EQ(report->container_list().size(), 1u) << "세 번 불러도 하나여야 한다";
+    EXPECT_EQ(report->container_state_list().size(), 1u);
+    EXPECT_EQ(report->exit_code_list().size(), 1u);
+}
+
+// updateServices 의 "실제 전이가 있었나" 판정
+//
+// 위 updateServicesUpdatesServiceState 는 TestMonitor 를 만들기만 하고
+// updateServices 를 호출하지 않는다(본문이 전부 주석 처리돼 있다). 그래서
+// 전이 감지 분기와 그에 딸린 즉시 리포트 발행이 실행 0회였다.
+//
+// 무엇을 지키는가: 서비스가 진짜로 상태를 바꾼 순간에만 diag/컨테이너 스냅샷을
+// 즉시 쏜다. 안 그러면 주기 리포트(kPollIntervalMs × kDiagReportInterval = 15초)
+// 를 기다려야 해서 Start 직후 RUNNING 이 모니터에 늦게 뜬다. 반대로 게이트가
+// 풀려서 매 폴마다 쏘면 정상 상태에서도 15초에 한 번이 아니라 5초에 한 번씩
+// 전체 스냅샷이 나가 트래픽이 는다. 양쪽 다 고정한다.
+//
+// mock_service.hpp 의 심은 GetServiceState/SetServiceState 를 널 검사 없이
+// 전역 Mock_Service 로 넘긴다. 전이를 흉내내려면 지역 변수로 목을 받쳐야 한다.
+namespace {
+struct StateBackedService {
+    lifecycle_manager::ServiceState cur = lifecycle_manager::ServiceState::NOT_RUNNING;
+    explicit StateBackedService(lifecycle_manager::ServiceState initial) : cur(initial) {
+        ON_CALL(*Mock_Service, GetServiceState())
+            .WillByDefault(::testing::ReturnPointee(&cur));
+        ON_CALL(*Mock_Service, SetServiceState(_))
+            .WillByDefault(::testing::SaveArg<0>(&cur));
+    }
+};
+} // namespace
+
+TEST_F(StateMonitorTest, UpdateServicesPublishesImmediatelyOnRealTransition) {
+    MockLifecycleManager mgr;
+    StateMonitor monitor(mgr);
+
+    auto mockTransmitter = std::make_shared<MockDDSTransmitter>();
+    auto mockRegistry = std::make_shared<MockServiceRegistry>();
+    auto svc = std::make_shared<MockService>();
+
+    StateBackedService backing(lifecycle_manager::ServiceState::NOT_RUNNING);
+    EXPECT_CALL(*Mock_ManagerBase, GetService("svc1")).WillRepeatedly(Return(svc));
+    EXPECT_CALL(*Mock_ManagerBase, GetTransmitter()).WillRepeatedly(Return(mockTransmitter));
+    EXPECT_CALL(*Mock_ManagerBase, GetRegistry()).WillRepeatedly(Return(mockRegistry));
+    EXPECT_CALL(*Mock_ServiceRegistry, GetServiceNum()).WillRepeatedly(Return(1));
+    EXPECT_CALL(*Mock_ServiceRegistry, GetServicesByGroup(""))
+        .WillRepeatedly(Return(std::vector<std::shared_ptr<lifecycle_manager::Service>>{}));
+    EXPECT_CALL(*Mock_ServiceRegistry, GetAllContainers())
+        .WillRepeatedly(Return(std::vector<std::shared_ptr<lifecycle_manager::Container>>{}));
+
+    // 전이가 있었으니 즉시 스냅샷이 나가야 한다.
+    EXPECT_CALL(*Mock_DDSTransmitter, SendMessage(MessageType::LIFECYCLE_DIAG_REPORT, _))
+        .Times(1).WillRepeatedly(Return(true));
+    EXPECT_CALL(*Mock_DDSTransmitter, SendMessage(MessageType::CONTAINER_STATE_REPORT, _))
+        .WillRepeatedly(Return(true));
+
+    std::vector<std::string> names = {"svc1"};
+    std::vector<lifecyclemgr::ServiceState> states = {lifecyclemgr::ServiceState::RUNNING};
+    monitor.updateServices(&names, &states);
+
+    EXPECT_EQ(backing.cur, lifecycle_manager::ServiceState::RUNNING);
+}
+
+TEST_F(StateMonitorTest, UpdateServicesStaysQuietWhenStateIsUnchanged) {
+    MockLifecycleManager mgr;
+    StateMonitor monitor(mgr);
+
+    auto mockTransmitter = std::make_shared<MockDDSTransmitter>();
+    auto mockRegistry = std::make_shared<MockServiceRegistry>();
+    auto svc = std::make_shared<MockService>();
+
+    // 이미 RUNNING 인데 또 RUNNING 을 받는다 — 정상 상태 폴링이 이렇다.
+    StateBackedService backing(lifecycle_manager::ServiceState::RUNNING);
+    EXPECT_CALL(*Mock_ManagerBase, GetService("svc1")).WillRepeatedly(Return(svc));
+    EXPECT_CALL(*Mock_ManagerBase, GetTransmitter()).WillRepeatedly(Return(mockTransmitter));
+    EXPECT_CALL(*Mock_ManagerBase, GetRegistry()).WillRepeatedly(Return(mockRegistry));
+
+    EXPECT_CALL(*Mock_DDSTransmitter, SendMessage(MessageType::LIFECYCLE_DIAG_REPORT, _))
+        .Times(0);
+
+    std::vector<std::string> names = {"svc1"};
+    std::vector<lifecyclemgr::ServiceState> states = {lifecyclemgr::ServiceState::RUNNING};
+    monitor.updateServices(&names, &states);
+}
+
+TEST_F(StateMonitorTest, UpdateServicesIgnoresUnknownServiceNames) {
+    MockLifecycleManager mgr;
+    StateMonitor monitor(mgr);
+
+    auto mockTransmitter = std::make_shared<MockDDSTransmitter>();
+    EXPECT_CALL(*Mock_ManagerBase, GetService(_))
+        .WillRepeatedly(Return(std::shared_ptr<lifecycle_manager::Service>()));
+    EXPECT_CALL(*Mock_ManagerBase, GetTransmitter()).WillRepeatedly(Return(mockTransmitter));
+    // 아무 서비스도 못 찾았으니 ProcessServiceHandling 도 즉시 리포트도 없다.
+    EXPECT_CALL(*Mock_DDSTransmitter, SendMessage(_, _)).Times(0);
+
+    std::vector<std::string> names = {"ghost"};
+    std::vector<lifecyclemgr::ServiceState> states = {lifecyclemgr::ServiceState::RUNNING};
+    EXPECT_NO_THROW(monitor.updateServices(&names, &states));
+}
+
+TEST_F(StateMonitorTest, UpdateServicesTruncatesToShorterListOnMismatch) {
+    // 두 병렬 리스트 길이가 다르면 짧은 쪽까지만 본다. 안 그러면 at() 이
+    // 던지고 DDS 수신 콜백 스레드가 죽는다.
+    MockLifecycleManager mgr;
+    StateMonitor monitor(mgr);
+
+    auto mockTransmitter = std::make_shared<MockDDSTransmitter>();
+    EXPECT_CALL(*Mock_ManagerBase, GetService(_))
+        .WillRepeatedly(Return(std::shared_ptr<lifecycle_manager::Service>()));
+    EXPECT_CALL(*Mock_ManagerBase, GetTransmitter()).WillRepeatedly(Return(mockTransmitter));
+
+    std::vector<std::string> names = {"a", "b", "c"};
+    std::vector<lifecyclemgr::ServiceState> states = {lifecyclemgr::ServiceState::RUNNING};
+    EXPECT_NO_THROW(monitor.updateServices(&names, &states));
+
+    std::vector<std::string> few = {"a"};
+    std::vector<lifecyclemgr::ServiceState> many = {
+        lifecyclemgr::ServiceState::RUNNING, lifecyclemgr::ServiceState::NOT_RUNNING};
+    EXPECT_NO_THROW(monitor.updateServices(&few, &many));
+}
+
 // Test NotifyLifecycleDiagnosticInfo with all=false (updated services only)
 TEST_F(StateMonitorTest, NotifyLifecycleDiagnosticInfo_UpdatedServicesOnly) {
     MockLifecycleManager mgr;

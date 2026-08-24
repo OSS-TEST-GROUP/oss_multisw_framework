@@ -23,8 +23,7 @@ class Container {
     Container(const std::string& name, const std::string& image,
               const std::string& deploy_file, const std::string& namespace_,
               ContainerType type = ContainerType::DOCKER);
-    virtual ~Container();
-
+    virtual ~Container() = default;
     std::string GetName() const;
     std::string GetImage() const;
     std::string GetDeployFile() const;

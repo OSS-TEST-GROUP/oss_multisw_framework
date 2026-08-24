@@ -1,10 +1,11 @@
 #ifndef LIFECYCLE_ENDPOINT_FACTORY_HPP_
 #define LIFECYCLE_ENDPOINT_FACTORY_HPP_
 
-#include <string>
+#include <functional>
 #include <map>
 #include <memory>
-#include <functional>
+#include <string>
+#include <utility>
 
 #include "transmitter/DDSTransmitter.hpp"
 #include "include/MessageType.hpp"
@@ -65,7 +66,7 @@ class EndPointFactory  {
 
     int32_t Initialize();
 
-    int32_t CreateEndPoints(std::shared_ptr<DDSTransmitter> transmitter,
+    int32_t CreateEndPoints(const std::shared_ptr<DDSTransmitter>& transmitter,
                             const EndPointHandlers& handlers = EndPointHandlers{});
 
     const char* GetTopic(MessageType mtype);
@@ -73,7 +74,7 @@ class EndPointFactory  {
     // Allow injection of custom endpoint creators for testing
     using EndpointCreator = std::function<std::shared_ptr<DDSMessageEndPoint>(MessageType, const std::string&)>;
     void SetCustomCreator(MessageType type, EndpointCreator creator) {
-        custom_creators_[type] = creator;
+        custom_creators_[type] = std::move(std::move(creator));
     }
 
   private:

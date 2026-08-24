@@ -20,8 +20,7 @@ using MsgType = std::pair<MessageType, void*>;
 class MessageQueue {
   public:
     MessageQueue();
-    virtual ~MessageQueue();
-
+    virtual ~MessageQueue() = default;
     void SendMessage(MsgType& message);
 
     bool Start() ;

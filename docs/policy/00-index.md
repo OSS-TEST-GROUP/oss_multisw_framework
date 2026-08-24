@@ -20,6 +20,7 @@
 | `issue-template-guide.md` | 이슈 폼 **작성·유지보수** 규칙·문법·repo별 차이 | 담당자 |
 | `how-to-file-an-issue.md` | 이슈를 **등록하는** 방법 (템플릿 선택·작성 요령·보안·제출 후 흐름) | 사용자·기여자 |
 | `tagging-rules-guide.md` | **태깅 룰** — 공개 Git 릴리스 태그(SemVer) + 컨테이너 레지스트리 이미지 태그 | 공동 개발 기관·담당자 |
+| `registry-robot-account-guide.md` | **레지스트리 로봇 계정** — Harbor 로봇 발급·권한·검증·credential 등록·교체 | 레지스트리·CI 담당자 |
 
 ---
 

@@ -55,14 +55,14 @@ void StateMonitor::UpdateServicesState(lifecyclemgr::NotifyServiceState* update)
 void StateMonitor::UpdateServicesState(lifecyclemgr::GetServiceStateResponse* update) {
     Mock_StateMonitor->UpdateServicesState(update);
 }
-void StateMonitor::SetUpdateStateFlag(std::shared_ptr<Service> service) {
+void StateMonitor::SetUpdateStateFlag(const std::shared_ptr<Service>& service) {
     Mock_StateMonitor->SetUpdateStateFlag(service); 
 }
 
-void StateMonitor::ClearUpdateStateFlag(std::shared_ptr<Service> service) {
+void StateMonitor::ClearUpdateStateFlag(const std::shared_ptr<Service>& service) {
     Mock_StateMonitor->ClearUpdateStateFlag(service);
 }
-bool StateMonitor::GetUpdateStateFlag(std::shared_ptr<Service> service) {
+bool StateMonitor::GetUpdateStateFlag(const std::shared_ptr<Service>& service) {
     return Mock_StateMonitor->GetUpdateStateFlag(service);
 }
 void StateMonitor::ClearAllUpdatedFlag() {
@@ -89,7 +89,7 @@ void StateMonitor::RequestGetState() {
 void StateMonitor::updateServices(std::vector<std::string>* slist, std::vector<lifecyclemgr::ServiceState>* statelist) {
     Mock_StateMonitor->updateServices(slist, statelist);
 }
-bool StateMonitor::getServiceState(std::shared_ptr<Service> service, lifecyclemgr::ServiceStatus& entry) {
+bool StateMonitor::getServiceState(const std::shared_ptr<Service>& service, lifecyclemgr::ServiceStatus& entry) {
     return Mock_StateMonitor->getServiceState(service, entry);
 }
 

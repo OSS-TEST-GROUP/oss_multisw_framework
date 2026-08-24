@@ -269,14 +269,15 @@ Host Adapter는 vECU 내부의 **접속점**까지만 소유한다. 전체 parti
 
 `DLL 컴파일`은 runtime 계층의 책임이 아니라 build/package 선택이다. Windows host는 `.dll`, 현재 Linux/ARM64 container는 `.so` 또는 executable, 표준 model exchange가 필요하면 FMU를 사용할 수 있다. Host Adapter의 플랫폼 독립 책임은 **시간 동기화, lifecycle, 입출력 교환, trace와 host API 연동**이다.
 
-Fidelity별 기본 구성은 다음과 같다.
+Fidelity별 기본 구성은 다음과 같다. **등급 명칭·보장 범위의 정본은 §11**이며, 이 표는 각
+등급을 만족시키기 위한 계층별 **구성 예시**다(§11과 명칭이 어긋나면 §11이 이긴다).
 
-| Fidelity | ASW/Behavior | Virtual BSW | V-HAL/Host |
+| Fidelity (§11) | ASW/Behavior | Virtual BSW | V-HAL/Host |
 |---|---|---|---|
 | L0 Interface Stub | 고정 응답 또는 echo | 최소 runtime | endpoint와 lifecycle 중심 |
-| L1 Behavior Model | 상태 머신/규칙 모델 | scheduler·통신 최소본 | simulated I/O와 clock 연결 |
-| L2 Production ASW | 실제 제어 코드 | 필요한 RTE/BSW 가상화 | ECU hardware API 치환 |
-| L3 Plant Coupled | L2 또는 고급 behavior | L2 범위 | plant 결합: FMU/코드(in-process `IPlant`) 또는 MORAI/AWSIM(버스 결합) 추가 |
+| L1 Protocol Fidelity | 요청/응답 대화가 성립하는 최소 로직 | scheduler·통신 최소본 | simulated I/O와 clock 연결 |
+| L2 Behavioral Fidelity | 상태기계/규칙 모델 또는 실제 제어 코드 | 필요한 RTE/BSW 가상화 | ECU hardware API 치환 |
+| L3 Plant Coupled | L2 범위 | L2 범위 | plant 결합: FMU/코드(in-process `IPlant`) 또는 MORAI/AWSIM(버스 결합) 추가 |
 | L4 Target-like | 실제 ASW | 실제 BSW/OS 동작에 최대한 근접 | target timing/interface 검증 강화 |
 
 ### 6.2 포트-어댑터 런타임 구현
@@ -691,15 +692,30 @@ Topology Compiler의 공통 출력:
 
 ## 11. Fidelity와 Conformance
 
-| 수준 | 명칭 | 보장 범위 | 대표 검증 |
-|---|---|---|---|
-| L0 | Interface Stub | type/topic match와 기본 sample | endpoint matching |
-| L1 | Protocol Fidelity | QoS, request/response, 오류 처리 | protocol conformance |
-| L2 | Behavioral Fidelity | 상태기계, timing, failure semantic | golden scenario |
-| L3 | Plant-coupled Fidelity | FMU 기반 폐루프 | model correlation |
-| L4 | Target-like Fidelity | ARM64와 실제 gateway/protocol | target parity |
+**이 표가 fidelity 등급 정의의 정본이다** — §6.1 구성 표, PPT, 도구 문서는 모두 이 명칭을
+따른다.
+
+| 수준 | 명칭 | 보장 범위 | 대표 검증 | 판정 주체 |
+|---|---|---|---|---|
+| L0 | Interface Stub | type/topic match와 기본 sample | endpoint matching | **자동** — `evaluate.py` |
+| L1 | Protocol Fidelity | QoS, request/response, 오류 처리 | protocol conformance | **자동** — `evaluate.py` (`analyze_protocol`) |
+| L2 | Behavioral Fidelity | 상태기계, timing, failure semantic | golden scenario | **수동/별도 스테이지** — `compare_golden.py` (아래 주의) |
+| L3 | Plant-coupled Fidelity | FMU 기반 폐루프 또는 lockstep 버스 폐루프 | model correlation | **자동** — `evaluate.py` (`analyze_plant`/`analyze_vehicle`) |
+| L4 | Target-like Fidelity | ARM64와 실제 gateway/protocol | target parity | **자동** — `parity.py` (attestation 필수) |
+
+> **주의 — `fidelity_evidenced`는 L2를 발급하지 않는다.** `evaluate.py`가 한 trace에서
+> 자동 부여하는 등급은 **L0·L1·L3**뿐이다(`_bump` 호출 참조). L2의 대표 검증인 golden
+> scenario 비교는 `gate.py` **밖**의 별도 스테이지(`sils-ci.sh` stage 5 → `compare_golden.py`)에서
+> 수행되며 `MATCH`/`REGRESSION` 결과만 낸다 — fidelity 등급으로 환산되지 않는다. 따라서
+> `fidelity_evidenced`는 "엄밀한 누적 사다리"가 아니라 **일부 feature 증거에 대응하는 최고
+> rank**로 읽어야 한다. 특히 in-process plant 런은 L2 증거 없이 L0 → L3로 건너뛸 수 있다.
+> L2를 자동 판정에 편입하려면 `evaluate.py`에 behavior 증거 기반 `_bump("L2")`와 `gate.py`의
+> 선언↔증거 비교를 함께 추가해야 한다(현재 미구현, 온디맨드).
 
 - 각 Descriptor와 CI 결과에 fidelity 수준을 기록한다.
+- **Descriptor의 선언 `fidelity`는 검사되지 않는다.** Topology Compiler는 이를 `resolved-run.yaml`에
+  복사할 뿐이며(`compile.py`), `gate.py`는 선언 등급과 `fidelity_evidenced`를 비교하지 않는다.
+  즉 선언은 현재 **의도 표기**이고 게이트의 최소 요구 수준이 아니다.
 - ARM64는 L4 구성 요소 중 하나이며 L4 전체를 자동으로 충족하지 않는다.
 - conformance 결과에는 Contract Catalog version과 image digest를 기록한다.
 

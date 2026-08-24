@@ -38,29 +38,33 @@ std::shared_ptr<Logger> Logger::getInstance()
 
 void Logger::setLogLevel(LogLevel level) { logLevel = level; }
 
-void Logger::critical(const std::string msg) { 
+bool Logger::ShouldLog(LogLevel level) const { return level <= logLevel; }
+
+void Logger::critical(const std::string& msg) { 
     log(LogLevel::CRITICAL, "[CRITICAL]", msg); 
 }
-void Logger::error(const std::string msg) { 
+void Logger::error(const std::string& msg) { 
     log(LogLevel::ERROR, "[ERROR]", msg); 
 }
-void Logger::info(const std::string msg)    
+void Logger::info(const std::string& msg)    
 { 
     log(LogLevel::INFO,    "[INFO]",    msg); 
 }
-void Logger::debug(const std::string msg)   
+void Logger::debug(const std::string& msg)   
 { 
     log(LogLevel::DEBUG,   "[DEBUG]",   msg); 
 }
-void Logger::verbose(const std::string msg) 
+void Logger::verbose(const std::string& msg) 
 { 
     log(LogLevel::VERBOSE, "[VERBOSE]", msg); 
 }
 
 
-void Logger::log(LogLevel level, const std::string& levelStr, const std::string msg) {
-    if (level > logLevel) return;
-    
+void Logger::log(LogLevel level, const std::string& levelStr, const std::string& msg) {
+    if (level > logLevel) {
+        return;
+    }
+
     std::lock_guard<std::mutex> guard(logMutex);
 
     std::ostringstream oss;
@@ -80,7 +84,8 @@ std::string Logger::timestamp() {
     std::time_t now = std::time(nullptr);
     
     char buf[20];
-    if (std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", std::localtime(&now)))
+    if (std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", std::localtime(&now))) {
         return buf;
+    }
     return "";
 }

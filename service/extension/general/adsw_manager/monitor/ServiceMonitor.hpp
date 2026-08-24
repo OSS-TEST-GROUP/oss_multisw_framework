@@ -15,8 +15,7 @@ namespace adsw_manager {
 class ServiceMonitor {
   public:
     ServiceMonitor();
-    virtual ~ServiceMonitor();
-
+    virtual ~ServiceMonitor() = default;
     bool Initialize();
     void Finalize();
     
@@ -25,9 +24,9 @@ class ServiceMonitor {
     void NotifyServiceState();
     void NotifyAdswStatus(int32_t status_code, std::string status_msg);
 
-    int32_t NodeStarted(std::string service, std::string node);
-    int32_t NodeStopped(std::string service, std::string node);
-    int32_t NodeCount(std::string service);
+    int32_t NodeStarted(const std::string& service, const std::string& node);
+    int32_t NodeStopped(const std::string& service, const std::string& node);
+    int32_t NodeCount(const std::string& service);
 
     void UpdateServiceState();
 

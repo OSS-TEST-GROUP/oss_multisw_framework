@@ -1,15 +1,16 @@
 #include "StopServiceEndPoint.hpp"
 
+#include <utility>
+
 #include "lifecycle/StopServiceRequest.hpp"
 #include "ADSWManager.hpp"
 #include "logger/Log.hpp"
 
 namespace general {
 namespace adsw_manager {
-    
-StopServiceEndPoint::StopServiceEndPoint(MessageType msgtype, std::string topic) 
-    : DDSMessageEndpoint() {
-    topic_ = topic;
+
+StopServiceEndPoint::StopServiceEndPoint(MessageType msgtype, std::string topic) : topic_(std::move(topic)) {
+
     if (msgtype == MessageType::STOP_SERVICE_REQUEST){
         type_support_ = std::make_shared<TypeSupport>(new StopServiceRequestPubSubType());
     }else if (msgtype == MessageType::STOP_SERVICE_RESPONSE){
@@ -36,7 +37,7 @@ std::shared_ptr<TypeSupport> StopServiceEndPoint::GetTypeSupport() {
 void StopServiceEndPoint::OnDataAvailable(){
     LOG_DEBUG("Message Delivery for " << GetTopic() );
 
-    if (Read<StopServiceRequest>(req_) == true){
+    if (Read<StopServiceRequest>(req_)) {
 
         // Same phantom guard as StartServiceEndPoint — see commentary there.
         if (!ADSWManager::Get()->IsKnownLifecyclePublisher(LastPublicationHandle())) {
@@ -58,7 +59,6 @@ void StopServiceEndPoint::OnDataAvailable(){
             LOG_ERROR("Failed to retrieve service controller.");
         }
     }
-
 }
 
 

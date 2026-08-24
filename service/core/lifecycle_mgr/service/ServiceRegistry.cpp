@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <iostream>
 #include <set>
+#include <utility>
 
 #include "ServiceRegistry.hpp"
 #include "logger/Log.hpp"
@@ -12,7 +13,6 @@
 namespace lifecycle_manager {
 
 ServiceRegistry::ServiceRegistry() {}
-ServiceRegistry::~ServiceRegistry() {}
 
 bool ServiceRegistry::UpdateServiceList(UpdateServiceListRequest* update){
 
@@ -25,7 +25,9 @@ bool ServiceRegistry::UpdateServiceList(UpdateServiceListRequest* update){
         std::vector<lifecyclemgr::Container>& clist = update->container_list();
         for (auto& c : clist) {
             const std::string name = c.name();
-            if (name.empty()) continue;
+            if (name.empty()) {
+                continue;
+            }
             auto existing = GetContainer(name);
             if (existing) {
                 existing->SetImage(c.image());
@@ -54,7 +56,9 @@ bool ServiceRegistry::UpdateServiceList(UpdateServiceListRequest* update){
         std::shared_ptr<Service> existing = GetService(svc->name());
         if (existing) {
             group = GetGroupNameByService(existing);
-            if (!group.empty()) break;
+            if (!group.empty()) {
+                break;
+            }
         }
     }
     if (group.empty()) {
@@ -95,7 +99,7 @@ bool ServiceRegistry::UpdateServiceList(UpdateServiceListRequest* update){
     bool retval = transmitter->SendMessage(MessageType::UPDATE_SERVICE_LIST_RESPONSE, 
                                     reinterpret_cast<void*>(&udpate_response_));
 
-    if (service_set.size() > 0){
+    if (!service_set.empty()) {
         std::shared_ptr<StateManager> manager = LifecycleFactory::GetInstance()->GetStateMgr();
         if (manager != nullptr){
             manager->ProcessServiceHandling(service_set);
@@ -104,7 +108,7 @@ bool ServiceRegistry::UpdateServiceList(UpdateServiceListRequest* update){
     return retval;       
 }
 
-void ServiceRegistry::AddGroup(std::string name){
+void ServiceRegistry::AddGroup(const std::string& name) {
     std::lock_guard<std::mutex> lock_guard(lock_mutex_);
 
     if (hasGroup(name)){
@@ -114,7 +118,7 @@ void ServiceRegistry::AddGroup(std::string name){
     groups_[name] = std::make_shared<std::vector<std::string>>();
 }
 
-void ServiceRegistry::RemoveGroup(std::string name){
+void ServiceRegistry::RemoveGroup(const std::string& name) {
     std::lock_guard<std::mutex> lock_guard(lock_mutex_);
  
     auto it = groups_.find(name);
@@ -125,11 +129,10 @@ void ServiceRegistry::RemoveGroup(std::string name){
 }
 
 bool ServiceRegistry::IsGroup(std::string name){
-    return hasGroup(name);
+    return hasGroup(std::move(name));
 }
 
-
-bool ServiceRegistry::AddService(std::shared_ptr<Service> service, std::string group){
+bool ServiceRegistry::AddService(const std::shared_ptr<Service>& service, std::string group) {
     std::lock_guard<std::mutex> lock_guard(lock_mutex_);
 
     if (hasService(service->GetName())){
@@ -138,17 +141,16 @@ bool ServiceRegistry::AddService(std::shared_ptr<Service> service, std::string g
 
     services_[service->GetName()] = service;
 
-    std::shared_ptr<std::vector<std::string>> group_ptr = getGroup(group);
+    std::shared_ptr<std::vector<std::string>> group_ptr = getGroup(std::move(group));
 
     if (group_ptr != nullptr){
         vectorAdd(*group_ptr, service->GetName());
     }
 
     return true;
-
 }
 
-void ServiceRegistry::RemoveService(std::string name){
+void ServiceRegistry::RemoveService(const std::string& name) {
     std::lock_guard<std::mutex> lock_guard(lock_mutex_);
 
     auto it = services_.find(name);
@@ -160,8 +162,7 @@ void ServiceRegistry::RemoveService(std::string name){
     // need to remove from group
 }
 
-
-std::shared_ptr<Service> ServiceRegistry::GetService(std::string name){
+std::shared_ptr<Service> ServiceRegistry::GetService(const std::string& name) {
     std::lock_guard<std::mutex> lock_guard(lock_mutex_);
 
     auto it = services_.find(name);
@@ -172,7 +173,7 @@ std::shared_ptr<Service> ServiceRegistry::GetService(std::string name){
     return nullptr;
 }
 
-std::vector<std::shared_ptr<Service>> ServiceRegistry::GetServicesByGroup(std::string group){
+std::vector<std::shared_ptr<Service>> ServiceRegistry::GetServicesByGroup(const std::string& group) {
     std::lock_guard<std::mutex> lock_guard(lock_mutex_);
 
     std::vector<std::shared_ptr<Service>> group_list;
@@ -201,10 +202,9 @@ std::vector<std::shared_ptr<Service>> ServiceRegistry::GetServicesByGroup(std::s
     }
 
     return group_list;
-
 }
 
-std::vector<std::string> ServiceRegistry::GetServicesNameByGroup(std::string group){
+std::vector<std::string> ServiceRegistry::GetServicesNameByGroup(const std::string& group) {
     std::lock_guard<std::mutex> lock_guard(lock_mutex_);
 
     std::vector<std::string> group_list;
@@ -232,10 +232,9 @@ std::vector<std::string> ServiceRegistry::GetServicesNameByGroup(std::string gro
 
     }
     return group_list;
-
 }
 
-std::string ServiceRegistry::GetGroupNameByService(std::shared_ptr<Service> service){
+std::string ServiceRegistry::GetGroupNameByService(const std::shared_ptr<Service>& service) {
     std::lock_guard<std::mutex> lock_guard(lock_mutex_);
 
     for (const auto &iter : groups_)
@@ -247,7 +246,7 @@ std::string ServiceRegistry::GetGroupNameByService(std::shared_ptr<Service> serv
     }
     return "";
 }
-    
+
 std::vector<std::string> ServiceRegistry::GetGroupList(){
     std::vector<std::string> group_list;
 
@@ -266,10 +265,10 @@ uint64_t ServiceRegistry::GetServiceNum(){
 
 }
 
-uint64_t ServiceRegistry::GetServiceNumInGroup(std::string group){
+uint64_t ServiceRegistry::GetServiceNumInGroup(const std::string& group) {
     std::lock_guard<std::mutex> lock_guard(lock_mutex_);
 
-    if (group.size() == 0){
+    if (group.empty()) {
         return services_.size();
     }
 
@@ -280,7 +279,6 @@ uint64_t ServiceRegistry::GetServiceNumInGroup(std::string group){
     }
 
     return 0;
-
 }
 
 uint64_t ServiceRegistry::GetGroupNum(){
@@ -289,20 +287,14 @@ uint64_t ServiceRegistry::GetGroupNum(){
     return groups_.size();
 }
 
-
-bool ServiceRegistry::hasService(std::string name){
+bool ServiceRegistry::hasService(const std::string& name) {
 
     auto it = services_.find(name);
 
-    if (it != services_.end()) {
-        return true;
-    }
-
-    return false;
+    return it != services_.end();
 }
 
-
-std::shared_ptr<Service> ServiceRegistry::getService(std::string name){
+std::shared_ptr<Service> ServiceRegistry::getService(const std::string& name) {
 
     auto it = services_.find(name);
 
@@ -311,23 +303,16 @@ std::shared_ptr<Service> ServiceRegistry::getService(std::string name){
     }
 
     return nullptr;
-    
 }
 
-
-bool ServiceRegistry::hasGroup(std::string name){
+bool ServiceRegistry::hasGroup(const std::string& name) {
 
     auto it = groups_.find(name);
 
-    if (it != groups_.end()) {
-        return true;
-    }
-
-    return false;
-    
+    return it != groups_.end();
 }
 
-std::shared_ptr<std::vector<std::string>> ServiceRegistry::getGroup(std::string name){
+std::shared_ptr<std::vector<std::string>> ServiceRegistry::getGroup(const std::string& name) {
 
     auto it = groups_.find(name);
 
@@ -336,11 +321,10 @@ std::shared_ptr<std::vector<std::string>> ServiceRegistry::getGroup(std::string 
     }
 
     return nullptr;
-    
 }
 
-bool ServiceRegistry::vectorHas(std::vector<std::string> vec, std::string item){
-    
+bool ServiceRegistry::vectorHas(std::vector<std::string> vec, const std::string& item) {
+
     if(std::find(vec.begin(), vec.end(), item) != vec.end()) { // vector내에 item 이 존재하지 않음
         return true;
     }
@@ -348,8 +332,8 @@ bool ServiceRegistry::vectorHas(std::vector<std::string> vec, std::string item){
     return false;
 }
 
-bool ServiceRegistry::vectorAdd(std::vector<std::string>& vec, std::string item){
-    
+bool ServiceRegistry::vectorAdd(std::vector<std::string>& vec, const std::string& item) {
+
     if(std::find(vec.begin(), vec.end(), item) == vec.end()) { // vector내에 item 이 존재하지 않음
         vec.push_back(item);
         return true;
@@ -358,7 +342,7 @@ bool ServiceRegistry::vectorAdd(std::vector<std::string>& vec, std::string item)
     return false;
 }
 
-bool ServiceRegistry::vectorRemove(std::vector<std::string>& vec, std::string item){
+bool ServiceRegistry::vectorRemove(std::vector<std::string>& vec, const std::string& item) {
 
     auto iter = std::find(vec.begin(), vec.end(), item);
 
@@ -369,7 +353,6 @@ bool ServiceRegistry::vectorRemove(std::vector<std::string>& vec, std::string it
     }
 
     return false;
-
 }
 
 std::string ServiceRegistry::newGroup(){
@@ -393,17 +376,21 @@ std::vector<std::shared_ptr<Container>> ServiceRegistry::GetAllContainers() {
     std::lock_guard<std::mutex> lock(lock_mutex_);
     std::vector<std::shared_ptr<Container>> out;
     out.reserve(containers_.size());
-    for (auto& kv : containers_) out.push_back(kv.second);
+    for (auto& kv : containers_) {
+        out.push_back(kv.second);
+    }
     return out;
 }
 
 void ServiceRegistry::UpsertContainer(const std::shared_ptr<Container>& c) {
-    if (!c) return;
+    if (!c) {
+        return;
+    }
     std::lock_guard<std::mutex> lock(lock_mutex_);
     containers_[c->GetName()] = c;
 }
 
-void ServiceRegistry::UpdateContainerState(const std::string& name,
+bool ServiceRegistry::UpdateContainerState(const std::string& name,
                                            ContainerState state,
                                            int32_t exit_code) {
     std::lock_guard<std::mutex> lock(lock_mutex_);
@@ -417,10 +404,13 @@ void ServiceRegistry::UpdateContainerState(const std::string& name,
         fresh->SetState(state);
         fresh->SetExitCode(exit_code);
         containers_[name] = fresh;
-        return;
+        return true;  // new record → treat as a transition (publish)
     }
+    // Detect a real state transition so the caller can publish on-change only.
+    const bool changed = (it->second->GetState() != state);
     it->second->SetState(state);
     it->second->SetExitCode(exit_code);
+    return changed;
 }
 
 std::vector<std::string> ServiceRegistry::GetServicesInContainer(

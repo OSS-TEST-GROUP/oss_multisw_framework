@@ -9,20 +9,15 @@ Service::Service(const std::string& name, ServiceType service_type, RecoveryPoli
       recovery_policy_(recovery_policy),
       is_enabled_(is_enable),
       service_state_(ServiceState::NOT_RUNNING),
-      packag_name_(""),
-      launch_file_(""),
-      match_pattern_(""),
+
       is_direct_exec_(false),
       is_container_workload_(false),
       max_nodes_(0),
       current_nodes_(0),
       pid_(0),
-      exit_code_(-1)
-{
-
+      exit_code_(-1) {
 }
 
-Service::~Service() {}
 
 std::string Service::GetName() {
     return name_;
@@ -60,7 +55,7 @@ void Service::SetPackage(const std::string& package){
     packag_name_ = package;
 }
 
-const std::string Service::GetPackage(){
+std::string Service::GetPackage() {
     if (!packag_name_.empty()){
         return packag_name_;
     }
@@ -70,18 +65,16 @@ const std::string Service::GetPackage(){
 
 void Service::SetRunningNodes(int32_t count){
 
-    int32_t prev_nodes = current_nodes_;
     if (max_nodes_ < count){
         max_nodes_ = count;
     }
     current_nodes_ = count;
 
-    if (prev_nodes > current_nodes_){
-        // node decrease
-    }else if (prev_nodes < current_nodes_){
-        // node increasing
-    }
-
+    // 여기 있던 if (prev_nodes > current_nodes_) / else if (prev_nodes < ...) 는
+    // 두 분기 모두 본문이 비어 있었다 (bugprone-branch-clone). 노드 증감에 따라
+    // 뭔가 하려던 자리로 보이지만 구현된 적이 없고, 지금은 증감 자체를
+    // ContainerHealthMonitor 의 PID 폴링이 판정한다. 빈 분기와 그 분기에서만
+    // 쓰이던 prev_nodes 를 함께 걷어냈다.
 }
 
 int32_t Service::GetRunningNodes(){

@@ -1,15 +1,16 @@
 #include "StartServiceEndPoint.hpp"
 
+#include <utility>
+
 #include "lifecycle/StartServiceRequest.hpp"
 #include "logger/Log.hpp"
 #include "manager/LifecycleFactory.hpp"
 
 namespace lifecycle_manager {
 
+StartServiceEndPoint::StartServiceEndPoint(MessageType msgtype, std::string topic, Callback cb)
+    : DDSMessageEndPoint(std::move(topic)), on_data_cb_(std::move(cb)) {
 
-StartServiceEndPoint::StartServiceEndPoint(MessageType msgtype, std::string topic, Callback cb) 
-    : DDSMessageEndPoint(topic), on_data_cb_(std::move(cb)){
-        
     if (msgtype == MessageType::START_SERVICE_REQUEST){
         SetTypeSupport(std::make_shared<TypeSupport>(new StartServiceRequestPubSubType()));
     }else if (msgtype == MessageType::START_SERVICE_RESPONSE){
@@ -26,7 +27,7 @@ StartServiceEndPoint::~StartServiceEndPoint() {
 void StartServiceEndPoint::OnDataAvailable(){
     LOG_DEBUG("Message Delivery for " << GetTopic() );
 
-    if (Read<StartServiceResponse>(resp_) == true){
+    if (Read<StartServiceResponse>(resp_)) {
 
         // Drop samples coming from any participant other than the
         // adsw_manager we pinned in LifecycleFactory. Without this, phantom
@@ -46,7 +47,6 @@ void StartServiceEndPoint::OnDataAvailable(){
             on_data_cb_(message);
         }
     }
-
 }
 
 void StartServiceEndPoint::OnDataPublished(bool ret){

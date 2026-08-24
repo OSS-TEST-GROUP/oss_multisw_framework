@@ -1,10 +1,11 @@
 #include "PolicyOnSuccess.hpp"
 
+#include <utility>
+
 namespace lifecycle_manager {
 
-PolicyOnSuccess::PolicyOnSuccess(RecoveryPolicy policy, std::string name) : PolicyBase(policy, name){
+PolicyOnSuccess::PolicyOnSuccess(RecoveryPolicy policy, std::string name) : PolicyBase(policy, std::move(name)) {
 }
-PolicyOnSuccess::~PolicyOnSuccess() {}
 
 ServiceControlAction PolicyOnSuccess::Evaluate(std::shared_ptr<Service> service){
 
@@ -15,6 +16,8 @@ ServiceControlAction PolicyOnSuccess::Evaluate(std::shared_ptr<Service> service)
         return action;
     }
 
+    // 모든 ServiceState 를 빠짐없이 열거한다. 결과 action 이 같은 상태가 여럿이라
+    // bugprone-branch-clone 이 잡지만 합치지 않는다 — 이유는 policy/.clang-tidy 참조.
     switch(state){
         case ServiceState::NOT_RUNNING :{
             // Restart only on clean exit (exit code == 0).

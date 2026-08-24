@@ -20,8 +20,10 @@ pipeline {
         IMAGE_REGISTRY   = "registry.obigo.com"
         IMAGE_NAMESPACE  = "oss"
         APP_NAME         = "oss-mmf"
-        REGISTRY_ID      = "ossuser"
-        REGISTRY_PWD     = "Ossuser1234"
+        // Harbor 자격증명은 Jenkins Credentials(Username with password)에서 주입한다.
+        // 저장소에 비밀번호를 하드코딩하지 않는다 (공개 저장소로 전달되는 파일).
+        // 등록 대상: Harbor 로봇 계정 oss-ci (pull+push, oss 프로젝트 한정)
+        REGISTRY         = credentials('harbor-oss-ci')
         BUILDER_IMAGE    = "${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${APP_NAME}-builder:latest"
 
         BUILD_UNITTEST   = 'FALSE'
@@ -55,7 +57,8 @@ pipeline {
                         docker logout "${IMAGE_REGISTRY}:80"
                     fi
                     if ! cat ${HOME}/.docker/config.json 2>/dev/null | grep "${IMAGE_REGISTRY}"; then
-                        echo "${REGISTRY_PWD}" | docker login ${IMAGE_REGISTRY} -u ${REGISTRY_ID} --password-stdin
+                        # 로봇 계정명에 '$' 가 포함되므로(robot$oss+oss-ci) 반드시 변수 참조로 넘긴다.
+                        printf '%s' "${REGISTRY_PSW}" | docker login "${IMAGE_REGISTRY}" -u "${REGISTRY_USR}" --password-stdin
                     fi
                 '''
             }

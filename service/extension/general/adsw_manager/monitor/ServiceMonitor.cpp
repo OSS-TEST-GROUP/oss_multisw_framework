@@ -1,5 +1,6 @@
-#include <vector>
 #include <algorithm>
+#include <utility>
+#include <vector>
 
 #include "ServiceMonitor.hpp"
 #include "ADSWManager.hpp"
@@ -17,7 +18,6 @@ namespace adsw_manager {
 
 ServiceMonitor::ServiceMonitor() {}
 
-ServiceMonitor::~ServiceMonitor() {}
 
 bool ServiceMonitor::Initialize() {
     return true;
@@ -39,6 +39,11 @@ void ServiceMonitor::UpdateServiceState(UpdateServiceInfo& info) {
             ServiceState state = service->GetServiceState();
             LOG_DEBUG("ServiceMonitor::UpdateServiceState service: " << info.name << " state: " << static_cast<int>(state));
 
+            // CREATED 와 STATE_UPDATED 는 지금 같은 동작이라 bugprone-branch-clone 이
+            // 잡는다. 합치지 않는다 — 아래 주석이 설명하듯 CREATED 가 전달받은
+            // state 를 존중하는 건 버그를 잡고 얻은 결론이고, 두 이벤트는 의미가
+            // 달라 언제든 다시 갈릴 수 있다.
+            // NOLINTNEXTLINE(bugprone-branch-clone)
             if (info.service_event == ServiceEvent::CREATED) {
                 // Honor the state the caller passed. NodeStarted passes
                 // RUNNING when a ROS2 node first appears; hard-coding
@@ -75,7 +80,9 @@ void ServiceMonitor::NotifyServiceState() {
         if (endpoint != nullptr){
             lifecyclemgr::NotifyServiceState notify;
 
-            notify.mw_type() = TypeConvert::ToMwType(MwType::ROS2);
+            // 등록부(ServiceRegistry)가 MW_NATIVE 로 보고하므로 통지도 같아야 한다.
+            // 어긋나면 lifecycle_mgr 이 같은 서비스를 두 미들웨어로 본다.
+            notify.mw_type() = TypeConvert::ToMwType(MwType::MW_NATIVE);
 
             std::vector<std::shared_ptr<Service>> group = registry->GetServicesByGroup("");
 
@@ -104,14 +111,14 @@ void ServiceMonitor::NotifyAdswStatus(int32_t status_code, std::string status_ms
             adswmgr::AdswServiceStatus notify;
 
             notify.status_code() = status_code;
-            notify.status_msg() = status_msg;
+            notify.status_msg() = std::move(status_msg);
 
             endpoint->Write(reinterpret_cast<void*>(&notify));
         }
     }
 }
 
-int32_t ServiceMonitor::NodeStarted(std::string service, std::string node){
+int32_t ServiceMonitor::NodeStarted(const std::string& service, const std::string& node) {
 
     if (ros_service_node_list_.find(service) == ros_service_node_list_.end())
     {
@@ -122,11 +129,11 @@ int32_t ServiceMonitor::NodeStarted(std::string service, std::string node){
 
     ros_service_node_list_[service].push_back(node);
     LOG_VERBOSE("ServiceMonitor::NodeStarted  " << service << "::" << node);
-    return ros_service_node_list_[service].size();
+    // 서비스당 노드 수다. int32 범위를 넘길 일이 없다.
+    return static_cast<int32_t>(ros_service_node_list_[service].size());
 }
 
-
-int32_t ServiceMonitor::NodeStopped(std::string service, std::string node){
+int32_t ServiceMonitor::NodeStopped(const std::string& service, const std::string& node) {
 
     auto& vlist = ros_service_node_list_[service];
 
@@ -137,20 +144,20 @@ int32_t ServiceMonitor::NodeStopped(std::string service, std::string node){
         LOG_VERBOSE("ServiceMonitor::NodeStopped  " << service << "::" << node);
     }
 
-    if (ros_service_node_list_[service].size() == 0)
-    {
+    if (ros_service_node_list_[service].empty()) {
         // The first start detected !!
         UpdateServiceInfo serviceinfo(service, service, ServiceEvent::DELETED, ServiceState::NOT_RUNNING);
         UpdateServiceState(serviceinfo);
-    }    
-    
-    return ros_service_node_list_[service].size();
+    }
+
+    // 서비스당 노드 수다. int32 범위를 넘길 일이 없다.
+    return static_cast<int32_t>(ros_service_node_list_[service].size());
 }
 
-int32_t ServiceMonitor::NodeCount(std::string service){
-    return ros_service_node_list_[service].size();
+int32_t ServiceMonitor::NodeCount(const std::string& service) {
+    // 서비스당 노드 수다. int32 범위를 넘길 일이 없다.
+    return static_cast<int32_t>(ros_service_node_list_[service].size());
 }
-
 
 void ServiceMonitor::OnServiceProcessDied(const std::string& service_name,
                                           int32_t exit_code) {
@@ -158,7 +165,9 @@ void ServiceMonitor::OnServiceProcessDied(const std::string& service_name,
               << " exit_code=" << exit_code);
 
     std::shared_ptr<ServiceRegistry> registry = ADSWManager::Get()->GetServiceRegistry();
-    if (!registry) return;
+    if (!registry) {
+        return;
+    }
 
     std::shared_ptr<Service> svc = registry->GetService(service_name);
     if (!svc) {
@@ -181,7 +190,9 @@ void ServiceMonitor::OnContainerStateChanged(const std::string& container_name,
               << " exit_code=" << exit_code);
 
     std::shared_ptr<ServiceRegistry> registry = ADSWManager::Get()->GetServiceRegistry();
-    if (!registry) return;
+    if (!registry) {
+        return;
+    }
 
     std::vector<std::shared_ptr<Service>> services = registry->GetServicesByGroup(container_name);
     if (services.empty()) {
@@ -218,7 +229,7 @@ void ServiceMonitor::UpdateServiceState(){
         }
         else{
             std::vector<std::string> vlist = ros_service_node_list_[service->GetName()];
-            service->SetRunningNodes(vlist.size());
+            service->SetRunningNodes(static_cast<int32_t>(vlist.size()));
         }
     }
 }

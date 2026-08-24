@@ -1,7 +1,25 @@
+# DDS 도메인 (기본 42)
+# ─────────────────────────────────────────────────────────────────────────────
+# 이 파일의 모든 서비스는 `${ROS_DOMAIN_ID:-42}` 로 도메인을 받는다. 기본 42 인 이유는
+# Autoware adsw 파티션(saved-service-list.yaml)이 42 라서다 — 0 이면 adsw_monitor 가
+# 구독만 하고 발행자가 없어 화면이 전부 null 이 된다(실측 2026-08-04).
+#
+# 바꾸는 방법 (우선순위 순):
+#   a) 도메인 파일 — HMI 런처 Settings 의 "DDS domain" 이 기록하는 정본:
+#        docker compose --env-file /opt/mmf/config/domain.env \
+#          -f docker/compose/docker-compose-integration.yaml up -d --force-recreate
+#   b) 셸 env:  ROS_DOMAIN_ID=1 docker compose -f ... up -d
+#   c) compose 파일 옆 `.env` (샘플: compose/domain.env.example)
+#
+# ⚠️ 도메인은 프로세스 시작 시점에만 읽힌다. `docker restart` 는 생성 당시 env 를
+#    재사용하므로 **재생성(--force-recreate 또는 down+up)** 이 필요하다.
+# ⚠️ 통합 테스트에서 도메인 격리가 필요하면 ROS_DOMAIN_ID 를 명시해 오버라이드한다
+#    (예: ROS_DOMAIN_ID=7 docker compose ... — 기본값에 의존하지 말 것).
+
 services:
   mmf-core:
     container_name: oss-mmf-core
-    image: registry.obigo.com/oss/oss-mmf-core:latest
+    image: ${CORE_IMG:-registry.obigo.com/oss/oss-mmf-core:latest}
     privileged: true
     network_mode: "host"
     deploy:
@@ -19,9 +37,9 @@ services:
     #      - /run/user/1000:/run/user/1000
     restart: unless-stopped
     environment:
-      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0} # DDS 도메인 격리 (보드별 동일 값 사용)
-      - MMF_DDS_DOMAIN_ID=${ROS_DOMAIN_ID:-0} # raw Fast-DDS (lifecycle_mgr/diagnostics/adsw/ota)
-      - VISS_DDS_DOMAIN_ID=${ROS_DOMAIN_ID:-0} # vehicle_info/viss
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-42} # DDS 도메인 격리 (보드별 동일 값 사용)
+      - MMF_DDS_DOMAIN_ID=${ROS_DOMAIN_ID:-42} # raw Fast-DDS (lifecycle_mgr/diagnostics/adsw/ota)
+      - VISS_DDS_DOMAIN_ID=${ROS_DOMAIN_ID:-42} # vehicle_info/viss
       - HEARTBEAT_INTERVAL_SEC=3
       - REST_URL=http://172.16.10.47:8080/upload
     healthcheck:
@@ -33,7 +51,7 @@ services:
 
   mmf-ext-ros2:
     container_name: oss-mmf-ext-ros2
-    image: registry.obigo.com/oss/oss-mmf-ext-ros2:latest
+    image: ${EXTROS2_IMG:-registry.obigo.com/oss/oss-mmf-ext-ros2:latest}
     depends_on:
       mmf-core:
         condition: service_healthy
@@ -65,69 +83,9 @@ services:
       - ${SAVED_REGISTRY_BACKUP:-/dev/null}:/config
     restart: unless-stopped
     environment:
-      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0} # DDS 도메인 격리
-      - MMF_DDS_DOMAIN_ID=${ROS_DOMAIN_ID:-0} # raw Fast-DDS
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-42} # DDS 도메인 격리
+      - MMF_DDS_DOMAIN_ID=${ROS_DOMAIN_ID:-42} # raw Fast-DDS
       - SAVED_REGISTRY_BACKUP=${SAVED_REGISTRY_BACKUP:+/config} # 서비스목록 백업/설정 디렉토리 경로
-    entrypoint:
-      - /bin/bash
-      - -c
-      - |
-        export LD_LIBRARY_PATH=/oss/lib
-        export SAVED_REGISTRY_BACKUP=$${SAVED_REGISTRY_BACKUP:-\"/oss/bin/config\"}
-
-        # Source ROS2 Humble setup
-        source /opt/ros/humble/setup.bash
-
-        # colcon overlay containing all auto-generated per-module packages
-        # (diagnosticmgr, lifecyclemgr, otamanager, adswmgr, security). Built
-        # in docker/Dockerfile.rel's ros-mmf-base stage via idl_to_msg.py +
-        # colcon. Required so rosbridge_server can resolve `<pkg>/msg/<Type>`
-        # advertise / subscribe requests; without it every typed advertise
-        # fails with "No module named '<pkg>'".
-        if [ -f /opt/ros/humble/share/mmf_interfaces/setup.bash ]; then
-          source /opt/ros/humble/share/mmf_interfaces/setup.bash
-        fi
-
-        # tier4_autoware_msgs overlay (built in same ros-mmf-base stage). Only
-        # needed if any topic uses tier4_*_msgs / autoware_*_msgs types.
-        if [ -f /opt/ros/humble/share/tier4_autoware/setup.bash ]; then
-          source /opt/ros/humble/share/tier4_autoware/setup.bash
-        fi
-
-        # F010: ota_client background launch.
-        # The binary is shipped by Dockerfile.rel runtime-mmf-ext-ros2 (it copies
-        # output/<arch>/<type>/extension/ros2/bin/ → /oss/bin/). We still guard
-        # `-x` for cases where a developer mounts a stripped image and forgets
-        # to rebuild ext-ros2.
-        if [ -x /oss/bin/ota_client ]; then
-          echo "[ros2_entrypoint] launching /oss/bin/ota_client in background"
-          ( /oss/bin/ota_client; rc=$$?
-            echo "[ros2_entrypoint] ota_client exited rc=$$rc (container stays up)"
-          ) &
-        else
-          echo "[ros2_entrypoint] WARN: /oss/bin/ota_client not found, skipping (rebuild ext-ros2 to populate it)" >&2
-        fi
-
-        # dds_bridge: dynamic-IDL adapter that forwards every OtaManager
-        # topic between the raw bare-DDS layer (otamanager::X) and the
-        # ROS-canonical layer (otamanager::msg::dds_::X_) so rosbridge_server
-        # and ota_monitor can talk to the host OtaManager without TypeObject
-        # matching pain. Topic table + design rationale live in
-        # service/extension/ros2/dds_bridge/main.cc.
-        if [ -x /oss/bin/dds_bridge ]; then
-          echo "[ros2_entrypoint] launching /oss/bin/dds_bridge in background"
-          ( /oss/bin/dds_bridge /oss/bin/idl; rc=$$?
-            echo "[ros2_entrypoint] dds_bridge exited rc=$$rc (container stays up)"
-          ) &
-        else
-          echo "[ros2_entrypoint] WARN: /oss/bin/dds_bridge not found, skipping" >&2
-        fi
-
-        # Start rosbridge_server in background
-        ros2 launch rosbridge_server rosbridge_websocket_launch.xml &
-
-        # Start main application
-        exec /oss/bin/adsw_manager
 
   mmf-ext-agl:
     container_name: oss-mmf-ext-agl
@@ -186,7 +144,7 @@ services:
           is_enabled: true
           mw_type: AGL
           init_state: NOT_RUNNING
-          image: registry.obigo.com/oss/oss-hmi-launcher:latest
+          image: ${HMI_LAUNCHER_IMAGE:-registry.obigo.com/oss/oss-hmi-launcher:latest}
           extra_args:
           - "-it"
           - --net=host
@@ -239,8 +197,8 @@ services:
       # 직접 compose up 하는 경우: AGL_X86_CONFIG_GEN=/tmp/agl-service-list.x86.gen.yaml 을 지정
     restart: unless-stopped
     environment:
-      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0} # DDS 도메인 격리
-      - MMF_DDS_DOMAIN_ID=${ROS_DOMAIN_ID:-0} # raw Fast-DDS
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-42} # DDS 도메인 격리
+      - MMF_DDS_DOMAIN_ID=${ROS_DOMAIN_ID:-42} # raw Fast-DDS
       - HMI_RUNTIME_UID=${HMI_RUNTIME_UID:-1000}
       - HMI_GPU=${HMI_GPU:-auto}
       - DISPLAY=${DISPLAY:-:0}
@@ -267,7 +225,7 @@ services:
       - XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}
       - NVIDIA_DRIVER_CAPABILITIES=all
       - TZ=Asia/Seoul # 타임존 직접 명시 (또는 호스트 환경에 맞춰 수정)
-      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0} # DDS 통신용 도메인 ID (필요시 변경)
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-42} # DDS 통신용 도메인 ID (필요시 변경)
 
     deploy:
       resources:
@@ -313,7 +271,7 @@ services:
       - XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}
       - NVIDIA_DRIVER_CAPABILITIES=all
       - TZ=Asia/Seoul # 타임존 직접 명시 (또는 호스트 환경에 맞춰 수정)
-      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0} # DDS 통신용 도메인 ID (필요시 변경)
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-42} # DDS 통신용 도메인 ID (필요시 변경)
 
     deploy:
       resources:
@@ -359,7 +317,7 @@ services:
       - XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}
       - NVIDIA_DRIVER_CAPABILITIES=all
       - TZ=Asia/Seoul # 타임존 직접 명시 (또는 호스트 환경에 맞춰 수정)
-      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0} # DDS 통신용 도메인 ID (필요시 변경)
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-42} # DDS 통신용 도메인 ID (필요시 변경)
 
     deploy:
       resources:
@@ -422,6 +380,52 @@ services:
     stdin_open: true
     tty: true
     restart: unless-stopped
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # rviz2-agl — AGL 보드(Orin)의 rviz2 컨테이너
+  #
+  # ⚠️ **`up` 으로 자동 기동되지 않는다** (profiles: [rviz2]). 이 컨테이너의 생명주기는
+  #    런처의 rviz2_panel 이 소유한다 — 패널이 `docker run/stop/rm -f rviz2` 로 직접
+  #    제어하고(F010 direct-docker), agl-shell gRPC(:14005) 로 화면을 전환한다.
+  #    compose 가 부팅 때 함께 띄우면 ① 이름 충돌(패널 start 가 rm -f 로 지운다)
+  #    ② rviz2 가 런처를 덮은 상태로 부팅되는 문제가 생긴다.
+  #
+  # 이 정의의 목적은 두 가지다:
+  #   1) **이미지 프로비저닝** — 새 보드에서 패널 Start 전에 2GB 이미지를 미리 받는다:
+  #        docker compose -f docker/compose/docker-compose-integration.yaml pull rviz2-agl
+  #      (서비스를 이름으로 지목하면 해당 profile 이 자동 활성된다 — compose v2)
+  #   2) **수동 스모크 실행** — 런처 없이 rviz2 만 띄워 확인할 때:
+  #        docker compose -f ... --profile rviz2 up -d rviz2-agl
+  #      확인 후에는 `docker stop rviz2 && docker rm rviz2` 로 정리해 패널에 넘긴다.
+  #
+  # 파라미터는 패널의 docker run 인자와 **동일**하게 유지한다
+  # (oss_hmi_app: apps/rviz2_panel/lib/config/app_config.dart → dockerRunArgs).
+  # 값이 갈라지면 "패널로 띄운 rviz2" 와 "compose 로 띄운 rviz2" 가 다르게 동작한다.
+  # 의도적으로 다른 항목은 RVIZ_CONFIG 하나다: 패널은 기본 미설정(기본 rviz 뷰)이고
+  # 사용자가 Run Options 에서 고르지만, 통합 테스트는 Autoware 시각화가 목적이라
+  # 여기서는 autoware.rviz 를 기본값으로 준다(같은 파일의 oss-adsw-rviz 와 동일).
+  # 기본 뷰로 띄우려면 RVIZ_CONFIG= (빈 값) 으로 오버라이드한다 — entrypoint 가
+  # 빈 값이면 -d 를 붙이지 않는다.
+  rviz2-agl:
+    profiles: [ rviz2 ]
+    container_name: rviz2            # 패널이 기대하는 이름 (docker stop/logs/inspect rviz2)
+    image: ${RVIZ2_IMAGE:-registry.obigo.com/oss/rviz2-agl:latest}
+    network_mode: "host"             # agl-shell gRPC 127.0.0.1:14005 접근
+    ipc: "host"                      # ROS2 공유메모리 전송
+    user: "1001:1001"                # agl-driver — wayland 소켓 소유자
+    group_add: [ "44" ]              # video 그룹 (/dev/dri)
+    environment:
+      # 호스트 wayland 소켓을 컨테이너 안 경로로 넘긴다. entrypoint 가 소켓 존재를
+      # 보고 cage 모드(보드)와 X11 직행 모드(x86 PC)를 자동 판정한다.
+      - XDG_RUNTIME_DIR=/host-xdg
+      - WAYLAND_DISPLAY=wayland-0
+      - HOME=/tmp
+      - LIBGL_ALWAYS_SOFTWARE=1      # Orin vendor GL 대신 SW 렌더 (실측 안정)
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-42}
+      - RVIZ_CONFIG=${RVIZ_CONFIG:-/opt/autoware/share/obigo_launch/rviz/autoware.rviz}
+    volumes:
+      - /run/user/1001:/host-xdg
+    restart: "no"                    # 패널의 rm -f 와 싸우지 않게 재시작 정책 없음
 
   security_processor:
     image: ghcr.io/oss-test-group/oss-ids/security_processor:v0.1.0

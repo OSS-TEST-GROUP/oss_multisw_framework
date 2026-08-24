@@ -21,7 +21,6 @@
 namespace ros2 {
 namespace adsw_manager {
 
-namespace {
 // Check if a service's process tree is alive inside the container.
 //
 // We can't trust the stored PID: StartService captures the PID echoed by
@@ -36,18 +35,24 @@ namespace {
 //
 // `token` should come from Service::ResolveProcessMatchToken(), which picks
 // launchfile / name / package / explicit-override appropriately.
-bool IsServiceAliveInContainer(const std::string& container,
-                                const std::string& token) {
-    if (token.empty()) return true;  // no token → can't check; assume alive
+bool ContainerHealthMonitor::IsServiceAliveInContainer(const std::string& container,
+                                                       const std::string& token) {
+    if (token.empty()) {
+        return true; // no token → can't check; assume alive
+    }
     std::string cmd = "docker exec " + container
                     + " pgrep -f " + token + "\\$"
                     + " >/dev/null 2>&1 && echo alive || echo dead";
     FILE* fp = popen(cmd.c_str(), "r");
-    if (!fp) return true;  // can't check — don't false-positive a death
+    if (!fp) {
+        return true; // can't check — don't false-positive a death
+    }
     char buf[16] = {0};
     bool got = (fgets(buf, sizeof(buf), fp) != nullptr);
     pclose(fp);
-    if (!got) return true;
+    if (!got) {
+        return true;
+    }
     return std::string(buf).find("alive") != std::string::npos;
 }
 
@@ -60,25 +65,30 @@ bool IsServiceAliveInContainer(const std::string& container,
 // service container kept running, ServiceRegistry comes up with pid_=0 for
 // every service and our PID-based liveness path is dead-on-arrival. Probing
 // pgrep recovers the live PID so the poll loop can resume.
-uint64_t LookupServicePidInContainer(const std::string& container,
-                                      const std::string& token) {
-    if (token.empty()) return 0;
+uint64_t ContainerHealthMonitor::LookupServicePidInContainer(const std::string& container,
+                                                             const std::string& token) {
+    if (token.empty()) {
+        return 0;
+    }
     std::string cmd = "docker exec " + container
                     + " pgrep -f " + token + "\\$"
                     + " 2>/dev/null | head -1";
     FILE* fp = popen(cmd.c_str(), "r");
-    if (!fp) return 0;
+    if (!fp) {
+        return 0;
+    }
     char buf[32] = {0};
     bool got = (fgets(buf, sizeof(buf), fp) != nullptr);
     pclose(fp);
-    if (!got) return 0;
+    if (!got) {
+        return 0;
+    }
     try {
         return std::stoull(buf);
     } catch (...) {
         return 0;
     }
 }
-}  // namespace
 
 ContainerHealthMonitor::ContainerHealthMonitor() {}
 
@@ -102,12 +112,18 @@ void ContainerHealthMonitor::Stop() {
 void ContainerHealthMonitor::NotifyInitialContainerState() {
     // 컨테이너를 직접 시작하지 않고 현재 상태를 lifecycle_mgr에 보고한다.
     // lifecycle_mgr의 recovery policy가 StartServiceRequest를 통해 재시작을 결정한다.
-    if (!ADSWManager::Get()) return;
+    if (!ADSWManager::Get()) {
+        return;
+    }
     auto controller = ADSWManager::Get()->GetServiceController();
-    if (!controller) return;
+    if (!controller) {
+        return;
+    }
 
     auto container_ctrl = controller->GetContainer();
-    if (!container_ctrl) return;
+    if (!container_ctrl) {
+        return;
+    }
 
     auto containers = container_ctrl->GetAllContainers();
     for (const auto& container : containers) {
@@ -128,14 +144,31 @@ void ContainerHealthMonitor::PollLoop() {
     while (running_) {
         std::this_thread::sleep_for(std::chrono::milliseconds(kPollIntervalMs));
 
-        if (!running_) break;
+        if (!running_) {
+            break;
+        }
 
-        if (!ADSWManager::Get()) continue;
+        PollOnce();
+    }
+
+    LOG_DEBUG("ContainerHealthMonitor poll loop exited");
+}
+
+// PollLoop 한 사이클. 원래 루프 본문 그대로이고 `continue` 만 `return` 이 됐다
+// (각 continue 는 그 반복의 마지막 동작이었다).
+void ContainerHealthMonitor::PollOnce() {
+    if (!ADSWManager::Get()) {
+        return;
+    }
         auto controller = ADSWManager::Get()->GetServiceController();
-        if (!controller) continue;
+        if (!controller) {
+            return;
+        }
 
         auto container_ctrl = controller->GetContainer();
-        if (!container_ctrl) continue;
+        if (!container_ctrl) {
+            return;
+        }
 
         auto containers = container_ctrl->GetAllContainers();
         for (const auto& container : containers) {
@@ -169,16 +202,15 @@ void ContainerHealthMonitor::PollLoop() {
                 PollServicesInContainer(name);
             }
         }
-    }
-
-    LOG_DEBUG("ContainerHealthMonitor poll loop exited");
 }
 
 // virtual — overridable in tests
 void ContainerHealthMonitor::NotifyContainerState(const std::string& container_name,
                                                    bool is_running,
                                                    int32_t exit_code) {
-    if (!ADSWManager::Get()) return;
+    if (!ADSWManager::Get()) {
+        return;
+    }
 
     // Existing path: fan out as per-service NotifyServiceState so recovery
     // policy keeps working.
@@ -198,13 +230,19 @@ void ContainerHealthMonitor::PublishContainerStateHeartbeat(
         const std::string& container_name,
         bool is_running,
         int32_t exit_code) {
-    if (!ADSWManager::Get()) return;
+    if (!ADSWManager::Get()) {
+        return;
+    }
     auto transmitter = ADSWManager::Get()->GetTransmitter();
     const char* topic = ADSWManager::Get()->GetTopic(MessageType::NOTIFY_CONTAINER_STATE);
-    if (!transmitter || !topic) return;
+    if (!transmitter || !topic) {
+        return;
+    }
 
     auto endpoint = transmitter->GetMessageEndpoint(topic);
-    if (!endpoint) return;
+    if (!endpoint) {
+        return;
+    }
 
     lifecyclemgr::NotifyContainerState payload;
     payload.container_list().push_back(container_name);
@@ -216,11 +254,15 @@ void ContainerHealthMonitor::PublishContainerStateHeartbeat(
 }
 
 void ContainerHealthMonitor::PollServicesInContainer(const std::string& container_name) {
-    if (!ADSWManager::Get()) return;
+    if (!ADSWManager::Get()) {
+        return;
+    }
     auto controller = ADSWManager::Get()->GetServiceController();
     auto registry   = ADSWManager::Get()->GetServiceRegistry();
     auto monitor    = ADSWManager::Get()->GetServiceMonitor();
-    if (!registry || !monitor) return;
+    if (!registry || !monitor) {
+        return;
+    }
 
     const bool is_native = controller && controller->IsNativeExecution();
 

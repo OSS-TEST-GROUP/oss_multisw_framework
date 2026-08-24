@@ -1,5 +1,7 @@
 #include "StartContainerEndPoint.hpp"
 
+#include <utility>
+
 #include "lifecycle/StartContainerRequest.hpp"
 #include "logger/Log.hpp"
 
@@ -7,7 +9,7 @@ namespace lifecycle_manager {
 
 StartContainerEndPoint::StartContainerEndPoint(
     MessageType msgtype, std::string topic, Callback cb)
-    : DDSMessageEndPoint(topic), on_data_cb_(std::move(cb)) {
+    : DDSMessageEndPoint(std::move(topic)), on_data_cb_(std::move(cb)) {
     if (msgtype == MessageType::START_CONTAINER_REQUEST) {
         SetTypeSupport(std::make_shared<TypeSupport>(
             new StartContainerRequestPubSubType()));
@@ -17,12 +19,11 @@ StartContainerEndPoint::StartContainerEndPoint(
     }
 }
 
-StartContainerEndPoint::~StartContainerEndPoint() {}
 
 void StartContainerEndPoint::OnDataAvailable() {
     LOG_DEBUG("Message Delivery for " << GetTopic());
 
-    if (Read<StartContainerResponse>(resp_) == true) {
+    if (Read<StartContainerResponse>(resp_)) {
         StartContainerResponse* msg =
             reinterpret_cast<StartContainerResponse*>(&resp_);
         if (on_data_cb_) {

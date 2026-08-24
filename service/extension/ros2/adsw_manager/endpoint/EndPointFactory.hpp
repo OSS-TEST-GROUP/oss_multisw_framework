@@ -29,8 +29,8 @@ class EndPointFactory {
     void Finalize();
 
     const char* GetTopic(MessageType mtype);
-    
-    int32_t CreateEndPoints(std::shared_ptr<DDSTransmitter> transmitter);
+
+    int32_t CreateEndPoints(const std::shared_ptr<DDSTransmitter>& transmitter);
 
   private:
     std::map<MessageType, std::string> topic_lists_;

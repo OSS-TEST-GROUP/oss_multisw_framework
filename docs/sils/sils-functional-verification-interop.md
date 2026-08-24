@@ -51,7 +51,7 @@ requirements:
     assert: {max_abs: 0.6}                  # rad
 ```
 
-**assert 라이브러리**(트레이스에서 계산): `in_range`(경계)·`max_abs`·`max_rate`(jerk 등 차분)·`settle_to`(정착)·`overshoot_lt`·`never`(안전 불변식). — STL의 G(always)/F(eventually)를 **데이터로** 표현한 간이형.
+**assert 라이브러리 — 구현된 5종이 전부다**(트레이스에서 계산): `in_range`(경계)·`max_abs`·`max_rate`(jerk 등 차분)·`settle_to`(정착)·`overshoot_lt`. STL의 G(always)/F(eventually)를 **데이터로** 표현한 간이형이다. `never`(안전 불변식) 같은 추가 종류는 **미구현·온디맨드**이며(§5 로드맵), 여기 목록에 없는 assert 를 `requirements.yaml` 에 쓰면 조용히 무시된다 — `analyze_requirements` 는 아는 키만 평가한다.
 
 ### 3.2 현업 대비 위치
 
@@ -82,12 +82,37 @@ requirements:
 | 출발점 | 그대로 재사용 | 재표현 필요 |
 |---|---|---|
 | **Simulink(MBD)** | 모델→**FMU**, 요구→**ReqIF** | Test Assessment 로직 → YAML(소량) |
-| **CarMaker/MORAI/Autoware** | **OpenSCENARIO .xosc** | **거의 없음**(성공조건이 xosc에) |
+| **CarMaker/MORAI/Autoware** | **OpenSCENARIO .xosc** 의 **매핑 가능한 condition subset** | 미매핑 condition(Collision·TTC·Position 등) 전부 + 시나리오 실행 자체 |
 | **Vector CANoe** | 측정 **MF4** | CAPL 테스트 → YAML |
 | **dSPACE** | **MF4**, 모델 | AutomationDesk Python 평가 → YAML |
-| **형식기법** | **STL 수식** | 거의 없음 |
+| **형식기법** | **STL 수식** | 5종 assert 밖의 연산자(§3.1) |
 
-**정직한 한계**: Simulink `verify()`·CAPL·AutomationDesk 스크립트 같은 **독점 판정 로직은 그대로 못 옮긴다**(락인). 옮겨오는 건 표준 계층(모델=FMU·시나리오=xosc·요구=ReqIF·데이터=MF4)이며, pass/fail은 한 번 재표현한다 — 단 OpenSCENARIO StopTrigger는 그 자체가 pass/fail이라 재표현마저 최소.
+**정직한 한계**: Simulink `verify()`·CAPL·AutomationDesk 스크립트 같은 **독점 판정 로직은 그대로 못 옮긴다**(락인). 옮겨오는 건 표준 계층(모델=FMU·시나리오=xosc·요구=ReqIF·데이터=MF4)이며, pass/fail은 한 번 재표현한다.
+
+> **OpenSCENARIO 수용 범위 — 정확히 이만큼이다 (과장 금지).**
+> "CarMaker/MORAI/Autoware 사용자가 `.xosc` 를 거의 그대로 가져올 수 있다"는 **아니다.** 현재
+> [import_openscenario.py](../../tools/sils/conformance/import_openscenario.py) 가 하는 일은
+> **"OpenSCENARIO 자산에서 제한된 condition subset 을 requirements 로 추출"** 이다.
+>
+> - **매핑되는 condition 2종뿐**: `SpeedCondition`→`state_received.vx`,
+>   `AccelerationCondition`→`control_published.acceleration`.
+> - **미매핑 8종**은 버리지 않고 리포트하지만 판정에는 들어가지 않는다 — `CollisionCondition`,
+>   `TimeToCollisionCondition`, `ReachPositionCondition`, `DistanceCondition`,
+>   `RelativeDistanceCondition`, `TraveledDistanceCondition`, `StandStillCondition`,
+>   `OffroadCondition`. 대부분 **트레이스에 신호 자체가 없다**(플랜트/시뮬 필요 → 실 브리지 #1).
+> - **시나리오를 실행하지 않는다.** importer 는 스펙만 뽑는다. 주행 자체는 외부 시뮬레이터 몫.
+> - **StopTrigger 의 성공/실패 polarity 를 결정하지 않는다.** 생성된 requirement 는 신호가
+>   지켜야 할 *bound* 이고, 방향은 사람이 확인해야 한다(생성 파일 헤더에 경고를 넣는다).
+>
+> **그리고 미매핑 조건은 "신호가 없어서" 만이 아니다.** `Collision`·`TTC`·`ReachPosition` 은
+> 신호가 생겨도 **닫힌 루프가 아니면 판정에 의미가 없다** — 재생본(rosbag/`ReplayPlant`)은 내
+> 제어에 반응하지 않으므로 그 조건들은 내 ECU 가 아니라 녹화본을 판정하게 된다. 즉 importer
+> 조건 확장과 실 시뮬레이터 연동은 별개 작업이 아니라 같은 하나다:
+> [simulator-loops §2](sils-simulator-loops.md).
+>
+> 생태계 쪽도 균일하지 않다 — AWSIM 의 OpenSCENARIO 경로는 prototype 으로 안내되고,
+> MathWorks 쪽 지원은 "Simulink 자체"가 아니라 RoadRunner/Automated Driving 계열 기능이다.
+> 즉 "모두가 이 포맷을 말한다"가 아니라 **"제품·구성마다 지원 범위가 다르다"** 가 정확하다.
 
 ### 4.3 설계 원칙 — 정규 IR + 얇은 importer
 

@@ -41,6 +41,7 @@
 
 #include "VissRequestPubSubTypes.hpp"
 #include "json_min.hpp"
+#include "sils_participant_qos.hpp"
 
 namespace {
 
@@ -148,6 +149,7 @@ int main() {
                                       ",\"response_topic\":\"" + g_response_topic + "\"");
 
     DomainParticipantQos pqos;
+    sils::ApplySilsParticipantQos(pqos);   // see sils_participant_qos.hpp
     pqos.name("sils_vecu_viss_responder:" + g_run_id);
     DomainParticipant* participant = DomainParticipantFactory::get_instance()->create_participant(
         domain_id, pqos, nullptr, StatusMask::none());

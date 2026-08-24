@@ -1,0 +1,12 @@
+{
+  "samples": 2022,
+  "wall_span_sec": 101.05135536193848,
+  "sim_span_sec": 101.05146598815918,
+  "median_publish_interval_sec": 0.05001640319824219,
+  "max_publish_interval_sec": 0.05741715431213379,
+  "gaps_over_3x_median": 0,
+  "offset_intercept_sec": -0.00046837120462051967,
+  "drift_slope_sec_per_sec": -6.779537103306323e-07,
+  "max_residual_sec": 0.0026972456376699277,
+  "verdict": "offset-sufficient"
+}

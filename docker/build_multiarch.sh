@@ -22,6 +22,18 @@
 #
 # Usage:
 #   BUILD_TYPE=Release ./docker/build_multiarch.sh
+#
+# ⚠️ 선행 조건 — 이 스크립트는 **컴파일하지 않는다.** `output/<arch>/${BUILD_TYPE}/…` 에 이미
+#    있는 바이너리를 이미지에 복사할 뿐이다. 그래서 먼저 소스를 빌드해야 한다:
+#
+#      ./build.sh --release                                  # x86_64 (core+extension)
+#      ./build.sh --release --aarch64 --set-extension-platform=ROS2
+#      ./build.sh --release --aarch64 --set-extension-platform=AGL
+#
+#    ❗ `build.sh` 의 기본 모드는 **Debug** 다(`--release` 를 빼면 Debug 로 나간다). 반면 이
+#      스크립트와 Dockerfile 의 기본값은 **Release** 다. 두 기본값이 어긋나므로, `--release`
+#      없이 빌드한 뒤 이미지를 만들면 **방금 빌드한 코드가 아니라 예전 Release 산출물이 조용히
+#      들어간다.** 아래 가드가 그 사고를 막는다(존재 + 신선도 검사).
 
 set -e
 
@@ -55,7 +67,12 @@ if [ "${GIT_BRANCH}" != "${DEFAULT_BRANCH}" ]; then
   exit 1
 fi
 BUILD_DATE_UTC="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-SNAP="${GIT_BRANCH}-$(date -u +%Y%m%d)-${GIT_SHORT}"
+# 선택적 스냅샷 prefix — 같은 소스(같은 커밋)로 여러 변종 이미지를 만들 때
+# 스냅샷 태그가 서로 덮어쓰는 것을 막는다. 예) BUILD_TYPE=Debug 빌드:
+#   SNAP_PREFIX=debug BUILD_TYPE=Debug ./docker/build_multiarch.sh
+#   → debug-develop-20260801-abc1234
+SNAP_PREFIX="$(printf '%s' "${SNAP_PREFIX:-}" | sed 's/[^A-Za-z0-9._-]/-/g')"
+SNAP="${SNAP_PREFIX:+${SNAP_PREFIX}-}${GIT_BRANCH}-$(date -u +%Y%m%d)-${GIT_SHORT}"
 OCI_LABELS=(
   --label "org.opencontainers.image.revision=${GIT_REV}"
   --label "org.opencontainers.image.source=github.com/obigo-gov/oss_multisw_framework"
@@ -68,6 +85,72 @@ OCI_LABELS=(
 declare -A ARCH_MAP=( [amd64]=x86_64 [arm64]=aarch64 )
 ARCHS=(amd64 arm64)
 TARGETS=(core ext-ros2 ext-agl)
+
+# ── 산출물 가드 (BUILD_TYPE ↔ output/ 정합) ─────────────────────────────────
+# 실패 모드가 "조용히 잘못된 이미지" 라서 빌드 전에 막는다.
+#   (a) 존재: Dockerfile 이 복사할 디렉토리가 없으면 build 가 애매한 에러로 죽거나,
+#             더 나쁘게는 다른 타겟의 stale 산출물만으로 이미지가 만들어질 수 있다.
+#   (b) 신선도: 산출물이 현재 커밋보다 오래되면 이미지에 옛 코드가 들어간다. 실측 사례 —
+#             x86_64/Release 가 3주 전에 멈춘 상태로 남아 있었다(2026-08-11 확인).
+# 검사만 하고 컴파일은 하지 않는다(이 스크립트의 책임 분리). 의도적으로 옛 산출물을 쓰려면
+# ALLOW_STALE_OUTPUT=1 로 신선도 검사만 경고로 낮춘다.
+declare -A TARGET_SUBPATH=( [core]=core [ext-ros2]=extension/ros2 [ext-agl]=extension/agl )
+# 신선도 기준은 **HEAD 가 아니라 그 타겟의 소스를 마지막으로 바꾼 커밋**이다. HEAD 로 비교하면
+# 문서·스크립트만 고친 커밋에도 정상 산출물이 stale 로 잡혀(오탐) 가드가 무력화된다.
+declare -A TARGET_SRC=(
+  [core]="service/core idl CMakeLists.txt"
+  [ext-ros2]="service/extension/ros2 idl CMakeLists.txt"
+  [ext-agl]="service/extension/agl idl CMakeLists.txt"
+)
+guard_errors=0
+
+for arch in "${ARCHS[@]}"; do
+  kernel_arch="${ARCH_MAP[$arch]}"
+  for tgt in "${TARGETS[@]}"; do
+    bin_dir="output/${kernel_arch}/${BUILD_TYPE}/${TARGET_SUBPATH[$tgt]}/bin"
+
+    if [ ! -d "${bin_dir}" ]; then
+      echo "ERROR: 산출물 없음 — ${bin_dir}" >&2
+      echo "       BUILD_TYPE=${BUILD_TYPE} 로 먼저 소스를 빌드하세요:" >&2
+      case "${tgt}" in
+        core)     echo "         ./build.sh --release${arch:+$([ "$arch" = arm64 ] && echo ' --aarch64')}" >&2 ;;
+        ext-ros2) echo "         ./build.sh --release$([ "$arch" = arm64 ] && echo ' --aarch64') --set-extension-platform=ROS2" >&2 ;;
+        ext-agl)  echo "         ./build.sh --release$([ "$arch" = arm64 ] && echo ' --aarch64') --set-extension-platform=AGL" >&2 ;;
+      esac
+      guard_errors=$((guard_errors+1))
+      continue
+    fi
+
+    # 산출물 최신 mtime vs 그 타겟 소스의 마지막 커밋 시각.
+    newest_epoch="$(find "${bin_dir}" -type f -printf '%T@\n' 2>/dev/null \
+                    | sort -rn | head -1 | cut -d. -f1)"
+    newest_epoch="${newest_epoch:-0}"
+    # shellcheck disable=SC2086  # 경로 목록을 의도적으로 단어 분리
+    src_epoch="$(git log -1 --format=%ct -- ${TARGET_SRC[$tgt]} 2>/dev/null || echo 0)"
+    src_epoch="${src_epoch:-0}"
+    if [ "${src_epoch}" -gt 0 ] && [ "${newest_epoch}" -lt "${src_epoch}" ]; then
+      lag=$(( src_epoch - newest_epoch ))
+      if [ "${lag}" -ge 86400 ]; then age_txt="약 $(( lag / 86400 ))일"; else age_txt="약 $(( lag / 3600 ))시간"; fi
+      msg="산출물이 소스 변경보다 ${age_txt} 뒤처짐 — ${bin_dir}
+       (소스 최종변경 $(date -d "@${src_epoch}" '+%m-%d %H:%M') > 산출물 $(date -d "@${newest_epoch}" '+%m-%d %H:%M'))"
+      if [ "${ALLOW_STALE_OUTPUT:-0}" = "1" ]; then
+        echo "WARNING: ${msg} — ALLOW_STALE_OUTPUT=1 로 통과" >&2
+      else
+        echo "ERROR: ${msg}" >&2
+        echo "       재빌드하거나, 의도한 것이면 ALLOW_STALE_OUTPUT=1 을 주세요." >&2
+        guard_errors=$((guard_errors+1))
+      fi
+    fi
+  done
+done
+
+if [ "${guard_errors}" -gt 0 ]; then
+  echo "" >&2
+  echo "산출물 가드 실패 ${guard_errors}건 — 이미지를 만들지 않았습니다." >&2
+  exit 1
+fi
+echo "산출물 가드 통과 (BUILD_TYPE=${BUILD_TYPE}, ${#ARCHS[@]} arch × ${#TARGETS[@]} target)"
+echo ""
 
 echo "=== OSS Multi-Middleware Framework Multi-arch Build ==="
 echo "Architectures: ${ARCHS[*]}"

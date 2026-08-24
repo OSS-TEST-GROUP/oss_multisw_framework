@@ -13,7 +13,6 @@ namespace ros2 {
 namespace adsw_manager {
 
 MessageQueue::MessageQueue() {}
-MessageQueue::~MessageQueue() {}
 
 bool MessageQueue::Start() {
     if (publishing_thread_.joinable()) {
@@ -55,8 +54,9 @@ void MessageQueue::PublishingLoop()
             return stop_publisher_.load() || !outgoing_msg_queue_.empty();
         });
 
-        if (stop_publisher_.load())
+        if (stop_publisher_.load()) {
             break;
+        }
 
         while (!outgoing_msg_queue_.empty())
         {

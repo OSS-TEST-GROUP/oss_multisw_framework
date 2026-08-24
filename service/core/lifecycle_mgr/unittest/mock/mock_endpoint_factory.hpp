@@ -27,7 +27,7 @@ int EndPointFactory::Initialize() {
     return Mock_EndPointFactory->Initialize();
 }
 
-int32_t EndPointFactory::CreateEndPoints(std::shared_ptr<DDSTransmitter> transmitter,
+int32_t EndPointFactory::CreateEndPoints(const std::shared_ptr<DDSTransmitter>& transmitter,
                                          const EndPointHandlers& handlers) {
     return Mock_EndPointFactory->CreateEndPoints(transmitter, handlers);
 }

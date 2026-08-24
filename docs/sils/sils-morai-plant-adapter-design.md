@@ -195,14 +195,22 @@ S3까지 재현 가능한 trace를 *만들었으니*, S4는 conformance 툴이 �
 
 ---
 
-## 6. 열린 질문 (리뷰에서 결정)
+## 6. 리뷰에서 결정된 사항 (S1~S5 구현으로 확정)
 
-1. **프레이밍**: Option 2 단독 vs Option 3(포트 래핑)?
-2. **채널맵 위치**: 새 yaml(예 `config/sils/channelmap/*.yaml`) vs 기존 speclist/env 확장?
-3. **VSS 정합**: 채널 신호명을 VISS/VSS path에 직접 바인딩할지(vehicle_info_mgr 계약 재사용) vs 독립 이름공간?
-4. **lockstep 대상**: AWSIM 우선(ROS2 훅 용이) vs MORAI 우선(원 요구)?
-5. **BehaviorOutput MIMO**: 스칼라 `value` 유지 + 채널 사이드채널 vs 구조 교체?
+§5의 S1~S5가 모두 머지되면서 아래 5건은 **결정·구현 완료**다. 기록으로 남긴다.
+
+| # | 질문 | 결정 | 근거 |
+|---|---|---|---|
+| 1 | **프레이밍**: Option 2 단독 vs Option 3(포트 래핑)? | **Option 2 단독** — 버스 결합. `IPlant`로 래핑하지 않는다(authority=sim이라 in-process step 계약과 성격이 다름) | §2·§5, `RunVehicleProbe` |
+| 2 | **채널맵 위치**: 새 yaml vs speclist/env 확장? | **새 yaml** — `config/sils/channelmap/*.yaml`, `SILS_CHANNELMAP`으로 지정 | §5.1 |
+| 3 | **VSS 정합**: VISS/VSS path 직접 바인딩 vs 독립 이름공간? | **독립 정규 계약** — `EgoState`/`VehicleControl` 정규 IDL을 SiLS가 소유. VISS/VSS 바인딩은 안 함 | §3, `VehicleWireCodec` |
+| 4 | **lockstep 대상**: AWSIM 우선 vs MORAI 우선? | **시뮬레이터 비종속** — 기존 ClockMaster barrier가 일반 barrier이므로 `TickGrant` 구독 + `TickComplete` 응답하는 참가자면 누구나 포함. 실제 어느 쪽을 먼저 붙일지는 [BR-C-1](sils-real-bridge-requirements.md) 답에 종속 | §5.2 |
+| 5 | **BehaviorOutput MIMO**: 스칼라 `value` 유지 vs 구조 교체? | **분리** — VISS 경로의 스칼라 `behavior_output.value`는 유지하고, 버스 경로는 별도 포트 `IVehicleBehavior`(state in → control out)를 둔다 | [vehicle_behavior.hpp](../../service/sils/vecu/src/vehicle_behavior.hpp) |
+
+**남은 열린 질문은 SiLS 밖**이다 — 외부 시뮬레이터/Autoware 인터페이스이며
+[sils-real-bridge-requirements.md](sils-real-bridge-requirements.md)의 BR-M·BR-A·BR-C로 이관했다.
+그중 **BR-C-1(MORAI step-control 지원 여부)**이 실 브리지 #1의 검증 수준을 가르는 최우선 항목이다.
 
 ---
 
-*리뷰 후 프레이밍이 확정되면 S1 스캐폴딩(채널맵 스키마 + free-run 브링업)부터 착수.*
+*S1~S5 완료. 다음은 실 브리지 #1(외부 컴포넌트) — BR-C-1 답 확인 후 착수.*

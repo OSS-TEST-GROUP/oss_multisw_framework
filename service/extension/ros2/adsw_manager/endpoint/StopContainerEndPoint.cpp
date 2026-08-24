@@ -1,5 +1,7 @@
 #include "StopContainerEndPoint.hpp"
 
+#include <utility>
+
 #include "lifecycle/StopContainerRequest.hpp"
 #include "ADSWManager.hpp"
 #include "control/ContainerController.hpp"
@@ -11,9 +13,8 @@
 namespace ros2 {
 namespace adsw_manager {
 
-StopContainerEndPoint::StopContainerEndPoint(MessageType msgtype, std::string topic)
-    : DDSMessageEndpoint() {
-    topic_ = topic;
+StopContainerEndPoint::StopContainerEndPoint(MessageType msgtype, std::string topic) : topic_(std::move(topic)) {
+
     if (msgtype == MessageType::STOP_CONTAINER_REQUEST) {
         type_support_ = std::make_shared<TypeSupport>(new StopContainerRequestPubSubType());
     } else if (msgtype == MessageType::STOP_CONTAINER_RESPONSE) {
@@ -21,7 +22,6 @@ StopContainerEndPoint::StopContainerEndPoint(MessageType msgtype, std::string to
     }
 }
 
-StopContainerEndPoint::~StopContainerEndPoint() {}
 
 std::string StopContainerEndPoint::GetTopic() { return topic_; }
 std::string StopContainerEndPoint::GetTypeName() { return type_support_->get_type_name(); }
@@ -30,7 +30,9 @@ std::shared_ptr<TypeSupport> StopContainerEndPoint::GetTypeSupport() { return ty
 void StopContainerEndPoint::OnDataAvailable() {
     LOG_DEBUG("Message Delivery for " << GetTopic());
 
-    if (Read<StopContainerRequest>(req_) != true) return;
+    if (!Read<StopContainerRequest>(req_)) {
+        return;
+    }
 
     StopContainerRequest* message = reinterpret_cast<StopContainerRequest*>(&req_);
 
@@ -45,7 +47,9 @@ void StopContainerEndPoint::OnDataAvailable() {
         if (!container_ctrl) { ok = false; break; }
         bool r = container_ctrl->StopContainer(name);
         LOG_DEBUG("StopContainer name=" << name << " result=" << (r ? "OK" : "FAIL"));
-        if (!r) ok = false;
+        if (!r) {
+            ok = false;
+        }
     }
 
     resp_.ret_code() = ok ? lifecyclemgr::ReturnCode::SUCCESS
@@ -56,7 +60,9 @@ void StopContainerEndPoint::OnDataAvailable() {
         ADSWManager::Get()->GetTopic(MessageType::STOP_CONTAINER_RESPONSE) : nullptr;
     if (transmitter && resp_topic) {
         auto endpoint = transmitter->GetMessageEndpoint(resp_topic);
-        if (endpoint) endpoint->Write(&resp_);
+        if (endpoint) {
+            endpoint->Write(&resp_);
+        }
     }
 }
 

@@ -23,10 +23,9 @@ class NotifyContainerStateEndPoint : public DDSMessageEndPoint {
 
     NotifyContainerStateEndPoint(MessageType msgtype, std::string topic,
                                   Callback cb = nullptr);
-    virtual ~NotifyContainerStateEndPoint();
-
-    virtual void OnDataAvailable() override;
-    virtual void OnDataPublished(bool ret) override;
+    ~NotifyContainerStateEndPoint() override= default;
+    void OnDataAvailable() override;
+    void OnDataPublished(bool ret) override;
 
   private:
     NotifyContainerState data_;

@@ -41,7 +41,9 @@ inline MockStateManager* Mock_StateManager = nullptr;
 
 // Implementations moved to .cpp file to avoid multiple definition errors.
 StateManager::StateManager(lifecycle_manager::LifecycleManager& mgr) : ManagerBase(mgr) {}
-StateManager::~StateManager() {}
+// StateManager::~StateManager() 정의는 제거했다. 프로덕션 헤더가 `= default` 로 바뀌어
+// 아웃오브라인 정의가 위법(explicitly-defaulted 함수의 재정의)이 되고,
+// defaulted 소멸자는 컴파일러가 각 TU 에 만들어주므로 링크 심이 필요 없다.
 
 bool StateManager::Start() {
     return Mock_StateManager->Start();
@@ -50,18 +52,18 @@ bool StateManager::Start() {
 void StateManager::Stop() {
     Mock_StateManager->Stop();
 }
-bool StateManager::StartService(std::shared_ptr<Service> service) {
+bool StateManager::StartService(const std::shared_ptr<Service>& service) {
     return Mock_StateManager->StartService(service);
 }
 
-void StateManager::StopService(std::shared_ptr<Service> service) {
+void StateManager::StopService(const std::shared_ptr<Service>& service) {
     Mock_StateManager->StopService(service);
 }
 
 bool StateManager::SetServiceMode(lifecyclemgr::SetServiceModeRequest* message) {
     return Mock_StateManager->SetServiceMode(message);
 }
-void StateManager::ProcessServiceHandling(std::set<std::shared_ptr<Service>> service_list) {
+void StateManager::ProcessServiceHandling(const std::set<std::shared_ptr<Service>>& service_list) {
     Mock_StateManager->ProcessServiceHandling(service_list);
 }
 void StateManager::OnStart(lifecyclemgr::StartServiceResponse* message) {

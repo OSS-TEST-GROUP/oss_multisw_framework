@@ -103,6 +103,31 @@ check 0 "capture-golden: baseline conformant run" \
     --topology "${TOPO}" --out-dir "${WORK}/caprun" --traces-dir "${WORK}/traces" \
     --rules "${WORK}/rules.yaml" --capture-golden-dir "${WORK}/captured"
 
+# --- plant isolation (two-loop operation: MORAI vs scenario_simulator_v2) -----
+# Capture a golden that DECLARES its plant, then compare the same traces back under a
+# different plant: that must be refused as policy, not reported as a code regression.
+check 0 "plant: capture-golden stamps --plant into golden_meta" \
+    --topology "${TOPO}" --out-dir "${WORK}/capplant" --traces-dir "${WORK}/traces" \
+    --rules "${WORK}/rules.yaml" --capture-golden-dir "${WORK}/golden-morai" --plant morai
+if grep -q '"plant": "morai"' "${WORK}/golden-morai"/*.jsonl 2>/dev/null; then
+    echo "PASS artifact golden_meta.plant recorded"; pass=$((pass+1))
+else
+    echo "FAIL artifact golden_meta.plant not recorded"; fail=$((fail+1))
+fi
+
+check 0 "plant: same plant -> compare runs normally (MATCH)" \
+    --topology "${TOPO}" --out-dir "${WORK}/plantok" --traces-dir "${WORK}/traces" \
+    --golden-dir "${WORK}/golden-morai" --rules "${WORK}/rules.yaml" --plant morai
+
+check 1 "plant: cross-plant compare -> REJECTED (not a regression)" \
+    --topology "${TOPO}" --out-dir "${WORK}/plantbad" --traces-dir "${WORK}/traces" \
+    --golden-dir "${WORK}/golden-morai" --rules "${WORK}/rules.yaml" --plant scenario_simulator_v2
+if grep -q 'REJECTED' "${WORK}/plantbad/compare/"*.compare.json 2>/dev/null; then
+    echo "PASS artifact cross-plant compare says REJECTED"; pass=$((pass+1))
+else
+    echo "FAIL artifact cross-plant compare did not say REJECTED"; fail=$((fail+1))
+fi
+
 # lint gate: a broken catalog must fail BEFORE compile. --contracts is relative to
 # the repo root (that's what sils-ci hands the linter), so drop a broken catalog at
 # a repo-root-relative temp path and clean it up in the trap.

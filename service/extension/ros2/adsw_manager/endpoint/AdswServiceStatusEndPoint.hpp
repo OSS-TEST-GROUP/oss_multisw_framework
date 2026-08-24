@@ -17,13 +17,13 @@ using namespace adswmgr;
 class ADSWServiceStatusEndPoint : public DDSMessageEndpoint {
   public:
     ADSWServiceStatusEndPoint(MessageType msgtype, std::string topic);
-    virtual ~ADSWServiceStatusEndPoint();
+    ~ADSWServiceStatusEndPoint() override;
 
-    virtual std::string GetTopic();
-    virtual std::string GetTypeName();
-    virtual std::shared_ptr<TypeSupport> GetTypeSupport();
+    std::string GetTopic() override;
+    std::string GetTypeName() override;
+    std::shared_ptr<TypeSupport> GetTypeSupport() override;
 
-    virtual void OnDataAvailable();
+    void OnDataAvailable() override;
 
   private:
     std::string topic_;

@@ -38,8 +38,9 @@ MockServiceMonitor* Mock_ServiceMonitor;
 
 ServiceMonitor::ServiceMonitor() {
 }
-ServiceMonitor::~ServiceMonitor() {
-}
+// ~ServiceMonitor() 정의는 제거했다. 프로덕션 헤더가 `= default` 로 바뀌어
+// 아웃오브라인 정의가 위법(explicitly-defaulted 함수의 재정의)이 되고,
+// defaulted 소멸자는 컴파일러가 각 TU 에 만들어주므로 링크 심이 필요 없다.
 bool ServiceMonitor::Initialize() {
     return Mock_ServiceMonitor->Initialize();
 }
@@ -55,13 +56,13 @@ void ServiceMonitor::NotifyServiceState() {
 std::shared_ptr<ROSServiceDiscovery> ServiceMonitor::GetServiceDiscovery() {
     return Mock_ServiceMonitor->GetServiceDiscovery();
 }
-int32_t ServiceMonitor::NodeStarted(std::string service, std::string node) {
+int32_t ServiceMonitor::NodeStarted(const std::string& service, const std::string& node) {
     return Mock_ServiceMonitor->NodeStarted(service, node);
 }
-int32_t ServiceMonitor::NodeStopped(std::string service, std::string node) {
+int32_t ServiceMonitor::NodeStopped(const std::string& service, const std::string& node) {
     return Mock_ServiceMonitor->NodeStopped(service, node);
 }
-int32_t ServiceMonitor::NodeCount(std::string service) {
+int32_t ServiceMonitor::NodeCount(const std::string& service) {
     return Mock_ServiceMonitor->NodeCount(service);
 }
 void ServiceMonitor::UpdateServiceState() {

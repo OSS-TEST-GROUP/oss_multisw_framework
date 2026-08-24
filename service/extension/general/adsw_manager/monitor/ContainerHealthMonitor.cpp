@@ -38,16 +38,22 @@ namespace {
 // launchfile / name / package / explicit-override appropriately.
 bool IsServiceAliveInContainer(const std::string& container,
                                 const std::string& token) {
-    if (token.empty()) return true;  // no token → can't check; assume alive
+    if (token.empty()) {
+        return true; // no token → can't check; assume alive
+    }
     std::string cmd = "docker exec " + container
                     + " pgrep -f " + token + "\\$"
                     + " >/dev/null 2>&1 && echo alive || echo dead";
     FILE* fp = popen(cmd.c_str(), "r");
-    if (!fp) return true;  // can't check — don't false-positive a death
+    if (!fp) {
+        return true; // can't check — don't false-positive a death
+    }
     char buf[16] = {0};
     bool got = (fgets(buf, sizeof(buf), fp) != nullptr);
     pclose(fp);
-    if (!got) return true;
+    if (!got) {
+        return true;
+    }
     return std::string(buf).find("alive") != std::string::npos;
 }
 
@@ -62,16 +68,22 @@ bool IsServiceAliveInContainer(const std::string& container,
 // pgrep recovers the live PID so the poll loop can resume.
 uint64_t LookupServicePidInContainer(const std::string& container,
                                       const std::string& token) {
-    if (token.empty()) return 0;
+    if (token.empty()) {
+        return 0;
+    }
     std::string cmd = "docker exec " + container
                     + " pgrep -f " + token + "\\$"
                     + " 2>/dev/null | head -1";
     FILE* fp = popen(cmd.c_str(), "r");
-    if (!fp) return 0;
+    if (!fp) {
+        return 0;
+    }
     char buf[32] = {0};
     bool got = (fgets(buf, sizeof(buf), fp) != nullptr);
     pclose(fp);
-    if (!got) return 0;
+    if (!got) {
+        return 0;
+    }
     try {
         return std::stoull(buf);
     } catch (...) {
@@ -102,12 +114,18 @@ void ContainerHealthMonitor::Stop() {
 void ContainerHealthMonitor::NotifyInitialContainerState() {
     // 컨테이너를 직접 시작하지 않고 현재 상태를 lifecycle_mgr에 보고한다.
     // lifecycle_mgr의 recovery policy가 StartServiceRequest를 통해 재시작을 결정한다.
-    if (!ADSWManager::Get()) return;
+    if (!ADSWManager::Get()) {
+        return;
+    }
     auto controller = ADSWManager::Get()->GetServiceController();
-    if (!controller) return;
+    if (!controller) {
+        return;
+    }
 
     auto container_ctrl = controller->GetContainer();
-    if (!container_ctrl) return;
+    if (!container_ctrl) {
+        return;
+    }
 
     auto containers = container_ctrl->GetAllContainers();
     for (const auto& container : containers) {
@@ -128,14 +146,22 @@ void ContainerHealthMonitor::PollLoop() {
     while (running_) {
         std::this_thread::sleep_for(std::chrono::milliseconds(kPollIntervalMs));
 
-        if (!running_) break;
+        if (!running_) {
+            break;
+        }
 
-        if (!ADSWManager::Get()) continue;
+        if (!ADSWManager::Get()) {
+            continue;
+        }
         auto controller = ADSWManager::Get()->GetServiceController();
-        if (!controller) continue;
+        if (!controller) {
+            continue;
+        }
 
         auto container_ctrl = controller->GetContainer();
-        if (!container_ctrl) continue;
+        if (!container_ctrl) {
+            continue;
+        }
 
         auto containers = container_ctrl->GetAllContainers();
         for (const auto& container : containers) {
@@ -178,7 +204,9 @@ void ContainerHealthMonitor::PollLoop() {
 void ContainerHealthMonitor::NotifyContainerState(const std::string& container_name,
                                                    bool is_running,
                                                    int32_t exit_code) {
-    if (!ADSWManager::Get()) return;
+    if (!ADSWManager::Get()) {
+        return;
+    }
 
     // Existing path: fan out as per-service NotifyServiceState so recovery
     // policy keeps working.
@@ -198,13 +226,19 @@ void ContainerHealthMonitor::PublishContainerStateHeartbeat(
         const std::string& container_name,
         bool is_running,
         int32_t exit_code) {
-    if (!ADSWManager::Get()) return;
+    if (!ADSWManager::Get()) {
+        return;
+    }
     auto transmitter = ADSWManager::Get()->GetTransmitter();
     const char* topic = ADSWManager::Get()->GetTopic(MessageType::NOTIFY_CONTAINER_STATE);
-    if (!transmitter || !topic) return;
+    if (!transmitter || !topic) {
+        return;
+    }
 
     auto endpoint = transmitter->GetMessageEndpoint(topic);
-    if (!endpoint) return;
+    if (!endpoint) {
+        return;
+    }
 
     lifecyclemgr::NotifyContainerState payload;
     payload.container_list().push_back(container_name);
@@ -216,11 +250,15 @@ void ContainerHealthMonitor::PublishContainerStateHeartbeat(
 }
 
 void ContainerHealthMonitor::PollServicesInContainer(const std::string& container_name) {
-    if (!ADSWManager::Get()) return;
+    if (!ADSWManager::Get()) {
+        return;
+    }
     auto controller = ADSWManager::Get()->GetServiceController();
     auto registry   = ADSWManager::Get()->GetServiceRegistry();
     auto monitor    = ADSWManager::Get()->GetServiceMonitor();
-    if (!registry || !monitor) return;
+    if (!registry || !monitor) {
+        return;
+    }
 
     // general 변형은 ros2 launch 개념이 없다 — 서비스는 항상 네이티브 바이너리로
     // 실행되므로 프로세스 매칭 토큰도 네이티브 경로(실행 파일명)를 쓴다.

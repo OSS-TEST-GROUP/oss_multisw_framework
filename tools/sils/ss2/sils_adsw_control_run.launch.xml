@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SiLS variant of obigo_launch's sample_adsw_control_run.launch.xml, for the Control
+  partition. Docs: docs/sils/sils-integration-topology.md §3, sils-stage3-autoware-partition.md
+
+  NOTE ON STYLE: XML comments may not contain a double hyphen, so this file uses "->" and
+  plain prose where the rest of the tree would use an em dash. Two hyphens anywhere in here
+  is a parse error, not a style nit, and the launch file fails to load with a column number
+  that points at the comment rather than the markup.
+
+  ★ WHY THIS FILE EXISTS
+
+  We need autoware_simple_planning_simulator OFF, because in a real rig the plant is MORAI
+  or Web.Auto and the SiLS bridges occupy the vehicle_interface seat. The switch is
+  `launch_simulator_dummy_vehicle`, declared with a proper default in
+  obigo_launch/launch/planning_simulator.launch.xml. But sample_adsw_control_run.launch.xml
+  passes it as a `value=`, and a `value=` is not overridable from the command line (only a
+  `default=` is), so
+
+      ros2 launch obigo_launch sample_adsw_control_run.launch.xml \
+          launch_simulator_dummy_vehicle:=false
+
+  is silently ignored: it sets a variable nothing reads.
+
+  Rather than patch a file inside the vendor image, this include chains one level up, to
+  planning_simulator.launch.xml, whose args ARE defaults. Every value below is copied
+  verbatim from sample_adsw_control_run.launch.xml except the two marked CHANGED. Keep it
+  that way: any drift from the vendor file is a difference in what we are testing.
+
+  ★ THE ARG WE DO NOT TOUCH: vehicle_simulation
+
+  planning_simulator.launch.xml derives Autoware's own vehicle interface from it:
+
+      <let name="launch_vehicle_interface" value="false" if="$(var vehicle_simulation)"/>
+      <let name="launch_vehicle_interface" value="true" unless="$(var vehicle_simulation)"/>
+
+  It defaults to true, so launch_vehicle_interface stays FALSE and the seat stays EMPTY,
+  which is exactly what we want, because OUR bridges are the vehicle interface. Setting
+  vehicle_simulation=false would make Autoware launch its own CAN side interface package
+  and fight us for /vehicle/status/*.
+
+  ★ WHAT MUST RUN ALONGSIDE
+
+  Turning the simulator off removes ten publishers, not six. Measured on this partition
+  2026-08-11 (docs/sils/evidence/sps-topic-inventory-2026-08-11.txt): 53 subscriptions
+  across those ten topics, all with simple_planning_simulator as the sole publisher.
+
+      aw_vehicle_status_bridge   /vehicle/status/*        14 subscriptions
+      aw_localization_bridge     /localization/*          38 subscriptions
+
+  Not supplied, and believed harmless here. Verify, do not assume:
+      /vehicle/status/actuation_status  MEASURED 0 subscribers. Only
+                                        autoware_raw_vehicle_cmd_converter reads it, and
+                                        that launches only for a vehicle_model_type
+                                        containing ACTUATION_CMD. sample_vehicle is
+                                        DELAY_STEER_ACC_GEARED, so it does not run.
+      /sensing/imu/imu_data             MEASURED 1 subscriber:
+                                        autoware_autonomous_emergency_braking. Whether AEB
+                                        blocks control without it is the open question this
+                                        configuration exists to answer.
+
+  ★ USAGE
+
+  The file is not in the image. tools/sils/ss2/run_control_partition_sils.sh copies it to
+  the /workspace bind mount and restarts only the control container with it. To reproduce
+  the vendor behaviour exactly (simulator ON) for an A/B comparison, pass
+  launch_simulator_dummy_vehicle:=true, which is what the default below is for.
+-->
+<launch>
+  <arg name="map_path" description="point cloud and lanelet2 map directory path"/>
+  <arg name="vehicle_model" default="sample_vehicle"/>
+  <arg name="sensor_model" default="sample_sensor_kit"/>
+  <arg name="data_path" default="$(env HOME)/autoware_data"/>
+
+  <!-- CHANGED (1 of 2): the whole point of this file. Vendor hardcodes true. -->
+  <arg name="launch_simulator_dummy_vehicle" default="false"
+       description="launch autoware_simple_planning_simulator. FALSE means the SiLS bridges
+                    must supply /vehicle/status/* AND /localization/*; see header."/>
+
+  <include file="$(find-pkg-share obigo_launch)/launch/planning_simulator.launch.xml">
+    <arg name="map_path" value="$(var map_path)"/>
+    <arg name="vehicle_model" value="$(var vehicle_model)"/>
+    <arg name="sensor_model" value="$(var sensor_model)"/>
+    <arg name="data_path" value="$(var data_path)"/>
+    <arg name="is_launch_autoware" value="true"/>
+    <arg name="launch_file" value="adsw_control.launch.xml"/>
+    <arg name="is_launch_simulator" value="true"/>
+    <arg name="sim_launch_file" value="obigo_simulator_component.launch.xml"/>
+    <arg name="launch_simulator_dummy_perception" value="false"/>
+    <!-- CHANGED (2 of 2): forwarded from our arg instead of a hardcoded true. -->
+    <arg name="launch_simulator_dummy_vehicle" value="$(var launch_simulator_dummy_vehicle)"/>
+    <arg name="initial_engage_state" value="true"/>
+    <arg name="pointcloud_container_name" value="pointcloud_container_control"/>
+    <arg name="glog_name" value="glog_component_control"/>
+  </include>
+</launch>

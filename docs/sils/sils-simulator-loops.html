@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SiLS · 두 시뮬레이션 경로 아키텍처 — 우리 scope 표시</title>
+<style>
+  :root{
+    --bg:#f1f4f5; --surface:#ffffff; --surface-2:#f7f9fa;
+    --ink:#0f1518; --muted:#566871; --faint:#8496a0;
+    --line:#d6dee1; --line-soft:#e6ecee;
+    --ours:#0b8f82;   --ours-ink:#076b61;   --ours-soft:#d8efec;   /* SiLS 소유 */
+    --adpt:#4f5bc4;   --adpt-ink:#3d47a3;   --adpt-soft:#e4e6f7;   /* 우리가 만들 어댑터(SiLS 밖) */
+    --oss:#b9761a;    --oss-ink:#8a5712;    --oss-soft:#f3e6d1;    /* 외부 오픈소스 (patch 가능) */
+    --vend:#a3427c;   --vend-ink:#832f62;   --vend-soft:#f6e0ef;   /* 외부 상용 (접근 불가) */
+    --cloud:#6b7c85;  --cloud-ink:#4c5b63;  --cloud-soft:#e7ecee;  /* 클라우드 SaaS */
+    --grid:rgba(11,143,130,.05);
+    --shadow:0 1px 2px rgba(16,30,34,.04),0 8px 24px -14px rgba(16,30,34,.14);
+    --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0b0f12; --surface:#131b1f; --surface-2:#0f171b;
+      --ink:#e1e9ec; --muted:#8ea0a8; --faint:#63757d;
+      --line:#243036; --line-soft:#1a242a;
+      --ours:#34c9b8; --ours-ink:#7fe0d4; --ours-soft:#12312e;
+      --adpt:#8b9be8; --adpt-ink:#aab5f0; --adpt-soft:#1e2340;
+      --oss:#e0a04a;  --oss-ink:#eec079;  --oss-soft:#3a2c17;
+      --vend:#dd7fbb; --vend-ink:#eda6d1; --vend-soft:#3a1a2e;
+      --cloud:#93a4ad; --cloud-ink:#b3c2c9; --cloud-soft:#1c252a;
+      --grid:rgba(52,201,184,.06);
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px -16px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#f1f4f5; --surface:#ffffff; --surface-2:#f7f9fa;
+    --ink:#0f1518; --muted:#566871; --faint:#8496a0; --line:#d6dee1; --line-soft:#e6ecee;
+    --ours:#0b8f82; --ours-ink:#076b61; --ours-soft:#d8efec;
+    --adpt:#4f5bc4; --adpt-ink:#3d47a3; --adpt-soft:#e4e6f7;
+    --oss:#b9761a;  --oss-ink:#8a5712;  --oss-soft:#f3e6d1;
+    --vend:#a3427c; --vend-ink:#832f62; --vend-soft:#f6e0ef;
+    --cloud:#6b7c85; --cloud-ink:#4c5b63; --cloud-soft:#e7ecee;
+    --grid:rgba(11,143,130,.05);
+    --shadow:0 1px 2px rgba(16,30,34,.04),0 8px 24px -14px rgba(16,30,34,.14);
+  }
+  :root[data-theme="dark"]{
+    --bg:#0b0f12; --surface:#131b1f; --surface-2:#0f171b;
+    --ink:#e1e9ec; --muted:#8ea0a8; --faint:#63757d; --line:#243036; --line-soft:#1a242a;
+    --ours:#34c9b8; --ours-ink:#7fe0d4; --ours-soft:#12312e;
+    --adpt:#8b9be8; --adpt-ink:#aab5f0; --adpt-soft:#1e2340;
+    --oss:#e0a04a;  --oss-ink:#eec079;  --oss-soft:#3a2c17;
+    --vend:#dd7fbb; --vend-ink:#eda6d1; --vend-soft:#3a1a2e;
+    --cloud:#93a4ad; --cloud-ink:#b3c2c9; --cloud-soft:#1c252a;
+    --grid:rgba(52,201,184,.06);
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px -16px rgba(0,0,0,.6);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6;font-size:16px;
+    background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:26px 26px}
+  .wrap{max-width:1060px;margin:0 auto;padding:clamp(28px,5vw,60px) clamp(16px,4vw,32px) 90px}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ours-ink);font-weight:600}
+  h1{font-size:clamp(25px,4.5vw,40px);line-height:1.12;letter-spacing:-.02em;font-weight:800;margin:.5rem 0 0;text-wrap:balance}
+  .lede{color:var(--muted);font-size:clamp(15px,1.9vw,17px);max-width:70ch;margin:1rem 0 0}
+  h2{font-size:19px;font-weight:750;margin:0 0 1rem;border-bottom:1px solid var(--line);padding-bottom:.6rem}
+  h3{font-size:15px;font-weight:700;margin:26px 0 .7rem;color:var(--muted)}
+  section{margin-top:46px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:clamp(14px,2.4vw,22px);box-shadow:var(--shadow)}
+  code,.mono{font-family:var(--mono);font-size:.875em}
+  p{margin:.85rem 0}
+  a{color:var(--ours-ink)}
+
+  /* --- legend --- */
+  .legend{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 4px}
+  .lg{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:999px;
+      padding:6px 13px 6px 9px;background:var(--surface);font-size:13.5px;font-weight:600}
+  .sw{width:13px;height:13px;border-radius:4px;flex:none}
+  .lg small{font-weight:500;color:var(--muted);font-size:12.5px}
+
+  /* --- layered stack diagram --- */
+  .stack{display:flex;flex-direction:column;gap:0}
+  .band{border:1.5px solid var(--c);background:var(--cs);border-radius:12px;padding:12px 14px 14px;position:relative}
+  .band.dashed{border-style:dashed}
+  .band.thick{border-width:2.5px}
+  .band-hd{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;margin-bottom:10px}
+  .band-hd b{font-size:13.5px;font-weight:750;color:var(--ci);letter-spacing:-.01em}
+  .band-hd span{font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+  .nodes{display:flex;flex-wrap:wrap;gap:8px}
+  .node{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 11px;
+        font-size:13px;line-height:1.35;flex:1 1 auto;min-width:150px}
+  .node b{display:block;font-family:var(--mono);font-size:12.5px;font-weight:700;color:var(--ink)}
+  .node i{font-style:normal;display:block;color:var(--muted);font-size:12px;margin-top:2px}
+  .node.warn{border-color:var(--oss);border-width:1.5px;background:var(--oss-soft)}
+  .node.warn b{color:var(--oss-ink)}
+  .node.ghost{opacity:.62;border-style:dashed}
+
+  .flow{display:flex;align-items:center;justify-content:center;gap:9px;
+        font-size:12.5px;font-family:var(--mono);color:var(--muted);padding:9px 4px;text-align:center}
+  .flow::before,.flow::after{content:"";flex:1;height:1px;background:var(--line);max-width:110px}
+  .switch{display:flex;align-items:center;justify-content:center;gap:10px;margin:4px 0;
+          font-size:13px;font-weight:750;color:var(--adpt-ink);padding:9px 4px;text-align:center}
+  .switch::before,.switch::after{content:"";flex:1;height:2px;
+          background:repeating-linear-gradient(90deg,var(--adpt) 0 7px,transparent 7px 14px)}
+
+  /* --- comparison table --- */
+  table{width:100%;border-collapse:collapse;font-size:13.5px;margin:.4rem 0}
+  th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+  th{font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:700;
+     border-bottom:1px solid var(--line)}
+  tbody tr:last-child td{border-bottom:0}
+  td b{font-weight:700}
+  .tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+
+  .note{border-left:3px solid var(--oss);background:var(--oss-soft);border-radius:0 10px 10px 0;
+        padding:12px 16px;margin:18px 0;font-size:14px}
+  .note b{color:var(--oss-ink)}
+  .keyed{border-left:3px solid var(--ours);background:var(--ours-soft);border-radius:0 10px 10px 0;
+        padding:12px 16px;margin:18px 0;font-size:14px}
+  .keyed b{color:var(--ours-ink)}
+
+  .pill{display:inline-block;font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 7px;
+        border-radius:5px;letter-spacing:.02em;vertical-align:1px}
+  .p-ours{background:var(--ours-soft);color:var(--ours-ink)}
+  .p-adpt{background:var(--adpt-soft);color:var(--adpt-ink)}
+  .p-oss{background:var(--oss-soft);color:var(--oss-ink)}
+  .p-vend{background:var(--vend-soft);color:var(--vend-ink)}
+
+  footer{margin-top:64px;padding-top:20px;border-top:1px solid var(--line);
+         color:var(--faint);font-size:12.5px;font-family:var(--mono)}
+  @media (max-width:600px){ .node{min-width:100%} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">SiLS · 시뮬레이터 연동</div>
+  <h1>두 시뮬레이션 경로 아키텍처</h1>
+  <p class="lede">
+    <b>루프 A — MORAI</b> 와 <b>루프 B — Web.Auto 시나리오</b> 를 나란히 놓고, <b>어디까지가 우리 것인지</b>를
+    색으로 표시한 그림. 핵심은 두 그림의 <b>아래 절반이 완전히 같다</b>는 것 — 바뀌는 것은 어댑터
+    컨테이너 하나뿐이고 <code>service/sils/</code> 는 재빌드하지 않는다.
+  </p>
+  <p class="lede" style="margin-top:.6rem">
+    정본은 <a href="sils-simulator-loops.md">sils-simulator-loops.md</a> — 충돌하면 <code>.md</code> 를 믿을 것.
+  </p>
+
+  <!-- ============================ LEGEND ============================ -->
+  <section>
+    <h2>범례 — scope 색</h2>
+    <div class="legend">
+      <span class="lg"><span class="sw" style="background:var(--ours)"></span>SiLS 소유 <small>· 우리 저장소, 우리가 정본</small></span>
+      <span class="lg"><span class="sw" style="background:var(--adpt)"></span>우리가 만들 어댑터 <small>· SiLS <b>밖</b>, 부패 방지 계층</small></span>
+      <span class="lg"><span class="sw" style="background:var(--oss)"></span>외부 오픈소스 <small>· 온프렘, <b>patch 가능</b></small></span>
+      <span class="lg"><span class="sw" style="background:var(--vend)"></span>외부 상용 <small>· 내부 접근 <b>불가</b>, 벤더 문의</small></span>
+      <span class="lg"><span class="sw" style="background:var(--cloud)"></span>클라우드 SaaS <small>· 자산만 반출</small></span>
+    </div>
+    <div class="keyed" style="margin-top:20px">
+      <b>어댑터가 왜 SiLS 밖인가.</b> 어댑터는 시뮬레이터마다 다르고 벤더 사정으로 흔들린다.
+      이것을 안에 넣으면 시뮬레이터를 바꿀 때마다 <code>service/sils/</code> 가 흔들린다 —
+      그래서 어댑터를 <b>부패 방지 계층</b>으로 밖에 두고, SiLS 는 <b>정규 계약</b>
+      (<code>EgoState</code>/<code>VehicleControl</code>/<code>ControlTarget</code>)만 소유한다.
+    </div>
+  </section>
+
+  <!-- ============================ LOOP B ============================ -->
+  <section>
+    <h2>루프 B — Web.Auto 시나리오 경로</h2>
+    <p style="color:var(--muted);font-size:14.5px;margin-top:0">
+      답하는 질문: <b>“표준 시나리오 자산으로 요구를 자동 판정할 수 있는가”</b>
+    </p>
+
+    <div class="card">
+      <div class="stack">
+
+        <div class="band" style="--c:var(--cloud);--cs:var(--cloud-soft);--ci:var(--cloud-ink)">
+          <div class="band-hd"><b>클라우드 SaaS — TIER IV Web.Auto</b><span>접근 불가 · 고치지 않는다 · 자산만 반출</span></div>
+          <div class="nodes">
+            <div class="node"><b>Scenario Editor</b><i>웹 저작 · 파라미터화된 시나리오</i></div>
+            <div class="node"><b>Scenario Format v2.0</b><i>YAML — <code>.xosc</code> 가 아니다</i></div>
+            <div class="node ghost"><b>CI/CD · Evaluator</b><i>클라우드 실행 — <b>쓰지 않는다</b></i></div>
+          </div>
+        </div>
+
+        <div class="flow">▼ &nbsp;<code>.xosc</code> 파일 반출 &nbsp;(변환은 <code>scenario_test_runner</code> 내장) &nbsp;▼</div>
+
+        <div class="band" style="--c:var(--oss);--cs:var(--oss-soft);--ci:var(--oss-ink)">
+          <div class="band-hd"><b>외부 오픈소스 (온프렘) — <code>scenario_simulator_v2</code></b><span>Apache-2.0 · 우리가 띄운다 · <b>patch 대상</b></span></div>
+          <div class="nodes">
+            <div class="node"><b>scenario_test_runner</b><i>배치 실행 CLI · 결과 집계</i></div>
+            <div class="node warn"><b>openscenario_interpreter</b><i>⚠ <code>create_wall_timer</code> 30 Hz — 여기가 결정론 깨는 지점</i></div>
+            <div class="node warn"><b>traffic_simulator</b><i>⚠ 시계 · <code>/clock</code> · <code>updateFrame()</code> — <b>W3 patch</b></i></div>
+            <div class="node"><b>simple_sensor_simulator</b><i><b>플랜트 본체</b> — 차량 동역학·센서</i></div>
+            <div class="node warn"><b>concealer</b><i>⚠ Autoware 어댑터 — 우리 VCU 자리와 충돌 (B1-2)</i></div>
+            <div class="node ghost"><b>Autoware</b><i>B-full 에서만 · <code>spinSome()</code> 비동기 → 결정론 포기</i></div>
+          </div>
+        </div>
+
+        <div class="flow">▲▼ &nbsp;ROS2 토픽 ↔ DDS 정규 계약 &nbsp;(단위는 이미 rad · m/s² 라 변환 거의 없음) &nbsp;▲▼</div>
+
+        <div class="band dashed" style="--c:var(--adpt);--cs:var(--adpt-soft);--ci:var(--adpt-ink)">
+          <div class="band-hd"><b>어댑터 — 우리가 만들지만 SiLS 밖</b><span>컨테이너 1개 · 이것만 교체된다</span></div>
+          <div class="nodes">
+            <div class="node"><b>SS_v2 ↔ DDS 어댑터</b><i>rclcpp 노드 · 정규 타입 재발행 <span class="pill p-adpt">B2-1</span></i></div>
+            <div class="node"><b><code>/clock</code> → tick 브리지</b><i>B-full 시간축 정렬용 <span class="pill p-adpt">W2 · B2-6</span></i></div>
+          </div>
+        </div>
+
+        <div class="switch">◀ ◀ ◀ &nbsp;여 기 가 &nbsp;스 위 치 &nbsp;지 점 &nbsp;— 아래는 두 루프가 동일 &nbsp;▶ ▶ ▶</div>
+
+        <div class="band thick" style="--c:var(--ours);--cs:var(--ours-soft);--ci:var(--ours-ink)">
+          <div class="band-hd"><b>SiLS 소유 — 시뮬레이터가 바뀌어도 재빌드 없음</b><span>루프 A 와 <b>완전 동일</b></span></div>
+          <div class="nodes">
+            <div class="node"><b>idl/dds/sils/</b><i>정규 계약 — <code>EgoState</code> · <code>VehicleControl</code> · <code>ControlTarget</code> · <code>TickControl</code></i></div>
+            <div class="node"><b>service/sils/vecu/</b><i>vECU 런타임 — <code>IVehicleBehavior</code> · <code>IClockSource</code> · <code>VehicleWireCodec</code></i></div>
+            <div class="node"><b>run_coordinator</b><i>ClockMaster — <code>TickGrant</code>/<code>TickComplete</code> barrier</i></div>
+            <div class="node"><b>config/sils/channelmap/</b><i><code>sils/ego/state</code> · <code>sils/ego/cmd</code> — <b>토픽이 우리 것</b></i></div>
+            <div class="node"><b>tools/sils/conformance/</b><i><code>validate_trace</code> → <code>evaluate</code> → <code>gate.py</code> → verdict/junit</i></div>
+            <div class="node"><b>compare_golden</b><i>회귀 — <code>gate_plant()</code> 로 <b>플랜트별 격리</b></i></div>
+          </div>
+        </div>
+
+      </div><!-- /stack -->
+
+      <h3>★ 루프 B 만의 성질 — 같은 파일이 자극과 판정 둘 다</h3>
+      <div class="stack">
+        <div class="flow" style="padding-top:0">같은 <code>.xosc</code> 가 위(자극)와 아래(판정)로 <b>동시에</b> 흘러간다</div>
+        <div class="band" style="--c:var(--ours);--cs:var(--ours-soft);--ci:var(--ours-ink)">
+          <div class="band-hd"><b>판정 경로 <span class="pill p-ours">SiLS 소유</span></b><span><code>.xosc</code> → 요구 자동 추출</span></div>
+          <div class="nodes">
+            <div class="node"><b>import_openscenario.py</b><i><code>ParameterDeclarations</code> <code>$name</code> 치환 완료 (B0-3)</i></div>
+            <div class="node"><b>requirements.yaml</b><i>속도·감속 한계 등 — <b>손으로 저작하지 않는다</b></i></div>
+            <div class="node"><b>gate.py --requirements</b><i>FIDELITY 판정에 융합</i></div>
+          </div>
+        </div>
+      </div>
+      <p style="font-size:14px;color:var(--muted);margin-bottom:0">
+        두 벌(시나리오 / 요구)을 유지하며 어긋날 여지가 없다. <b>이 성질은 루프 A 에는 없다.</b>
+      </p>
+    </div>
+
+    <div class="note">
+      <b>루프 B 는 다시 둘로 갈린다.</b>
+      <b>B-det</b> = vECU + SS_v2 (제어 목표는 fixture 공급) → 시뮬레이터를 barrier 에 넣으면 <b>L3</b>, golden 기준선.
+      <b>B-full</b> = Autoware 포함 → 폐루프 <b>동작</b> 검증, 결정론은 포기.
+      Autoware 가 <code>spinSome()</code> 으로 비동기라 하나로 합치려 하면 둘 다 잃는다.
+    </div>
+  </section>
+
+  <!-- ============================ LOOP A ============================ -->
+  <section>
+    <h2>루프 A — MORAI 경로</h2>
+    <p style="color:var(--muted);font-size:14.5px;margin-top:0">
+      답하는 질문: <b>“실제 도입 대상 시뮬레이터에서 우리 vECU 가 도는가”</b>
+    </p>
+
+    <div class="card">
+      <div class="stack">
+
+        <div class="band" style="--c:var(--vend);--cs:var(--vend-soft);--ci:var(--vend-ink)">
+          <div class="band-hd"><b>외부 상용 — MORAI</b><span>내부 접근 <b>불가</b> · 막히면 벤더 문의뿐</span></div>
+          <div class="nodes">
+            <div class="node"><b>MORAI 시나리오 러너</b><i>⚠ <code>.xosc</code> 를 받는지 <b>미확인</b> <span class="pill p-vend">A1-3</span></i></div>
+            <div class="node"><b>MORAI 플랜트</b><i>차량 동역학·센서 — 러너와 <b>한 덩어리</b></i></div>
+            <div class="node"><b>시계</b><i>⚠ 외부 스텝 제어 지원 <b>미확인</b> <span class="pill p-vend">A1-1 · BR-C-1</span></i></div>
+            <div class="node ghost"><b>Autoware</b><i>루프 A 도 동일하게 비동기</i></div>
+          </div>
+        </div>
+
+        <div class="flow">▲▼ &nbsp;ROS2 토픽 ↔ DDS 정규 계약 &nbsp;<b style="color:var(--oss-ink)">⚠ 단위 변환이 있다</b> &nbsp;▲▼</div>
+
+        <div class="band dashed" style="--c:var(--adpt);--cs:var(--adpt-soft);--ci:var(--adpt-ink)">
+          <div class="band-hd"><b>어댑터 — 우리가 만들지만 SiLS 밖</b><span>컨테이너 1개 · 이것만 교체된다</span></div>
+          <div class="nodes">
+            <div class="node warn"><b>MORAI ↔ DDS 어댑터</b><i>⚠ deg→rad, km/h→m/s, accel/brake 정규화 <span class="pill p-adpt">A2-1</span></i></div>
+            <div class="node"><b>종방향 명령 매핑</b><i><code>longlCmdType</code> 에 m/s² 모드가 있나 <span class="pill p-vend">A1-2</span></i></div>
+          </div>
+        </div>
+
+        <div class="switch">◀ ◀ ◀ &nbsp;여 기 가 &nbsp;스 위 치 &nbsp;지 점 &nbsp;— 아래는 두 루프가 동일 &nbsp;▶ ▶ ▶</div>
+
+        <div class="band thick" style="--c:var(--ours);--cs:var(--ours-soft);--ci:var(--ours-ink)">
+          <div class="band-hd"><b>SiLS 소유 — 루프 B 와 바이트 단위로 같은 것</b><span>동일 바이너리 · 동일 채널맵 · 동일 게이트</span></div>
+          <div class="nodes">
+            <div class="node"><b>idl/dds/sils/</b><i>정규 계약 — 변경 없음</i></div>
+            <div class="node"><b>service/sils/vecu/</b><i>vECU 런타임 — <b>재빌드 없음</b></i></div>
+            <div class="node"><b>run_coordinator</b><i>ClockMaster barrier — 참가자 집합만 다름</i></div>
+            <div class="node"><b>config/sils/channelmap/</b><i>같은 <code>ego-min.yaml</code></i></div>
+            <div class="node"><b>tools/sils/conformance/</b><i>같은 게이트</i></div>
+            <div class="node warn"><b>compare_golden</b><i>⚠ golden 은 <b>MORAI 전용 세트</b> — 섞으면 exit 2</i></div>
+          </div>
+        </div>
+
+      </div><!-- /stack -->
+
+      <h3>루프 A 에는 자동 판정 경로가 없다</h3>
+      <div class="stack">
+        <div class="band dashed" style="--c:var(--muted);--cs:var(--surface-2);--ci:var(--muted)">
+          <div class="band-hd"><b>판정 기준을 손으로 저작해야 한다</b><span>A1-3 가 “X” 로 답하면 확정</span></div>
+          <div class="nodes">
+            <div class="node"><b>requirements.yaml</b><i>사람이 작성 · 시나리오와 <b>어긋날 여지가 있다</b></i></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      <b>루프 A 의 위험은 배선이 아니라 단위다.</b> <code>deg</code> 를 <code>rad</code> 로 안 바꾸면
+      값이 <b>57.3배</b>로 들어오는데, 코드는 아무 데서도 실패하지 않고 <b>판정만 조용히 틀린다</b>.
+      MORAI 는 안을 못 여니 이런 것을 소스로 확인할 수 없다 — <b>B 를 먼저 하는 이유</b>다.
+    </div>
+  </section>
+
+  <!-- ============================ COMPARE ============================ -->
+  <section>
+    <h2>두 경로 비교</h2>
+    <div class="card">
+      <div class="tw"><table>
+        <thead><tr><th style="width:20%"></th><th style="width:40%">루프 B — Web.Auto 시나리오</th><th style="width:40%">루프 A — MORAI</th></tr></thead>
+        <tbody>
+          <tr><td><b>시뮬레이터</b></td>
+              <td><code>scenario_simulator_v2</code> <span class="pill p-oss">오픈소스</span></td>
+              <td>MORAI <span class="pill p-vend">상용</span></td></tr>
+          <tr><td><b>자극원</b></td>
+              <td>Web.Auto Editor 저작 <code>.xosc</code></td>
+              <td>MORAI 시나리오 러너</td></tr>
+          <tr><td><b>판정 기준</b></td>
+              <td><b>같은 <code>.xosc</code> 에서 자동 추출</b></td>
+              <td>별도 저작 (어긋날 여지)</td></tr>
+          <tr><td><b>막혔을 때</b></td>
+              <td><b>소스를 읽어 푼다</b> — B1-1 이 실제로 그랬다</td>
+              <td><b>벤더 답변을 기다린다</b> — A1-1~A1-4</td></tr>
+          <tr><td><b>시간/결정론</b></td>
+              <td>조사 완료 — 그대로는 L3 불가, <b>개조하면 가능</b> (W3)</td>
+              <td><b>미확인</b> — BR-C-1 답에 종속</td></tr>
+          <tr><td><b>예상 fidelity</b></td>
+              <td><b>B-det L3</b> / B-full L0~L1</td>
+              <td>L0 ~ L3 (A1-1 에 종속)</td></tr>
+          <tr><td><b>어댑터 난이도</b></td>
+              <td>낮음 — rad·m/s² 이미 1:1</td>
+              <td><b>높음</b> — 단위 변환 3종 + 명령 모드</td></tr>
+          <tr><td><b>우리 코드 변경</b></td>
+              <td colspan="2" style="text-align:center;background:var(--ours-soft);color:var(--ours-ink);font-weight:700">
+                양쪽 모두 <b>0</b> — IDL · vECU · barrier · 게이트 전부 그대로</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+    <div class="keyed">
+      <b>이 그림의 결론 한 줄.</b> 두 경로의 차이는 전부 <b>스위치 지점 위쪽</b>에 있다.
+      아래쪽(SiLS 소유)은 같은 바이너리·같은 채널맵·같은 게이트라서, <b>둘을 병행해도 유지 비용이
+      두 배가 되지 않는다</b>. 대신 <b>판정 결과를 섞으면 안 되므로</b> golden 을 플랜트별로 격리한다.
+    </div>
+  </section>
+
+  <!-- ============================ SCOPE SUMMARY ============================ -->
+  <section>
+    <h2>우리 scope — 경계 요약</h2>
+    <div class="card">
+      <div class="tw"><table>
+        <thead><tr><th style="width:16%">구분</th><th style="width:34%">무엇</th><th style="width:50%">경로 · 근거</th></tr></thead>
+        <tbody>
+          <tr><td><span class="pill p-ours">SiLS 소유</span></td>
+              <td>정규 계약 IDL</td>
+              <td><code>idl/dds/sils/</code> — <code>EgoState</code> · <code>VehicleControl</code> · <code>ControlTarget</code> · <code>TickControl</code></td></tr>
+          <tr><td><span class="pill p-ours">SiLS 소유</span></td>
+              <td>vECU 런타임 · ClockMaster</td>
+              <td><code>service/sils/vecu/</code> · <code>service/sils/run_coordinator/</code></td></tr>
+          <tr><td><span class="pill p-ours">SiLS 소유</span></td>
+              <td>판정 게이트 · 트레이스 계약</td>
+              <td><code>tools/sils/conformance/</code> · trace schema v1 · <code>tools/sils/ci/sils-ci.sh</code></td></tr>
+          <tr><td><span class="pill p-ours">SiLS 소유</span></td>
+              <td>토폴로지 · 채널맵</td>
+              <td><code>tools/sils/topology_compiler/</code> · <code>config/sils/channelmap/</code></td></tr>
+          <tr><td><span class="pill p-adpt">우리가 만듦<br>(SiLS 밖)</span></td>
+              <td>시뮬레이터 어댑터</td>
+              <td>루프 B <span class="pill p-adpt">B2-1</span> · 루프 A <span class="pill p-adpt">A2-1</span> — rclcpp 노드, 컨테이너 1개</td></tr>
+          <tr><td><span class="pill p-oss">외부 OSS</span></td>
+              <td><code>scenario_simulator_v2</code></td>
+              <td>온프렘 셀프호스팅. 결정론이 필요하면 <b>fork 또는 상류 기여</b> <span class="pill p-oss">W3 · B2-2</span></td></tr>
+          <tr><td><span class="pill p-vend">외부 상용</span></td>
+              <td>MORAI</td>
+              <td>내부 접근 불가 — <b>A1-1~A1-4 벤더 확인이 선행</b></td></tr>
+          <tr><td><span class="pill p-vend">클라우드</span></td>
+              <td>Web.Auto</td>
+              <td><b>고치지 않는다 · 실행에 쓰지 않는다.</b> <code>.xosc</code> 자산만 반출</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+    <div class="note">
+      <b>가장 자주 나오는 오해.</b> “Web.Auto 를 고쳐서 붙인다” 가 아니다. Web.Auto 는 클라우드 SaaS 라
+      접근 자체가 불가능하고, 필요하지도 않다. 우리가 patch 를 고민하는 대상은
+      <b>온프렘에서 우리가 띄우는 오픈소스 <code>scenario_simulator_v2</code></b> 이며,
+      그중에서도 <code>traffic_simulator</code> 의 <code>updateFrame()</code> 구동부와
+      <code>openscenario_interpreter</code> 의 <code>create_wall_timer</code> 두 곳이다.
+    </div>
+  </section>
+
+  <footer>
+    정본: sils-simulator-loops.md · 이 html 은 손으로 만든 시각 요약이라 문구가 뒤처질 수 있다<br>
+    기준 commit: c183738 (2026-08-06) · 관련: sils-real-bridge-requirements.md · sils-morai-plant-adapter-design.md
+  </footer>
+
+</div>
+</body>
+</html>

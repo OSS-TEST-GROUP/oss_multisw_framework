@@ -16,8 +16,7 @@ namespace lifecycle_manager {
 class LifecycleFactory {
   public:
     LifecycleFactory();
-    virtual ~LifecycleFactory();
-
+    virtual ~LifecycleFactory() = default;
     static LifecycleFactory* GetInstance();
 
     std::shared_ptr<LifecycleManager> GetManager();

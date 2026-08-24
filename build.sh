@@ -11,8 +11,14 @@ export CONTAINER_IMAGE_NAME="oss-mmwf-ros2-x86_64"
 export CONTAINER_IMAGE_TAG=""
 export REGISTRY_ADDRESS="registry.obigo.com"
 export REPO_ADDRESS="repo.obigo.com"
-export REGISTRY_ID="ossuser"
-export REGISTRY_PWD="Ossuser1234"
+export S3_ARTIFACT_URL="s3://oss-artifact"
+export AGL_SDK_SOURCE="${AGL_SDK_SOURCE:-nexus}"
+# 레지스트리 자격증명은 하드코딩하지 않는다 (공개 저장소로 전달되는 파일).
+#   · pull  : oss 프로젝트가 public 이므로 인증 불필요
+#   · push  : CI 는 Harbor 로봇 계정(oss-ci) 을 REGISTRY_ID/REGISTRY_PWD 로 주입,
+#             로컬은 미리 `docker login registry.obigo.com` (docker/registry-auth.sh 참조)
+export REGISTRY_ID="${REGISTRY_ID:-}"
+export REGISTRY_PWD="${REGISTRY_PWD:-}"
 export DOCKER_TARGET="build-stage"
 
 # Build options
@@ -214,9 +220,16 @@ do_set_private_registry() {
 		docker logout "${REGISTRY_ADDRESS}:80"
 	fi
 
-	if ! cat ~/.docker/config.json 2>/dev/null \
-		| grep "${REGISTRY_ADDRESS}"; then
-		echo "${REGISTRY_PWD}" | docker login ${REGISTRY_ADDRESS} -u ${REGISTRY_ID} --password-stdin
+	# oss 프로젝트는 public 이므로 pull 은 인증이 필요 없다. 인증이 필요한 것은 push 뿐이다.
+	# 따라서 자격증명이 주입되지 않았으면 로그인을 건너뛴다 (자격증명 없이도 로컬 빌드 가능).
+	if cat ~/.docker/config.json 2>/dev/null | grep -q "${REGISTRY_ADDRESS}"; then
+		:  # 이미 로그인되어 있음
+	elif [[ -z "${REGISTRY_ID}" || -z "${REGISTRY_PWD}" ]]; then
+		echo "INFO: 레지스트리 자격증명이 없어 로그인을 건너뜁니다 (익명 pull 사용)."
+		echo "      push 가 필요하면 REGISTRY_ID/REGISTRY_PWD 를 주입하거나"
+		echo "      'docker login ${REGISTRY_ADDRESS}' 를 먼저 실행하세요."
+	else
+		printf '%s' "${REGISTRY_PWD}" | docker login ${REGISTRY_ADDRESS} -u "${REGISTRY_ID}" --password-stdin
 		do_error_check
 	fi
 	## we can access https://registry.obigo.com now. so we don't need below login process anymore.
@@ -249,10 +262,44 @@ do_install_agl_build_environment() {
 	fi
 
 	if [[ ! -d ${SDK_DIR}/agl-adt ]]; then
-		curl -v -u "ossdev:ossdev1234" \
-			-o /tmp/oss-agl-ivi-flutter-aarch64-toolchain-18.94.0.sh \
-			https://${REPO_ADDRESS}/repository/yocto-adt/agl/oss-agl-ivi-flutter-aarch64-toolchain-18.94.0.sh
-		do_error_check
+		case "${AGL_SDK_SOURCE}" in
+			nexus)
+				# AGL SDK 다운로드 자격증명은 환경변수로 주입한다 (하드코딩 금지).
+				#   예: REPO_ID=<id> REPO_PWD=<pw> ./build.sh --aarch64 ...
+				: "${REPO_ID:?REPO_ID 를 지정하세요 (AGL SDK 다운로드 계정)}"
+				: "${REPO_PWD:?REPO_PWD 를 지정하세요 (AGL SDK 다운로드 비밀번호)}"
+				echo "==> AGL SDK 취득: Nexus (https://${REPO_ADDRESS}/repository/yocto-adt/agl/oss-agl-ivi-flutter-aarch64-toolchain-18.94.0.sh)"
+				curl -v -u "${REPO_ID}:${REPO_PWD}" \
+					-o /tmp/oss-agl-ivi-flutter-aarch64-toolchain-18.94.0.sh \
+					https://${REPO_ADDRESS}/repository/yocto-adt/agl/oss-agl-ivi-flutter-aarch64-toolchain-18.94.0.sh
+				do_error_check
+				;;
+			s3)
+				# AWS CLI 로그인(인증) 상태 확인
+				if ! aws sts get-caller-identity >/dev/null 2>&1 && ! aws s3 ls s3://oss-artifact >/dev/null 2>&1; then
+					if [[ -n "${AWS_ACCESS_KEY_ID}" && -n "${AWS_SECRET_ACCESS_KEY}" ]]; then
+						echo "==> AWS CLI credentials 환경변수가 발견되어 자동 설정을 진행합니다."
+						aws configure set aws_access_key_id "${AWS_ACCESS_KEY_ID}"
+						aws configure set aws_secret_access_key "${AWS_SECRET_ACCESS_KEY}"
+						aws configure set region "${AWS_DEFAULT_REGION:-ap-northeast-2}"
+					else
+						echo "ERROR: AWS CLI 인증 정보가 설정되어 있지 않습니다 (AGL_SDK_SOURCE=s3)."
+						echo "       사전에 'aws configure' 명령으로 로그인하거나,"
+						echo "       AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... ./build.sh 형식으로 환경변수를 전달하세요."
+						echo "       기본 경로(Nexus)를 쓰려면 AGL_SDK_SOURCE 변수를 지정하지 마세요."
+						exit 1
+					fi
+				fi
+				echo "==> AGL SDK 취득: S3 (${S3_ARTIFACT_URL}/yocto-adt/agl/oss-agl-ivi-flutter-aarch64-toolchain-18.94.0.sh)"
+				aws s3 cp ${S3_ARTIFACT_URL}/yocto-adt/agl/oss-agl-ivi-flutter-aarch64-toolchain-18.94.0.sh \
+					/tmp/oss-agl-ivi-flutter-aarch64-toolchain-18.94.0.sh
+				do_error_check
+				;;
+			*)
+				echo "ERROR: AGL_SDK_SOURCE='${AGL_SDK_SOURCE}' — nexus 또는 s3 만 가능합니다."
+				exit 1
+				;;
+		esac
 
 		chmod a+x /tmp/oss-agl-ivi-flutter-aarch64-toolchain-18.94.0.sh
 		/tmp/oss-agl-ivi-flutter-aarch64-toolchain-18.94.0.sh -y -d ${SDK_DIR}/agl-adt

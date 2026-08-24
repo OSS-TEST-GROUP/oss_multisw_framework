@@ -19,13 +19,12 @@ using namespace lifecyclemgr;
 class SetRecoveryPolicyEndPoint : public DDSMessageEndpoint {
   public:
     SetRecoveryPolicyEndPoint(MessageType msgtype, std::string topic);
-    virtual ~SetRecoveryPolicyEndPoint();
+    ~SetRecoveryPolicyEndPoint() override= default;
+    std::string GetTopic() override;
+    std::string GetTypeName() override;
+    std::shared_ptr<TypeSupport> GetTypeSupport() override;
 
-    virtual std::string GetTopic();
-    virtual std::string GetTypeName();
-    virtual std::shared_ptr<TypeSupport> GetTypeSupport();
-
-    virtual void OnDataAvailable();
+    void OnDataAvailable() override;
 
   private:
     std::string                  topic_;

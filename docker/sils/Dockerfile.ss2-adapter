@@ -1,0 +1,229 @@
+# SiLS loop B -- SS_v2 <-> DDS adapter container (work item B2-1).
+#
+# Built ON TOP of the SS_v2 image because the adapter needs traffic_simulator_msgs, which
+# only exists in that workspace. It adds:
+#   - a JRE + fastddsgen        (to generate the canonical EgoState type)
+#   - adapters/ss2              (the bridge itself)
+#
+# ARCHITECTURE NOTE -- why the type is generated here rather than reused:
+#
+#   service/sils/vecu builds against Fast DDS 3 and the top-level IDL step emits generated
+#   sources for that. This container's Fast DDS comes from the ROS 2 distribution instead
+#   (Humble bundles 2.x), because the adapter shares a process with rclcpp and two Fast DDS
+#   major versions in one process is not something we want to debug. Generated sources are
+#   not portable across that boundary (namespaces and TypeObject support differ; 3.x emits
+#   *.hpp where 2.x emits *.h), so adapters/ss2/CMakeLists.txt runs fastddsgen itself with
+#   whatever version is installed here.
+#
+#   The WIRE is unaffected -- Fast DDS 2.x and 3.x interoperate over RTPS, and the type is
+#   generated from the same idl/dds/sils/EgoState.idl, so the DDS type name and the CDR
+#   layout are identical. This is a build-time split, not a protocol split.
+#
+#   ⚠ UNVERIFIED until first build: that Fast DDS 2.x <-> 3.x interop actually matches for
+#   this type. It is the first thing to confirm (see docs/sils/sils-ss2-bringup.md §6).
+#
+# Build:  docker/sils/build-ss2-adapter.sh   (needs sils-ss2:humble first)
+# Run:    docker/compose/docker-compose-sils-ss2.yaml  service `ss2-adapter`
+# Docs:   adapters/ss2/README.md
+
+# BASE IS THE *DEVELOPMENT* STAGE, not the runtime one.
+#
+# Upstream's runtime stage strips the build interface to slim the image:
+#     find install -name cmake -type d -exec rm -rf {} + ; rm -rf install/include
+# so find_package(traffic_simulator_msgs) fails there -- that image RUNS the simulator,
+# it cannot COMPILE against it. docker/sils/build-ss2.sh tags the development stage as
+# sils-ss2-dev:humble for exactly this (free: runtime was built from it, so it is cached).
+#
+# The image is therefore larger than the runtime one. That is accepted for now: this is a
+# bring-up/CI tool, not a shipped artifact. Slimming it means a two-stage build that
+# copies the compiled adapter onto the runtime image, which also has to re-register the
+# package in colcon's install layout -- worth doing once stage 1 is proven, not before.
+ARG SS2_IMAGE=sils-ss2-dev:humble
+FROM ${SS2_IMAGE} AS toolchain
+
+ARG ROS_DISTRO=humble
+# Fast-DDS-Gen tag. It must match not just Fast DDS but FAST CDR, which is the constraint
+# that actually bites -- the generated headers include Fast CDR directly.
+#
+#   Fast-DDS-Gen v4.x  ->  Fast DDS 3.x
+#   Fast-DDS-Gen v3.x  ->  Fast DDS 2.10+ / Fast CDR 2.x
+#   Fast-DDS-Gen v2.x  ->  Fast DDS 2.6   / Fast CDR 1.0.x   <-- ROS 2 Humble. Ours.
+#
+# Evidence for the last row: Fast CDR 1.0.x has no `include/fastcdr/cdr/` directory at all
+# (checked against the v1.0.27 tree), while v3.x-generated code opens with
+# `#include <fastcdr/cdr/fixed_size_string.hpp>`. That mismatch is what a v3.x generator
+# produces here, and it surfaces as a confusing "no such file" deep inside colcon -- hence
+# the preflight below, which catches it in its own labelled step instead.
+#
+# v2.5.3 is the last v2 tag.
+ARG FASTDDSGEN_REF=v2.5.3
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV DEBCONF_NOWARNINGS=yes
+
+USER root
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        default-jdk-headless \
+        git \
+        ca-certificates \
+        build-essential \
+        cmake && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# fastddsgen is a Java tool published with no prebuilt release assets, so it has to be
+# built from source; upstream's documented build is `./gradlew assemble`. Slow on first
+# run, cached in this layer afterwards.
+#
+# NOT a shallow clone. Fast-DDS-Gen carries a submodule (the IDL parser), and
+# `--depth 1 --branch <tag>` frequently cannot resolve the submodule's pinned commit
+# because that commit is not in the truncated history -- the clone "succeeds" and the
+# submodule ends up empty, then gradle fails much later with a confusing error. The
+# history is small; paying for it is cheaper than debugging that.
+#
+# Submodules are initialised as a SEPARATE step rather than via --recursive so that a
+# submodule failure is attributable on its own line instead of being folded into the
+# clone.
+RUN git clone --branch "${FASTDDSGEN_REF}" \
+        https://github.com/eProsima/Fast-DDS-Gen.git /opt/fastddsgen-src
+RUN cd /opt/fastddsgen-src && git submodule update --init --recursive
+RUN cd /opt/fastddsgen-src && ./gradlew assemble --no-daemon
+# A WRAPPER, not a symlink. `scripts/fastddsgen` locates its jar relative to its own
+# path -- $(dirname $0)/../share/fastddsgen/java/fastddsgen.jar -- and it does not resolve
+# symlinks first. Symlinking it into /usr/local/bin therefore makes it look under
+# /usr/local/share and fail with "Unable to access jarfile". Exec'ing the real script in
+# place keeps its own dirname intact.
+RUN test -f /opt/fastddsgen-src/share/fastddsgen/java/fastddsgen.jar \
+      || { echo "fastddsgen.jar is not where the launcher expects it; jars found:" >&2; \
+           find /opt/fastddsgen-src -name '*.jar' >&2; exit 1; } && \
+    chmod a+x /opt/fastddsgen-src/scripts/fastddsgen && \
+    printf '#!/bin/sh\nexec /opt/fastddsgen-src/scripts/fastddsgen "$@"\n' \
+      > /usr/local/bin/fastddsgen && \
+    chmod a+x /usr/local/bin/fastddsgen && \
+    fastddsgen -version
+
+# The canonical contract. Only the IDL is copied -- not the generated tree, and not
+# service/sils/, which this container has no business containing.
+COPY idl/dds/sils/EgoState.idl /opt/sils/idl/dds/sils/EgoState.idl
+# The RETURN contract, for ss2_control_bridge (B2-3). CMakeLists expects it as a sibling of
+# EgoState.idl -- a missing file here fails at configure time with the path named, which is
+# the cheap failure; the expensive one would be a bridge built without the type.
+COPY idl/dds/sils/VehicleControl.idl /opt/sils/idl/dds/sils/VehicleControl.idl
+# The INBOUND contract for stage 3, for aw_control_target_bridge: real Autoware's
+# control_cmd arrives as this. Same sibling rule as above.
+COPY idl/dds/sils/ControlTarget.idl /opt/sils/idl/dds/sils/ControlTarget.idl
+ENV SILS_EGOSTATE_IDL=/opt/sils/idl/dds/sils/EgoState.idl
+
+# PREFLIGHT: does this generator's output match this image's Fast CDR?
+#
+# Generate once into a scratch dir and check the one thing that actually differs across
+# generator lines: whether the emitted headers reach for Fast CDR 2.x paths
+# (`fastcdr/cdr/...`) that a Fast CDR 1.0.x image does not have.
+#
+# Without this the mismatch appears as `fatal error: fastcdr/cdr/fixed_size_string.hpp:
+# No such file or directory` inside a colcon compile log, which reads like a missing
+# dependency rather than a version mismatch, and points at neither the generator nor its
+# tag. Ten cheap seconds here save a full round trip.
+RUN set -eu; \
+    mkdir -p /tmp/gencheck; \
+    fastddsgen -replace -d /tmp/gencheck "${SILS_EGOSTATE_IDL}" > /tmp/gencheck/gen.log 2>&1 \
+        || { echo "PREFLIGHT: fastddsgen failed to generate EgoState.idl:" >&2; \
+             cat /tmp/gencheck/gen.log >&2; exit 1; }; \
+    if grep -rq 'fastcdr/cdr/' /tmp/gencheck 2>/dev/null \
+       && ! find / -path '*/fastcdr/cdr/fixed_size_string.hpp' -print -quit 2>/dev/null | grep -q .; then \
+        echo "" >&2; \
+        echo "PREFLIGHT FAILED: Fast-DDS-Gen / Fast CDR version mismatch." >&2; \
+        echo "  Fast-DDS-Gen ${FASTDDSGEN_REF} emitted Fast CDR 2.x includes (fastcdr/cdr/...)," >&2; \
+        echo "  but this image ships Fast CDR 1.0.x, which has no fastcdr/cdr/ directory." >&2; \
+        echo "  Fix: use a generator from the v2.x line, e.g." >&2; \
+        echo "       FASTDDSGEN_REF=v2.5.3 docker/sils/build-ss2-adapter.sh" >&2; \
+        echo "  Mapping: v4.x->FastDDS 3.x · v3.x->FastCDR 2.x · v2.x->FastCDR 1.0.x (Humble)" >&2; \
+        exit 1; \
+    fi; \
+    echo "PREFLIGHT ok: generated headers are compatible with this image's Fast CDR"; \
+    rm -rf /tmp/gencheck
+
+# ---------------------------------------------------------------------------
+# Everything above is the TOOLCHAIN stage: base + JDK + fastddsgen + the IDL, with no
+# adapter source in it. Build just this to get an image you can iterate in:
+#
+#     docker build --target toolchain -t sils-ss2-toolchain:humble \
+#         -f docker/sils/Dockerfile.ss2-adapter .
+#     docker run --rm -it \
+#         -v "$PWD/adapters/ss2:/ws/src/ss2_ego_bridge" \
+#         sils-ss2-toolchain:humble bash
+#
+# Why bother: a one-shot `docker build` surfaces exactly ONE compile error per round
+# trip, and a failed layer is discarded, so every fix costs a full rebuild. Compiling by
+# hand in a shell shows the whole error list at once. See adapters/ss2/README.md "반복 빌드".
+# ---------------------------------------------------------------------------
+
+FROM toolchain AS adapter
+
+# ARG does not cross a stage boundary -- the one declared in `toolchain` is out of scope
+# here, and an unset ROS_DISTRO would silently become `source /opt/ros//setup.bash`.
+ARG ROS_DISTRO=humble
+
+# Cyclone DDS, so SILS_RMW=rmw_cyclonedds_cpp actually works here.
+#
+# WHY THIS IS NOT OPTIONAL: the KATECH Autoware partitions run Cyclone
+# (partition/run_partitions.sh sets RMW_IMPLEMENTATION=rmw_cyclonedds_cpp), and 2026-08-10
+# measurement showed Fast DDS <-> Cyclone carries discovery and pub/sub but NOT service
+# round-trips -- while concealer <-> AD API is ALL services. Stage 3 therefore has to run
+# our ROS 2 side on Cyclone. See docs/sils/evidence/adapi-real-partition-2026-08-10.md.
+#
+# sils-ss2:humble already ships this package; this image did not, and the failure is loud
+# but late -- the node exits at startup with "failed to load shared library
+# 'librmw_cyclonedds_cpp.so'", which reads like a broken image rather than a missing
+# package.
+#
+# Installed HERE, in the adapter stage, rather than in `toolchain`'s apt block on purpose:
+# that block is followed by the fastddsgen source build (gradle, several minutes), and
+# touching it would invalidate that layer on every rebuild.
+USER root
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        ros-${ROS_DISTRO}-rmw-cyclonedds-cpp && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# The adapter package, overlaid onto the SS_v2 workspace so colcon sees
+# traffic_simulator_msgs from the underlay.
+COPY adapters/ss2 /home/ubuntu/Desktop/scenario_simulator_ws/src/ss2_ego_bridge
+
+WORKDIR /home/ubuntu/Desktop/scenario_simulator_ws
+
+RUN bash -c "source /opt/ros/${ROS_DISTRO}/setup.bash && \
+    source /home/ubuntu/Desktop/scenario_simulator_ws/install/local_setup.bash && \
+    colcon build --packages-select ss2_ego_bridge \
+        --cmake-args -DCMAKE_BUILD_TYPE=Release"
+
+# Own entrypoint.
+#
+# Upstream sets ENTRYPOINT (which sources ROS + the workspace overlay) only in its RUNTIME
+# stage. We build from the DEVELOPMENT stage -- see the note at the top -- and that stage
+# has none, so anything passed as `command:` would run with nothing sourced and fail with
+# "package not found" even though the package is installed correctly. Provide the same
+# sourcing here rather than making every caller remember to do it.
+RUN printf '%s\n' \
+    '#!/bin/bash' \
+    'set -e' \
+    'source "/opt/ros/${ROS_DISTRO}/setup.bash"' \
+    'source "/home/ubuntu/Desktop/scenario_simulator_ws/install/local_setup.bash"' \
+    'exec "$@"' \
+    > /usr/local/bin/ss2-adapter-entrypoint.sh && \
+    chmod a+x /usr/local/bin/ss2-adapter-entrypoint.sh && \
+    # Prove it works now, not at `docker compose up` time.
+    /usr/local/bin/ss2-adapter-entrypoint.sh ros2 pkg list | grep -qx ss2_ego_bridge
+
+ENTRYPOINT ["/usr/local/bin/ss2-adapter-entrypoint.sh"]
+
+LABEL org.opencontainers.image.title="sils-ss2-adapter" \
+      org.opencontainers.image.description="scenario_simulator_v2 -> canonical SiLS EgoState bridge" \
+      com.obigo.sils.loop="B" \
+      com.obigo.sils.stage="1-wiring" \
+      com.obigo.sils.plant="ss2-wire"
+
+CMD ["ros2", "run", "ss2_ego_bridge", "ss2_ego_bridge"]

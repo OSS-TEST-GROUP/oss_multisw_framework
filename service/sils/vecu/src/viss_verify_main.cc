@@ -28,6 +28,7 @@
 #include <fastdds/dds/topic/TypeSupport.hpp>
 
 #include "VissRequestPubSubTypes.hpp"
+#include "sils_participant_qos.hpp"
 
 namespace {
 
@@ -166,6 +167,7 @@ int main() {
     TraceEvent(run_id, "verify_start", "\"domain_id\":" + std::to_string(domain_id));
 
     DomainParticipantQos pqos;
+    sils::ApplySilsParticipantQos(pqos);   // see sils_participant_qos.hpp
     // Suffixed with run_id (not instance_id -- one verifier checks a whole run,
     // not one vECU instance) so concurrent runs on the same domain don't collide
     // on participant name (§9.5).

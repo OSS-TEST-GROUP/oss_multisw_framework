@@ -829,9 +829,17 @@ def analyze_protocol(events: list[dict], injected: dict | None = None) -> tuple[
 
 
 # Fidelity ladder rank (§11) -- fidelity_evidenced reports the HIGHEST level shown.
-# L4 (target parity) is NOT evidenced from a single trace: it needs a cross-trace
-# comparison against a real-target reference (tools/sils/conformance/parity.py). A single
-# run only records its attestation (analyze_attestation); parity.py is the L4 authority.
+#
+# NOT A STRICT CUMULATIVE LADDER. Two levels are never issued from here:
+#   * L2 (Behavioral Fidelity) -- there is deliberately NO _bump("L2"). §11's representative
+#     check for L2 is a golden-scenario comparison, which lives OUTSIDE gate.py (sils-ci.sh
+#     stage 5 -> compare_golden.py) and yields MATCH/REGRESSION, not a fidelity grade. So an
+#     in-process plant run can jump L0 -> L3 with no L2 evidence. Adding L2 here requires a
+#     behavior-evidence rule AND a declared-vs-evidenced check in gate.py (on demand, §11).
+#   * L4 (target parity) -- needs a cross-trace comparison against a real-target reference
+#     (parity.py). A single run only records its attestation (analyze_attestation).
+# Read fidelity_evidenced as "highest level some feature evidenced", not "every level below
+# was proven". Descriptor-declared fidelity is likewise NOT checked against this value.
 FIDELITY_RANK = {"none": 0, "L0": 1, "L1": 2, "L2": 3, "L3": 4, "L4": 5}
 
 

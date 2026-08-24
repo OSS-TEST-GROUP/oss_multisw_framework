@@ -1,0 +1,61 @@
+# SiLS 루프 B 3계단(B-full) 전용 오버레이 — adsw 파티션의 Autoware 맵만 바꾼다.
+#
+# docker-compose-integration.yaml 은 여러 사람이 공유하는 파일이라 손대지 않는다.
+# 이 파일은 **덧씌우는** 용도이며, 쓰지 않으면 통합 테스트 동작은 완전히 종전 그대로다.
+#
+#   docker compose \
+#     -f docker/compose/docker-compose-integration.yaml \
+#     -f docker/compose/docker-compose-sils-autoware.override.yaml \
+#     up -d oss-adsw-decision oss-adsw-control oss-adsw-perception
+#
+# ── 왜 필요한가 ──────────────────────────────────────────────────────────────
+#
+# 3계단은 SS_v2 시나리오 러너를 우리 Autoware 에 물린다. 그때 **시나리오와 Autoware 가
+# 같은 맵을 봐야 한다.** 통합 테스트 기본값은 KCity 인데, 상류 SS_v2 시나리오 79개는
+# 전부 kashiwanoha 기준이다. 둘 중 하나를 맞춰야 하고, kashiwanoha 쪽이 압도적으로 싸다 —
+# 그 맵이 SS_v2 이미지에 완본(lanelet2_map.osm + pointcloud_map.pcd 39MB)으로 들어 있어서
+# 따로 구할 것이 없다.
+#
+# ── 맵 꺼내기 (한 번만) ──────────────────────────────────────────────────────
+#
+#   mkdir -p ~/autoware_map
+#   cid=$(docker create sils-ss2:humble)
+#   docker cp "$cid:/home/ubuntu/Desktop/scenario_simulator_ws/install/kashiwanoha_map/share/kashiwanoha_map/map" ~/autoware_map/kashiwanoha
+#   docker rm "$cid"
+#
+#   export AUTOWARE_MAP_DIR=$HOME/autoware_map/kashiwanoha
+#
+# ⚠ `~` 가 아니라 `$HOME` 을 쓸 것 — 변수로 치환된 경로의 `~` 는 셸이 확장해 주지 않는다.
+#
+# ── 확인된 것 / 안 된 것 ─────────────────────────────────────────────────────
+#
+# ✅ start_script 에 KCity 전제가 없다 (2026-08-07 확인). adsw-control.sh 는
+#      map_path:=/autoware_map  vehicle_model:=sample_vehicle  sensor_model:=sample_sensor_kit
+#    뿐이고, 앞은 마운트 지점이라 맵 종류와 무관하며 뒤 둘은 Autoware 표준 샘플이다.
+# ⬜ 파티션이 kashiwanoha 로 실제로 뜨는지는 **미검증** — 투영 원점이 다르면 걸릴 수 있다.
+# ⚠ 이 서비스들은 GPU(nvidia container toolkit)를 요구한다. 없는 장비에서는
+#    `could not select device driver "nvidia"` 로 기동 자체가 안 된다. GPU 예약을 지워
+#    반쪽만 띄우지 말 것 — 반쪽 Autoware 의 ADAPI 목록은 대조 근거가 되지 못한다.
+#
+# 병합 확인:
+#   docker compose -f docker-compose-integration.yaml \
+#                  -f docker-compose-sils-autoware.override.yaml config \
+#     | grep -c autoware_map        # 3 이어야 한다 (서비스당 1개, 중복 아님)
+#
+# 배경: docs/sils/sils-simulator-loops.md §4 ·
+#       docs/sils/evidence/ss2-concealer-survey-2026-08-07.md
+
+services:
+  # volumes 는 compose 가 **target 경로 기준으로 병합**하므로, 같은 /autoware_map 을
+  # 겨냥한 아래 항목이 원본 마운트를 대체한다 (추가되는 것이 아니다).
+  oss-adsw-decision:
+    volumes:
+      - ${AUTOWARE_MAP_DIR:?set AUTOWARE_MAP_DIR to the map directory, e.g. $HOME/autoware_map/kashiwanoha}:/autoware_map:ro
+
+  oss-adsw-control:
+    volumes:
+      - ${AUTOWARE_MAP_DIR:?set AUTOWARE_MAP_DIR to the map directory, e.g. $HOME/autoware_map/kashiwanoha}:/autoware_map:ro
+
+  oss-adsw-perception:
+    volumes:
+      - ${AUTOWARE_MAP_DIR:?set AUTOWARE_MAP_DIR to the map directory, e.g. $HOME/autoware_map/kashiwanoha}:/autoware_map:ro

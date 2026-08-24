@@ -26,7 +26,6 @@ std::optional<std::string> getEnv(const std::string &key) {
 
 ServiceRegistry::ServiceRegistry()
     : ready_service_list_(false) {}
-ServiceRegistry::~ServiceRegistry() {}
 
 // constexpr const char *SAVED_REGISTRY_BACKUP =
 // "config/saved-service-list.yaml";
@@ -40,10 +39,10 @@ bool ServiceRegistry::LoadServiceList() {
 
   ready_service_list_ = LoadServiceSaved(yaml_path_);
 
-  if (ready_service_list_ == false) {
-    std::string list_path = getEnv("SAVED_REGISTRY_BACKUP").value_or("config");
-    list_path.append("/ros2-sample-speclist.yaml");
-    ready_service_list_ = LoadServiceList(list_path);
+  if (!ready_service_list_) {
+      std::string list_path = getEnv("SAVED_REGISTRY_BACKUP").value_or("config");
+      list_path.append("/ros2-sample-speclist.yaml");
+      ready_service_list_ = LoadServiceList(list_path);
   }
 
   LOG_DEBUG("ServiceRegistry::LoadServiceList success =? "
@@ -66,8 +65,9 @@ bool ServiceRegistry::LoadServiceList(const std::string &path) {
       auto args = container["args"];
       std::cout << "Container name: " << name << std::endl;
       std::cout << "Command: ";
-      for (auto c : command)
-        std::cout << c.as<std::string>() << " ";
+      for (auto c : command) {
+          std::cout << c.as<std::string>() << " ";
+      }
       std::cout << std::endl;
       std::cout << "Args: ";
 
@@ -157,31 +157,33 @@ ServiceRegistry::extractRos2RunCommands(const std::string &script) {
 }
 
 void ServiceRegistry::AddGroup(const std::string &name) {
-  if (group_.count(name) == 0) {
-    group_[name] = {};
-  }
+    if (!group_.contains(name)) {
+        group_[name] = {};
+    }
 }
 
 void ServiceRegistry::RemoveGroup(const std::string &name) {
-  if (group_.count(name) > 0) {
-    group_.erase(name);
-  }
+    if (group_.contains(name)) {
+        group_.erase(name);
+    }
 }
 
 bool ServiceRegistry::IsGroup(const std::string &name) {
-  return group_.count(name) > 0;
+    return group_.contains(name);
 }
 
-bool ServiceRegistry::AddService(std::shared_ptr<Service> service,
-                                 const std::string &group) {
-  if (!service || group.empty())
-    return false;
+bool ServiceRegistry::AddService(const std::shared_ptr<Service>& service,
+                                 const std::string& group) {
+    if (!service || group.empty()) {
+        return false;
+    }
 
   const std::string &name = service->GetName();
 
   // Check for duplicate service
-  if (services_.find(name) != services_.end())
-    return false;
+  if (services_.find(name) != services_.end()) {
+      return false;
+  }
 
   AddGroup(group); // ensure group exists
 
@@ -193,8 +195,9 @@ bool ServiceRegistry::AddService(std::shared_ptr<Service> service,
 
 void ServiceRegistry::RemoveService(const std::string &name) {
   auto it = services_.find(name);
-  if (it == services_.end())
-    return;
+  if (it == services_.end()) {
+      return;
+  }
 
   std::shared_ptr<Service> service = it->second;
 
@@ -241,21 +244,21 @@ ServiceRegistry::GetServicesByGroup(const std::string &group) {
     return result;
   }
 
-  for (auto &iter : iter->second) {
-    result.push_back(iter);
+  for (const auto& iter : iter->second) {
+      result.push_back(iter);
   }
   return result;
 }
 
 std::string
-ServiceRegistry::GetGroupNameByService(std::shared_ptr<Service> service) {
-  for (auto &iter : group_) {
-    if (iter.second.count(service) > 0) {
-      return iter.first;
+ServiceRegistry::GetGroupNameByService(const std::shared_ptr<Service>& service) {
+    for (auto& iter : group_) {
+        if (iter.second.contains(service)) {
+            return iter.first;
+        }
     }
-  }
 
-  return "";
+    return "";
 }
 
 uint64_t ServiceRegistry::GetServicesNum() { return services_.size(); }
@@ -277,7 +280,10 @@ bool ServiceRegistry::ProcessGetServiceStateRequest(
     LOG_ERROR("GetServiceStateRequest is null");
     return false;
   }
-  if (TypeConvert::ToMwType(message->mw_type()) == MwType::ROS2) {
+  // 이 판(ros2)은 ROS2 만 맡는다. general 판은 MW_NATIVE 를 맡는다 -- 예전에는 그쪽도
+  // 자기를 ROS2 로 보고해서, 둘이 같은 버스에 있으면 같은 요청에 둘 다 반응했다.
+  const MwType req_mw = TypeConvert::ToMwType(message->mw_type());
+  if (req_mw == MwType::ROS2) {
     std::shared_ptr<DDSTransmitter> transmitter =
         ADSWManager::Get()->GetTransmitter();
 
@@ -311,6 +317,9 @@ bool ServiceRegistry::ProcessGetServiceStateRequest(
         MessageType::GET_SERVICE_STATE_RESPONSE,
         reinterpret_cast<void *>(&get_service_response_));
   }
+  // 응답하지 않는 것은 맞다(내 소관이 아니다). 다만 흔적 없이 사라지면 안 된다.
+  LOG_DEBUG("GetServiceStateRequest ignored: mw_type "
+            << static_cast<int>(req_mw) << " is not handled by this adsw_manager (ROS2)");
   return true;
 }
 
@@ -336,9 +345,9 @@ void ServiceRegistry::UpdateLastSentRecovery() {
 bool ServiceRegistry::ProcessUpdateServiceListRequest() {
   LOG_DEBUG("Processing UpdateServiceListRequest");
 
-  if (ready_service_list_ == false) {
-    LOG_ERROR("Service list not ready  ");
-    return false;
+  if (!ready_service_list_) {
+      LOG_ERROR("Service list not ready  ");
+      return false;
   }
 
   // recovery 값이 변경된 경우에만 전송 (최초 전송은 항상 실행)
@@ -374,7 +383,9 @@ bool ServiceRegistry::ProcessUpdateServiceListRequest() {
     auto container_ctrl = controller->GetContainer();
     if (container_ctrl) {
       for (const auto &container : container_ctrl->GetAllContainers()) {
-        if (container == nullptr) continue;
+          if (container == nullptr) {
+              continue;
+          }
         lifecyclemgr::Container container_info;
         container_info.name()                = container->GetName();
         container_info.image()               = container->GetImage();
@@ -443,7 +454,10 @@ bool ServiceRegistry::Save() {
           case RecoveryPolicy::ON_FAILURE:        return "ON_FAILURE";
           case RecoveryPolicy::ON_SUCCESS:        return "ON_SUCCESS";
           case RecoveryPolicy::ON_NOT_RESPONDING: return "ON_NOT_RESPONDING";
-          case RecoveryPolicy::MANUAL:            return "MANUAL";
+          // R_DEFAULT 는 "정책 미지정" 이고 기본값이 MANUAL 이라 MANUAL 과 같은
+          // 문자열로 떨어진다. 별도 분기로 두면 bugprone-branch-clone 이 잡으므로
+          // 라벨을 묶는다.
+          case RecoveryPolicy::MANUAL:
           case RecoveryPolicy::R_DEFAULT:
           default:                                return "MANUAL";
       }
@@ -477,51 +491,59 @@ bool ServiceRegistry::Save() {
     // config, not just the group/services.
     std::shared_ptr<Container> c = cc ? cc->GetContainer(group.first) : nullptr;
     if (c) {
-      if (!c->GetImage().empty()) ndcontainer["image"] = c->GetImage();
+        if (!c->GetImage().empty()) {
+            ndcontainer["image"] = c->GetImage();
+        }
       ndcontainer["container-type"] = ctype_to_str(c->GetContainerType());
-      if (!c->GetDeployFile().empty()) ndcontainer["deploy-filepath"] = c->GetDeployFile();
+      if (!c->GetDeployFile().empty()) {
+          ndcontainer["deploy-filepath"] = c->GetDeployFile();
+      }
       if (!c->GetExtraArgs().empty()) {
         YAML::Node ea;
-        for (const auto &a : c->GetExtraArgs()) ea.push_back(a);
+        for (const auto& a : c->GetExtraArgs()) {
+            ea.push_back(a);
+        }
         ndcontainer["extra_args"] = ea;
       }
       if (!c->GetCommandArgs().empty()) {
         YAML::Node ca;
-        for (const auto &a : c->GetCommandArgs()) ca.push_back(a);
+        for (const auto& a : c->GetCommandArgs()) {
+            ca.push_back(a);
+        }
         ndcontainer["command_args"] = ca;
       }
     }
 
     YAML::Node ndservices;
 
-    for (auto &service : group.second) {
-      YAML::Node ndservice;
+    for (const auto& service : group.second) {
+        YAML::Node ndservice;
 
-      ndservice["package"] = service->GetPackage();
-      ndservice["name"] = service->GetName();
-      ndservice["launchfile"] = service->GetLaunchFile();
-      if (!service->GetProcessMatchPattern().empty()) {
-        ndservice["match_pattern"] = service->GetProcessMatchPattern();
-      }
-      if (service->IsDirectExec()) {
-        ndservice["exec_type"] = "binary";
-      } else if (service->IsContainerWorkload()) {
-        ndservice["exec_type"] = "container";
-      }
+        ndservice["package"] = service->GetPackage();
+        ndservice["name"] = service->GetName();
+        ndservice["launchfile"] = service->GetLaunchFile();
+        if (!service->GetProcessMatchPattern().empty()) {
+            ndservice["match_pattern"] = service->GetProcessMatchPattern();
+        }
+        if (service->IsDirectExec()) {
+            ndservice["exec_type"] = "binary";
+        } else if (service->IsContainerWorkload()) {
+            ndservice["exec_type"] = "container";
+        }
 
-      ndservice["type"]     = type_to_str(service->GetServiceType());
-      ndservice["recovery"] = recovery_to_str(service->GetRecoveryPolicy());
+        ndservice["type"] = type_to_str(service->GetServiceType());
+        ndservice["recovery"] = recovery_to_str(service->GetRecoveryPolicy());
 
-      // LoadServiceSaved compares enabled as a "true"/"false" string;
-      // YAML's native bool would round-trip but the parser there reads
-      // .as<std::string>("") so an explicit quoted string keeps both
-      // sides aligned.
-      ndservice["enabled"] = service->IsEnabled() ? std::string("true")
-                                                  : std::string("false");
+        // LoadServiceSaved compares enabled as a "true"/"false" string;
+        // YAML's native bool would round-trip but the parser there reads
+        // .as<std::string>("") so an explicit quoted string keeps both
+        // sides aligned.
+        ndservice["enabled"] = service->IsEnabled() ? std::string("true")
+                                                    : std::string("false");
 
-      ndservice["max"] = service->GetMaxNodes();
+        ndservice["max"] = service->GetMaxNodes();
 
-      ndservices.push_back(ndservice);
+        ndservices.push_back(ndservice);
     }
 
     ndcontainer["services"] = ndservices;
@@ -612,13 +634,15 @@ bool ServiceRegistry::LoadServiceSaved(const std::string &path) {
         // strings; empty when omitted (classic adsw-test-app model).
         std::vector<std::string> extraArgs;
         if (containerData["extra_args"] && containerData["extra_args"].IsSequence()) {
-          for (const auto &a : containerData["extra_args"])
-            extraArgs.push_back(a.as<std::string>(""));
+            for (const auto& a : containerData["extra_args"]) {
+                extraArgs.push_back(a.as<std::string>(""));
+            }
         }
         std::vector<std::string> commandArgs;
         if (containerData["command_args"] && containerData["command_args"].IsSequence()) {
-          for (const auto &c : containerData["command_args"])
-            commandArgs.push_back(c.as<std::string>(""));
+            for (const auto& c : containerData["command_args"]) {
+                commandArgs.push_back(c.as<std::string>(""));
+            }
         }
 
         if (!groupname.empty() && !image.empty()) {

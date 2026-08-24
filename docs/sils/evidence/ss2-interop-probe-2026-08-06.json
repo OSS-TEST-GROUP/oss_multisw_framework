@@ -1,0 +1,693 @@
+{
+  "schema": "sils-ss2-interop-probe/v1",
+  "purpose": "BR-C-2a input (B1-3)",
+  "environment": {
+    "rmw_implementation": "rmw_fastrtps_cpp",
+    "ros_domain_id": "0",
+    "ros_distro": "humble",
+    "ros_localhost_only": "0",
+    "fastdds_profiles": "/opt/sils/fastdds-profile.xml",
+    "cyclonedds_uri": "<unset>",
+    "arch": "x86_64",
+    "kernel": "6.8.0-124-generic"
+  },
+  "counts": {
+    "topics": 16,
+    "endpoints": 38,
+    "nodes": 5
+  },
+  "topics": [
+    {
+      "topic": "/DoorSwitch",
+      "ros_type": "sdv_vss/msg/DoorSwitch",
+      "dds_topic": "rt/DoorSwitch",
+      "dds_type": "sdv_vss::msg::dds_::DoorSwitch_"
+    },
+    {
+      "topic": "/DoorUnlockLockIndicator",
+      "ros_type": "sdv_vss/msg/DoorUnlockLockIndicator",
+      "dds_topic": "rt/DoorUnlockLockIndicator",
+      "dds_type": "sdv_vss::msg::dds_::DoorUnlockLockIndicator_"
+    },
+    {
+      "topic": "/clock",
+      "ros_type": "rosgraph_msgs/msg/Clock",
+      "dds_topic": "rt/clock",
+      "dds_type": "rosgraph_msgs::msg::dds_::Clock_"
+    },
+    {
+      "topic": "/debug_marker",
+      "ros_type": "visualization_msgs/msg/MarkerArray",
+      "dds_topic": "rt/debug_marker",
+      "dds_type": "visualization_msgs::msg::dds_::MarkerArray_"
+    },
+    {
+      "topic": "/entity/status",
+      "ros_type": "traffic_simulator_msgs/msg/EntityStatusWithTrajectoryArray",
+      "dds_topic": "rt/entity/status",
+      "dds_type": "traffic_simulator_msgs::msg::dds_::EntityStatusWithTrajectoryArray_"
+    },
+    {
+      "topic": "/lanelet/marker",
+      "ros_type": "visualization_msgs/msg/MarkerArray",
+      "dds_topic": "rt/lanelet/marker",
+      "dds_type": "visualization_msgs::msg::dds_::MarkerArray_"
+    },
+    {
+      "topic": "/parameter_events",
+      "ros_type": "rcl_interfaces/msg/ParameterEvent",
+      "dds_topic": "rt/parameter_events",
+      "dds_type": "rcl_interfaces::msg::dds_::ParameterEvent_"
+    },
+    {
+      "topic": "/perception/traffic_light_recognition/external/traffic_signals",
+      "ros_type": "autoware_perception_msgs/msg/TrafficLightGroupArray",
+      "dds_topic": "rt/perception/traffic_light_recognition/external/traffic_signals",
+      "dds_type": "autoware_perception_msgs::msg::dds_::TrafficLightGroupArray_"
+    },
+    {
+      "topic": "/real_time_factor",
+      "ros_type": "std_msgs/msg/Float64",
+      "dds_topic": "rt/real_time_factor",
+      "dds_type": "std_msgs::msg::dds_::Float64_"
+    },
+    {
+      "topic": "/rosout",
+      "ros_type": "rcl_interfaces/msg/Log",
+      "dds_topic": "rt/rosout",
+      "dds_type": "rcl_interfaces::msg::dds_::Log_"
+    },
+    {
+      "topic": "/simulation/entity/marker",
+      "ros_type": "visualization_msgs/msg/MarkerArray",
+      "dds_topic": "rt/simulation/entity/marker",
+      "dds_type": "visualization_msgs::msg::dds_::MarkerArray_"
+    },
+    {
+      "topic": "/simulation/traffic_lights",
+      "ros_type": "traffic_simulator_msgs/msg/TrafficLightArrayV1",
+      "dds_topic": "rt/simulation/traffic_lights",
+      "dds_type": "traffic_simulator_msgs::msg::dds_::TrafficLightArrayV1_"
+    },
+    {
+      "topic": "/tf",
+      "ros_type": "tf2_msgs/msg/TFMessage",
+      "dds_topic": "rt/tf",
+      "dds_type": "tf2_msgs::msg::dds_::TFMessage_"
+    },
+    {
+      "topic": "/tf_static",
+      "ros_type": "tf2_msgs/msg/TFMessage",
+      "dds_topic": "rt/tf_static",
+      "dds_type": "tf2_msgs::msg::dds_::TFMessage_"
+    },
+    {
+      "topic": "/traffic_light/marker",
+      "ros_type": "visualization_msgs/msg/MarkerArray",
+      "dds_topic": "rt/traffic_light/marker",
+      "dds_type": "visualization_msgs::msg::dds_::MarkerArray_"
+    },
+    {
+      "topic": "/v2x/traffic_signals",
+      "ros_type": "autoware_perception_msgs/msg/TrafficLightGroupArray",
+      "dds_topic": "rt/v2x/traffic_signals",
+      "dds_type": "autoware_perception_msgs::msg::dds_::TrafficLightGroupArray_"
+    }
+  ],
+  "endpoints": [
+    {
+      "topic": "/DoorSwitch",
+      "node": "_CREATED_BY_BARE_DDS_APP_",
+      "qos": {
+        "reliability": "RELIABLE",
+        "history": "UNKNOWN",
+        "durability": "TRANSIENT_LOCAL",
+        "lifespan": "Infinite",
+        "deadline": "Infinite",
+        "liveliness": "AUTOMATIC",
+        "liveliness_lease": "Infinite"
+      },
+      "ros_type": "sdv_vss/msg/DoorSwitch",
+      "endpoint": "PUBLISHER"
+    },
+    {
+      "topic": "/DoorSwitch",
+      "node": "_CREATED_BY_BARE_DDS_APP_",
+      "qos": {
+        "reliability": "RELIABLE",
+        "history": "UNKNOWN",
+        "durability": "VOLATILE",
+        "lifespan": "Infinite",
+        "deadline": "Infinite",
+        "liveliness": "AUTOMATIC",
+        "liveliness_lease": "Infinite"
+      },
+      "ros_type": "sdv_vss/msg/DoorSwitch",
+      "endpoint": "SUBSCRIPTION"
+    },
+    {
+      "topic": "/DoorSwitch",
+      "node": "_CREATED_BY_BARE_DDS_APP_",
+      "qos": {
+        "reliability": "RELIABLE",
+        "history": "UNKNOWN",
+        "durability": "VOLATILE",
+        "lifespan": "Infinite",
+        "deadline": "Infinite",
+        "liveliness": "AUTOMATIC",
+        "liveliness_lease": "Infinite"
+      },
+      "ros_type": "sdv_vss/msg/DoorSwitch",
+      "endpoint": "SUBSCRIPTION"
+    },
+    {
+      "topic": "/DoorSwitch",
+      "node": "_CREATED_BY_BARE_DDS_APP_",
+      "qos": {
+        "reliability": "RELIABLE",
+        "history": "UNKNOWN",
+        "durability": "TRANSIENT_LOCAL",
+        "lifespan": "Infinite",
+        "deadline": "Infinite",
+        "liveliness": "AUTOMATIC",
+        "liveliness_lease": "Infinite"
+      },
+      "ros_type": "sdv_vss/msg/DoorSwitch",
+      "endpoint": "SUBSCRIPTION"
+    },
+    {
+      "topic": "/DoorUnlockLockIndicator",
+      "node": "_CREATED_BY_BARE_DDS_APP_",
+      "qos": {
+        "reliability": "RELIABLE",
+        "history": "UNKNOWN",
+        "durability": "TRANSIENT_LOCAL",
+        "lifespan": "Infinite",
+        "deadline": "Infinite",
+        "liveliness": "AUTOMATIC",
+        "liveliness_lease": "Infinite"
+      },
+      "ros_type": "sdv_vss/msg/DoorUnlockLockIndicator",
+      "endpoint": "PUBLISHER"
+    },
+    {
+      "topic": "/DoorUnlockLockIndicator",
+      "node": "_CREATED_BY_BARE_DDS_APP_",
+      "qos": {
+        "reliability": "RELIABLE",
+        "history": "UNKNOWN",
+        "durability": "VOLATILE",
+        "lifespan": "Infinite",
+        "deadline": "Infinite",
+        "liveliness": "AUTOMATIC",
+        "liveliness_lease": "Infinite"
+      },
+      "ros_type": "sdv_vss/msg/DoorUnlockLockIndicator",
+      "endpoint": "SUBSCRIPTION"
+    },
+    {
+      "topic": "/DoorUnlockLockIndicator",
+      "node": "_CREATED_BY_BARE_DDS_APP_",
+      "qos": {
+        "reliability": "RELIABLE",
+        "history": "UNKNOWN",
+        "durability": "TRANSIENT_LOCAL",
+        "lifespan": "Infinite",
+        "deadline": "Infinite",
+        "liveliness": "AUTOMATIC",
+        "liveliness_lease": "Infinite"
+      },
+      "ros_type": "sdv_vss/msg/DoorUnlockLockIndicator",
+      "endpoint": "SUBSCRIPTION"
+    },
+    {
+      "topic": "/DoorUnlockLockIndicator",
+      "node": "_CREATED_BY_BARE_DDS_APP_",
+      "qos": {
+        "reliability": "RELIABLE",
+        "history": "UNKNOWN",
+        "durability": "VOLATILE",
+        "lifespan": "Infinite",
+        "deadline": "Infinite",
+        "liveliness": "AUTOMATIC",
+        "liveliness_lease": "Infinite"
+      },
+      "ros_type": "sdv_vss/msg/DoorUnlockLockIndicator",
+      "endpoint": "SUBSCRIPTION"
+    },
+    {
+      "topic": "/clock",
+      "node": "scenario_node",
+      "qos": {
+        "reliability": "BEST_EFFORT",
+        "history": "UNKNOWN",
+        "durability": "VOLATILE",
+        "lifespan": "Infinite",
+        "deadline": "Infinite",
+        "liveliness": "AUTOMATIC",
+        "liveliness_lease": "Infinite"
+      },
+      "ros_type": "rosgraph_msgs/msg/Clock",
+      "endpoint": "PUBLISHER"
+    },
+    {
+      "topic": "/debug_marker",
+      "node": "scenario_node",
+      "qos": {
+        "reliability": "RELIABLE",
+        "history": "UNKNOWN",
+        "durability": "VOLATILE",
+        "lifespan": "Infinite",
+        "deadline": "Infinite",
+        "liveliness": "AUTOMATIC",
+        "liveliness_lease": "Infinite"
+      },
+      "ros_type": "visualization_msgs/msg/MarkerArray",
+      "endpoint": "PUBLISHER"
+    },
+    {
+      "topic": "/entity/status",
+      "node": "scenario_node",
+      "qos": {
+        "reliability": "RELIABLE",
+        "history": "UNKNOWN",
+        "durability": "VOLATILE",
+        "lifespan": "Infinite",
+        "deadline": "Infinite",
+        "liveliness": "AUTOMATIC",
+        "liveliness_lease": "Infinite"
+      },
+      "ros_type": "traffic_simulator_msgs/msg/EntityStatusWithTrajectoryArray",
+      "endpoint": "PUBLISHER"
+    },
+    {
+      "topic": "/entity/status",
+      "node": "visualizer",
+      "qos": {
+        "reliability": "RELIABLE",
+        "history": "UNKNOWN",
+        "durability": "VOLATILE",
+        "lifespan": "Infinite",
+        "deadline": "Infinite",
+        "liveliness": "AUTOMATIC",
+        "liveliness_lease": "Infinite"
+      },
+      "ros_type": "traffic_simulator_msgs/msg/EntityStatusWithTrajectoryArray",
+      "endpoint": "SUBSCRIPTION"
+    },
+    {
+      "topic": "/lanelet/marker",
+      "node": "scenario_node",
+      "qos": {
+        "reliability": "RELIABLE",
+        "history": "UNKNOWN",
+        "durability": "TRANSIENT_LOCAL",
+        "lifespan": "Infinite",
+        "deadline": "Infinite",
+        "liveliness": "AUTOMATIC",
+        "liveliness_lease": "Infinite"
+      },
+      "ros_type": "visualization_msgs/msg/MarkerArray",
+      "endpoint": "PUBLISHER"
+    },
+    {
+      "topic": "/parameter_events",
+      "node": "scenario_node",
+      "qos": {
+        "reliability": "RELIABLE",
+        "history": "UNKNOWN",
+        "durability": "VOLATILE",
+        "lifespan": "Infinite",
+        "deadline": "Infinite",
+        "liveliness": "AUTOMATIC",
+        "liveliness_lease": "Infinite"
+      },
+      "ros_type": "rcl_interfaces/msg/ParameterEvent",
+      "endpoint": "PUBLISHER"
+    },
+    {
+      "topic": "/parameter_events",
+      "node": "scenario_node",
+      "qos": {
+        "reliability": "RELIABLE",
+        "history": "UNKNOWN",
+        "durability": "VOLATILE",
+        "lifespan": "Infinite",
+        "deadline": "Infinite",
+        "liveliness": "AUTOMATIC",
+        "liveliness_lease": "Infinite"
+      },
+      "ros_type": "rcl_interfaces/msg/ParameterEvent",
+      "endpoint": "PUBLISHER"
+    },
+    {
+      "topic": "/parameter_events",
+      "node": "simple_sensor_simulator",
+      "qos": {
+        "reliability": "RELIABLE",
+        "history": "UNKNOWN",
+        "durability": "VOLATILE",
+        "lifespan": "Infinite",
+        "deadline": "Infinite",
+        "liveliness": "AUTOMATIC",
+        "liveliness_lease": "Infinite"
+      },
+      "ros_type": "rcl_interfaces/msg/ParameterEvent",
+      "endpoint": "PUBLISHER"
+    },
+    {
+      "topic": "/parameter_events",
+      "node": "visualizer",
+      "qos": {
+        "reliability": "RELIABLE",
+        "history": "UNKNOWN",
+        "durability": "VOLATILE",
+        "lifespan": "Infinite",
+        "deadline": "Infinite",
+        "liveliness": "AUTOMATIC",
+        "liveliness_lease": "Infinite"
+      },
+      "ros_type": "rcl_interfaces/msg/ParameterEvent",
+      "endpoint": "PUBLISHER"
+    },
+    {
+      "topic": "/parameter_events",
+      "node": "visualizer",
+      "qos": {
+        "reliability": "RELIABLE",
+        "history": "UNKNOWN",
+        "durability": "VOLATILE",
+        "lifespan": "Infinite",
+        "deadline": "Infinite",
+        "liveliness": "AUTOMATIC",
+        "liveliness_lease": "Infinite"
+      },
+      "ros_type": "rcl_interfaces/msg/ParameterEvent",
+      "endpoint": "PUBLISHER"
+    },
+    {
+      "topic": "/parameter_events",
+      "node": "_ros2cli_daemon_0_56e8da0775fd466ab4c1561123ef3be7",
+      "qos": {
+        "reliability": "RELIABLE",
+        "history": "UNKNOWN",
+        "durability": "VOLATILE",
+        "lifespan": "Infinite",
+        "deadline": "Infinite",
+        "liveliness": "AUTOMATIC",
+        "liveliness_lease": "Infinite"
+      },
+      "ros_type": "rcl_interfaces/msg/ParameterEvent",
+      "endpoint": "PUBLISHER"
+    },
+    {
+      "topic": "/parameter_events",
+      "node": "scenario_node",
+      "qos": {
+        "reliability": "RELIABLE",
+        "history": "UNKNOWN",
+        "durability": "VOLATILE",
+        "lifespan": "Infinite",
+        "deadline": "Infinite",
+        "liveliness": "AUTOMATIC",
+        "liveliness_lease": "Infinite"
+      },
+      "ros_type": "rcl_interfaces/msg/ParameterEvent",
+      "endpoint": "SUBSCRIPTION"
+    },
+    {
+      "topic": "/parameter_events",
+      "node": "scenario_node",
+      "qos": {
+        "reliability": "RELIABLE",
+        "history": "UNKNOWN",
+        "durability": "VOLATILE",
+        "lifespan": "Infinite",
+        "deadline": "Infinite",
+        "liveliness": "AUTOMATIC",
+        "liveliness_lease": "Infinite"
+      },
+      "ros_type": "rcl_interfaces/msg/ParameterEvent",
+      "endpoint": "SUBSCRIPTION"
+    },
+    {
+      "topic": "/parameter_events",
+      "node": "simple_sensor_simulator",
+      "qos": {
+        "reliability": "RELIABLE",
+        "history": "UNKNOWN",
+        "durability": "VOLATILE",
+        "lifespan": "Infinite",
+        "deadline": "Infinite",
+        "liveliness": "AUTOMATIC",
+        "liveliness_lease": "Infinite"
+      },
+      "ros_type": "rcl_interfaces/msg/ParameterEvent",
+      "endpoint": "SUBSCRIPTION"
+    },
+    {
+      "topic": "/parameter_events",
+      "node": "visualizer",
+      "qos": {
+        "reliability": "RELIABLE",
+        "history": "UNKNOWN",
+        "durability": "VOLATILE",
+        "lifespan": "Infinite",
+        "deadline": "Infinite",
+        "liveliness": "AUTOMATIC",
+        "liveliness_lease": "Infinite"
+      },
+      "ros_type": "rcl_interfaces/msg/ParameterEvent",
+      "endpoint": "SUBSCRIPTION"
+    },
+    {
+      "topic": "/parameter_events",
+      "node": "visualizer",
+      "qos": {
+        "reliability": "RELIABLE",
+        "history": "UNKNOWN",
+        "durability": "VOLATILE",
+        "lifespan": "Infinite",
+        "deadline": "Infinite",
+        "liveliness": "AUTOMATIC",
+        "liveliness_lease": "Infinite"
+      },
+      "ros_type": "rcl_interfaces/msg/ParameterEvent",
+      "endpoint": "SUBSCRIPTION"
+    },
+    {
+      "topic": "/perception/traffic_light_recognition/external/traffic_signals",
+      "node": "scenario_node",
+      "qos": {
+        "reliability": "RELIABLE",
+        "history": "UNKNOWN",
+        "durability": "TRANSIENT_LOCAL",
+        "lifespan": "Infinite",
+        "deadline": "Infinite",
+        "liveliness": "AUTOMATIC",
+        "liveliness_lease": "Infinite"
+      },
+      "ros_type": "autoware_perception_msgs/msg/TrafficLightGroupArray",
+      "endpoint": "PUBLISHER"
+    },
+    {
+      "topic": "/real_time_factor",
+      "node": "scenario_node",
+      "qos": {
+        "reliability": "BEST_EFFORT",
+        "history": "UNKNOWN",
+        "durability": "VOLATILE",
+        "lifespan": "Infinite",
+        "deadline": "Infinite",
+        "liveliness": "AUTOMATIC",
+        "liveliness_lease": "Infinite"
+      },
+      "ros_type": "std_msgs/msg/Float64",
+      "endpoint": "SUBSCRIPTION"
+    },
+    {
+      "topic": "/rosout",
+      "node": "scenario_node",
+      "qos": {
+        "reliability": "RELIABLE",
+        "history": "UNKNOWN",
+        "durability": "TRANSIENT_LOCAL",
+        "lifespan": "10000000000 nanoseconds",
+        "deadline": "Infinite",
+        "liveliness": "AUTOMATIC",
+        "liveliness_lease": "Infinite"
+      },
+      "ros_type": "rcl_interfaces/msg/Log",
+      "endpoint": "PUBLISHER"
+    },
+    {
+      "topic": "/rosout",
+      "node": "scenario_node",
+      "qos": {
+        "reliability": "RELIABLE",
+        "history": "UNKNOWN",
+        "durability": "TRANSIENT_LOCAL",
+        "lifespan": "10000000000 nanoseconds",
+        "deadline": "Infinite",
+        "liveliness": "AUTOMATIC",
+        "liveliness_lease": "Infinite"
+      },
+      "ros_type": "rcl_interfaces/msg/Log",
+      "endpoint": "PUBLISHER"
+    },
+    {
+      "topic": "/rosout",
+      "node": "simple_sensor_simulator",
+      "qos": {
+        "reliability": "RELIABLE",
+        "history": "UNKNOWN",
+        "durability": "TRANSIENT_LOCAL",
+        "lifespan": "10000000000 nanoseconds",
+        "deadline": "Infinite",
+        "liveliness": "AUTOMATIC",
+        "liveliness_lease": "Infinite"
+      },
+      "ros_type": "rcl_interfaces/msg/Log",
+      "endpoint": "PUBLISHER"
+    },
+    {
+      "topic": "/rosout",
+      "node": "visualizer",
+      "qos": {
+        "reliability": "RELIABLE",
+        "history": "UNKNOWN",
+        "durability": "TRANSIENT_LOCAL",
+        "lifespan": "10000000000 nanoseconds",
+        "deadline": "Infinite",
+        "liveliness": "AUTOMATIC",
+        "liveliness_lease": "Infinite"
+      },
+      "ros_type": "rcl_interfaces/msg/Log",
+      "endpoint": "PUBLISHER"
+    },
+    {
+      "topic": "/rosout",
+      "node": "_ros2cli_daemon_0_56e8da0775fd466ab4c1561123ef3be7",
+      "qos": {
+        "reliability": "RELIABLE",
+        "history": "UNKNOWN",
+        "durability": "TRANSIENT_LOCAL",
+        "lifespan": "10000000000 nanoseconds",
+        "deadline": "Infinite",
+        "liveliness": "AUTOMATIC",
+        "liveliness_lease": "Infinite"
+      },
+      "ros_type": "rcl_interfaces/msg/Log",
+      "endpoint": "PUBLISHER"
+    },
+    {
+      "topic": "/simulation/entity/marker",
+      "node": "visualizer",
+      "qos": {
+        "reliability": "RELIABLE",
+        "history": "UNKNOWN",
+        "durability": "VOLATILE",
+        "lifespan": "Infinite",
+        "deadline": "Infinite",
+        "liveliness": "AUTOMATIC",
+        "liveliness_lease": "Infinite"
+      },
+      "ros_type": "visualization_msgs/msg/MarkerArray",
+      "endpoint": "PUBLISHER"
+    },
+    {
+      "topic": "/simulation/traffic_lights",
+      "node": "scenario_node",
+      "qos": {
+        "reliability": "RELIABLE",
+        "history": "UNKNOWN",
+        "durability": "TRANSIENT_LOCAL",
+        "lifespan": "Infinite",
+        "deadline": "Infinite",
+        "liveliness": "AUTOMATIC",
+        "liveliness_lease": "Infinite"
+      },
+      "ros_type": "traffic_simulator_msgs/msg/TrafficLightArrayV1",
+      "endpoint": "PUBLISHER"
+    },
+    {
+      "topic": "/tf",
+      "node": "scenario_node",
+      "qos": {
+        "reliability": "RELIABLE",
+        "history": "UNKNOWN",
+        "durability": "VOLATILE",
+        "lifespan": "Infinite",
+        "deadline": "Infinite",
+        "liveliness": "AUTOMATIC",
+        "liveliness_lease": "Infinite"
+      },
+      "ros_type": "tf2_msgs/msg/TFMessage",
+      "endpoint": "PUBLISHER"
+    },
+    {
+      "topic": "/tf_static",
+      "node": "scenario_node",
+      "qos": {
+        "reliability": "RELIABLE",
+        "history": "UNKNOWN",
+        "durability": "TRANSIENT_LOCAL",
+        "lifespan": "Infinite",
+        "deadline": "Infinite",
+        "liveliness": "AUTOMATIC",
+        "liveliness_lease": "Infinite"
+      },
+      "ros_type": "tf2_msgs/msg/TFMessage",
+      "endpoint": "PUBLISHER"
+    },
+    {
+      "topic": "/traffic_light/marker",
+      "node": "scenario_node",
+      "qos": {
+        "reliability": "RELIABLE",
+        "history": "UNKNOWN",
+        "durability": "TRANSIENT_LOCAL",
+        "lifespan": "Infinite",
+        "deadline": "Infinite",
+        "liveliness": "AUTOMATIC",
+        "liveliness_lease": "Infinite"
+      },
+      "ros_type": "visualization_msgs/msg/MarkerArray",
+      "endpoint": "PUBLISHER"
+    },
+    {
+      "topic": "/traffic_light/marker",
+      "node": "scenario_node",
+      "qos": {
+        "reliability": "RELIABLE",
+        "history": "UNKNOWN",
+        "durability": "TRANSIENT_LOCAL",
+        "lifespan": "Infinite",
+        "deadline": "Infinite",
+        "liveliness": "AUTOMATIC",
+        "liveliness_lease": "Infinite"
+      },
+      "ros_type": "visualization_msgs/msg/MarkerArray",
+      "endpoint": "PUBLISHER"
+    },
+    {
+      "topic": "/v2x/traffic_signals",
+      "node": "scenario_node",
+      "qos": {
+        "reliability": "RELIABLE",
+        "history": "UNKNOWN",
+        "durability": "TRANSIENT_LOCAL",
+        "lifespan": "Infinite",
+        "deadline": "Infinite",
+        "liveliness": "AUTOMATIC",
+        "liveliness_lease": "Infinite"
+      },
+      "ros_type": "autoware_perception_msgs/msg/TrafficLightGroupArray",
+      "endpoint": "PUBLISHER"
+    }
+  ],
+  "not_measured": {
+    "xcdr_version": "no ros2 CLI verb exposes negotiated data_representation; use an RTPS capture (see script header)",
+    "discovery_transport": "infer from the RTPS capture / profile file, not from ros2 CLI"
+  }
+}

@@ -25,7 +25,9 @@ inline MockMWService* Mock_MWService = nullptr;
 
 MWService::MWService(int32_t code, const std::string& name, const std::string& exepath, bool active, const std::vector<ArgumentConfig>& args){}
 
-MWService::~MWService() {}
+// MWService::~MWService() 정의는 제거했다. 프로덕션 헤더가 `= default` 로 바뀌어
+// 아웃오브라인 정의가 위법(explicitly-defaulted 함수의 재정의)이 되고,
+// defaulted 소멸자는 컴파일러가 각 TU 에 만들어주므로 링크 심이 필요 없다.
 
 bool MWService::IsActive()  {
     return Mock_MWService->IsActive();

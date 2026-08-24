@@ -42,6 +42,7 @@
 #include "vehicle_input_fault.hpp"
 #include "vehicle_staging.hpp"
 #include "vehicle_wire.hpp"
+#include "sils_participant_qos.hpp"
 
 namespace sils {
 
@@ -165,6 +166,7 @@ inline int RunVehicleProbe(const ProbeConfig& cfg, std::unique_ptr<IVehicleBehav
                      (cfg.stage_input ? "true" : "false"));
 
     DomainParticipantQos pqos;
+    sils::ApplySilsParticipantQos(pqos);   // see sils_participant_qos.hpp
     pqos.name("sils_vecu_vehicle_probe:" + id);
     DomainParticipant* participant = DomainParticipantFactory::get_instance()->create_participant(
         cfg.domain_id, pqos, nullptr, StatusMask::none());
@@ -198,6 +200,11 @@ inline int RunVehicleProbe(const ProbeConfig& cfg, std::unique_ptr<IVehicleBehav
     std::vector<DataReader*> state_readers;   // in, type canonical/ego-state (polled, non-staging)
     std::vector<DataReader*> target_readers;  // in, type canonical/control-target (Profile B)
     std::vector<DataWriter*> control_writers; // out, VehicleControl
+    // in, type canonical/vehicle-control -- another vECU's OUTPUT read as our input
+    // (arbitration). Names are kept alongside because the arbitration decision is logged
+    // per channel; a bare vector of readers would make the trace unreadable.
+    std::vector<DataReader*> request_readers;
+    std::vector<std::string> request_names;
 
     // S2 staging (§7.3): typed per-tick inboxes + listeners, one per in-channel. Populated
     // only when cfg.stage_input -- the readers then feed listeners (arrival-time recv_seq)
@@ -218,17 +225,32 @@ inline int RunVehicleProbe(const ProbeConfig& cfg, std::unique_ptr<IVehicleBehav
                      std::to_string(cmap.outputs().size()));
 
     for (const Channel& ch : cmap.channels()) {
-        // Dispatch `in` channels by declared type: control-target (Autoware) vs ego-state
-        // (sim). Anything else defaults to ego-state. `out` is always VehicleControl.
+        // Dispatch `in` channels by declared type: control-target (Autoware), vehicle-control
+        // (another vECU's command -- arbitration), else ego-state (sim). `out` is always
+        // VehicleControl.
+        //
+        // vehicle-control appears on BOTH sides: as `out` it is what we publish, as `in` it
+        // is a peer's publication. The direction, not the type, decides which.
         const bool is_target = ch.type == "canonical/control-target";
+        const bool is_request = ch.dir == ChannelDir::In && ch.type == "canonical/vehicle-control";
         const char* type = ch.dir != ChannelDir::In ? codec.control_type_name()
                            : is_target             ? codec.control_target_type_name()
+                           : is_request            ? codec.control_type_name()
                                                    : codec.state_type_name();
         Topic* t = participant->create_topic(ch.topic, type, TOPIC_QOS_DEFAULT);
         if (ch.dir == ChannelDir::In) {
             DataReaderQos q = DATAREADER_QOS_DEFAULT;
             apply_qos_r(q);
-            if (stage_input) {
+            if (is_request) {
+                // Deliberately NOT staged, even under SILS_STAGE_INPUT. Staging exists to pin
+                // which arrival belongs to which tick for determinism of the ECU's own input;
+                // an arbitration input is a peer's latest opinion and the rule (min/clamp) is
+                // order-independent by construction, so freezing buys nothing and would add a
+                // third inbox type to every staging report. Polled, newest-wins -- same as a
+                // non-staged state channel.
+                request_readers.push_back(sub->create_datareader(t, q, nullptr));
+                request_names.push_back(ch.name);
+            } else if (stage_input) {
                 // Attach a staging listener so recv_seq is assigned at true arrival time;
                 // the tick loop freezes the inbox at the boundary (no in-tick polling).
                 if (is_target) {
@@ -292,6 +314,12 @@ inline int RunVehicleProbe(const ProbeConfig& cfg, std::unique_ptr<IVehicleBehav
     bool have_state = false;
     ControlTargetSample latest_target;   // last Autoware target (Profile B)
     bool have_target = false;
+    // Arbitration: one held value per request channel (ZOH across ticks with no arrival),
+    // and the per-tick view handed to the behavior. Sized once -- indices match
+    // request_readers/request_names.
+    std::vector<VehicleControlSample> held_requests(request_readers.size());
+    std::vector<char> have_held_request(request_readers.size(), 0);
+    std::vector<ControlRequest> latest_requests;
     TickInfo tick;
     uint64_t last_seq = 0;
     while (clock->WaitForNextTick(tick)) {
@@ -345,6 +373,30 @@ inline int RunVehicleProbe(const ProbeConfig& cfg, std::unique_ptr<IVehicleBehav
                 }
             }
         }
+        // Arbitration inputs: other vECUs' latest commands. Polled on both paths (see the
+        // is_request note at bind time -- these are never staged). Newest per channel wins;
+        // a channel that has said nothing yet simply does not appear this tick, which is the
+        // honest representation: "no opinion" is not the same as "commands zero".
+        latest_requests.clear();
+        for (std::size_t i = 0; i < request_readers.size(); ++i) {
+            bool got = false;
+            VehicleControlSample newest{};
+            for (const VehicleControlSample& v : codec.TakeControl(request_readers[i])) {
+                newest = v;
+                got = true;
+            }
+            if (got) {
+                held_requests[i] = newest;
+                have_held_request[i] = true;
+            }
+            // Hold the last value across ticks with no arrival (ZOH), same convention the
+            // state channel uses. Without it a peer publishing slower than our tick would
+            // flicker in and out of the arbitration set and the command would oscillate.
+            if (have_held_request[i]) {
+                latest_requests.push_back(ControlRequest{request_names[i], held_requests[i]});
+            }
+        }
+
         // Inbound fault injection (staging-layer interceptor): perturb the STATE the behavior
         // is about to consume. Applied here so both staging and free-run paths are covered,
         // and after acquisition so Drop can restore the pre-tick value (held across the outage).
@@ -363,9 +415,22 @@ inline int RunVehicleProbe(const ProbeConfig& cfg, std::unique_ptr<IVehicleBehav
         }
 
         if (have_state) {
+            // `vy` and `stamp_ns` carry no information for the behavior, but they are the
+            // only two observables that answer questions the BUS cannot answer about the
+            // sim adapter feeding us (tools/sils/ss2/analyze_wire.py):
+            //   vy       -- is `velocity` in the VEHICLE frame or the MAP frame? Only vy
+            //               distinguishes them, and only while yaw is changing: vehicle
+            //               frame keeps vy ~= 0 through a curve, map frame does not.
+            //   stamp_ns -- is the source stamping SIMULATION time or wall clock? A wall
+            //               clock stamp is ~1.7e18 (ns since the Unix epoch); sim time
+            //               restarts near 0 each run.
+            // Both are additive: v1.json declares extra fields forward-compatible, so an
+            // older vECU that omits them still validates.
             std::ostringstream ex;
             ex << "\"tick_seq\":" << tick.seq << ",\"src_seq\":" << latest.seq
-               << ",\"vx\":" << latest.vx << ",\"yaw\":" << latest.yaw
+               << ",\"stamp_ns\":" << latest.stamp_ns
+               << ",\"vx\":" << latest.vx << ",\"vy\":" << latest.vy
+               << ",\"yaw\":" << latest.yaw
                << ",\"steering\":" << latest.steering_angle;
             VehicleTrace(run_id, id, "state_received", ex.str());
         }
@@ -378,9 +443,28 @@ inline int RunVehicleProbe(const ProbeConfig& cfg, std::unique_ptr<IVehicleBehav
             VehicleTrace(run_id, id, "target_received", ex.str());
         }
 
-        VehicleBehaviorContext bctx{tick.seq, tick.sim_time_ns, latest, have_state,
-                                    latest_target, have_target};
+        VehicleBehaviorContext bctx{tick.seq,      tick.sim_time_ns, latest,
+                                    have_state,    latest_target,    have_target,
+                                    latest_requests};
         VehicleControlSample c = behavior->OnTick(bctx);
+        // Arbitration decision, BEFORE the command line below. Counters alone cannot tell
+        // "healthy" from "one peer has been winning every tick since second 3" -- and the
+        // published command cannot either, because it looks like a normal command. The rule
+        // lives in the behavior; the run loop only reports what the inputs were, which is
+        // the part every arbitration rule has in common.
+        if (!latest_requests.empty()) {
+            std::ostringstream ax;
+            ax << "\"tick_seq\":" << tick.seq << ",\"owner_acceleration\":"
+               << (have_target ? latest_target.acceleration : c.acceleration)
+               << ",\"chosen_acceleration\":" << c.acceleration << ",\"inputs\":{";
+            for (std::size_t i = 0; i < latest_requests.size(); ++i) {
+                if (i != 0) ax << ",";
+                ax << "\"" << latest_requests[i].name << "\":"
+                   << latest_requests[i].sample.acceleration;
+            }
+            ax << "}";
+            VehicleTrace(run_id, id, "arbitrated", ax.str());
+        }
         c.seq = tick.seq;                 // run loop is the single source of seq/stamp
         c.stamp_ns = tick.sim_time_ns;
         for (DataWriter* w : control_writers) {

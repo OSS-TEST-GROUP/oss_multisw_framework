@@ -15,9 +15,11 @@ pipeline {
         IMAGE_REGISTRY = "registry.obigo.com"
         IMAGE_NAMESPACE = "oss"
         APP_NAME = "oss-mmf"
-        // ossuser 단일 계정으로 pull·push 모두 수행 (builder 등 관리자 계정 사용 금지).
-        REGISTRY_ID = "ossuser"
-        REGISTRY_PWD = "Ossuser1234"
+        // Harbor 자격증명은 Jenkins Credentials(Username with password)에서 주입한다.
+        // 저장소에 비밀번호를 하드코딩하지 않는다 (공개 저장소로 전달되는 파일).
+        // 등록 대상: Harbor 로봇 계정 oss-ci (pull+push, oss 프로젝트 한정)
+        //   → REGISTRY_USR / REGISTRY_PSW 환경변수가 자동 생성되고 로그에서 마스킹된다.
+        REGISTRY = credentials('harbor-oss-ci')
 
         // Dockerfile Path
         DOCKERFILE_PATH = "docker/Dockerfile" 
@@ -73,7 +75,8 @@ pipeline {
                             docker logout "${IMAGE_REGISTRY}:80"
                         fi
                         if ! cat ${HOME}/.docker/config.json 2>/dev/null | grep "${IMAGE_REGISTRY}"; then
-                            echo "${REGISTRY_PWD}" | docker login ${IMAGE_REGISTRY} -u ${REGISTRY_ID} --password-stdin
+                            # 로봇 계정명에 '$' 가 포함되므로(robot$oss+oss-ci) 반드시 변수 참조로 넘긴다.
+                            printf '%s' "${REGISTRY_PSW}" | docker login "${IMAGE_REGISTRY}" -u "${REGISTRY_USR}" --password-stdin
                         fi
                     '''
                 }
@@ -130,12 +133,12 @@ pipeline {
                     sh '''
                         #!/bin/bash
                         set -e
-                        if ! curl -u "${REGISTRY_ID}:${REGISTRY_PWD}" -s https://${IMAGE_REGISTRY}/v2/_catalog 2>/dev/null \
+                        if ! curl -u "${REGISTRY_USR}:${REGISTRY_PSW}" -s https://${IMAGE_REGISTRY}/v2/_catalog 2>/dev/null \
                             | grep -q "${APP_NAME}-builder"; then
                             docker build -t ${BUILDER_IMAGE} \
                                 -f ${PWD}/docker/Dockerfile .
-                            # push 는 ossuser 단일 계정 (pull·push 공용).
-                            echo "${REGISTRY_PWD}" | docker login ${IMAGE_REGISTRY} -u "${REGISTRY_ID}" --password-stdin
+                            # push 는 Harbor 로봇 계정(oss-ci) 자격증명으로 수행.
+                            printf '%s' "${REGISTRY_PSW}" | docker login "${IMAGE_REGISTRY}" -u "${REGISTRY_USR}" --password-stdin
                             docker push ${BUILDER_IMAGE}
                         else
                             if [ -z $(docker images -q "${BUILDER_IMAGE}") ]; then
@@ -291,6 +294,60 @@ pipeline {
             post {
                 always {
                     archiveArtifacts artifacts: 'output/unittest-results/**/junit_results.xml', fingerprint: true
+                }
+            }
+        }
+        // ── 통합 레인 (커버리지 캡처 전에 실행) ──────────────────────────────
+        //
+        // 왜 여기인가:
+        //   integration-tests.regex 로 유닛 레인에서 빠진 테스트들 —
+        //   ConcreteEndpointIntegrationTest(lifecycle 21 / adsw 13),
+        //   LifecycleAdswIntegrationTest 10, ContainerDockerComposeTest 4,
+        //   ROSDiscoveryInfoEndpointTest 3 — 은 실제로 프로덕션 코드를
+        //   실행하지만 .gcda 를 남기지 않아 커버리지에 한 줄도 기여하지
+        //   못했다. 그래서 adsw 의 Start/Stop/GetServiceState/
+        //   UpdateServiceList 엔드포인트가 "테스트 없음"처럼 60%대로 찍힌다.
+        //   실제로는 실 DDS pub→sub 로 검증되고 있다.
+        //
+        //   Jenkinsfile.integration 에 붙일 수는 없다. 그 파이프라인은
+        //   BUILD_UNITTEST=FALSE 로 빌드해서 --coverage 계측이 없고,
+        //   애초에 이 ctest 타겟들이 BUILD_UNITTEST 아래에서만 등록되므로
+        //   빌드조차 되지 않는다. 계측 빌드를 가진 파이프라인은 여기뿐이다.
+        //
+        //   coverage.sh 는 레인 구분 없이 빌드 트리의 .gcda 를 통째로
+        //   캡처하므로, 순서만 Coverage 앞에 두면 된다.
+        //
+        // 실패는 빌드를 깨지 않는다 (run_integration.sh 가 `|| true`).
+        // 도메인은 유닛 레인/컴포즈 스택과 겹치지 않게 고정한다.
+        stage('Integration ctest (for coverage)') {
+            steps {
+                script {
+                    def dockerArgs = [
+                        '-u 1000:1000',
+                        '-w /home/ossuser/workspace',
+                        "-v ${SDK_DIR}:/opt",
+                        "-v ${WORKSPACE}/.build:/home/ossuser/workspace/.build",
+                        "-v ${WORKSPACE}/idl:/home/ossuser/workspace/idl",
+                        "-v ${WORKSPACE}/output:/home/ossuser/workspace/output",
+                        "-v ${WORKSPACE}/service:/home/ossuser/workspace/service",
+                        "-v ${WORKSPACE}/docker:/home/ossuser/workspace/docker"
+                    ].join(' ')
+                    docker.image("${BUILDER_IMAGE}").inside(dockerArgs) {
+                        sh '''
+                            cd /home/ossuser/workspace
+                            MMF_INTEGRATION_DOMAIN=137 CTEST_TIMEOUT=60 \
+                                bash docker/scripts/run_integration.sh
+                        '''
+                    }
+                }
+            }
+            post {
+                always {
+                    catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
+                        junit testResults: 'output/integration-results/**/*.xml', allowEmptyResults: true
+                    }
+                    archiveArtifacts artifacts: 'output/integration-results/**/junit_results.xml',
+                                     allowEmptyArchive: true, fingerprint: true
                 }
             }
         }

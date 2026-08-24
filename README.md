@@ -280,6 +280,8 @@ link_libraries(gtest gmock)
 | 문서 | 설명 |
 |---|---|
 | [`build-install-run-guide.md`](./docs/guide/build-install-run-guide.md) | MMF 빌드·설치·실행 (x86_64 / arm64) |
+| [`static-analysis-unittest-guide.md`](./docs/guide/static-analysis-unittest-guide.md) | 모듈 스코프 정적분석·유닛테스트·커버리지 측정 절차 |
+| [`integration-test-procedure-guide.md`](./docs/guide/integration-test-procedure-guide.md) | 통합 테스트 절차 |
 | [`board-autostart-guide.md`](./docs/guide/board-autostart-guide.md) | 보드 재부팅 자동시작 — core / ext-ros2 / ext-agl |
 | [`ext-ros2-adsw-operation-guide.md`](./docs/guide/ext-ros2-adsw-operation-guide.md) | ext-ros2 adsw_manager 운영 — autoware 관리·기동·트러블슈팅 |
 | [`adsw-manager-autosar-lifecycle-integration-guide.md`](./docs/guide/adsw-manager-autosar-lifecycle-integration-guide.md) | Adaptive AUTOSAR `adsw_manager` ↔ `lifecycle_manager` 통합 |
