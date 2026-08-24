@@ -45,8 +45,13 @@ producers (clock master, responder) omit `instance_id`. The schema encodes the e
 | `coordinator` | `run_coordinator/run_phase1.sh` | run lifecycle + terminal verdict |
 | `clock_master` | `sils_clock_master.cc` | lockstep tick control plane |
 | `responder` | `viss_responder_main.cc` | L1 SUT stand-in |
-| `verifier` | `viss_verify_main.cc` | run verifier |
+| `verifier` | `viss_verify_main.cc` · `vehicle_verify_main.cc` | run verifier (VISS · bus-coupled) |
 | `input_source` | `sils_input_source.cc` | async input fixture |
+| `sim_fixture` | `sils_ego_source.cc` · `sils_control_source.cc` | bus-coupled lockstep source fixtures (`ego_source_*` / `control_source_*`) — registered in v1 as of S4 |
+
+This table must match the producer set in
+[`v1.json`](../../config/sils/trace-schema/v1.json) exactly (**7 producers**). If they
+disagree, the schema JSON wins — it is the machine source of truth.
 
 ## vECU events (the core contract)
 
@@ -132,10 +137,44 @@ Fail-closed: any violation → exit 1. See [conformance README](../../tools/sils
 
 ## Versioning
 
-- `schema_version` is an integer; this is **1**.
-- **Backward-compatible** (no version bump): adding a new event; adding an *optional*
-  field to an existing event. Consumers ignore unknown fields/events (with
-  `--allow-unknown-events`).
+- `schema_version` is an integer; this is **1**. There are no minor revisions — the schema
+  is either v1 or a future v2.
 - **Breaking** (bump to 2): renaming/removing an event; adding/renaming a *required*
   field; changing a field's type or meaning. A v2 schema file is added alongside v1;
   `validate_trace.py --schema` selects which to check against.
+- **Non-breaking** (no version bump): adding a new event; adding an *optional* field to an
+  existing event. **But read the fail-closed rule below before assuming old validators
+  accept it.**
+
+### Compatibility is asymmetric — and fail-closed by default ★
+
+The two directions are **not** symmetric, and the default is strict:
+
+| direction | unknown *field* | unknown *event* |
+|---|---|---|
+| new producer → **current** validator | ✅ always accepted | ✅ (the event is in this v1) |
+| new producer → **older** v1 validator | ✅ always accepted | ❌ **exit 1** unless `--allow-unknown-events` |
+
+`validate_trace.py` treats an event name that is not in its schema copy as a **violation**
+(`--allow-unknown-events` is the explicit opt-out). This is deliberate — a silent typo in an
+event name must not pass as "some future event" — but it means **adding an event is only
+"non-breaking" for consumers that either updated their `v1.json` or opted into the flag.**
+`gate.py` uses the strict default.
+
+### A trace does not self-describe its schema version
+
+There is no `schema_version` field in the trace itself; the JSONL carries only the events.
+Consequences to plan around:
+
+- A consumer cannot negotiate — it must be **told** which schema to check against
+  (`--schema`, default v1).
+- Diagnosing "unknown event" failures means comparing the producer's build to the
+  validator's `v1.json` by hand.
+
+**Policy for now:** the schema JSON in `config/sils/trace-schema/` is the single source of
+truth, producers and validators are expected to ship from the same tree, and any new event
+lands in `v1.json` **in the same change** that starts emitting it (this is what S4 did for
+the bus-coupled events). Stamping a version into the trace — and with it real
+producer/validator negotiation — needs changes in every emitter (C++ `TraceEvent`, the
+coordinator shell `trace()`, the fixtures) plus a re-capture of every golden, so it is
+tracked as an **open item, not implemented**.

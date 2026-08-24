@@ -40,7 +40,9 @@ inline MockService* Mock_Service = nullptr;
 
 Service::Service() {}
 Service::Service(const std::string& name, const ServiceType type, const RecoveryPolicy policy, const bool enabled, const MwType os) {}
-Service::~Service() {}
+// Service::~Service() 정의는 제거했다. 프로덕션 헤더가 `= default` 로 바뀌어
+// 아웃오브라인 정의가 위법(explicitly-defaulted 함수의 재정의)이 되고,
+// defaulted 소멸자는 컴파일러가 각 TU 에 만들어주므로 링크 심이 필요 없다.
 
 bool Service::isEnabled() {
     return Mock_Service->isEnabled();

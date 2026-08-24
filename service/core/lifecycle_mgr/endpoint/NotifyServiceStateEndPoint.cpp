@@ -1,13 +1,15 @@
 #include "NotifyServiceStateEndPoint.hpp"
 
+#include <utility>
+
 #include "lifecycle/NotifyServiceState.hpp"
 #include "logger/Log.hpp"
 #include "manager/LifecycleFactory.hpp"
 
 namespace lifecycle_manager {
 
-NotifyServiceStateEndPoint::NotifyServiceStateEndPoint(MessageType msgtype, std::string topic, Callback cb) 
-    : DDSMessageEndPoint(topic), on_data_cb_(std::move(cb)){
+NotifyServiceStateEndPoint::NotifyServiceStateEndPoint(MessageType msgtype, std::string topic, Callback cb)
+    : DDSMessageEndPoint(std::move(topic)), on_data_cb_(std::move(cb)) {
 
     if (msgtype == MessageType::NOTIFY_SERVICE_STATE){
         SetTypeSupport(std::make_shared<TypeSupport>(new NotifyServiceStatePubSubType()));
@@ -23,7 +25,7 @@ NotifyServiceStateEndPoint::~NotifyServiceStateEndPoint() {
 void NotifyServiceStateEndPoint::OnDataAvailable(){
     LOG_DEBUG("Message Delivery for " << GetTopic() );
 
-    if (Read<NotifyServiceState>(data_) == true){
+    if (Read<NotifyServiceState>(data_)) {
 
         // Phantom-publisher guard. A stray publisher writing NOT_RUNNING to
         // this topic flips lifecycle_mgr's service state to NotRunning, which
@@ -43,7 +45,6 @@ void NotifyServiceStateEndPoint::OnDataAvailable(){
             on_data_cb_(message);
         }
     }
-
 }
 
 void NotifyServiceStateEndPoint::OnDataPublished(bool ret){

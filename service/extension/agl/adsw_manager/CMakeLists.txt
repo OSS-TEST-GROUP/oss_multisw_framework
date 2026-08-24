@@ -78,6 +78,10 @@ install(TARGETS ${PROJECT_NAME}
 	ARCHIVE DESTINATION lib
 )
 
+# 아치별 서비스 목록 2벌. entrypoint(agl_entrypoint.sh)가 uname -m 으로 선택하며,
+# x86 파일이 없으면 amd64 가 arm64(Tegra 전용 설정) 목록으로 폴백해 버린다.
+# 따라서 두 파일을 함께 설치한다.
 install(FILES config/agl-service-list.yaml
+              config/agl-service-list.x86.yaml
 	DESTINATION bin/config
 )

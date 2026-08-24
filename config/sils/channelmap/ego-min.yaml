@@ -20,7 +20,18 @@ channels:
     type: canonical/ego-state
 
   # --- ACTUATION out (vECU -> MORAI/AWSIM): VehicleControl struct ---
+  #
+  # `sils/ego/cmd` is THE longitudinal actuation channel across every channel map in the
+  # tree (this one, plainc-min, adaptive-min, classic-min, vehicle-interface) and is the
+  # name the plant-bridge requirement is written against (docs/sils/
+  # sils-real-bridge-requirements.md BR-M-2). It used to be `sils/ego/control` here only,
+  # which meant swapping the vECU for one of the examples opened the loop with no error
+  # anywhere -- a reader and a writer that disagree on the topic name simply never match.
+  #
+  # steer-min.yaml is the ONE deliberate exception: it publishes sils/ego/steer_cmd so a
+  # steering ECU and a longitudinal ECU can run on the same bus without two writers
+  # fighting over one topic. Different actuator, different channel -- not a naming drift.
   - name: Vehicle.Control
     dir: out
-    topic: sils/ego/control
+    topic: sils/ego/cmd
     type: canonical/vehicle-control

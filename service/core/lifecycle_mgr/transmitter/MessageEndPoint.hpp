@@ -15,8 +15,7 @@ namespace lifecycle_manager {
 class MessageEndPoint {
   public:
     MessageEndPoint(std::string topic);
-    virtual ~MessageEndPoint();
-
+    virtual ~MessageEndPoint() = default;
     std::string GetTopic();
     std::string GetTypeName();
     std::shared_ptr<TypeSupport> GetTypeSupport();

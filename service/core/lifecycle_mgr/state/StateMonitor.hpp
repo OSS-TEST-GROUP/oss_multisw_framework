@@ -22,7 +22,7 @@ namespace lifecycle_manager {
 class StateMonitor : public ManagerBase {
   public:
     StateMonitor(LifecycleManager& lifecycle);
-    virtual ~StateMonitor();
+    ~StateMonitor() override;
 
     bool Start();
     void Stop();
@@ -30,9 +30,9 @@ class StateMonitor : public ManagerBase {
     void UpdateServicesState(lifecyclemgr::NotifyServiceState* update);
     void UpdateServicesState(lifecyclemgr::GetServiceStateResponse* response);
 
-    void SetUpdateStateFlag(std::shared_ptr<Service> service);
-    void ClearUpdateStateFlag(std::shared_ptr<Service> service);
-    bool GetUpdateStateFlag(std::shared_ptr<Service> service);
+    void SetUpdateStateFlag(const std::shared_ptr<Service>& service);
+    void ClearUpdateStateFlag(const std::shared_ptr<Service>& service);
+    bool GetUpdateStateFlag(const std::shared_ptr<Service>& service);
 
     void ClearAllUpdatedFlag();
 
@@ -46,7 +46,7 @@ class StateMonitor : public ManagerBase {
     void RunThread();
     void RequestGetState();
     void updateServices(std::vector<std::string>* slist, std::vector<lifecyclemgr::ServiceState> *statelist);
-    bool getServiceState(std::shared_ptr<Service> service, lifecyclemgr::ServiceStatus& entry);
+    bool getServiceState(const std::shared_ptr<Service>& service, lifecyclemgr::ServiceStatus& entry);
 
     // Polling interval (DESIGN-3): use named constants so the values are
     // visible and can be moved to config in the future.
@@ -78,7 +78,7 @@ class StateMonitor : public ManagerBase {
     // loop derefs it asynchronously, so the buffer must outlive the call.
     lifecyclemgr::NotifyContainerState container_report_;
 
-    int32_t loop_count_;
+    int32_t loop_count_ = 0;   // RunThread() 가 다시 0 을 넣지만 그 전에 읽힐 수 있다
 
 };
 

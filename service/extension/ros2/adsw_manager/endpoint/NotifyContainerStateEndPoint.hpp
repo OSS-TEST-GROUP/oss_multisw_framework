@@ -20,14 +20,13 @@ using namespace lifecyclemgr;
 class NotifyContainerStateEndPoint : public DDSMessageEndpoint {
   public:
     NotifyContainerStateEndPoint(MessageType msgtype, std::string topic);
-    virtual ~NotifyContainerStateEndPoint();
-
-    virtual std::string GetTopic();
-    virtual std::string GetTypeName();
-    virtual std::shared_ptr<TypeSupport> GetTypeSupport();
+    ~NotifyContainerStateEndPoint() override= default;
+    std::string GetTopic() override;
+    std::string GetTypeName() override;
+    std::shared_ptr<TypeSupport> GetTypeSupport() override;
 
     // Pure publisher — never invoked.
-    virtual void OnDataAvailable() {}
+    void OnDataAvailable() override {}
 
   private:
     std::string                  topic_;

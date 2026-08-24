@@ -1,0 +1,28 @@
+{
+  "domain": 43,
+  "state_source": "adapi",
+  "core_failures": 0,
+  "rows": [
+
+    {"kind":"topic","severity":"core","name":"/control/command/control_cmd","expected":"autoware_control_msgs/msg/Control","observed":"autoware_control_msgs/msg/Control"},
+    {"kind":"topic","severity":"legacy","name":"/autoware/state","expected":"autoware_system_msgs/msg/AutowareState","observed":"autoware_system_msgs/msg/AutowareState"},
+    {"kind":"topic","severity":"adapi","name":"/api/operation_mode/state","expected":"autoware_adapi_v1_msgs/msg/OperationModeState","observed":"autoware_adapi_v1_msgs/msg/OperationModeState"},
+    {"kind":"topic","severity":"adapi","name":"/api/routing/state","expected":"autoware_adapi_v1_msgs/msg/RouteState","observed":"autoware_adapi_v1_msgs/msg/RouteState"},
+    {"kind":"topic","severity":"adapi","name":"/api/localization/initialization_state","expected":"autoware_adapi_v1_msgs/msg/LocalizationInitializationState","observed":"autoware_adapi_v1_msgs/msg/LocalizationInitializationState"},
+    {"kind":"topic","severity":"feature","name":"/api/fail_safe/mrm_state","expected":"autoware_adapi_v1_msgs/msg/MrmState","observed":"autoware_adapi_v1_msgs/msg/MrmState"},
+    {"kind":"topic","severity":"feature","name":"/api/external/get/emergency","expected":"tier4_external_api_msgs/msg/Emergency","observed":"tier4_external_api_msgs/msg/Emergency"},
+    {"kind":"topic","severity":"feature","name":"/api/external/get/rtc_status","expected":"tier4_rtc_msgs/msg/CooperateStatusArray","observed":"tier4_rtc_msgs/msg/CooperateStatusArray"},
+    {"kind":"topic","severity":"feature","name":"/control/command/turn_indicators_cmd","expected":"autoware_vehicle_msgs/msg/TurnIndicatorsCommand","observed":"autoware_vehicle_msgs/msg/TurnIndicatorsCommand"},
+    {"kind":"topic","severity":"feature","name":"/planning/scenario_planning/lane_driving/behavior_planning/path_with_lane_id","expected":"","observed":"tier4_planning_msgs/msg/PathWithLaneId"},
+    {"kind":"service","severity":"drive","name":"/api/external/set/engage","expected":"tier4_external_api_msgs/srv/Engage","observed":"tier4_external_api_msgs/srv/Engage"},
+    {"kind":"service","severity":"drive","name":"/api/localization/initialize","expected":"autoware_adapi_v1_msgs/srv/InitializeLocalization","observed":"autoware_adapi_v1_msgs/srv/InitializeLocalization"},
+    {"kind":"service","severity":"drive","name":"/api/routing/set_route_points","expected":"autoware_adapi_v1_msgs/srv/SetRoutePoints","observed":"autoware_adapi_v1_msgs/srv/SetRoutePoints"},
+    {"kind":"service","severity":"drive","name":"/api/routing/set_route","expected":"autoware_adapi_v1_msgs/srv/SetRoute","observed":"autoware_adapi_v1_msgs/srv/SetRoute"},
+    {"kind":"service","severity":"drive","name":"/api/routing/clear_route","expected":"autoware_adapi_v1_msgs/srv/ClearRoute","observed":"autoware_adapi_v1_msgs/srv/ClearRoute"},
+    {"kind":"service","severity":"drive","name":"/api/operation_mode/enable_autoware_control","expected":"autoware_adapi_v1_msgs/srv/ChangeOperationMode","observed":"autoware_adapi_v1_msgs/srv/ChangeOperationMode"},
+    {"kind":"service","severity":"feature","name":"/api/operation_mode/change_to_stop","expected":"autoware_adapi_v1_msgs/srv/ChangeOperationMode","observed":"autoware_adapi_v1_msgs/srv/ChangeOperationMode"},
+    {"kind":"service","severity":"drive","name":"/api/autoware/set/velocity_limit","expected":"tier4_external_api_msgs/srv/SetVelocityLimit","observed":"tier4_external_api_msgs/srv/SetVelocityLimit"},
+    {"kind":"service","severity":"feature","name":"/api/external/set/rtc_commands","expected":"tier4_rtc_msgs/srv/CooperateCommands","observed":"tier4_rtc_msgs/srv/CooperateCommands"},
+    {"kind":"service","severity":"feature","name":"/api/external/set/rtc_auto_mode","expected":"tier4_rtc_msgs/srv/AutoModeWithModule","observed":"tier4_rtc_msgs/srv/AutoModeWithModule"}
+  ]
+}

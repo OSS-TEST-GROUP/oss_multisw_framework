@@ -14,6 +14,11 @@ tolerance rules:
     construction and MUST NOT be used as golden exact-match targets; only `replay`,
     `relay-staged`, or `full-lockstep` are (§12.4). A rules file declaring a rejected
     mode is refused (exit 2), not silently compared.
+  - PLANT isolation: a golden captured under one plant/simulator may not be compared
+    against a run under another (MORAI vs scenario_simulator_v2 vs FMU vs fixture have
+    different vehicle dynamics). `capture_golden --plant` records it, `--plant` here
+    declares the candidate's, and a declared mismatch is refused (exit 2) -- otherwise a
+    plant swap reads as a code regression. See docs/sils/sils-simulator-loops.md.
 
 Events are aligned by a key (default: the event name), grouped in order, and paired
 positionally within each key group -- so N publish_intent events pair 0↔0,1↔1,...
@@ -289,12 +294,56 @@ def gate_input_mode(rules: dict) -> str | None:
     return None
 
 
+def golden_plant(golden: list[dict]) -> str | None:
+    """The plant/simulator identity capture_golden stamped into `golden_meta`, or None
+    for a golden captured before/without --plant."""
+    for e in golden:
+        if e.get("event") == "golden_meta":
+            return e.get("plant")
+    return None
+
+
+def gate_plant(golden: list[dict], candidate_plant: str | None) -> tuple[str | None, str | None]:
+    """Plant isolation. Returns (rejection_reason, warning).
+
+    Two simulators (MORAI vs scenario_simulator_v2 vs an FMU vs a fixture) have different
+    vehicle dynamics, so the same vECU legitimately produces different values under each.
+    Comparing a golden captured under one against a run under another surfaces as a
+    REGRESSION with nothing to say the PLANT changed rather than the code -- the exact
+    false signal a regression gate exists to avoid. So a declared mismatch is a policy
+    REJECT (exit 2), never a regression verdict.
+
+    Enforcement mirrors the input_mode gate: it only binds when both sides declare. A
+    legacy golden with no recorded plant, or a caller that passes no --plant, is allowed
+    through with a warning that the gate did not run -- silently upgrading those to hard
+    failures would break every golden captured before this field existed."""
+    declared = golden_plant(golden)
+    if declared is not None and candidate_plant is not None:
+        if declared != candidate_plant:
+            return (f"plant mismatch: golden was captured under plant '{declared}' but the "
+                    f"candidate ran under '{candidate_plant}'. Different plants have "
+                    f"different dynamics -- a cross-plant compare cannot distinguish a code "
+                    f"regression from a plant change. Use the golden set for '{candidate_plant}'."), None
+        return None, None
+    if declared is None and candidate_plant is None:
+        return None, ("plant identity declared on neither golden nor candidate; "
+                      "plant-isolation gate not enforced")
+    missing = "golden (capture_golden --plant)" if declared is None else "candidate (--plant)"
+    return None, (f"plant identity missing on {missing}; plant-isolation gate not enforced "
+                  f"(other side declares '{declared or candidate_plant}')")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--golden", type=Path, required=True, help="known-good golden trace.jsonl")
     parser.add_argument("--candidate", type=Path, required=True, help="candidate run trace.jsonl")
     parser.add_argument("--rules", type=Path, default=None, help="tolerance rules YAML (§12.4)")
     parser.add_argument("--strict", action="store_true", help="force strict event ordering (overrides rules)")
+    parser.add_argument("--plant", default=None, metavar="ID",
+                        help="plant/simulator the CANDIDATE ran under (e.g. morai, "
+                             "scenario_simulator_v2). Compared against the golden's recorded "
+                             "plant; a mismatch is refused (exit 2) rather than reported as "
+                             "a regression")
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args(argv)
 
@@ -318,9 +367,20 @@ def main(argv: list[str] | None = None) -> int:
         print(f"# error: {gerr or cerr}", file=sys.stderr)
         return EXIT_REJECT
 
+    # Plant isolation runs BEFORE the value comparison: if the plants differ there is no
+    # meaning in the field diffs at all, so producing them would only invite reading them.
+    plant_reason, plant_warn = gate_plant(golden, args.plant)
+    if plant_reason:
+        print(json.dumps({"verdict": "REJECTED", "reason": plant_reason}, indent=2))
+        if not args.quiet:
+            print(f"# REJECTED: {plant_reason}", file=sys.stderr)
+        return EXIT_REJECT
+
     report = compare(golden, cand, rules)
     if rules.get("input_mode") is None:
         report["warnings"].append("input_mode not declared in rules; §12.4 gate not enforced")
+    if plant_warn:
+        report["warnings"].append(plant_warn)
     print(json.dumps(report, indent=2))
 
     if not args.quiet:

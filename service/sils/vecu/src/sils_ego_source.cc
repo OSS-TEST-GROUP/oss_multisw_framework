@@ -22,6 +22,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <csignal>
 #include <cstdint>
 #include <cstdlib>
@@ -38,6 +39,7 @@
 #include <fastdds/dds/topic/TypeSupport.hpp>
 
 #include "EgoStatePubSubTypes.hpp"
+#include "sils_participant_qos.hpp"
 #include "clock_source.hpp"  // sils::LockstepClockSource (reused; TickControl via sils_vecu)
 
 using namespace eprosima::fastdds::dds;
@@ -60,10 +62,29 @@ std::string ArgStr(int argc, char** argv, const std::string& flag, const std::st
         if (flag == argv[i]) return argv[i + 1];
     return fb;
 }
+double ArgDbl(int argc, char** argv, const std::string& flag, double fb) {
+    for (int i = 1; i + 1 < argc; ++i)
+        if (flag == argv[i]) { try { return std::stod(argv[i + 1]); } catch (...) { return fb; } }
+    return fb;
+}
 EgoStateVec3 Vec3(double x, double y, double z) {
     EgoStateVec3 v;
     v.x(x); v.y(y); v.z(z);
     return v;
+}
+
+// Speed and distance at sim-time t under "ramp at `accel` until `vmax`, then hold".
+// A PURE FUNCTION OF t, deliberately: the lockstep mode derives state from sim_time rather
+// than integrating, which is the whole reason its runs are reproducible. Capping by
+// clamping an integrated variable instead would reintroduce path dependence.
+// vmax <= 0 means no cap, which is the original uncapped ramp.
+struct Motion { double vx; double s; };
+Motion MotionAt(double t, double accel, double vmax) {
+    if (t < 0.0) t = 0.0;
+    if (vmax <= 0.0 || accel <= 0.0) return {accel * t, 0.5 * accel * t * t};
+    const double t_cap = vmax / accel;
+    if (t <= t_cap) return {accel * t, 0.5 * accel * t * t};
+    return {vmax, 0.5 * accel * t_cap * t_cap + vmax * (t - t_cap)};
 }
 }  // namespace
 
@@ -81,12 +102,42 @@ int main(int argc, char** argv) {
     const int startup_ms = ArgInt(argc, argv, "--startup-ms", 1000);
     const double accel = 0.5;  // m/s^2 nominal ramp so vx (and position) visibly evolve
 
+    // --- where on the map, and pointing which way ---------------------------------
+    //
+    // Added for stage 3 (docs/sils/evidence/vehicle-seat-no-simulator-2026-08-11.md §5.1).
+    // Without these the fixture starts at (0,0) heading +x, which is the MAP ORIGIN and is
+    // not on any lanelet. Autoware then localizes nowhere, refuses to plan a route, and
+    // "Control is skipped since input data is not ready" never stops -- which looks like a
+    // bridge defect and is not one. Give it a pose the map actually contains and Autoware
+    // plans against our bridges' data.
+    //
+    // DEFAULTS ARE THE OLD BEHAVIOUR EXACTLY: at x0=y0=yaw0=0 the position below reduces to
+    // (s, 0, 0) because cos(0)=1 and sin(0)=0, and orientation stays zero. Existing traces
+    // and goldens are unaffected.
+    //
+    // Coordinates are Autoware's `map` frame, which for an MGRS map is UTM modulo 100000.
+    // On the sample-map-planning rig a known-good start is
+    //     --x0 3638.69 --y0 73605.25 --yaw0 -1.4441
+    // (from /workspace/log/pose.json, the pose used to drive the partition on 08-10).
+    const double x0 = ArgDbl(argc, argv, "--x0", 0.0);
+    const double y0 = ArgDbl(argc, argv, "--y0", 0.0);
+    const double yaw0 = ArgDbl(argc, argv, "--yaw0", 0.0);
+
+    // Speed cap, m/s. 0 keeps the old uncapped ramp -- which is fine for a 2-second unit
+    // run and useless for a 300-second one: at 0.5 m/s^2 the fixture is doing 150 m/s by
+    // then and has left the map entirely. Capping keeps it a pure function of sim_time (see
+    // Travelled below), so lockstep determinism survives.
+    const double vmax = ArgDbl(argc, argv, "--vmax", 0.0);
+
     int domain_id = 0;
     const std::string denv = GetEnvOr("VISS_DDS_DOMAIN_ID", "");
     if (!denv.empty()) { try { domain_id = std::stoi(denv); } catch (...) {} }
 
     DomainParticipantQos pqos;
     pqos.name("sils_ego_source:" + run_id);
+
+    sils::ApplySilsParticipantQos(pqos);   // see sils_participant_qos.hpp
+
     DomainParticipant* participant = DomainParticipantFactory::get_instance()->create_participant(
         domain_id, pqos, nullptr, StatusMask::none());
     if (!participant) {
@@ -113,22 +164,32 @@ int main(int argc, char** argv) {
     // Build + publish one EgoState (shared by both clock modes). seq/stamp/kinematics are
     // supplied by the caller so the wall loop can integrate wall-dt while lockstep derives
     // everything from sim_time.
-    auto publish_state = [&](uint64_t seq, int64_t stamp_ns, double px, double vx) {
+    // `travelled` is arc length along the heading, not an x coordinate. The map position is
+    // derived from it here so both clock modes share one definition of "where the car is".
+    auto publish_state = [&](uint64_t seq, int64_t stamp_ns, double travelled, double vx) {
+        const double px = x0 + travelled * std::cos(yaw0);
+        const double py = y0 + travelled * std::sin(yaw0);
         EgoState s;
         s.run_id(run_id);
         s.seq(seq);
         s.stamp_ns(stamp_ns);
-        s.position(Vec3(px, 0.0, 0.0));
-        s.orientation_rpy(Vec3(0.0, 0.0, 0.0));
+        s.position(Vec3(px, py, 0.0));
+        s.orientation_rpy(Vec3(0.0, 0.0, yaw0));
+        // Velocity and acceleration are VEHICLE frame (the IDL says so), so they do not
+        // rotate with yaw0 -- the car is always moving along its own +x. Rotating them here
+        // would double-apply the heading, since consumers already read them as body frame.
         s.velocity(Vec3(vx, 0.0, 0.0));
-        s.acceleration(Vec3(accel, 0.0, 0.0));
+        // Acceleration goes to zero once the speed cap is reached; reporting the nominal
+        // ramp forever would tell Autoware the car is still accelerating while it holds a
+        // constant speed, and the longitudinal controller acts on measured acceleration.
+        s.acceleration(Vec3((vmax > 0.0 && vx >= vmax) ? 0.0 : accel, 0.0, 0.0));
         s.yaw_rate(0.0);
         s.steering_angle(0.0);
         s.gear(3);  // DRIVE
         writer->write(&s);
         std::cout << "{\"run_id\":\"" << run_id << "\",\"event\":\"ego_source_sent\",\"seq\":" << seq
-                  << ",\"sim_time_ns\":" << stamp_ns << ",\"vx\":" << vx << ",\"px\":" << px << "}"
-                  << std::endl;
+                  << ",\"sim_time_ns\":" << stamp_ns << ",\"vx\":" << vx << ",\"px\":" << px
+                  << ",\"py\":" << py << "}" << std::endl;
     };
 
     int sent = 0;
@@ -153,9 +214,8 @@ int main(int argc, char** argv) {
             // is left unstaged. Run clock_master with --ticks a bit above --count.
             if (count <= 0 || tick.seq <= static_cast<uint64_t>(count)) {
                 const double t = static_cast<double>(tick.sim_time_ns) / 1e9;  // sim seconds
-                const double vx = accel * t;         // exact integral -> pure fn of sim_time
-                const double px = 0.5 * accel * t * t;
-                publish_state(tick.seq, tick.sim_time_ns, px, vx);
+                const Motion m = MotionAt(t, accel, vmax);  // pure fn of sim_time
+                publish_state(tick.seq, tick.sim_time_ns, m.s, m.vx);
                 ++sent;
             }
             clock->TickDone(tick);  // TickComplete(seq, "ego-source") + tick_complete trace
@@ -167,15 +227,36 @@ int main(int argc, char** argv) {
                   << topic_name << "\",\"mode\":\"wall\",\"count\":" << count << ",\"rate_ms\":"
                   << rate_ms << "}" << std::endl;
         const double dt = static_cast<double>(rate_ms) / 1000.0;
-        double px = 0.0, vx = 0.0;
+        double travelled = 0.0, vx = 0.0;
+
+        // ★ PACE AGAINST AN ABSOLUTE DEADLINE, NOT sleep_for.
+        //
+        // The stamp below is i * rate_ms -- sim time advances by exactly rate_ms per
+        // sample, by construction. `sleep_for(rate_ms)` AFTER doing the work makes the WALL
+        // period rate_ms + work, so sim time falls behind the wall by the work time on
+        // every single sample. Measured at --rate-ms 20: 20.4 ms actual, a 2% slip, i.e.
+        // ~20 ms of lag per second.
+        //
+        // That is not cosmetic. The Autoware bridges anchor sim time to the wall clock once
+        // and then watch the offset (adapters/ss2/include/aw_stamp_policy.hpp); a 2% slip
+        // blows the 20 ms tolerance after one second and leaves the watchdog permanently
+        // red -- which trains everyone to ignore the one alarm that catches real clock
+        // faults. Measured against SS_v2 the genuine drift is 6.8e-07 s/s, five orders of
+        // magnitude smaller, so this fixture was the outlier, not the plant.
+        //
+        // sleep_until absorbs the work time instead of adding to it. The stamp is still a
+        // pure function of i, so determinism is untouched.
+        auto next = std::chrono::steady_clock::now();
         for (int i = 1; i <= count; ++i) {
-            vx += accel * dt;   // ramp speed
-            px += vx * dt;      // integrate position
+            vx += accel * dt;                            // ramp speed
+            if (vmax > 0.0 && vx > vmax) vx = vmax;      // ...up to the cap
+            travelled += vx * dt;                        // integrate distance along heading
             const int64_t stamp_ns =
                 static_cast<int64_t>(i) * static_cast<int64_t>(rate_ms) * 1000000LL;
-            publish_state(static_cast<uint64_t>(i), stamp_ns, px, vx);
+            publish_state(static_cast<uint64_t>(i), stamp_ns, travelled, vx);
             ++sent;
-            std::this_thread::sleep_for(std::chrono::milliseconds(rate_ms));
+            next += std::chrono::milliseconds(rate_ms);
+            std::this_thread::sleep_until(next);
         }
     }
 

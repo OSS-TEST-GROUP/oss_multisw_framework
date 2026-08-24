@@ -56,6 +56,7 @@
 #include "scenario.hpp"
 #include "tick_inbox.hpp"
 #include "wire.hpp"
+#include "sils_participant_qos.hpp"
 
 namespace sils {
 
@@ -215,6 +216,7 @@ inline int RunProbe(const ProbeConfig& cfg, std::unique_ptr<IBehavior> behavior,
     TraceEvent(run_id, "run_start", 0, "\"domain_id\":" + std::to_string(cfg.domain_id));
 
     DomainParticipantQos pqos;
+    sils::ApplySilsParticipantQos(pqos);   // see sils_participant_qos.hpp
     // Suffixed with instance_id so multiple vECU instances show up as distinct,
     // greppable participants instead of colliding under one fixed name (§9.5).
     pqos.name("sils_vecu_viss_probe:" + g_instance_id);

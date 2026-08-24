@@ -17,7 +17,6 @@ std::optional<std::string> getEnv(const std::string& key) {
 }  // namespace
 
 MWServiceManager::MWServiceManager() {}
-MWServiceManager::~MWServiceManager() {}
 
 bool MWServiceManager::Initialize(){
     LOG_DEBUG("MWServiceManager::Initialize");
@@ -38,7 +37,7 @@ void MWServiceManager::Stop(){
     LOG_DEBUG("MWServiceManager::Stop — no-op");
 }
 
-bool MWServiceManager::LoadMWConfig(std::string path){
+bool MWServiceManager::LoadMWConfig(const std::string& path) {
 
     LOG_DEBUG("LoadConfig path " << path);
 

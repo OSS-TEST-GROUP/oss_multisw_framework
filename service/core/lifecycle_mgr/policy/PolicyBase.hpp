@@ -13,8 +13,7 @@ namespace lifecycle_manager {
 class PolicyBase {
   public:
     PolicyBase(RecoveryPolicy policy, std::string name);
-    virtual ~PolicyBase();
-
+    virtual ~PolicyBase() = default;
     RecoveryPolicy GetPolicy();
     std::string GetName();
 

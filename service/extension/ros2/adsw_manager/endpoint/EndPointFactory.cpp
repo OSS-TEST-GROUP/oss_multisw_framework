@@ -55,10 +55,9 @@ bool EndPointFactory::Initialize(){
 
 void EndPointFactory::Finalize(){
     topic_lists_.clear();    
-} 
+}
 
-int32_t EndPointFactory::CreateEndPoints(std::shared_ptr<DDSTransmitter> transmitter){
-
+int32_t EndPointFactory::CreateEndPoints(const std::shared_ptr<DDSTransmitter>& transmitter) {
 
     DomainParticipant* participant = transmitter->GetDomain();
     Publisher* publisher = transmitter->GetPublisher();
@@ -222,9 +221,10 @@ int32_t EndPointFactory::CreateEndPoints(std::shared_ptr<DDSTransmitter> transmi
         }
     }
 
-    return topic_lists_.size();
+    // 토픽 표는 MessageType enum 크기로 상한이 잡힌다(수십 개). 축소는 안전하나
+    // 암묵적으로 두면 bugprone-narrowing-conversions 가 잡으므로 의도를 명시한다.
+    return static_cast<int32_t>(topic_lists_.size());
 }
-
 
 const char* EndPointFactory::GetTopic(MessageType mtype){
 

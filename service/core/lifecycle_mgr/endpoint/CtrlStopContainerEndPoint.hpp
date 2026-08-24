@@ -20,10 +20,9 @@ class CtrlStopContainerEndPoint : public DDSMessageEndPoint {
 
     CtrlStopContainerEndPoint(MessageType msgtype, std::string topic,
                                Callback cb = nullptr);
-    virtual ~CtrlStopContainerEndPoint();
-
-    virtual void OnDataAvailable() override;
-    virtual void OnDataPublished(bool ret) override;
+    ~CtrlStopContainerEndPoint() override= default;
+    void OnDataAvailable() override;
+    void OnDataPublished(bool ret) override;
 
   private:
     CtrlStopContainerRequest req_;

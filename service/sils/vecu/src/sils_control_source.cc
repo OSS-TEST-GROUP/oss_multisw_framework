@@ -30,6 +30,7 @@
 #include <fastdds/dds/topic/TypeSupport.hpp>
 
 #include "ControlTargetPubSubTypes.hpp"
+#include "sils_participant_qos.hpp"
 #include "clock_source.hpp"  // sils::LockstepClockSource (reused; TickControl via sils_vecu)
 
 using namespace eprosima::fastdds::dds;
@@ -73,6 +74,7 @@ int main(int argc, char** argv) {
     if (!denv.empty()) { try { domain_id = std::stoi(denv); } catch (...) {} }
 
     DomainParticipantQos pqos;
+    sils::ApplySilsParticipantQos(pqos);   // see sils_participant_qos.hpp
     pqos.name("sils_control_source:" + run_id);
     DomainParticipant* participant = DomainParticipantFactory::get_instance()->create_participant(
         domain_id, pqos, nullptr, StatusMask::none());

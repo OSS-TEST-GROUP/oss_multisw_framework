@@ -15,8 +15,7 @@ namespace adsw_manager {
 class Service {
   public:
     Service(const std::string& name, ServiceType service_type, RecoveryPolicy recovery_policy, bool is_enable);
-    virtual ~Service();
-
+    virtual ~Service() = default;
     std::string GetName();
 
     ServiceType GetServiceType();
@@ -30,10 +29,10 @@ class Service {
     void SetServiceState(ServiceState state);
 
     void SetLaunchFile(const std::string& launchfile);
-    const std::string GetLaunchFile(){return launch_file_;}
+    std::string GetLaunchFile() { return launch_file_; }
 
     void SetPackage(const std::string& package);
-    const std::string GetPackage();
+    std::string GetPackage();
     void SetRunningNodes(int32_t count);
     int32_t GetRunningNodes();
     int32_t GetMaxNodes();

@@ -32,7 +32,7 @@ EndPointFactory::~EndPointFactory() {
 bool EndPointFactory::Initialize() {
     return Mock_EndPointFactory->Initialize();
 }
-int32_t EndPointFactory::CreateEndPoints(std::shared_ptr<DDSTransmitter> transmitter) {
+int32_t EndPointFactory::CreateEndPoints(const std::shared_ptr<DDSTransmitter>& transmitter) {
     return Mock_EndPointFactory->CreateEndPoints(transmitter);
 }
 const char* EndPointFactory::GetTopic(MessageType mtype) {

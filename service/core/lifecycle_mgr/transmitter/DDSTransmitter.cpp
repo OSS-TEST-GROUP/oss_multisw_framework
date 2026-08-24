@@ -13,8 +13,10 @@ namespace {
 // ROS2/rmw convention), so MMF reads its own env MMF_DDS_DOMAIN_ID (default 0).
 // Every MMF participant on a board (lifecycle_mgr / adsw_manager / ota /
 // diagnostics / dds_bridge) must use the SAME value, else core↔adsw DDS breaks.
-static int MmfDdsDomainId() {
-    if (const char* e = std::getenv("MMF_DDS_DOMAIN_ID")) return std::atoi(e);
+int MmfDdsDomainId() {
+    if (const char* e = std::getenv("MMF_DDS_DOMAIN_ID")) {
+        return std::atoi(e);
+    }
     return 0;
 }
 } // namespace
@@ -24,7 +26,6 @@ DDSTransmitter::DDSTransmitter()
     , publisher_(nullptr)
     , subscriber_(nullptr)
     , message_queue_(nullptr) {}
-DDSTransmitter::~DDSTransmitter() {}
 
 
 bool DDSTransmitter::Initialize(){
@@ -86,8 +87,7 @@ void DDSTransmitter::Finalize(){
     }
 }
 
-
-bool DDSTransmitter::AddMessageEndpoint(std::shared_ptr<DDSMessageEndPoint> endpoint){
+bool DDSTransmitter::AddMessageEndpoint(const std::shared_ptr<DDSMessageEndPoint>& endpoint) {
 
     if (endpoint){
 
@@ -95,23 +95,20 @@ bool DDSTransmitter::AddMessageEndpoint(std::shared_ptr<DDSMessageEndPoint> endp
     }
 
     return false;
-
 }
 
-std::shared_ptr<DDSMessageEndPoint> DDSTransmitter::GetMessageEndPoint(std::string topic){
+std::shared_ptr<DDSMessageEndPoint> DDSTransmitter::GetMessageEndPoint(const std::string& topic) {
 
     auto search = endpoints_.find(topic);
 
     if (search != endpoints_.end()){
         LOG_DEBUG("GetEndpoint for " << topic << ", found " << search->first);
         return search->second;
-    } else{ 
-        LOG_ERROR("GetEndpoint Not found " << topic);
     }
-    return nullptr;
-    
-}
+    LOG_ERROR("GetEndpoint Not found " << topic);
 
+    return nullptr;
+}
 
 DomainParticipant* DDSTransmitter::GetDomain(){
     return participant_;

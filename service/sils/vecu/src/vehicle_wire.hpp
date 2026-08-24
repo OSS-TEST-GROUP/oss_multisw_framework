@@ -108,6 +108,30 @@ public:
         return out;
     }
 
+    // READ path (`in` channel, ARBITRATION): take VehicleControl samples -- another vECU's
+    // OUTPUT read as this one's input. Same type as our own out-channel, opposite direction.
+    //
+    // Why this exists: with several vECUs on one bus, judgement stays per-ECU (each writes
+    // its own channel so it can be verified alone) but the actuator is single, so somebody
+    // has to integrate. The integrator (VCU) reads the others here.
+    // Rules: docs/sils/sils-vecu-arbitration.md.
+    std::vector<VehicleControlSample> TakeControl(eprosima::fastdds::dds::DataReader* reader) {
+        std::vector<VehicleControlSample> out;
+        VehicleControl s;
+        eprosima::fastdds::dds::SampleInfo info;
+        while (reader->take_next_sample(&s, &info) == eprosima::fastdds::dds::RETCODE_OK) {
+            if (!info.valid_data) continue;
+            VehicleControlSample v;
+            v.seq = s.seq();
+            v.stamp_ns = s.stamp_ns();
+            v.steering_angle = s.steering_angle();
+            v.acceleration = s.acceleration();
+            v.gear = s.gear();
+            out.push_back(v);
+        }
+        return out;
+    }
+
     // WRITE path (`out` channel): encode a VehicleControlSample and write it. seq/stamp are
     // the caller's (tick) values; run_id is stamped from construction.
     void PublishControl(eprosima::fastdds::dds::DataWriter* writer,

@@ -23,8 +23,7 @@ namespace adsw_manager {
 class DDSMessageEndpoint : public DataWriterListener, public DataReaderListener {
   public:
     DDSMessageEndpoint();
-    virtual ~DDSMessageEndpoint();
-
+    ~DDSMessageEndpoint() override= default;
     virtual std::string GetTopic() = 0;
     virtual std::string GetTypeName() = 0;
     virtual std::shared_ptr<TypeSupport> GetTypeSupport() = 0;

@@ -21,8 +21,7 @@ class DDSTransmitter;
 class MessageQueue {
   public:
     MessageQueue(DDSTransmitter* transmitter);
-    virtual ~MessageQueue();
-
+    virtual ~MessageQueue() = default;
     void SendMessage(MsgType& message);
 
     bool Start() ;

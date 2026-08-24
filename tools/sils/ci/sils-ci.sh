@@ -32,6 +32,12 @@
 #   --parity-contract C    T = real-target reference trace, C = parity contract YAML
 #   --capture-golden-dir D baseline conformant traces into D (capture_golden self-refuses
 #                          a non-conformant/non-deterministic run)
+#   --plant ID             plant/simulator this run used (morai | scenario_simulator_v2 |
+#                          fmu | fixture ...). Stamped into captured goldens and checked
+#                          against the golden's on compare -- a cross-plant compare is
+#                          refused instead of being reported as a regression. REQUIRED
+#                          once more than one plant is in play (see
+#                          docs/sils/sils-simulator-loops.md).
 #
 # Artifacts land under --out-dir: resolved-run.yaml, saved-service-list.yaml,
 # traces/, verdict.json, junit.xml, compare/, parity/.
@@ -65,7 +71,7 @@ usage() {
 # --- args --------------------------------------------------------------------
 topology="" out_dir="" contracts="" qos="" image=""
 resolved_in="" traces_dir_in="" golden_dir="" rules=""
-capture_golden_dir="" parity_target="" parity_contract=""
+capture_golden_dir="" parity_target="" parity_contract="" plant=""
 backend="local" bin_dir="" verify_bin="" run_id="" suite_name="sils-conformance"
 dry_run=false keep_going=false no_lint=false lint_strict=false
 
@@ -81,6 +87,7 @@ while [[ $# -gt 0 ]]; do
         --golden-dir)  golden_dir="$2"; shift 2 ;;
         --rules)       rules="$2"; shift 2 ;;
         --capture-golden-dir) capture_golden_dir="$2"; shift 2 ;;
+        --plant)       plant="$2"; shift 2 ;;
         --parity-target)      parity_target="$2"; shift 2 ;;
         --parity-contract)    parity_contract="$2"; shift 2 ;;
         --backend)     backend="$2"; shift 2 ;;
@@ -206,6 +213,7 @@ if [[ -n "${golden_dir}" ]]; then
     mkdir -p "${out_dir}/compare"
     cmp_args=()
     [[ -n "${rules}" ]] && cmp_args+=(--rules "${rules}")
+    [[ -n "${plant}" ]] && cmp_args+=(--plant "${plant}")
     for tf in "${trace_files[@]}"; do
         base="$(basename "${tf}")"
         golden="${golden_dir}/${base}"
@@ -214,10 +222,17 @@ if [[ -n "${golden_dir}" ]]; then
             continue
         fi
         report="${out_dir}/compare/${base%.jsonl}.compare.json"
-        if ! python3 "${COMPARE_PY}" --golden "${golden}" --candidate "${tf}" \
-                ${cmp_args[@]+"${cmp_args[@]}"} --quiet > "${report}"; then
+        python3 "${COMPARE_PY}" --golden "${golden}" --candidate "${tf}" \
+            ${cmp_args[@]+"${cmp_args[@]}"} --quiet > "${report}"
+        cmp_one=$?
+        # 0 = MATCH, 1 = REGRESSION, 2 = policy reject (bad input_mode / plant mismatch).
+        # Both non-zero cases fail the stage, but they mean different things -- say which.
+        if [[ ${cmp_one} -eq 1 ]]; then
             compare_rc=1
             log "compare: REGRESSION vs golden for ${base} (see ${report})"
+        elif [[ ${cmp_one} -ne 0 ]]; then
+            compare_rc=1
+            log "compare: REJECTED for ${base} -- policy, not a regression (wrong plant or non-deterministic input_mode; see ${report})"
         fi
     done
 fi
@@ -253,6 +268,8 @@ if [[ -n "${capture_golden_dir}" ]]; then
     mkdir -p "${capture_golden_dir}"
     cap_args=()
     [[ -n "${rules}" ]] && cap_args+=(--rules "${rules}")
+    [[ -n "${plant}" ]] && cap_args+=(--plant "${plant}")
+    [[ -z "${plant}" ]] && log "capture-golden: warn -- no --plant declared; goldens will not be plant-isolated"
     for tf in "${trace_files[@]}"; do
         base="$(basename "${tf}")"
         if python3 "${CAPTURE_PY}" --trace "${tf}" --out "${capture_golden_dir}/${base}" \

@@ -1,15 +1,15 @@
 #include "NotifyServiceStateEndPoint.hpp"
 
+#include <utility>
+
 #include "lifecycle/NotifyServiceState.hpp"
 #include "logger/Log.hpp"
 
 namespace general {
 namespace adsw_manager {
-    
-NotifyServiceStateEndPoint::NotifyServiceStateEndPoint(MessageType msgtype, std::string topic) 
-    : DDSMessageEndpoint() {
-        
-    topic_ = topic;
+
+NotifyServiceStateEndPoint::NotifyServiceStateEndPoint(MessageType msgtype, std::string topic) : topic_(std::move(topic)) {
+
     if (msgtype == MessageType::NOTIFY_SERVICE_STATE){
         type_support_ = std::make_shared<TypeSupport>(new NotifyServiceStatePubSubType());
     }

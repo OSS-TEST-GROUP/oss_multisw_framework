@@ -19,11 +19,11 @@ class NotifyServiceStateEndPoint : public DDSMessageEndPoint {
     using Callback = std::function<void(NotifyServiceState*)>;
 
     NotifyServiceStateEndPoint(MessageType msgtype, std::string topic, Callback cb = nullptr);
-    virtual ~NotifyServiceStateEndPoint();
+    ~NotifyServiceStateEndPoint() override;
 
-    virtual void  OnDataAvailable() override;
+    void OnDataAvailable() override;
 
-    virtual void OnDataPublished(bool ret) override;
+    void OnDataPublished(bool ret) override;
 
   private:
     NotifyServiceState data_;

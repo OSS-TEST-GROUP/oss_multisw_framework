@@ -24,6 +24,15 @@ void ContainerHealthMonitor::NotifyInitialContainerState() {}
 // virtual — defined so the vtable resolves even though Start() is a no-op
 void ContainerHealthMonitor::NotifyContainerState(const std::string&, bool, int32_t) {}
 void ContainerHealthMonitor::PublishContainerStateHeartbeat(const std::string&, bool, int32_t) {}
+// 프로세스 조회 seam. virtual 이라 vtable 이 정의를 요구한다.
+// 여기서는 docker 를 부르면 안 되므로 "살아있음/모름" 이라는 안전한 기본값을 준다
+// (실제 구현의 조회 실패 시 반환값과 같다).
+bool ContainerHealthMonitor::IsServiceAliveInContainer(const std::string&, const std::string&) {
+    return true;
+}
+uint64_t ContainerHealthMonitor::LookupServicePidInContainer(const std::string&, const std::string&) {
+    return 0;
+}
 
 } // namespace adsw_manager
 } // namespace ros2

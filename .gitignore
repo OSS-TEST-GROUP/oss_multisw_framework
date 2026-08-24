@@ -42,3 +42,45 @@ output.unittest-run.*
 sils-runs/
 sils-*.state
 sils-*.members
+
+# 개발용 self-signed 인증서 — scripts/gen-dev-cert.sh 로 각 환경에서 생성한다 (사설키 커밋 금지)
+service/core/vehicle_info_mgr/config/security/key.pem
+service/core/vehicle_info_mgr/config/security/cert.pem
+
+# macOS Finder metadata
+.DS_Store
+**/.DS_Store
+
+# SiLS 문서 작업 중 남는 pptx 백업 사본 (정본은 sils-implementation-brief.pptx 하나).
+# 원본이 아니므로 저장소에 넣지 않는다 — 필요하면 docs/sils/ 밖으로 옮길 것.
+docs/sils/*.backup*.pptx
+
+# SiLS 루프 B 브링업 (docs/sils/sils-ss2-bringup.md)
+# 상류 scenario_simulator_v2 클론 — build-ss2.sh 가 만든다. 재현성은 소스가 아니라
+# docker/sils/ss2-upstream.pin 의 commit SHA 로 보장하므로 소스는 커밋하지 않는다.
+.ss2-src/
+# compose 가 만드는 실행 산출물 (probe 리포트, 시나리오 출력)
+runs/
+# 시나리오 자산은 각자 반출해 온다 (.xosc 는 Web.Auto/상류 샘플에서). README 만 추적.
+scenarios/ss2/*
+!scenarios/ss2/README.md
+
+# SS_v2 어댑터 dev shell 이 만드는 임시 init 스크립트 (docker/sils/dev-ss2-adapter.sh)
+.ss2-devshell-init.sh
+
+# ── 빌드 산출물 / 실행 잔여물 (2026-08-12) ────────────────────────────────
+# 한 번 커밋에 통째로 쓸려 들어간 적이 있다(642 files, 98k lines). 전부
+# build.sh 나 실행이 만들어 내는 것이라 저장소에 있을 이유가 없다.
+#
+# 스테이징한 실행물 스냅샷. 정본은 output/x86_64/.../bin 이고, bin/ 은
+# 손으로 복사해 둔 사본이라 조용히 낡는다.
+/bin/
+/bincp
+# 커버리지 리포트 (build.sh --coverage). 588개 HTML + zip.
+/coverage/
+# FMI 레퍼런스 FMU 와 그 아카이브 — 상류 릴리스에서 내려받는 것이다.
+/ref-fmus/
+/Reference-FMUs.zip
+# 실행 로그를 손으로 리다이렉트한 것들 (*.out)
+*.out
+/sils_test.txt

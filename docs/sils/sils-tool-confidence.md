@@ -75,17 +75,26 @@ conformance 판정이 신뢰 가능한 1차 근거는 **판정 대상 실행이 
 
 ## 4. Fidelity ladder — 각 레벨이 보증하는 것 / 하지 않는 것
 
-`fidelity_evidenced`는 트레이스가 **증거로 보인 최고 레벨**이다(`FIDELITY_RANK = {none:0, L0:1, L1:2, L2:3, L3:4, L4:5}`). 레벨은 **누적적 보증**이며, 각 레벨의 정확한 의미는:
+`fidelity_evidenced`는 트레이스가 **증거로 보인 최고 레벨**이다(`FIDELITY_RANK = {none:0, L0:1, L1:2, L2:3, L3:4, L4:5}`).
+
+> **누적 사다리가 아니다 (중요).** `evaluate.py`가 한 트레이스에서 자동 부여하는 레벨은
+> **L0·L1·L3**뿐이며 `_bump("L2")`는 존재하지 않는다. rank가 N이라는 것은 "N 이하 모든 레벨이
+> 증명됨"이 아니라 **"어떤 feature가 N을 증거했음"**을 뜻한다. 예: in-process plant 런은 L1
+> 증거(reqresp) 없이도 L0 → **L3**로 직행한다. 또한 Descriptor의 선언 `fidelity`는
+> `gate.py`가 `fidelity_evidenced`와 **대조하지 않는다** — 선언은 의도 표기다.
+
+각 레벨의 정확한 의미는:
 
 | 레벨 | 보증한다 | 보증하지 **않는다** |
 |---|---|---|
 | **L0** | 엔드포인트 매칭 + 샘플 수신(VISS) 또는 버스 working loop(state in·control out). "연결되고 well-formed 데이터가 흐른다" | 프로토콜 정합·결정론·폐루프 |
 | **L1** | 요청/응답 상관·QoS 정합(RELIABLE)·에러 처리 = 프로토콜 충실(reqresp conformant) | 폐루프·재현성 |
-| **L2** | (제어 입력 open-loop 구동; live feedback 없음) | 폐루프 피드백 |
+| **L2** | *(자동 판정 없음)* §11 정의는 Behavioral Fidelity(상태기계·timing·failure semantic)이고 대표 검증은 golden scenario 비교다. 이는 `gate.py` 밖 `compare_golden.py`가 `MATCH`/`REGRESSION`으로만 낸다 | fidelity 등급으로 환산되지 않음 — L2는 `fidelity_evidenced`에 **절대 나타나지 않는다** |
 | **L3** | **폐루프 + 결정론.** in-process: live IPlant + feedback 연속성 + 결정론 궤적. 버스결합: 폐루프(state 소비) + **lockstep 결정론**(`clock.deterministic` 필수) | **실 타깃과의 일치**(그건 L4). SiLS는 여기까지가 상한 |
 | **L4** | **실 ECU와의 parity** — 동일 자극에 실타깃 레퍼런스와 관찰 인터페이스가 계약 tolerance 내 일치 **AND** 환경 attestation(ARM64 + 실 gateway/protocol) 충족 | (단일 트레이스로 증거 불가 — parity.py가 cross-trace로 판정) |
 
 **정직한 경계**: 
+- **자동 판정 레벨 집합은 {L0, L1, L3}**이다. L2는 별도 golden 스테이지, L4는 `parity.py` 소관이며 둘 다 `fidelity_evidenced`가 발급하지 않는다.
 - **SiLS 도구가 자체적으로 도달 가능한 최고는 L3**이다. L3는 "폐루프가 결정론적으로 돈다"이지 "실차와 같다"가 아니다.
 - **L4는 이 kit 단독으로 못 준다** — `parity.py`가 실타깃 레퍼런스 트레이스를 **권위**로 두고 대조하며, 값/타이밍 parity + attestation **둘 다** 필요하다. 값이 우연히 맞아도 x86·stub gateway면 L4가 아니라 최대 L3다.
 

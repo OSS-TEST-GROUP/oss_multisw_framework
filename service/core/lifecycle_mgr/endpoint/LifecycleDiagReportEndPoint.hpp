@@ -17,11 +17,11 @@ using namespace lifecyclemgr;
 class LifecycleDiagReportEndPoint : public DDSMessageEndPoint {
   public:
     LifecycleDiagReportEndPoint(MessageType msgtype, std::string topic);
-    virtual ~LifecycleDiagReportEndPoint();
+    ~LifecycleDiagReportEndPoint() override;
 
-    virtual void  OnDataAvailable() override;
+    void OnDataAvailable() override;
 
-    virtual void OnDataPublished(bool ret) override;
+    void OnDataPublished(bool ret) override;
 
   private:
     LifecycleDiagReport data_;

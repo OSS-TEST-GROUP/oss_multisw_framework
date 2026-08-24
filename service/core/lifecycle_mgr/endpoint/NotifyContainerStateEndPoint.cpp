@@ -1,5 +1,7 @@
 #include "NotifyContainerStateEndPoint.hpp"
 
+#include <utility>
+
 #include "lifecycle/NotifyContainerState.hpp"
 #include "logger/Log.hpp"
 
@@ -7,7 +9,7 @@ namespace lifecycle_manager {
 
 NotifyContainerStateEndPoint::NotifyContainerStateEndPoint(
     MessageType msgtype, std::string topic, Callback cb)
-    : DDSMessageEndPoint(topic), on_data_cb_(std::move(cb)) {
+    : DDSMessageEndPoint(std::move(topic)), on_data_cb_(std::move(cb)) {
     // F008: same NotifyContainerState payload reused both as inbound
     // adsw→lifecycle subscription (NOTIFY_CONTAINER_STATE) and outbound
     // aggregated lifecycle→monitor publish (CONTAINER_STATE_REPORT).
@@ -18,12 +20,11 @@ NotifyContainerStateEndPoint::NotifyContainerStateEndPoint(
     }
 }
 
-NotifyContainerStateEndPoint::~NotifyContainerStateEndPoint() {}
 
 void NotifyContainerStateEndPoint::OnDataAvailable() {
     LOG_DEBUG("Message Delivery for " << GetTopic());
 
-    if (Read<NotifyContainerState>(data_) == true) {
+    if (Read<NotifyContainerState>(data_)) {
         NotifyContainerState* msg =
             reinterpret_cast<NotifyContainerState*>(&data_);
         if (on_data_cb_) {

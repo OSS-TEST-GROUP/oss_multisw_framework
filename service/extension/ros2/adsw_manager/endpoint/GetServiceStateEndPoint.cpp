@@ -1,5 +1,7 @@
 #include "GetServiceStateEndPoint.hpp"
 
+#include <utility>
+
 #include "lifecycle/GetServiceStateRequest.hpp"
 #include "ADSWManager.hpp"
 #include "logger/Log.hpp"
@@ -8,9 +10,8 @@
 namespace ros2 {
 namespace adsw_manager {
 
-GetServiceStateEndPoint::GetServiceStateEndPoint(MessageType msgtype, std::string topic) 
-    : DDSMessageEndpoint() {
-    topic_ = topic;
+GetServiceStateEndPoint::GetServiceStateEndPoint(MessageType msgtype, std::string topic) : topic_(std::move(topic)) {
+
     if (msgtype == MessageType::GET_SERVICE_STATE_REQUEST){
         type_support_ = std::make_shared<TypeSupport>(new GetServiceStateRequestPubSubType());
     }else if (msgtype == MessageType::GET_SERVICE_STATE_RESPONSE){
@@ -39,7 +40,7 @@ void GetServiceStateEndPoint::OnDataAvailable(){
     
     LOG_DEBUG("Message Delivery for " << GetTopic() );
 
-    if (Read<GetServiceStateRequest>(req_) == true){
+    if (Read<GetServiceStateRequest>(req_)) {
 
         GetServiceStateRequest* message = reinterpret_cast<GetServiceStateRequest*>(&req_);
 

@@ -91,14 +91,22 @@ class TypeConvert {
             case lifecyclemgr::MwType::ROS2 : return MwType::ROS2;
             case lifecyclemgr::MwType::AGL : return MwType::AGL;
             case lifecyclemgr::MwType::AUTOSAR : return MwType::AUTOSAR;
+            case lifecyclemgr::MwType::MW_NATIVE : return MwType::MW_NATIVE;
+            case lifecyclemgr::MwType::MW_UNKNOWN : return MwType::MW_UNKNOWN;
         }
+        // ⚠ 이 return 이 없었다. switch 를 벗어나면 값 없이 함수가 끝나 UB 다 --
+        //   IDL 이 열거자를 늘리는 순간 기존 빌드가 그리로 빠진다.
+        return MwType::MW_UNKNOWN;
     }
     static lifecyclemgr::MwType ToMwType(MwType os) {
         switch (os) {
             case MwType::ROS2 : return lifecyclemgr::MwType::ROS2;
             case MwType::AGL : return lifecyclemgr::MwType::AGL;
             case MwType::AUTOSAR : return lifecyclemgr::MwType::AUTOSAR;
+            case MwType::MW_NATIVE : return lifecyclemgr::MwType::MW_NATIVE;
+            case MwType::MW_UNKNOWN : return lifecyclemgr::MwType::MW_UNKNOWN;
         }
+        return lifecyclemgr::MwType::MW_UNKNOWN;
     }
 
     // F013: Container enum bridge between adsw_manager local enum and the IDL.

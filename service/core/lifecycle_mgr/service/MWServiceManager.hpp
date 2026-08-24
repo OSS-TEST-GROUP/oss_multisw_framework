@@ -24,8 +24,7 @@ namespace lifecycle_manager {
 class MWServiceManager {
   public:
     MWServiceManager();
-    virtual ~MWServiceManager();
-
+    virtual ~MWServiceManager() = default;
     bool Initialize();
 
     // Start/Stop are intentional no-ops — kept so the call sites in
@@ -33,7 +32,7 @@ class MWServiceManager {
     bool Start();
     void Stop();
 
-    bool LoadMWConfig(std::string path);
+    bool LoadMWConfig(const std::string& path);
 
     bool IsK3sMode() const;
 

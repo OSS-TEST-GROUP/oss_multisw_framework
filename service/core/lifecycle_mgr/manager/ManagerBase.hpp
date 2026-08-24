@@ -13,8 +13,7 @@ class Service;
 class ManagerBase {
   public:
     ManagerBase(LifecycleManager& lifecycle);
-    virtual ~ManagerBase();
-
+    virtual ~ManagerBase() = default;
     std::shared_ptr<DDSTransmitter> GetTransmitter();
     std::shared_ptr<Service> GetService(std::string name);
     std::shared_ptr<ServiceRegistry> GetRegistry();

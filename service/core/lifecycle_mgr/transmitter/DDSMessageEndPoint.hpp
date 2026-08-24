@@ -29,7 +29,7 @@ namespace lifecycle_manager {
 class DDSMessageEndPoint : public MessageEndPoint, public DataWriterListener , public DataReaderListener{
   public:
     DDSMessageEndPoint(std::string topic);
-    virtual ~DDSMessageEndPoint();
+    ~DDSMessageEndPoint() override;
 
     bool Initialize(DomainParticipant* participant, Publisher* publisher, Subscriber* subscriber);
     void Finalize();
@@ -49,7 +49,7 @@ class DDSMessageEndPoint : public MessageEndPoint, public DataWriterListener , p
             DataReader* reader,
             const SubscriptionMatchedStatus& info) override;
 
-    bool Write(const void* const data);
+    bool Write(const void* data);
 
     template<typename T>
     bool Read(T &value) {
@@ -110,7 +110,9 @@ class DDSMessageEndPoint : public MessageEndPoint, public DataWriterListener , p
     Publisher* publisher_;
     Subscriber* subscriber_;
 
-    Topic* dds_topic_;
+    // 정리 경로가 `if (dds_topic_ && participant_) delete_topic(dds_topic_)` 다.
+    // 미초기화면 Initialize() 전 파괴 시 쓰레기 포인터를 delete_topic 에 넘긴다.
+    Topic* dds_topic_ = nullptr;
 
     DataWriter* writer_;
     DataReader* reader_;
@@ -125,7 +127,7 @@ class DDSMessageEndPoint : public MessageEndPoint, public DataWriterListener , p
     std::condition_variable cv_;
     std::atomic<bool> stop_;
 
-    int16_t matched_;
+    int16_t matched_ = 0;
 
 };
 

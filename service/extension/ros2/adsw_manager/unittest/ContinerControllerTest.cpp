@@ -5,6 +5,7 @@
 #include "control/ContainerController.hpp"
 #include "service/Container.hpp"
 #include "mock/MockLogger.hpp"
+#include "mock/FakeCmdContainerController.hpp"
 
 using ::testing::Return;
 using ::testing::_;
@@ -350,6 +351,492 @@ TEST_F(ContainerControllerTest, ContainerSupported_MultipleCalls) {
     EXPECT_FALSE(controller->ContainerSupported());
 }
 
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 외부 프로세스 실행 경로 (start/stop/restart, status, exit-code)
+//
+// 이 경로들은 전부 RunCommand/CaptureCommand 를 지나 docker · kubectl 을 부른다.
+// 그래서 실제 런타임이 있어야만 도는 ContainerDockerTest(8) /
+// ContainerDockerComposeTest(4) 에만 의존했고, 유닛 레인에서는 한 줄도
+// 커버되지 않았다 (262줄 중 184줄 미커버).
+//
+// ContainerController 의 두 seam 을 서브클래싱해 명령을 가로채면 docker 없이
+// 같은 로직을 전부 돌릴 수 있다. 검증 대상은 "무엇을 실행했는가"(명령 문자열)와
+// "반환값을 어떻게 해석하는가" 두 가지다.
+// ═══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+using ros2::adsw_manager::Container;
+using ros2::adsw_manager::ContainerType;
+using ros2::adsw_manager::testing_support::FakeCmdContainerController;
+
+std::shared_ptr<Container> MakeContainer(const std::string& name, ContainerType type) {
+    return std::make_shared<Container>(name, name + "-image", "/tmp/" + name + ".yaml",
+                                       name + "-ns", type);
+}
+
+class ContainerControllerCmdTest : public ::testing::Test {
+  protected:
+    void SetUp() override {
+        Mock_Logger = new MockLogger();
+        ON_CALL(*Mock_Logger, Get()).WillByDefault(Return(Mock_Logger));
+        ctl = new FakeCmdContainerController();
+    }
+    void TearDown() override {
+        delete ctl;
+        delete Mock_Logger;
+        Mock_Logger = nullptr;
+    }
+
+    std::shared_ptr<Container> Add(const std::string& name, ContainerType type) {
+        auto c = MakeContainer(name, type);
+        EXPECT_TRUE(ctl->AddContainer(c));
+        return c;
+    }
+
+    FakeCmdContainerController* ctl;
+};
+
+} // namespace
+
+// ── 컨테이너 등록 ───────────────────────────────────────────────────────────
+
+TEST_F(ContainerControllerCmdTest, AddContainer_NullRejected) {
+    EXPECT_FALSE(ctl->AddContainer(nullptr));
+    EXPECT_TRUE(ctl->GetAllContainers().empty());
+}
+
+TEST_F(ContainerControllerCmdTest, AddContainer_DuplicateNameRejected) {
+    Add("dup", ContainerType::DOCKER);
+    EXPECT_FALSE(ctl->AddContainer(MakeContainer("dup", ContainerType::DOCKER)));
+    EXPECT_EQ(ctl->GetAllContainers().size(), 1u);
+}
+
+TEST_F(ContainerControllerCmdTest, ContainerSupported_TrueAfterAdd) {
+    EXPECT_FALSE(ctl->ContainerSupported());
+    Add("c1", ContainerType::DOCKER);
+    EXPECT_TRUE(ctl->ContainerSupported());
+}
+
+TEST_F(ContainerControllerCmdTest, GetContainer_NotFoundReturnsNull) {
+    EXPECT_EQ(ctl->GetContainer("nope"), nullptr);
+}
+
+// ── K3S ─────────────────────────────────────────────────────────────────────
+
+TEST_F(ContainerControllerCmdTest, StartK3s_Success) {
+    Add("k1", ContainerType::K3S);
+    EXPECT_TRUE(ctl->StartContainer("k1"));
+    ASSERT_EQ(ctl->run_cmds.size(), 1u);
+    EXPECT_EQ(ctl->run_cmds[0], "kubectl apply -f /tmp/k1.yaml");
+}
+
+TEST_F(ContainerControllerCmdTest, StartK3s_Failure) {
+    Add("k1", ContainerType::K3S);
+    ctl->default_rc = 1;
+    EXPECT_FALSE(ctl->StartContainer("k1"));
+}
+
+TEST_F(ContainerControllerCmdTest, StopK3s_Success) {
+    Add("k1", ContainerType::K3S);
+    EXPECT_TRUE(ctl->StopContainer("k1"));
+    ASSERT_EQ(ctl->run_cmds.size(), 1u);
+    EXPECT_EQ(ctl->run_cmds[0], "kubectl delete pod k1 -n k1-ns --ignore-not-found");
+}
+
+TEST_F(ContainerControllerCmdTest, StopK3s_Failure) {
+    Add("k1", ContainerType::K3S);
+    ctl->default_rc = 1;
+    EXPECT_FALSE(ctl->StopContainer("k1"));
+}
+
+TEST_F(ContainerControllerCmdTest, RestartK3s_DeletesThenApplies) {
+    Add("k1", ContainerType::K3S);
+    EXPECT_TRUE(ctl->RestartContainer("k1"));
+    ASSERT_EQ(ctl->run_cmds.size(), 2u);
+    EXPECT_THAT(ctl->run_cmds[0], ::testing::HasSubstr("kubectl delete pod"));
+    EXPECT_THAT(ctl->run_cmds[1], ::testing::HasSubstr("kubectl apply -f"));
+}
+
+TEST_F(ContainerControllerCmdTest, RestartK3s_StopFailsSkipsApply) {
+    Add("k1", ContainerType::K3S);
+    ctl->PushRc({1});
+    EXPECT_FALSE(ctl->RestartContainer("k1"));
+    EXPECT_EQ(ctl->run_cmds.size(), 1u);
+}
+
+// ── DOCKER ──────────────────────────────────────────────────────────────────
+
+TEST_F(ContainerControllerCmdTest, StartDocker_ExistingContainerStarts) {
+    Add("d1", ContainerType::DOCKER);
+    EXPECT_TRUE(ctl->StartContainer("d1"));
+    ASSERT_EQ(ctl->run_cmds.size(), 1u);
+    EXPECT_EQ(ctl->run_cmds[0], "docker start d1 2>/dev/null");
+}
+
+TEST_F(ContainerControllerCmdTest, StartDocker_FallsBackToRun) {
+    Add("d1", ContainerType::DOCKER);
+    ctl->PushRc({1, 0});   // docker start 실패 → docker run 성공
+    EXPECT_TRUE(ctl->StartContainer("d1"));
+    ASSERT_EQ(ctl->run_cmds.size(), 2u);
+    EXPECT_EQ(ctl->run_cmds[1], "docker run -d --init --name d1 d1-image");
+}
+
+TEST_F(ContainerControllerCmdTest, StartDocker_RunIncludesExtraAndCommandArgs) {
+    auto c = MakeContainer("d1", ContainerType::DOCKER);
+    c->SetExtraArgs({"--network", "host", "-e", "FOO=1"});
+    c->SetCommandArgs({"ros2", "launch", "pkg", "app.launch.py"});
+    ASSERT_TRUE(ctl->AddContainer(c));
+
+    ctl->PushRc({1, 0});
+    EXPECT_TRUE(ctl->StartContainer("d1"));
+    ASSERT_EQ(ctl->run_cmds.size(), 2u);
+    // extra_args 는 이미지 앞, command_args 는 이미지 뒤에 와야 한다.
+    EXPECT_EQ(ctl->run_cmds[1],
+              "docker run -d --init --name d1 --network host -e FOO=1 "
+              "d1-image ros2 launch pkg app.launch.py");
+}
+
+TEST_F(ContainerControllerCmdTest, StartDocker_BothStartAndRunFail) {
+    Add("d1", ContainerType::DOCKER);
+    ctl->default_rc = 1;
+    EXPECT_FALSE(ctl->StartContainer("d1"));
+    EXPECT_EQ(ctl->run_cmds.size(), 2u);
+}
+
+TEST_F(ContainerControllerCmdTest, StopDocker_StopsAndRemoves) {
+    Add("d1", ContainerType::DOCKER);
+    EXPECT_TRUE(ctl->StopContainer("d1"));
+    ASSERT_EQ(ctl->run_cmds.size(), 1u);
+    EXPECT_EQ(ctl->run_cmds[0], "docker stop d1 && docker rm d1");
+}
+
+TEST_F(ContainerControllerCmdTest, StopDocker_Failure) {
+    Add("d1", ContainerType::DOCKER);
+    ctl->default_rc = 1;
+    EXPECT_FALSE(ctl->StopContainer("d1"));
+}
+
+TEST_F(ContainerControllerCmdTest, RestartDocker_Success) {
+    Add("d1", ContainerType::DOCKER);
+    EXPECT_TRUE(ctl->RestartContainer("d1"));
+    ASSERT_EQ(ctl->run_cmds.size(), 1u);
+    EXPECT_EQ(ctl->run_cmds[0], "docker restart d1");
+}
+
+TEST_F(ContainerControllerCmdTest, RestartDocker_Failure) {
+    Add("d1", ContainerType::DOCKER);
+    ctl->default_rc = 1;
+    EXPECT_FALSE(ctl->RestartContainer("d1"));
+}
+
+// ── DOCKER_COMPOSE ──────────────────────────────────────────────────────────
+
+TEST_F(ContainerControllerCmdTest, StartCompose_Success) {
+    Add("c1", ContainerType::DOCKER_COMPOSE);
+    EXPECT_TRUE(ctl->StartContainer("c1"));
+    ASSERT_EQ(ctl->run_cmds.size(), 1u);
+    EXPECT_EQ(ctl->run_cmds[0], "docker compose -f /tmp/c1.yaml up -d");
+}
+
+TEST_F(ContainerControllerCmdTest, StartCompose_Failure) {
+    Add("c1", ContainerType::DOCKER_COMPOSE);
+    ctl->default_rc = 1;
+    EXPECT_FALSE(ctl->StartContainer("c1"));
+}
+
+TEST_F(ContainerControllerCmdTest, StopCompose_Success) {
+    Add("c1", ContainerType::DOCKER_COMPOSE);
+    EXPECT_TRUE(ctl->StopContainer("c1"));
+    EXPECT_EQ(ctl->run_cmds[0], "docker compose -f /tmp/c1.yaml down");
+}
+
+TEST_F(ContainerControllerCmdTest, StopCompose_Failure) {
+    Add("c1", ContainerType::DOCKER_COMPOSE);
+    ctl->default_rc = 1;
+    EXPECT_FALSE(ctl->StopContainer("c1"));
+}
+
+TEST_F(ContainerControllerCmdTest, RestartCompose_Success) {
+    Add("c1", ContainerType::DOCKER_COMPOSE);
+    EXPECT_TRUE(ctl->RestartContainer("c1"));
+    EXPECT_EQ(ctl->run_cmds[0], "docker compose -f /tmp/c1.yaml restart");
+}
+
+TEST_F(ContainerControllerCmdTest, RestartCompose_Failure) {
+    Add("c1", ContainerType::DOCKER_COMPOSE);
+    ctl->default_rc = 1;
+    EXPECT_FALSE(ctl->RestartContainer("c1"));
+}
+
+// ── 알 수 없는 타입 / 미등록 이름 ───────────────────────────────────────────
+
+TEST_F(ContainerControllerCmdTest, UnknownType_AllOperationsFail) {
+    Add("u1", ContainerType::UNKNOWN);
+    EXPECT_FALSE(ctl->StartContainer("u1"));
+    EXPECT_FALSE(ctl->StopContainer("u1"));
+    EXPECT_FALSE(ctl->RestartContainer("u1"));
+    EXPECT_FALSE(ctl->GetContainerStatus("u1"));
+    EXPECT_FALSE(ctl->GetContainerLogs("u1"));
+    EXPECT_EQ(ctl->GetContainerStatusStr("u1"), "unknown");
+    EXPECT_EQ(ctl->GetContainerExitCode("u1"), -1);
+    EXPECT_EQ(ctl->BaseCommand("u1"), "");
+    EXPECT_EQ(ctl->BaseRos2Command("u1"), "");
+    EXPECT_TRUE(ctl->run_cmds.empty());
+}
+
+TEST_F(ContainerControllerCmdTest, UnregisteredName_AllOperationsFail) {
+    EXPECT_FALSE(ctl->StartContainer("ghost"));
+    EXPECT_FALSE(ctl->StopContainer("ghost"));
+    EXPECT_FALSE(ctl->RestartContainer("ghost"));
+    EXPECT_FALSE(ctl->GetContainerStatus("ghost"));
+    EXPECT_FALSE(ctl->GetContainerLogs("ghost"));
+    EXPECT_EQ(ctl->GetContainerStatusStr("ghost"), "unknown");
+    EXPECT_EQ(ctl->GetContainerExitCode("ghost"), -1);
+    EXPECT_EQ(ctl->BaseCommand("ghost"), "");
+    EXPECT_EQ(ctl->BaseRos2Command("ghost"), "");
+}
+
+// ── status / logs (RunCommand 반환값 해석) ──────────────────────────────────
+
+TEST_F(ContainerControllerCmdTest, GetContainerStatus_K3sCommandAndResult) {
+    Add("k1", ContainerType::K3S);
+    EXPECT_TRUE(ctl->GetContainerStatus("k1"));
+    EXPECT_EQ(ctl->run_cmds[0],
+              "kubectl get pod k1 -n k1-ns -o jsonpath='{.status.phase}'");
+}
+
+TEST_F(ContainerControllerCmdTest, GetContainerStatus_DockerFailureRc) {
+    Add("d1", ContainerType::DOCKER);
+    ctl->default_rc = 1;
+    EXPECT_FALSE(ctl->GetContainerStatus("d1"));
+    EXPECT_EQ(ctl->run_cmds[0], "docker inspect --format='{{.State.Status}}' d1");
+}
+
+TEST_F(ContainerControllerCmdTest, GetContainerLogs_K3sAndDocker) {
+    Add("k1", ContainerType::K3S);
+    Add("d1", ContainerType::DOCKER);
+    EXPECT_TRUE(ctl->GetContainerLogs("k1"));
+    EXPECT_EQ(ctl->run_cmds[0], "kubectl logs k1 -n k1-ns -c k1");
+    EXPECT_TRUE(ctl->GetContainerLogs("d1"));
+    EXPECT_EQ(ctl->run_cmds[1], "docker logs d1");
+}
+
+TEST_F(ContainerControllerCmdTest, GetContainerLogs_FailureRc) {
+    Add("d1", ContainerType::DOCKER);
+    ctl->default_rc = 1;
+    EXPECT_FALSE(ctl->GetContainerLogs("d1"));
+}
+
+// ── GetContainerStatusStr (CaptureCommand 출력 가공) ────────────────────────
+
+TEST_F(ContainerControllerCmdTest, StatusStr_DockerStripsQuotesAndNewline) {
+    Add("d1", ContainerType::DOCKER);
+    ctl->capture_out = "'running'\n";
+    EXPECT_EQ(ctl->GetContainerStatusStr("d1"), "running");
+    EXPECT_EQ(ctl->capture_cmds[0],
+              "docker inspect --format='{{.State.Status}}' d1 2>/dev/null");
+}
+
+TEST_F(ContainerControllerCmdTest, StatusStr_StripsCarriageReturn) {
+    Add("d1", ContainerType::DOCKER);
+    ctl->capture_out = "exited\r\n";
+    EXPECT_EQ(ctl->GetContainerStatusStr("d1"), "exited");
+}
+
+TEST_F(ContainerControllerCmdTest, StatusStr_EmptyOutputBecomesUnknown) {
+    Add("d1", ContainerType::DOCKER);
+    ctl->capture_out = "";
+    EXPECT_EQ(ctl->GetContainerStatusStr("d1"), "unknown");
+}
+
+TEST_F(ContainerControllerCmdTest, StatusStr_OnlyQuotesBecomesUnknown) {
+    Add("d1", ContainerType::DOCKER);
+    ctl->capture_out = "''\n";
+    EXPECT_EQ(ctl->GetContainerStatusStr("d1"), "unknown");
+}
+
+TEST_F(ContainerControllerCmdTest, StatusStr_K3sUsesJsonpath) {
+    Add("k1", ContainerType::K3S);
+    ctl->capture_out = "Running\n";
+    EXPECT_EQ(ctl->GetContainerStatusStr("k1"), "Running");
+    EXPECT_EQ(ctl->capture_cmds[0],
+              "kubectl get pod k1 -n k1-ns -o jsonpath='{.status.phase}' 2>/dev/null");
+}
+
+TEST_F(ContainerControllerCmdTest, IsContainerRunning_BothCasings) {
+    Add("d1", ContainerType::DOCKER);
+    Add("k1", ContainerType::K3S);
+    ctl->capture_out = "running\n";
+    EXPECT_TRUE(ctl->IsContainerRunning("d1"));
+    ctl->capture_out = "Running\n";
+    EXPECT_TRUE(ctl->IsContainerRunning("k1"));
+    ctl->capture_out = "exited\n";
+    EXPECT_FALSE(ctl->IsContainerRunning("d1"));
+}
+
+// ── GetContainerExitCode ────────────────────────────────────────────────────
+
+TEST_F(ContainerControllerCmdTest, ExitCode_ParsesNumber) {
+    Add("d1", ContainerType::DOCKER);
+    ctl->capture_out = "137\n";
+    EXPECT_EQ(ctl->GetContainerExitCode("d1"), 137);
+    EXPECT_EQ(ctl->capture_cmds[0],
+              "docker inspect --format='{{.State.ExitCode}}' d1 2>/dev/null");
+}
+
+TEST_F(ContainerControllerCmdTest, ExitCode_ZeroIsValid) {
+    Add("d1", ContainerType::DOCKER);
+    ctl->capture_out = "0\n";
+    EXPECT_EQ(ctl->GetContainerExitCode("d1"), 0);
+}
+
+TEST_F(ContainerControllerCmdTest, ExitCode_NonNumericBecomesMinusOne) {
+    Add("d1", ContainerType::DOCKER);
+    ctl->capture_out = "not-a-number\n";
+    EXPECT_EQ(ctl->GetContainerExitCode("d1"), -1);
+}
+
+TEST_F(ContainerControllerCmdTest, ExitCode_EmptyBecomesMinusOne) {
+    Add("d1", ContainerType::DOCKER);
+    ctl->capture_out = "";
+    EXPECT_EQ(ctl->GetContainerExitCode("d1"), -1);
+}
+
+TEST_F(ContainerControllerCmdTest, ExitCode_K3sUsesTerminatedJsonpath) {
+    Add("k1", ContainerType::K3S);
+    ctl->capture_out = "2\n";
+    EXPECT_EQ(ctl->GetContainerExitCode("k1"), 2);
+    EXPECT_THAT(ctl->capture_cmds[0],
+                ::testing::HasSubstr("state.terminated.exitCode"));
+}
+
+// ── BaseCommand / BaseRos2Command ───────────────────────────────────────────
+
+TEST_F(ContainerControllerCmdTest, BaseCommand_Docker) {
+    Add("d1", ContainerType::DOCKER);
+    EXPECT_EQ(ctl->BaseCommand("d1"), "docker exec d1 ");
+}
+
+TEST_F(ContainerControllerCmdTest, BaseCommand_Compose) {
+    Add("c1", ContainerType::DOCKER_COMPOSE);
+    EXPECT_EQ(ctl->BaseCommand("c1"), "docker exec c1 ");
+}
+
+TEST_F(ContainerControllerCmdTest, BaseCommand_K3s) {
+    Add("k1", ContainerType::K3S);
+    EXPECT_EQ(ctl->BaseCommand("k1"), "kubectl exec -n k1-ns k1 -- ");
+}
+
+TEST_F(ContainerControllerCmdTest, BaseCommand_SelfContainerIsEmpty) {
+    // adsw_manager 자신이 도는 컨테이너로는 exec 하지 않는다.
+    EXPECT_EQ(ctl->BaseCommand("oss-mmf-ext-ros2"), "");
+    EXPECT_EQ(ctl->BaseRos2Command("oss-mmf-ext-ros2"), "");
+}
+
+TEST_F(ContainerControllerCmdTest, BaseRos2Command_SourcesRosSetup) {
+    Add("d1", ContainerType::DOCKER);
+    Add("k1", ContainerType::K3S);
+    EXPECT_EQ(ctl->BaseRos2Command("d1"),
+              "docker exec d1 bash -c \"source /opt/ros/humble/setup.bash && ");
+    EXPECT_EQ(ctl->BaseRos2Command("k1"),
+              "kubectl exec -n k1-ns k1 -- bash -c \"source /opt/ros/humble/setup.bash && ");
+}
+
+// ── CaptureCommand 절단 규약 ────────────────────────────────────────────────
+
+TEST_F(ContainerControllerCmdTest, StatusStr_TruncatedAtBufferSize) {
+    Add("d1", ContainerType::DOCKER);
+    // 실제 구현은 64바이트 버퍼(fgets 로 63자)를 쓴다. 긴 출력이 잘려도
+    // 크래시 없이 잘린 문자열이 그대로 나와야 한다.
+    ctl->capture_out = std::string(200, 'x');
+    EXPECT_EQ(ctl->GetContainerStatusStr("d1"), std::string(63, 'x'));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RunCommand / CaptureCommand 의 *실제* 본문
+//
+// 위 ContainerControllerCmdTest 는 이 둘을 override 해 명령을 가로챈다 —
+// docker 없이 상위 로직을 돌리려는 의도된 설계다. 그 부작용으로 두 seam 의
+// 진짜 구현(system() / popen())은 실행 0회였다. 특히 CaptureCommand 는
+// popen 실패·빈 출력·길이 절단을 전부 자기 안에서 처리하는데, 그 처리 결과가
+// GetContainerStatusStr("unknown") / GetContainerExitCode(-1) 의 근거다.
+// 가짜로 답을 심으면 그 변환 규약은 검증되지만 규약을 만들어내는 쪽은 안 된다.
+//
+// docker 는 필요 없다. seam 은 셸 명령 문자열을 그대로 받으므로 셸 내장
+// 명령으로 계약을 확인할 수 있다.
+// ═══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+// override 하지 않고 base 구현을 그대로 노출하는 껍데기.
+class RealCmdContainerController : public ros2::adsw_manager::ContainerController {
+  public:
+    using ContainerController::RunCommand;
+    using ContainerController::CaptureCommand;
+};
+
+class ContainerControllerRealCmdTest : public ::testing::Test {
+  protected:
+    void SetUp() override {
+        Mock_Logger = new MockLogger();
+        ON_CALL(*Mock_Logger, Get()).WillByDefault(Return(Mock_Logger));
+        ctl = std::make_unique<RealCmdContainerController>();
+    }
+    void TearDown() override {
+        ctl.reset();
+        delete Mock_Logger;
+        Mock_Logger = nullptr;
+    }
+    std::unique_ptr<RealCmdContainerController> ctl;
+};
+
+TEST_F(ContainerControllerRealCmdTest, RunCommandReportsZeroOnSuccess) {
+    // 호출부는 전부 `RunCommand(cmd) == 0` 으로 성공을 판정한다.
+    EXPECT_EQ(ctl->RunCommand("true"), 0);
+}
+
+TEST_F(ContainerControllerRealCmdTest, RunCommandReportsNonZeroOnFailure) {
+    EXPECT_NE(ctl->RunCommand("false"), 0);
+}
+
+TEST_F(ContainerControllerRealCmdTest, CaptureCommandReturnsFirstLine) {
+    // popen 은 stdout 첫 줄만 읽는다. 개행이 붙어 오는 것도 계약의 일부다 —
+    // GetContainerStatusStr 이 이 문자열을 그대로 넘긴다.
+    EXPECT_EQ(ctl->CaptureCommand("echo running", 64), "running\n");
+}
+
+TEST_F(ContainerControllerRealCmdTest, CaptureCommandReadsOnlyFirstLine) {
+    EXPECT_EQ(ctl->CaptureCommand("printf 'first\\nsecond\\n'", 64), "first\n");
+}
+
+TEST_F(ContainerControllerRealCmdTest, CaptureCommandEmptyOutputIsEmptyString) {
+    // fgets 가 nullptr 을 내는 경로. 호출부가 이걸 "unknown" / -1 로 접는다.
+    EXPECT_EQ(ctl->CaptureCommand("true", 64), "");
+}
+
+TEST_F(ContainerControllerRealCmdTest, CaptureCommandTruncatesToMaxLen) {
+    // max_len 은 널 종료 포함이라 실제로 담기는 건 max_len-1 바이트다.
+    // 상태 문자열 버퍼가 넘치지 않는 근거가 여기다.
+    const std::string out = ctl->CaptureCommand("printf 'aaaaaaaaaaaaaaaaaaaa'", 8);
+    EXPECT_EQ(out, std::string(7, 'a'));
+}
+
+TEST_F(ContainerControllerRealCmdTest, CaptureCommandFailedCommandYieldsEmpty) {
+    // 명령 자체가 실패해도 popen 은 성공한다(셸은 떴다). stdout 이 비어
+    // 빈 문자열로 접히는 게 정상 — 여기서 던지면 상태 폴링이 통째로 멈춘다.
+    EXPECT_EQ(ctl->CaptureCommand("exit 3", 64), "");
+}
+
+TEST_F(ContainerControllerRealCmdTest, SeamsNeverThrow) {
+    EXPECT_NO_THROW({
+        (void)ctl->RunCommand("");
+        (void)ctl->CaptureCommand("", 16);
+    });
+}
+
+} // namespace
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);

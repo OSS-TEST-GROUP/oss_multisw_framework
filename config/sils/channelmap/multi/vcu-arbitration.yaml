@@ -1,0 +1,38 @@
+# VCU (vehicle-interface) — 다중 vECU 구성. 아비트레이션 입력을 받는 채널맵.
+#
+# vehicle-interface.yaml 과 다른 점은 in 채널 셋이 늘어난 것뿐이다. 그 셋은 다른 vECU 의
+# OUT 채널이고, 타입이 우리 out 과 같은 canonical/vehicle-control 이다 — 방향이 다를 뿐이다.
+#
+# 규칙: docs/sils/sils-vecu-arbitration.md
+#   종축  out = min(owner, 아래 셋)      더 강한 제동이 이긴다
+#   횡축  out = clamp(owner, ±VI_STEER_LIMIT_RAD)   기본 OFF (차량 한계를 모른다)
+#   기어  owner 만
+#
+# ⚠ 채널 NAME 이 트레이스의 `arbitrated.inputs` 키가 된다. 버스에서는 상대 프로세스 이름을
+#   알 수 없으므로, 여기 이름이 곧 "누가 이겼는지" 를 읽는 유일한 단서다. 토픽과 같은
+#   뜻으로 지을 것.
+channels:
+  - name: Vehicle.ControlTarget
+    dir: in
+    topic: autoware/control_target
+    type: canonical/control-target
+  - name: Vehicle.EgoState
+    dir: in
+    topic: sils/ego/state
+    type: canonical/ego-state
+  - name: Request.adaptive
+    dir: in
+    topic: sils/ego/cmd_adaptive
+    type: canonical/vehicle-control
+  - name: Request.classic
+    dir: in
+    topic: sils/ego/cmd_classic
+    type: canonical/vehicle-control
+  - name: Request.plainc
+    dir: in
+    topic: sils/ego/cmd_plainc
+    type: canonical/vehicle-control
+  - name: Vehicle.Command
+    dir: out
+    topic: sils/ego/cmd
+    type: canonical/vehicle-control

@@ -1,0 +1,36 @@
+# Orin(arm64) 실보드용 compose 오버라이드 — docker-compose-integration.yaml 과 함께 쓴다.
+#
+#   docker compose -f docker/compose/docker-compose-integration.yaml \
+#                  -f docker/compose/docker-compose-agl-board.override.yaml \
+#                  up -d mmf-ext-agl
+#
+# 왜 필요한가 (실측 2026-08-04, Orin AGX 보드):
+#   base 의 `mmf-ext-agl` 은 x86_64 일 때만 hmi_launcher 서비스 목록을 인라인 생성한다
+#   (`if [ "$(uname -m)" = "x86_64" ]`). arm64 보드에서는 그 분기를 타지 않으므로
+#   **이미지에 내장된** /oss/bin/config/agl-service-list.yaml 이 쓰이고, 보드에
+#   구성해 둔 목록(/opt/adsw/config/agl-service-list.yaml)이 무시된다.
+#   그 목록에는 실보드 시나리오에 필요한 항목들이 들어 있다:
+#     - docker.sock + --group-add <docker gid>  → rviz2_panel 이 rviz2 컨테이너 제어
+#     - /root/oss/hmi_launcher_config.json      → rosbridge URL(차량 컴퓨트 IP) 지정
+#     - /cfg (XDG_CONFIG_HOME)                  → 앱 표시/숨김·타임존 영속
+#     - /opt/mmf/config (도메인 파일)            → Settings 의 DDS domain 반영
+#     - 검증용 런처 이미지 태그 핀
+#   그래서 보드에서는 이 오버라이드로 호스트 목록을 마운트해 그대로 쓰게 한다.
+#
+# 보드 런타임 uid 는 1001(agl-driver) 이므로 HMI_RUNTIME_UID=1001 로 실행한다:
+#   HMI_RUNTIME_UID=1001 docker compose -f … -f … up -d mmf-ext-agl
+services:
+  mmf-ext-agl:
+    # base 의 `deploy`(nvidia GPU 예약)를 **제거**한다 — Compose 2.24+ 의 `!reset` 태그.
+    # Orin/AGL 보드의 docker 에는 "nvidia" device driver 가 등록돼 있지 않아(실측:
+    # Runtimes = runc 뿐) 그대로 두면 컨테이너 생성이 다음으로 거부된다:
+    #   Error response from daemon: could not select device driver "nvidia" with capabilities: [[gpu]]
+    # `devices: []` 로는 지워지지 않는다 — compose 가 빈 시퀀스를 "미설정"으로 보고 base 값을
+    # 유지하기 때문이다(보드 실측 2026-08-06). `!reset` 이 이 용도의 공식 문법이다.
+    # 보드에서 GPU 는 ext-agl 이 아니라 **런처 컨테이너**가 AGL 서비스 목록의
+    # `--device /dev/dri:/dev/dri` 로 얻으므로 이 예약은 불필요하다.
+    # x86 데스크탑(nvidia 런타임 보유)은 이 override 를 쓰지 않아 base 그대로 GPU 를 쓴다.
+    deploy: !reset null
+    volumes:
+      # 호스트에 구성된 AGL 서비스 목록을 이미지 내장본 대신 사용 (읽기 전용)
+      - ${AGL_SERVICE_LIST:-/opt/adsw/config/agl-service-list.yaml}:/oss/bin/config/agl-service-list.yaml:ro

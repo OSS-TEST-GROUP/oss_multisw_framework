@@ -53,13 +53,13 @@ void StateMonitor::UpdateServicesState(lifecyclemgr::GetServiceStateResponse* re
     }
 }
 
-void StateMonitor::SetUpdateStateFlag(std::shared_ptr<Service> service){
+void StateMonitor::SetUpdateStateFlag(const std::shared_ptr<Service>& service) {
     std::lock_guard<std::mutex> lock_guard(lock_mutex_);
 
     udpated_service_list_.insert(service);
 }
 
-void StateMonitor::ClearUpdateStateFlag(std::shared_ptr<Service> service){
+void StateMonitor::ClearUpdateStateFlag(const std::shared_ptr<Service>& service) {
     std::lock_guard<std::mutex> lock_guard(lock_mutex_);
 
     if (udpated_service_list_.find(service) != udpated_service_list_.end()) {
@@ -67,14 +67,10 @@ void StateMonitor::ClearUpdateStateFlag(std::shared_ptr<Service> service){
     }
 }
 
-
-bool StateMonitor::GetUpdateStateFlag(std::shared_ptr<Service> service){
+bool StateMonitor::GetUpdateStateFlag(const std::shared_ptr<Service>& service) {
     std::lock_guard<std::mutex> lock_guard(lock_mutex_);
 
-    if (udpated_service_list_.find(service) != udpated_service_list_.end()) {
-        return true;
-    }    
-    return false;
+    return udpated_service_list_.find(service) != udpated_service_list_.end();
 }
 
 void StateMonitor::ClearAllUpdatedFlag(){
@@ -104,9 +100,12 @@ void StateMonitor::NotifyLifecycleDiagnosticInfo(bool all){
     if (transmitter != nullptr)
     {
         std::shared_ptr<ServiceRegistry> registry = GetRegistry();
-        diag_report_.total_services_num() = registry ? registry->GetServiceNum() : 0;
+        // GetServiceNum() 은 uint64_t, IDL 필드는 int32_t 다. 등록 서비스 수라
+        // 축소가 문제되지 않는다.
+        diag_report_.total_services_num() =
+            registry ? static_cast<int32_t>(registry->GetServiceNum()) : 0;
 
-        if (all == true){
+        if (all) {
 
             if (registry){
                 std::vector<std::shared_ptr<Service>> list = registry->GetServicesByGroup("");
@@ -123,7 +122,7 @@ void StateMonitor::NotifyLifecycleDiagnosticInfo(bool all){
                     diag_report_.service_list().push_back(service);
                 }
             }
-        }else{
+        } else {
             for( auto svc = udpated_service_list_.begin(); svc != udpated_service_list_.end(); ++svc ){
                 lifecyclemgr::ServiceStatus service;
                         
@@ -161,7 +160,7 @@ void StateMonitor::NotifyLifecycleDiagnosticInfo(bool all){
     }
 }
 
-bool StateMonitor::getServiceState(std::shared_ptr<Service> svc, lifecyclemgr::ServiceStatus& entry){
+bool StateMonitor::getServiceState(const std::shared_ptr<Service>& svc, lifecyclemgr::ServiceStatus& entry) {
 
     entry.name() = svc->GetName();
     entry.service_type() = TypeConvert::ToServiceType(svc->GetServiceType());
@@ -177,7 +176,6 @@ bool StateMonitor::getServiceState(std::shared_ptr<Service> svc, lifecyclemgr::S
 
     return false;
 }
-
 
 void StateMonitor::StartThread()
 {
@@ -281,7 +279,7 @@ void StateMonitor::updateServices(std::vector<std::string>* slist, std::vector<l
         }
     }
 
-    if (service_list.size() > 0){
+    if (!service_list.empty()) {
         std::shared_ptr<StateManager> manager = GetStateManager();
         manager->ProcessServiceHandling(service_list);
     }

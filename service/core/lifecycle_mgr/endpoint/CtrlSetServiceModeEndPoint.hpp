@@ -20,10 +20,9 @@ class CtrlSetServiceModeEndPoint : public DDSMessageEndPoint {
 
     CtrlSetServiceModeEndPoint(MessageType msgtype, std::string topic,
                                 Callback cb = nullptr);
-    virtual ~CtrlSetServiceModeEndPoint();
-
-    virtual void OnDataAvailable() override;
-    virtual void OnDataPublished(bool ret) override;
+    ~CtrlSetServiceModeEndPoint() override= default;
+    void OnDataAvailable() override;
+    void OnDataPublished(bool ret) override;
 
   private:
     CtrlSetServiceModeRequest req_;

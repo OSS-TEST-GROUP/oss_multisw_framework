@@ -594,6 +594,152 @@ TEST_F(ServiceRegistryTest, ServiceEnabledState) {
     EXPECT_FALSE(registry.GetService("disabled_svc")->isEnabled());
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// F013 컨테이너 레지스트리 + 그룹 목록
+//
+// 기존 테스트는 서비스/그룹 API 만 다룬다. 컨테이너 쪽
+// (UpsertContainer / GetContainer / GetAllContainers / UpdateContainerState /
+//  GetServicesInContainer) 과 GetGroupList 는 하나도 없어서 236줄 중 103줄이
+// 미커버였다. 전부 in-memory 자료구조라 런타임 의존이 없다.
+// ═══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+// ContainerType / ContainerState 는 lifecycle_manager 와 lifecyclemgr(IDL) 양쪽에
+// 있어 `using namespace lifecycle_manager;` 아래에서도 모호하다. 전부 명시한다.
+std::shared_ptr<lifecycle_manager::Container> MakeContainer(
+        const std::string& name,
+        lifecycle_manager::ContainerType type = lifecycle_manager::ContainerType::DOCKER) {
+    return std::make_shared<lifecycle_manager::Container>(name, name + "-img", "/tmp/" + name + ".yaml",
+                                       name + "-ns", type);
+}
+
+} // namespace
+
+TEST(ServiceRegistryContainerTest, GetContainerOnEmptyRegistryReturnsNull) {
+    ServiceRegistry reg;
+    EXPECT_EQ(reg.GetContainer("nope"), nullptr);
+    EXPECT_TRUE(reg.GetAllContainers().empty());
+}
+
+TEST(ServiceRegistryContainerTest, UpsertThenGet) {
+    ServiceRegistry reg;
+    auto c = MakeContainer("app");
+    reg.UpsertContainer(c);
+
+    auto got = reg.GetContainer("app");
+    ASSERT_NE(got, nullptr);
+    EXPECT_EQ(got->GetName(), "app");
+    EXPECT_EQ(got->GetType(), lifecycle_manager::ContainerType::DOCKER);
+    EXPECT_EQ(reg.GetAllContainers().size(), 1u);
+}
+
+TEST(ServiceRegistryContainerTest, UpsertNullIsIgnored) {
+    ServiceRegistry reg;
+    reg.UpsertContainer(nullptr);
+    EXPECT_TRUE(reg.GetAllContainers().empty());
+}
+
+TEST(ServiceRegistryContainerTest, UpsertSameNameReplaces) {
+    ServiceRegistry reg;
+    reg.UpsertContainer(MakeContainer("app", lifecycle_manager::ContainerType::DOCKER));
+    reg.UpsertContainer(MakeContainer("app", lifecycle_manager::ContainerType::K3S));
+
+    EXPECT_EQ(reg.GetAllContainers().size(), 1u);
+    EXPECT_EQ(reg.GetContainer("app")->GetType(), lifecycle_manager::ContainerType::K3S);
+}
+
+TEST(ServiceRegistryContainerTest, GetAllContainersReturnsEveryEntry) {
+    ServiceRegistry reg;
+    reg.UpsertContainer(MakeContainer("a"));
+    reg.UpsertContainer(MakeContainer("b"));
+    reg.UpsertContainer(MakeContainer("c"));
+
+    auto all = reg.GetAllContainers();
+    ASSERT_EQ(all.size(), 3u);
+    std::set<std::string> names;
+    for (const auto& c : all) names.insert(c->GetName());
+    EXPECT_EQ(names, (std::set<std::string>{"a", "b", "c"}));
+}
+
+// ── UpdateContainerState: 반환값이 "변했는가" 를 뜻한다 ─────────────────────
+
+TEST(ServiceRegistryContainerTest, UpdateStateAutoCreatesUnknownContainer) {
+    ServiceRegistry reg;
+    // UpdateServiceList 보다 알림이 먼저 와도 항목이 보이도록 자동 생성한다.
+    EXPECT_TRUE(reg.UpdateContainerState("ghost", lifecycle_manager::ContainerState::CONTAINER_RUNNING, 0));
+
+    auto c = reg.GetContainer("ghost");
+    ASSERT_NE(c, nullptr);
+    EXPECT_EQ(c->GetState(), lifecycle_manager::ContainerState::CONTAINER_RUNNING);
+    EXPECT_EQ(c->GetType(), lifecycle_manager::ContainerType::CT_UNKNOWN);
+    EXPECT_EQ(c->GetExitCode(), 0);
+}
+
+TEST(ServiceRegistryContainerTest, UpdateStateReturnsTrueOnlyOnTransition) {
+    ServiceRegistry reg;
+    reg.UpsertContainer(MakeContainer("app"));   // 초기 상태 CS_UNKNOWN
+
+    // CS_UNKNOWN → RUNNING : 전이
+    EXPECT_TRUE(reg.UpdateContainerState("app", lifecycle_manager::ContainerState::CONTAINER_RUNNING, 0));
+    // RUNNING → RUNNING : 전이 아님 (호출자는 이때 publish 하지 않는다)
+    EXPECT_FALSE(reg.UpdateContainerState("app", lifecycle_manager::ContainerState::CONTAINER_RUNNING, 0));
+    // RUNNING → STOPPED : 전이
+    EXPECT_TRUE(reg.UpdateContainerState("app", lifecycle_manager::ContainerState::CONTAINER_STOPPED, 137));
+
+    EXPECT_EQ(reg.GetContainer("app")->GetState(), lifecycle_manager::ContainerState::CONTAINER_STOPPED);
+    EXPECT_EQ(reg.GetContainer("app")->GetExitCode(), 137);
+}
+
+TEST(ServiceRegistryContainerTest, UpdateStateStoresExitCodeEvenWithoutTransition) {
+    ServiceRegistry reg;
+    reg.UpsertContainer(MakeContainer("app"));
+    reg.UpdateContainerState("app", lifecycle_manager::ContainerState::CONTAINER_STOPPED, 1);
+    // 상태가 같아도 exit code 는 갱신되어야 한다.
+    EXPECT_FALSE(reg.UpdateContainerState("app", lifecycle_manager::ContainerState::CONTAINER_STOPPED, 9));
+    EXPECT_EQ(reg.GetContainer("app")->GetExitCode(), 9);
+}
+
+TEST(ServiceRegistryContainerTest, UpdateStatePausedIsTracked) {
+    ServiceRegistry reg;
+    reg.UpsertContainer(MakeContainer("app"));
+    EXPECT_TRUE(reg.UpdateContainerState("app", lifecycle_manager::ContainerState::CONTAINER_PAUSED, 0));
+    EXPECT_EQ(reg.GetContainer("app")->GetState(), lifecycle_manager::ContainerState::CONTAINER_PAUSED);
+}
+
+// ── GetGroupList ────────────────────────────────────────────────────────────
+
+TEST(ServiceRegistryContainerTest, GetGroupListEmptyThenPopulated) {
+    ServiceRegistry reg;
+    EXPECT_TRUE(reg.GetGroupList().empty());
+
+    reg.AddGroup("g1");
+    reg.AddGroup("g2");
+
+    auto groups = reg.GetGroupList();
+    ASSERT_EQ(groups.size(), 2u);
+    EXPECT_EQ(std::set<std::string>(groups.begin(), groups.end()),
+              (std::set<std::string>{"g1", "g2"}));
+}
+
+TEST(ServiceRegistryContainerTest, GetGroupListDropsRemovedGroup) {
+    ServiceRegistry reg;
+    reg.AddGroup("g1");
+    reg.AddGroup("g2");
+    reg.RemoveGroup("g1");
+
+    auto groups = reg.GetGroupList();
+    ASSERT_EQ(groups.size(), 1u);
+    EXPECT_EQ(groups[0], "g2");
+}
+
+// ── GetServicesInContainer ──────────────────────────────────────────────────
+
+TEST(ServiceRegistryContainerTest, GetServicesInContainerEmptyWhenNoMatch) {
+    ServiceRegistry reg;
+    EXPECT_TRUE(reg.GetServicesInContainer("app").empty());
+}
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

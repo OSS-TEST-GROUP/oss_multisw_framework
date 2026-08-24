@@ -1,0 +1,106 @@
+# SiLS -- scenario_simulator_v2 (loop B) bring-up image.
+#
+# This is a THIN layer on top of the UPSTREAM image. It deliberately does not
+# reproduce upstream's build recipe (vcs import + rosdep + colcon): that recipe
+# lives in tier4/scenario_simulator_v2's own Dockerfile and will drift. We build
+# theirs as-is (docker/sils/build-ss2.sh), then add only what SiLS needs.
+#
+# What upstream gives us (verified from source, 2026-08-06):
+#   - base            docker.io/library/ros:humble          (Ubuntu 22.04, amd64)
+#   - workspace       /home/ubuntu/Desktop/scenario_simulator_ws
+#   - entrypoint      /docker-entrypoint.sh  (sources ROS + install/local_setup.bash)
+#   - RMW             ENV RMW_IMPLEMENTATION=rmw_cyclonedds_cpp     <-- see below
+#   - deps            dependency_humble.repos is MESSAGE/UTIL REPOS ONLY
+#                     (autoware_msgs, autoware_adapi_msgs, autoware_internal_msgs,
+#                      autoware_cmake, autoware_utils, autoware_lanelet2_extension,
+#                      color_names, tier4_msgs, agnocast)
+#                     => the 21.7GB Autoware CUDA image is NOT required to build or
+#                        run the simulator. concealer needs Autoware *messages*, not
+#                        Autoware. This answers work item B1-1's follow-on question.
+#
+# What this layer changes, and why:
+#
+#   1. RMW: upstream defaults to Cyclone DDS. Our canonical bus is Fast DDS
+#      (docker/build_environment/fastdds-profile.xml). Two ways to bridge that gap:
+#
+#        (A) run SS_v2 on Fast DDS too   -- one vendor end to end. Default here.
+#        (B) leave it on Cyclone         -- the adapter (rclcpp side) speaks Cyclone
+#                                           and re-publishes with the native Fast DDS
+#                                           API. This is what BR-C-2 actually specifies.
+#
+#      (A) is the default because it removes a variable from the FIRST bring-up.
+#      It is NOT a decision that (B) is wrong -- BR-C-2a still has to be measured,
+#      and this image can be flipped at runtime with
+#          -e RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+#      precisely so the same image measures BOTH columns of that matrix.
+#
+#   2. Fast DDS profile: the canonical SiLS profile (UDPv4 only, DataSharing OFF).
+#      Without it the ROS 2 side may pick SHM/data-sharing while our vECU does not,
+#      and endpoints match but no data flows -- the exact failure documented in
+#      service/sils/run_coordinator/run_phase1.sh.
+#
+#   3. Probe tooling: ros2 CLI introspection packages, so the B1-3 interop probe
+#      (tools/sils/ss2/probe_interop.sh) can run INSIDE this container.
+#
+# Build:   docker/sils/build-ss2.sh          (do not `docker build` this directly --
+#                                             it needs the upstream image first)
+# Run:     docker/compose/docker-compose-sils-ss2.yaml
+# Docs:    docs/sils/sils-ss2-bringup.md
+
+ARG SS2_UPSTREAM_IMAGE=sils-ss2-upstream:humble
+FROM ${SS2_UPSTREAM_IMAGE}
+
+ARG ROS_DISTRO=humble
+ENV DEBIAN_FRONTEND=noninteractive
+ENV DEBCONF_NOWARNINGS=yes
+
+# rmw_fastrtps_cpp ships with ros_base, but upstream's runtime stage prunes with
+# `rosdep install --dependency-types=exec`, so install it explicitly rather than
+# assuming it survived. ros2cli introspection verbs are what the B1-3 probe needs
+# (`topic info -v` is the only mechanical source for the per-endpoint QoS matrix).
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        ros-${ROS_DISTRO}-rmw-fastrtps-cpp \
+        ros-${ROS_DISTRO}-ros2cli \
+        ros-${ROS_DISTRO}-ros2topic \
+        ros-${ROS_DISTRO}-ros2node \
+        ros-${ROS_DISTRO}-ros2doctor \
+        iproute2 \
+        jq && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# (1) Fast DDS by default -- overridable at `docker run`/compose time.
+ENV RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+
+# (2) Canonical SiLS transport profile. FASTDDS_ is the current variable name;
+#     FASTRTPS_ is the pre-2.6 spelling, set as well so an older Fast DDS in the
+#     ROS 2 image still picks the profile up instead of silently using defaults.
+COPY docker/build_environment/fastdds-profile.xml /opt/sils/fastdds-profile.xml
+ENV FASTDDS_DEFAULT_PROFILES_FILE=/opt/sils/fastdds-profile.xml
+ENV FASTRTPS_DEFAULT_PROFILES_FILE=/opt/sils/fastdds-profile.xml
+
+# The interop probe, baked in so the container is self-sufficient on a machine
+# that has not checked out this repo.
+COPY tools/sils/ss2/probe_interop.sh /opt/sils/probe_interop.sh
+RUN chmod a+x /opt/sils/probe_interop.sh
+
+# scenario_test_runner cannot be pointed at a read-only scenario: the preprocessor
+# moves the file and writes a rewritten one back in its place, and the resulting
+# EROFS is swallowed into a silent 6-second exit. This wrapper stages a writable
+# copy first. See the script header, and ss2-scenario in
+# docker/compose/docker-compose-sils-ss2.yaml.
+COPY tools/sils/ss2/stage_and_launch.sh /opt/sils/stage_and_launch.sh
+RUN chmod a+x /opt/sils/stage_and_launch.sh
+
+# Where the probe writes its report; mount a volume here to collect it.
+ENV SILS_PROBE_OUT=/out
+VOLUME ["/out"]
+
+LABEL org.opencontainers.image.title="sils-ss2" \
+      org.opencontainers.image.description="scenario_simulator_v2 + SiLS Fast DDS profile (loop B bring-up)" \
+      com.obigo.sils.loop="B" \
+      com.obigo.sils.plant="ss2"
+
+# Inherit upstream's ENTRYPOINT (/docker-entrypoint.sh sources the ROS overlay).
+CMD ["bash"]

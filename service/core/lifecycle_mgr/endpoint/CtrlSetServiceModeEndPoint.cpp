@@ -1,5 +1,7 @@
 #include "CtrlSetServiceModeEndPoint.hpp"
 
+#include <utility>
+
 #include "lifecycle/LifecycleCtrlRequest.hpp"
 #include "logger/Log.hpp"
 
@@ -7,7 +9,7 @@ namespace lifecycle_manager {
 
 CtrlSetServiceModeEndPoint::CtrlSetServiceModeEndPoint(
     MessageType msgtype, std::string topic, Callback cb)
-    : DDSMessageEndPoint(topic), on_data_cb_(std::move(cb)) {
+    : DDSMessageEndPoint(std::move(topic)), on_data_cb_(std::move(cb)) {
     if (msgtype == MessageType::CTRL_SET_SERVICE_MODE_REQUEST) {
         SetTypeSupport(std::make_shared<TypeSupport>(
             new CtrlSetServiceModeRequestPubSubType()));
@@ -17,12 +19,11 @@ CtrlSetServiceModeEndPoint::CtrlSetServiceModeEndPoint(
     }
 }
 
-CtrlSetServiceModeEndPoint::~CtrlSetServiceModeEndPoint() {}
 
 void CtrlSetServiceModeEndPoint::OnDataAvailable() {
     LOG_DEBUG("Message Delivery for " << GetTopic());
 
-    if (Read<CtrlSetServiceModeRequest>(req_) == true) {
+    if (Read<CtrlSetServiceModeRequest>(req_)) {
         CtrlSetServiceModeRequest* msg =
             reinterpret_cast<CtrlSetServiceModeRequest*>(&req_);
         if (on_data_cb_) {

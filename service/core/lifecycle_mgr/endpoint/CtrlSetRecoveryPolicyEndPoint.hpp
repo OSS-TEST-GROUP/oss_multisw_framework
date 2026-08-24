@@ -21,10 +21,9 @@ class CtrlSetRecoveryPolicyEndPoint : public DDSMessageEndPoint {
 
     CtrlSetRecoveryPolicyEndPoint(MessageType msgtype, std::string topic,
                                     Callback cb = nullptr);
-    virtual ~CtrlSetRecoveryPolicyEndPoint();
-
-    virtual void OnDataAvailable() override;
-    virtual void OnDataPublished(bool ret) override;
+    ~CtrlSetRecoveryPolicyEndPoint() override= default;
+    void OnDataAvailable() override;
+    void OnDataPublished(bool ret) override;
 
   private:
     CtrlSetRecoveryPolicyRequest req_;

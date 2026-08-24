@@ -1,5 +1,7 @@
 #include "SetRecoveryPolicyEndPoint.hpp"
 
+#include <utility>
+
 #include "lifecycle/SetRecoveryPolicyRequest.hpp"
 #include "ADSWManager.hpp"
 #include "service/ServiceRegistry.hpp"
@@ -12,9 +14,8 @@
 namespace general {
 namespace adsw_manager {
 
-SetRecoveryPolicyEndPoint::SetRecoveryPolicyEndPoint(MessageType msgtype, std::string topic)
-    : DDSMessageEndpoint() {
-    topic_ = topic;
+SetRecoveryPolicyEndPoint::SetRecoveryPolicyEndPoint(MessageType msgtype, std::string topic) : topic_(std::move(topic)) {
+
     if (msgtype == MessageType::SET_RECOVERY_POLICY_REQUEST) {
         type_support_ = std::make_shared<TypeSupport>(new SetRecoveryPolicyRequestPubSubType());
     } else if (msgtype == MessageType::SET_RECOVERY_POLICY_RESPONSE) {
@@ -22,7 +23,6 @@ SetRecoveryPolicyEndPoint::SetRecoveryPolicyEndPoint(MessageType msgtype, std::s
     }
 }
 
-SetRecoveryPolicyEndPoint::~SetRecoveryPolicyEndPoint() {}
 
 std::string SetRecoveryPolicyEndPoint::GetTopic() { return topic_; }
 std::string SetRecoveryPolicyEndPoint::GetTypeName() { return type_support_->get_type_name(); }
@@ -31,7 +31,9 @@ std::shared_ptr<TypeSupport> SetRecoveryPolicyEndPoint::GetTypeSupport() { retur
 void SetRecoveryPolicyEndPoint::OnDataAvailable() {
     LOG_DEBUG("Message Delivery for " << GetTopic());
 
-    if (Read<SetRecoveryPolicyRequest>(req_) != true) return;
+    if (!Read<SetRecoveryPolicyRequest>(req_)) {
+        return;
+    }
 
     SetRecoveryPolicyRequest* message = reinterpret_cast<SetRecoveryPolicyRequest*>(&req_);
 
@@ -70,7 +72,9 @@ void SetRecoveryPolicyEndPoint::OnDataAvailable() {
         ADSWManager::Get()->GetTopic(MessageType::SET_RECOVERY_POLICY_RESPONSE) : nullptr;
     if (transmitter && resp_topic) {
         auto endpoint = transmitter->GetMessageEndpoint(resp_topic);
-        if (endpoint) endpoint->Write(&resp_);
+        if (endpoint) {
+            endpoint->Write(&resp_);
+        }
     }
 }
 

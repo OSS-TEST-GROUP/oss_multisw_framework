@@ -1,13 +1,14 @@
 #include "MessageEndPoint.hpp"
 
+#include <utility>
+
 namespace lifecycle_manager {
 
-MessageEndPoint::MessageEndPoint(std::string topic) 
-    : topic_(topic),
-    type_support_(nullptr){
+MessageEndPoint::MessageEndPoint(std::string topic)
+    : topic_(std::move(topic)),
+      type_support_(nullptr) {
 }
 
-MessageEndPoint::~MessageEndPoint() {}
 
 
 std::string MessageEndPoint::GetTopic() { 
@@ -23,7 +24,7 @@ std::shared_ptr<TypeSupport> MessageEndPoint::GetTypeSupport() {
 }
 
 void MessageEndPoint::SetTypeSupport(std::shared_ptr<TypeSupport> typesupport){
-    type_support_ = typesupport;
+    type_support_ = std::move(typesupport);
     type_name_ =  type_support_->get_type_name();
 }
 

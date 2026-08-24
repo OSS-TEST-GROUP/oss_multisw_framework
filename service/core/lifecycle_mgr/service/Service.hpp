@@ -15,9 +15,8 @@ class Service {
 
   public:
     Service();
-    Service(const std::string& name, const ServiceType type, const RecoveryPolicy policy, const bool enabled, const MwType os);
-    virtual ~Service();
-
+    Service(const std::string& name, ServiceType type, RecoveryPolicy policy, bool enabled, MwType os);
+    virtual ~Service() = default;
     std::string GetName();
     ServiceType GetServiceType();
     void SetServiceType(ServiceType type);

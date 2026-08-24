@@ -1,0 +1,31 @@
+/vehicle/status/velocity_status                pubs=0 subs=2    autoware_vehicle_msgs/msg/VelocityReport
+    publisher: <none>
+    QoS: 
+/vehicle/status/steering_status                pubs=0 subs=5    autoware_vehicle_msgs/msg/SteeringReport
+    publisher: <none>
+    QoS: 
+/vehicle/status/gear_status                    pubs=0 subs=2    autoware_vehicle_msgs/msg/GearReport
+    publisher: <none>
+    QoS: 
+/vehicle/status/control_mode                   pubs=0 subs=3    autoware_vehicle_msgs/msg/ControlModeReport
+    publisher: <none>
+    QoS: 
+/vehicle/status/turn_indicators_status         pubs=0 subs=1    autoware_vehicle_msgs/msg/TurnIndicatorsReport
+    publisher: <none>
+    QoS: 
+/vehicle/status/hazard_lights_status           pubs=0 subs=1    autoware_vehicle_msgs/msg/HazardLightsReport
+    publisher: <none>
+    QoS: 
+/vehicle/status/actuation_status               pubs= subs=     
+    publisher: <none>
+    QoS: 
+/sensing/imu/imu_data                          pubs=0 subs=1    sensor_msgs/msg/Imu
+    publisher: <none>
+    QoS: 
+/localization/kinematic_state                  pubs=0 subs=28   nav_msgs/msg/Odometry
+    publisher: <none>
+    QoS: 
+/localization/acceleration                     pubs=0 subs=10   geometry_msgs/msg/AccelWithCovarianceStamped
+    publisher: <none>
+    QoS: 
+TOTAL SUBSCRIPTIONS DEPENDING ON THESE 10 TOPICS: 53

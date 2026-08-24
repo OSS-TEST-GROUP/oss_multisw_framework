@@ -1,24 +1,23 @@
 #include "ROSDiscoveryInfoEndpoint.hpp"
+
+#include "logger/Log.hpp"
 #include "monitor/ROSServiceDiscovery.hpp"
 #include "ros2/ParticipantEntitiesInfo.hpp"
-#include "logger/Log.hpp"
+#include <utility>
 
 #include "ADSWManager.hpp"
 
 namespace ros2 {
 namespace adsw_manager {
-    
-ROSDiscoveryInfoEndpoint::ROSDiscoveryInfoEndpoint(MessageType msgtype, std::string topic) 
-    : DDSMessageEndpoint() {
-        
-    topic_ = topic;
+
+ROSDiscoveryInfoEndpoint::ROSDiscoveryInfoEndpoint(MessageType msgtype, std::string topic) : topic_(std::move(topic)) {
+
     if (msgtype == MessageType::ROS2_DISCOVREY_INFO)
     {
         type_support_ = std::make_shared<TypeSupport>(new rmw_dds_common::msg::ParticipantEntitiesInfoPubSubType());
     }
 }
 
-ROSDiscoveryInfoEndpoint::~ROSDiscoveryInfoEndpoint() {}
 
 std::string ROSDiscoveryInfoEndpoint::GetTopic() {
     return topic_;
@@ -34,8 +33,8 @@ std::shared_ptr<TypeSupport> ROSDiscoveryInfoEndpoint::GetTypeSupport() {
 
 void ROSDiscoveryInfoEndpoint::OnDataAvailable() {
     rmw_dds_common::msg::ParticipantEntitiesInfo info;
-    
-    if (Read<rmw_dds_common::msg::ParticipantEntitiesInfo>(info) == true){
+
+    if (Read<rmw_dds_common::msg::ParticipantEntitiesInfo>(info)) {
         LOG_DEBUG("ROSDiscoveryInfoEndpoint " << GetTopic() );
 
         std::shared_ptr<ROSServiceDiscovery> manager = ADSWManager::Get()->GetServiceDiscovery();
@@ -44,13 +43,10 @@ void ROSDiscoveryInfoEndpoint::OnDataAvailable() {
         }
         LOG_DEBUG("ROSDiscoveryInfoEndpoint processed " );
 
-    }
-    else {
+    } else {
         LOG_ERROR("Failed to read data from " << GetTopic());
     }
-    return;
 }
-
 
 } // namespace adsw_manager
 } // namespace ros2

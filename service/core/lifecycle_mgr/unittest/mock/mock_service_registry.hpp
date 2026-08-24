@@ -39,7 +39,7 @@ public:
     MOCK_METHOD(std::shared_ptr<lifecycle_manager::Container>, GetContainer, (const std::string&), ());
     MOCK_METHOD(std::vector<std::shared_ptr<lifecycle_manager::Container>>, GetAllContainers, (), ());
     MOCK_METHOD(void, UpsertContainer, (const std::shared_ptr<lifecycle_manager::Container>&), ());
-    MOCK_METHOD(void, UpdateContainerState, (const std::string&, lifecycle_manager::ContainerState, int32_t), ());
+    MOCK_METHOD(bool, UpdateContainerState, (const std::string&, lifecycle_manager::ContainerState, int32_t), ());
     MOCK_METHOD(std::vector<std::string>, GetServicesInContainer, (const std::string&), ());
 };
 
@@ -47,32 +47,34 @@ inline MockServiceRegistry* Mock_ServiceRegistry = nullptr;
 
 
 ServiceRegistry::ServiceRegistry() {}
-ServiceRegistry::~ServiceRegistry() {}
+// ServiceRegistry::~ServiceRegistry() 정의는 제거했다. 프로덕션 헤더가 `= default` 로 바뀌어
+// 아웃오브라인 정의가 위법(explicitly-defaulted 함수의 재정의)이 되고,
+// defaulted 소멸자는 컴파일러가 각 TU 에 만들어주므로 링크 심이 필요 없다.
 
-bool ServiceRegistry::AddService(std::shared_ptr<Service> service, std::string group) {
+bool ServiceRegistry::AddService(const std::shared_ptr<Service>& service, std::string group) {
     return Mock_ServiceRegistry->AddService(service, group);
 }
-void ServiceRegistry::RemoveService(std::string name) {
+void ServiceRegistry::RemoveService(const std::string& name) {
     Mock_ServiceRegistry->RemoveService(name);
 }
-std::shared_ptr<Service> ServiceRegistry::GetService(std::string name) {
+std::shared_ptr<Service> ServiceRegistry::GetService(const std::string& name) {
     return Mock_ServiceRegistry->GetService(name);  
 }
 
-std::vector<std::shared_ptr<Service>> ServiceRegistry::GetServicesByGroup(std::string group) {
+std::vector<std::shared_ptr<Service>> ServiceRegistry::GetServicesByGroup(const std::string& group) {
     return Mock_ServiceRegistry->GetServicesByGroup(group);
 }
-std::vector<std::string> ServiceRegistry::GetServicesNameByGroup(std::string group) {
+std::vector<std::string> ServiceRegistry::GetServicesNameByGroup(const std::string& group) {
     return Mock_ServiceRegistry->GetServicesNameByGroup(group);
 }
 
-std::string ServiceRegistry::GetGroupNameByService(std::shared_ptr<Service> service) {
+std::string ServiceRegistry::GetGroupNameByService(const std::shared_ptr<Service>& service) {
     return Mock_ServiceRegistry->GetGroupNameByService(service);
 }
 uint64_t ServiceRegistry::GetServiceNum() {
     return Mock_ServiceRegistry->GetServiceNum();
 }
-uint64_t ServiceRegistry::GetServiceNumInGroup(std::string group) {
+uint64_t ServiceRegistry::GetServiceNumInGroup(const std::string& group) {
     return Mock_ServiceRegistry->GetServiceNumInGroup(group);
 }
 uint64_t ServiceRegistry::GetGroupNum() {
@@ -81,36 +83,36 @@ uint64_t ServiceRegistry::GetGroupNum() {
 bool ServiceRegistry::UpdateServiceList(UpdateServiceListRequest* update) {
     return Mock_ServiceRegistry->UpdateServiceList(update);
 }
-void ServiceRegistry::AddGroup(std::string name) {
+void ServiceRegistry::AddGroup(const std::string& name) {
     Mock_ServiceRegistry->AddGroup(name);
 }
-void ServiceRegistry::RemoveGroup(std::string name) {
+void ServiceRegistry::RemoveGroup(const std::string& name) {
     Mock_ServiceRegistry->RemoveGroup(name);
 }
 bool ServiceRegistry::IsGroup(std::string name) {
     return Mock_ServiceRegistry->IsGroup(name);
 }
-std::shared_ptr<std::vector<std::string>> ServiceRegistry::getGroup(std::string name) {
+std::shared_ptr<std::vector<std::string>> ServiceRegistry::getGroup(const std::string& name) {
     return Mock_ServiceRegistry->getGroup(name);
 }
-bool ServiceRegistry::hasGroup(std::string name) {
+bool ServiceRegistry::hasGroup(const std::string& name) {
     return Mock_ServiceRegistry->hasGroup(name);
 }
 
-bool ServiceRegistry::vectorAdd(std::vector<std::string>& vec, std::string item) {
+bool ServiceRegistry::vectorAdd(std::vector<std::string>& vec, const std::string& item) {
     return Mock_ServiceRegistry->vectorAdd(vec, item);
 }
-bool ServiceRegistry::vectorRemove(std::vector<std::string>& vec, std::string item) {
+bool ServiceRegistry::vectorRemove(std::vector<std::string>& vec, const std::string& item) {
     return Mock_ServiceRegistry->vectorRemove(vec, item);   
 }   
 
-bool ServiceRegistry::vectorHas(std::vector<std::string> vec, std::string item) {
+bool ServiceRegistry::vectorHas(std::vector<std::string> vec, const std::string& item) {
     return Mock_ServiceRegistry->vectorHas(vec, item);
 }
-bool ServiceRegistry::hasService(std::string name) {
+bool ServiceRegistry::hasService(const std::string& name) {
     return Mock_ServiceRegistry->hasService(name);
 }
-std::shared_ptr<Service> ServiceRegistry::getService(std::string name) {
+std::shared_ptr<Service> ServiceRegistry::getService(const std::string& name) {
     return Mock_ServiceRegistry->getService(name);
 }      
 
@@ -130,11 +132,12 @@ std::vector<std::shared_ptr<Container>> ServiceRegistry::GetAllContainers(){
 void ServiceRegistry::UpsertContainer(const std::shared_ptr<Container>& c){
     if (Mock_ServiceRegistry) Mock_ServiceRegistry->UpsertContainer(c);
 }
-void ServiceRegistry::UpdateContainerState(const std::string& name,
+bool ServiceRegistry::UpdateContainerState(const std::string& name,
                                             ContainerState state,
                                             int32_t exit_code){
-    if (Mock_ServiceRegistry)
-        Mock_ServiceRegistry->UpdateContainerState(name, state, exit_code);
+    return Mock_ServiceRegistry
+        ? Mock_ServiceRegistry->UpdateContainerState(name, state, exit_code)
+        : false;
 }
 std::vector<std::string> ServiceRegistry::GetServicesInContainer(const std::string& name){
     return Mock_ServiceRegistry ? Mock_ServiceRegistry->GetServicesInContainer(name)

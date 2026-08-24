@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+  fastdds-profile-notypeprop.xml — 기본 프로파일 + TypeObject 전파 차단.
+
+  ★ 왜 있나
+
+  TypeObject 를 전파하는 Fast DDS 참가자가 Cyclone 참가자와 같은 도메인에 있으면,
+  Cyclone 의 XTypes 계층이 그것을 삼키지 못하고 로그를 쏟는다:
+
+      dq.builtin: type [INVALID ...]: ddsi_xt_type_init_impl with invalid type object
+
+  실측 2026-08-12, 도메인 42: 미패치 MMF 를 붙이자 파티션 3종에 1260줄. 없으면 0줄.
+  ⚠ 죽지는 않는다 -- 초판은 "전멸" 이라고 적었는데 틀렸다(진짜 원인은 중복 러너의 트랩).
+  → docs/sils/evidence/mmf-typeobject-2026-08-12.md
+
+  우리 코드(vECU·어댑터)는 이 규칙을 소스에 갖고 있다:
+      service/sils/vecu/src/sils_participant_qos.hpp   (Fast DDS 3.x 속성)
+      adapters/ss2/include/aw_type_propagation.hpp     (Fast DDS 2.6 TypeSupport 플래그)
+
+  MMF core 는 갖고 있지 않다 — ota_mgr 한 곳뿐이다. 이 파일은 **소스를 못 고치는
+  상황에서**(공유 제품 이미지) 같은 효과를 XML 로 내려는 시도다.
+
+  ★ 실패는 남의 프로세스에서 난다
+
+  이 규칙을 지키는 프로세스는 자기가 아니라 **이웃(Cyclone)** 을 보호한다. 그래서
+  "우리는 멀쩡한데?" 는 지켰다는 증거가 되지 못한다.
+
+  ★ 이 파일이 base 와 다른 점은 propertiesPolicy 블록 하나뿐이다.
+    나머지(UDP 전용 전송 · data sharing OFF)는 docker/build_environment/fastdds-profile.xml
+    그대로다 — 두 파일이 어긋나면 그쪽이 정본이다.
+
+  쓰는 법:
+    docker run ... -v $PWD/docker/build_environment/fastdds-profile-notypeprop.xml:/oss/fastdds-profile.xml:ro
+  또는 compose 오버라이드(docker/compose/docker-compose-nogpu.override.yaml 참고).
+-->
+<profiles>
+    <transport_descriptors>
+        <transport_descriptor>
+            <transport_id>udp_transport</transport_id>
+            <type>UDPv4</type>
+        </transport_descriptor>
+    </transport_descriptors>
+
+    <participant profile_name="participant_with_udp_transport" is_default_profile="true">
+        <rtps>
+            <userTransports>
+                <transport_id>udp_transport</transport_id>
+            </userTransports>
+            <useBuiltinTransports>false</useBuiltinTransports>
+
+            <!-- ★ 이 블록이 추가분이다.
+                 Fast DDS 3.x 의 participant property. 2.6 계열에는 없고, 넘겨도
+                 조용히 무시된다 — MMF 는 3.2.2 를 링크하므로 유효하다. -->
+            <propertiesPolicy>
+                <properties>
+                    <property>
+                        <name>fastdds.type_propagation</name>
+                        <value>disabled</value>
+                    </property>
+                </properties>
+            </propertiesPolicy>
+        </rtps>
+    </participant>
+
+    <!-- Disable data sharing for all readers/writers — forces UDP delivery and avoids
+         stale SHM segments from killed processes breaking writer proxy registration. -->
+    <data_reader profile_name="default_datareader" is_default_profile="true">
+        <qos>
+            <data_sharing>
+                <kind>OFF</kind>
+            </data_sharing>
+        </qos>
+    </data_reader>
+
+    <data_writer profile_name="default_datawriter" is_default_profile="true">
+        <qos>
+            <data_sharing>
+                <kind>OFF</kind>
+            </data_sharing>
+        </qos>
+    </data_writer>
+</profiles>

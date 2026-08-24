@@ -9,8 +9,7 @@ namespace lifecycle_manager {
 class ArgumentConfig {
   public:
     ArgumentConfig(const std::string& name, const std::string& description, const std::string& type, const std::string& default_value);
-    virtual ~ArgumentConfig();
-
+    virtual ~ArgumentConfig() = default;
     std::string GetName();
     std::string GetDescription();
     std::string GetType();

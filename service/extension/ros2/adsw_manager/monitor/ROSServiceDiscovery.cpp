@@ -14,7 +14,6 @@ ROSServiceDiscovery::ROSServiceDiscovery(ServiceMonitor* service_monitor)
 
 }
 
-ROSServiceDiscovery::~ROSServiceDiscovery() {}
 
 bool ROSServiceDiscovery::Initialize() {
     LOG_DEBUG("ROSServiceDiscovery::Initialize ");
@@ -37,13 +36,13 @@ void ROSServiceDiscovery::ParseROSDiscoveryInfo(rmw_dds_common::msg::Participant
         expect_service = participant->GuessService();
     }
 
-    if ((participant == nullptr) && (node_entities_info.size() > 0) ){
+    if ((participant == nullptr) && (!node_entities_info.empty())) {
         LOG_DEBUG("ParseROSDiscoveryInfo - new participant " << participant_gid_hex << ", " << node_entities_info.size());
         participant = std::make_shared<ROS2Participant>();
         ros_participants_[participant_gid_hex] = participant;
-    } else if ((participant != nullptr) && (node_entities_info.size() == 0) ){
+    } else if ((participant != nullptr) && (node_entities_info.empty())) {
         LOG_DEBUG("ParseROSDiscoveryInfo - delete participant " << participant_gid_hex << ", " << node_entities_info.size());
-    } else if ((participant == nullptr) && (node_entities_info.size() == 0) ){
+    } else if ((participant == nullptr) && (node_entities_info.empty())) {
         LOG_DEBUG("ParseROSDiscoveryInfo - invalid participant " << participant_gid_hex << ", " << node_entities_info.size());
         return;
     } else {
@@ -51,7 +50,7 @@ void ROSServiceDiscovery::ParseROSDiscoveryInfo(rmw_dds_common::msg::Participant
         LOG_DEBUG("ParseROSDiscoveryInfo - update node list " << participant_gid_hex << ", " << node_entities_info.size());
     }
 
-    if (ros_service_discovery_initialized_ == false){
+    if (!ros_service_discovery_initialized_) {
         ros_service_discovery_initialized_ = true;
         LOG_DEBUG("ROSServiceDiscovery::ParseROSDiscoveryInfo - Initial Discovery Completed ");
         service_monitor_->NotifyAdswStatus(1, "ADSW is ready running");
@@ -125,7 +124,7 @@ std::shared_ptr<ROS2Participant> ROSServiceDiscovery::GetROSParticipant(const st
     return nullptr;
 }
 
-std::string ROSServiceDiscovery::guessService(const std::string ns){
+std::string ROSServiceDiscovery::guessService(const std::string& ns) {
     std::vector<std::string> tokens;
     size_t start = 0;
     while (start < ns.size()) {
@@ -133,10 +132,9 @@ std::string ROSServiceDiscovery::guessService(const std::string ns){
         if (dashPos == std::string::npos) {
             tokens.push_back(ns.substr(start));
             break;
-        } else {
-            tokens.push_back(ns.substr(start, dashPos - start));
-            start = dashPos + 1;
         }
+        tokens.push_back(ns.substr(start, dashPos - start));
+        start = dashPos + 1;
     }
 
     if (tokens.size() > 1){

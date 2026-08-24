@@ -790,6 +790,104 @@ TEST_F(ServiceMonitorTest, MultipleNodesPerService) {
 }
 
 
+// ═══════════════════════════════════════════════════════════════════════════
+// OnContainerStateChanged — 컨테이너 상태 전이를 그 안의 서비스로 전파
+//
+// 이 메서드는 호출하는 테스트가 아예 없어서 통째로 실행 0회였다.
+// ContainerHealthMonitor 가 컨테이너 죽음을 감지했을 때 그 안에서 돌던
+// 서비스들을 NOT_RUNNING 으로 내리는 유일한 경로다. 여기가 끊기면 컨테이너가
+// 죽어도 lfc_monitor 에는 서비스가 RUNNING 으로 남는다.
+//
+// Mock_Service 를 세팅하지 않는 게 요점이다. 링크 심이 널일 때 실제 멤버를
+// 쓰므로 SetServiceState/SetExitCode 가 정말 반영됐는지 확인할 수 있다.
+// (Mock_Service 를 걸면 전역 하나로 전부 위임돼서 서비스별 구분이 안 된다.)
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_F(ServiceMonitorTest, OnContainerStateChangedStopsEveryServiceInGroup) {
+    Mock_Service = nullptr;   // 실제 멤버를 쓰게 둔다
+    auto a = std::make_shared<Service>("svcA", ServiceType::NORMAL, RecoveryPolicy::MANUAL, true);
+    auto b = std::make_shared<Service>("svcB", ServiceType::NORMAL, RecoveryPolicy::MANUAL, true);
+    a->SetServiceState(ServiceState::RUNNING);
+    b->SetServiceState(ServiceState::RUNNING);
+
+    ON_CALL(*mock_registry_, GetServicesByGroup("web"))
+        .WillByDefault(Return(std::vector<std::shared_ptr<Service>>{a, b}));
+
+    monitor->OnContainerStateChanged("web", /*is_running=*/false, /*exit_code=*/137);
+
+    EXPECT_EQ(a->GetServiceState(), ServiceState::NOT_RUNNING);
+    EXPECT_EQ(b->GetServiceState(), ServiceState::NOT_RUNNING);
+    EXPECT_EQ(a->GetExitCode(), 137);
+    EXPECT_EQ(b->GetExitCode(), 137);
+}
+
+TEST_F(ServiceMonitorTest, OnContainerStateChangedRunningGoesToInitializing) {
+    // 컨테이너가 떴다고 서비스가 곧바로 RUNNING 은 아니다 — 안의 노드가
+    // 올라와야 한다. INITIALIZING 으로 두고 폴링이 승격시킨다.
+    Mock_Service = nullptr;
+    auto a = std::make_shared<Service>("svcA", ServiceType::NORMAL, RecoveryPolicy::MANUAL, true);
+    a->SetServiceState(ServiceState::NOT_RUNNING);
+
+    ON_CALL(*mock_registry_, GetServicesByGroup("web"))
+        .WillByDefault(Return(std::vector<std::shared_ptr<Service>>{a}));
+
+    monitor->OnContainerStateChanged("web", /*is_running=*/true, /*exit_code=*/0);
+
+    EXPECT_EQ(a->GetServiceState(), ServiceState::INITIALIZING);
+    EXPECT_EQ(a->GetExitCode(), 0);
+}
+
+TEST_F(ServiceMonitorTest, OnContainerStateChangedEmptyGroupIsNoop) {
+    // 기본 ON_CALL 이 빈 벡터를 준다. 아무 일도 없어야 하고 던지면 안 된다 —
+    // 이 호출은 ContainerHealthMonitor 폴 루프 스레드에서 온다.
+    EXPECT_NO_THROW(monitor->OnContainerStateChanged("nobody", false, 1));
+}
+
+TEST_F(ServiceMonitorTest, OnContainerStateChangedOnlyTouchesItsOwnGroup) {
+    Mock_Service = nullptr;
+    auto mine = std::make_shared<Service>("mine", ServiceType::NORMAL, RecoveryPolicy::MANUAL, true);
+    auto other = std::make_shared<Service>("other", ServiceType::NORMAL, RecoveryPolicy::MANUAL, true);
+    mine->SetServiceState(ServiceState::RUNNING);
+    other->SetServiceState(ServiceState::RUNNING);
+
+    ON_CALL(*mock_registry_, GetServicesByGroup("web"))
+        .WillByDefault(Return(std::vector<std::shared_ptr<Service>>{mine}));
+    ON_CALL(*mock_registry_, GetServicesByGroup("db"))
+        .WillByDefault(Return(std::vector<std::shared_ptr<Service>>{other}));
+
+    monitor->OnContainerStateChanged("web", false, 9);
+
+    EXPECT_EQ(mine->GetServiceState(), ServiceState::NOT_RUNNING);
+    EXPECT_EQ(other->GetServiceState(), ServiceState::RUNNING) << "다른 그룹은 그대로";
+}
+
+// ── OnServiceProcessDied 의 정상 경로 ──────────────────────────────────────
+// 기존 테스트는 registry 널 / 서비스 미발견 쪽만 지난다. 실제로 죽음을
+// 반영하는 세 줄(NOT_RUNNING · exit_code · PID 0)은 실행되지 않았다.
+// PID 를 0 으로 되돌리는 게 중요하다 — 남겨두면 폴링이 그 PID 를 재사용한
+// 다른 프로세스를 보고 죽은 서비스를 살아있다고 판정한다.
+
+TEST_F(ServiceMonitorTest, OnServiceProcessDiedRecordsDeath) {
+    Mock_Service = nullptr;
+    auto svc = std::make_shared<Service>("worker", ServiceType::NORMAL, RecoveryPolicy::MANUAL, true);
+    svc->SetServiceState(ServiceState::RUNNING);
+    svc->SetPID(4242);
+
+    ON_CALL(*mock_registry_, GetService("worker")).WillByDefault(Return(svc));
+
+    monitor->OnServiceProcessDied("worker", 139);
+
+    EXPECT_EQ(svc->GetServiceState(), ServiceState::NOT_RUNNING);
+    EXPECT_EQ(svc->GetExitCode(), 139);
+    EXPECT_EQ(svc->GetPID(), 0u) << "PID 를 남기면 폴링이 재사용 PID 를 오인한다";
+}
+
+TEST_F(ServiceMonitorTest, OnServiceProcessDiedUnknownServiceIsNoop) {
+    ON_CALL(*mock_registry_, GetService(_))
+        .WillByDefault(Return(std::shared_ptr<Service>{}));
+    EXPECT_NO_THROW(monitor->OnServiceProcessDied("ghost", 1));
+}
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

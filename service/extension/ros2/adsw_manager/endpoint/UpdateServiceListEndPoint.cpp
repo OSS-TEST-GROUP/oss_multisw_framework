@@ -1,5 +1,7 @@
 #include "UpdateServiceListEndPoint.hpp"
 
+#include <utility>
+
 #include "lifecycle/UpdateServiceListRequest.hpp"
 #include "ADSWManager.hpp"
 #include "logger/Log.hpp"
@@ -7,9 +9,8 @@
 namespace ros2 {
 namespace adsw_manager {
 
-UpdateServiceListEndPoint::UpdateServiceListEndPoint(MessageType msgtype, std::string topic) 
-    : DDSMessageEndpoint() {
-    topic_ = topic;
+UpdateServiceListEndPoint::UpdateServiceListEndPoint(MessageType msgtype, std::string topic) : topic_(std::move(topic)) {
+
     if (msgtype == MessageType::UPDATE_SERVICE_LIST_REQUEST){
         type_support_ = std::make_shared<TypeSupport>(new UpdateServiceListRequestPubSubType());
     }else if (msgtype == MessageType::UPDATE_SERVICE_LIST_RESPONSE){
@@ -36,7 +37,7 @@ std::shared_ptr<TypeSupport> UpdateServiceListEndPoint::GetTypeSupport() {
 void UpdateServiceListEndPoint::OnDataAvailable(){
     LOG_DEBUG("Message Delivery for " << GetTopic() );
 
-    if (Read<UpdateServiceListResponse>(resp_) == true){
+    if (Read<UpdateServiceListResponse>(resp_)) {
 
         UpdateServiceListResponse* message = reinterpret_cast<UpdateServiceListResponse*>(&resp_);
 
@@ -51,7 +52,6 @@ void UpdateServiceListEndPoint::OnDataAvailable(){
 
         ADSWManager::Get()->ConfirmUpdateServiceList();
     }
-
 }
 
 

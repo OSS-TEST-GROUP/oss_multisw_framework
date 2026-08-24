@@ -8,25 +8,23 @@
 #include <fastdds/dds/publisher/qos/DataWriterQos.hpp>
 #include <fastdds/dds/publisher/qos/PublisherQos.hpp>
 
-#include <fastdds/dds/subscriber/qos/DataReaderQos.hpp>
-#include <fastdds/dds/subscriber/qos/SubscriberQos.hpp>
 #include <fastdds/dds/subscriber/SampleInfo.hpp>
 #include <fastdds/dds/subscriber/Subscriber.hpp>
-
-#include <fastdds/dds/publisher/qos/DataWriterQos.hpp>
-#include <fastdds/dds/publisher/qos/PublisherQos.hpp>
+#include <fastdds/dds/subscriber/qos/DataReaderQos.hpp>
+#include <fastdds/dds/subscriber/qos/SubscriberQos.hpp>
+#include <utility>
 
 using namespace eprosima::fastdds::dds;
 
 namespace lifecycle_manager {
 
-DDSMessageEndPoint::DDSMessageEndPoint(std::string topic) 
-    : MessageEndPoint(topic),
-        participant_(nullptr), 
-        publisher_(nullptr), 
-        subscriber_(nullptr), 
-        writer_(nullptr), 
-        reader_(nullptr) {
+DDSMessageEndPoint::DDSMessageEndPoint(std::string topic)
+    : MessageEndPoint(std::move(topic)),
+      participant_(nullptr),
+      publisher_(nullptr),
+      subscriber_(nullptr),
+      writer_(nullptr),
+      reader_(nullptr) {
 
     LOG_DEBUG("DDSMessageEndPoint create. " << GetTopic());
 }

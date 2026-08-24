@@ -19,18 +19,17 @@ class ContainerServiceController  : public ServiceController {
     ContainerServiceController();
     ~ContainerServiceController();
 
-    virtual bool Initialize();
-    virtual void Finalize();
+    bool Initialize() override;
+    void Finalize() override;
 
-    virtual bool StartGroup(const std::string& group);
-    virtual bool StopGroup(const std::string& group);
+    bool StartGroup(const std::string& group) override;
+    bool StopGroup(const std::string& group) override;
 
-    virtual bool StartService(const std::string& service_name);
-    virtual bool StopService(const std::string& service_name);
+    bool StartService(const std::string& service_name) override;
+    bool StopService(const std::string& service_name) override;
 
-
-    virtual bool StartService(std::shared_ptr<Service> service);
-    virtual bool StopService(std::shared_ptr<Service> service);
+    bool StartService(std::shared_ptr<Service> service) override;
+    bool StopService(std::shared_ptr<Service> service) override;
 
     bool ProcessServiceStartRequest(lifecyclemgr::StartServiceRequest* message);
     bool ProcessServiceStopRequest(lifecyclemgr::StopServiceRequest* message);

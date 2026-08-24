@@ -499,7 +499,7 @@ SILS_CHANNELMAP=config/sils/channelmap/ego-min.yaml  bin/sils_vecu_vehicle_probe
 bin/sils_ego_source --count 20 --rate-ms 100
 # → 프로브에 state_received(vx↑) → control_published(제어 반응) 가 흐르면 왕복 성립</pre>
 
-    <div class="callout a"><strong>성숙도 (2026-07):</strong> <b>S1 free-run 완료·머지</b>(채널맵·정규계약·코덱·프로브·fixture, 폐루프 왕복 검증). 예정 — S2 tick 경계 staging(결정론), S3 lockstep, Autoware 제어 입력(스키마 확인 후 채널 추가). 제어는 <b>stand-in P</b>; 전용 behavior 포트는 2번째 소비자 전 미도입. <b>MORAI→DDS 어댑터는 외부</b>(SiLS 밖).</div>
+    <div class="callout a"><strong>성숙도 (2026-08):</strong> <b>S1~S5 전부 완료·머지</b> — S1 free-run(채널맵·정규계약·코덱·프로브·fixture), S2 tick 경계 staging(<code>SILS_STAGE_INPUT=1</code>), S3 lockstep(<code>SILS_CLOCK_MODE=lockstep</code>), S4 conformance(버스 결합 이벤트가 <b>trace schema v1 에 등록</b>, <code>analyze_vehicle</code> 판정), S5 결함 주입(<code>SILS_INPUT_FAULTS</code> + <code>analyze_fault</code>). 전용 behavior 포트 <b><code>IVehicleBehavior</code> 도 도입됨</b>(<code>vehicle_behavior.hpp</code>, 기본 구현 <code>LongitudinalBehavior</code>). 남은 것 — Autoware 제어 입력(<code>control_cmd</code>→<code>ControlTarget</code>)과 실 브리지 #1(BR-C-1 clock 답 확인 후). <b>MORAI→DDS 어댑터는 외부</b>(SiLS 밖).</div>
   </section>
 
   <!-- ============ 08 검증 + 체크리스트 ============ -->
@@ -551,5 +551,7 @@ bin/sils_ego_source --count 20 --rate-ms 100
   </footer>
 
 </div>
+
+<div id="sils-doc-stamp" style="max-width:1100px;margin:2rem auto 1.5rem;padding:.75rem 1rem;border-left:3px solid #f0a800;background:rgba(240,168,0,.08);font:13px/1.6 system-ui,-apple-system,sans-serif;color:inherit;opacity:.9"><strong>이 HTML 은 손으로 만든 시각 요약이며 생성 스크립트가 없다 — 정본은 짝이 되는 <code>.md</code> 다.</strong> 내용이 충돌하면 <code>.md</code> 를 믿을 것. 기준 commit: <code>3c61230</code> · 정합성 점검 2026-08-04.</div>
 </body>
 </html>

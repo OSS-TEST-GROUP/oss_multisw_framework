@@ -7,7 +7,6 @@ ArgumentConfig::ArgumentConfig(const std::string& name, const std::string& descr
     
 }
 
-ArgumentConfig::~ArgumentConfig() {}
 
 std::string ArgumentConfig::GetName(){
     return arg_name_;

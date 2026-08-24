@@ -2,7 +2,9 @@
 
 MMF(oss_multisw_framework) 위에서 **SiLS(Software-in-the-Loop) 가상 ECU** 를 컴파일·실행·판정·회귀검사하는 도구 모음이다. 아키텍처 확정본은 **v3 Final** 문서(`docs/sils/sils-virtual-ecu-architecture-v3.md`)이며, 아래 코드의 `§n` 주석은 모두 그 문서의 절 번호를 가리킨다.
 
-> **검증 상태 (중요).** 이 디렉터리의 Python/shell 도구 계층은 **샌드박스에서 실제 실행·테스트까지 완료**되어 있다(아래 "테스트" 참조). `service/sils/` 의 C++ vECU 본체는 FastDDS 툴체인이 있는 Linux(x86_64)에서 **컴파일 + 실제 DDS 왕복이 검증**되었고, fidelity **L0·L2·L3 를 실런타임 trace 로 판정 완료**(2026-07 실측): local·docker 두 백엔드 `run_pass`, 병렬 격리·Fleet(vECU 3개), lockstep 결정론(§8), 입력 스테이징·replay(§7), 행동 상태기계(§11 L2), **플랜트 폐루프(§11 L3, AnalyticPlant)를 두 번 독립 실행해 sim_time·궤적이 소수점까지 재현**(compare_golden MATCH). 실행이라 드러난 결함 3건도 수정: docker `--ipc=host`(SHM), late-join verifier 용 `TRANSIENT_LOCAL`, lockstep golden 의 벽시계 latency 스킵. 도구 계층은 바이너리 없이도 dry-run·사전 캡처 trace 로 전 구간을 검증할 수 있게 설계되었다.
+> **검증 상태 (중요).** 이 디렉터리의 Python/shell 도구 계층은 **샌드박스에서 실제 실행·테스트까지 완료**되어 있다(아래 "테스트" 참조). `service/sils/` 의 C++ vECU 본체는 FastDDS 툴체인이 있는 Linux(x86_64)에서 **컴파일 + 실제 DDS 왕복이 검증**되었고, `evaluate.py` 가 자동 부여하는 fidelity **L0·L1·L3 를 실런타임 trace 로 판정 완료**(2026-07 실측): local·docker 두 백엔드 `run_pass`, 병렬 격리·Fleet(vECU 3개), lockstep 결정론(§8), 입력 스테이징·replay(§7), 행동 상태기계 동작, **플랜트 폐루프(§11 L3, AnalyticPlant)를 두 번 독립 실행해 sim_time·궤적이 소수점까지 재현**(compare_golden MATCH). 실행이라 드러난 결함 3건도 수정: docker `--ipc=host`, late-join verifier 용 `TRANSIENT_LOCAL`, lockstep golden 의 벽시계 latency 스킵. 도구 계층은 바이너리 없이도 dry-run·사전 캡처 trace 로 전 구간을 검증할 수 있게 설계되었다.
+>
+> **L2 는 자동 판정되지 않는다.** `evaluate.py` 의 `fidelity_evidenced` 는 L0·L1·L3·L4(parity 경유)만 발급하며 `_bump("L2")` 는 존재하지 않는다. §11 L2 의 대표 검증인 golden scenario 비교는 `gate.py` 밖의 별도 스테이지(`sils-ci.sh` stage 5 → `compare_golden.py`)이고 `MATCH`/`REGRESSION` 만 낸다. 위 행동 상태기계 런이 `MATCH` 로 재현된 것은 **회귀 증거**이지 자동 L2 등급이 아니다. 자세한 경계는 [architecture-v3 §11](../../docs/sils/sils-virtual-ecu-architecture-v3.md) 주의 박스 참조.
 
 ---
 
@@ -41,14 +43,17 @@ service/sils/vecu/descriptors/*.yaml       (ECU Descriptor, §9.2)
 
 | 도구 | 역할 | § | 테스트 |
 |---|---|---|---|
-| [contracts/lint_catalog.py](contracts/lint_catalog.py) | Contract/QoS Catalog 단독 위생 검사(필수필드·중복·domain_env 오타·dangling qos·IDL 실존·enum). compile 前 게이트 | §9.1/§9.3 | [16](contracts/test_lint_catalog.py) |
+| [contracts/lint_catalog.py](contracts/lint_catalog.py) | Contract/QoS Catalog 단독 위생 검사(필수필드·중복·domain_env 오타·dangling qos·IDL 실존·enum). compile 前 게이트 | §9.1/§9.3 | [18](contracts/test_lint_catalog.py) |
 | [topology_compiler/compile.py](topology_compiler/compile.py) | Topology+Descriptor+Contract+QoS → `resolved-run.yaml` + `saved-service-list.yaml`. 정적 검증(single-owner, 이름 중복, domain_env 일관성) + **Descriptor 포트 선언(clock/behavior/plant/scenario/attestation)→SILS_\* env 배선**(§9.2) | §9.2/§9.5/§11/§13 | [16](topology_compiler/test_compile.py) |
 | [topology_compiler/resolved_to_shell.py](topology_compiler/resolved_to_shell.py) | `resolved-run.yaml` → shell-safe `KEY='value'`(코디네이터 `--from-resolved` 급전) | §11 | (compile 테스트에 포함) |
 | [run_coordinator/domain_lease.py](run_coordinator/domain_lease.py) | 유한 pool 에서 DDS domain 원자적 임대(TTL+owner). 병렬 run 격리, Coordinator 사망 시 회수 | §12.1/§12.2 | [7](run_coordinator/test_domain_lease.py) |
-| [conformance/evaluate.py](conformance/evaluate.py) | trace.jsonl → conformance verdict. §5.2 상태기계(+verifier terminal), 증거기반 pass(L0), lockstep/staging/behavior/plant/scenario 판정(L1/L2/L3+결함주입), L4 attestation 기록, lease 무결성, fleet 완전성 | §5/§7/§8/§11/§12 | [61](conformance/test_evaluate.py) |
+| [conformance/validate_trace.py](conformance/validate_trace.py) | trace.jsonl ↔ `config/sils/trace-schema/v1.json` 적합성. 미등록 event 는 **기본 실패**(forward-compat 는 `--allow-unknown-events`) | §계약 | [12](conformance/test_validate_trace.py) |
+| [conformance/evaluate.py](conformance/evaluate.py) | trace.jsonl → conformance verdict. §5.2 상태기계(+verifier terminal), 증거기반 pass(L0), lockstep/staging/behavior/plant/vehicle/scenario 판정, 요구 판정(`--requirements`), L4 attestation 기록, lease 무결성, fleet 완전성. **`fidelity_evidenced` 는 L0·L1·L3 만 발급 — L2 없음** | §5/§7/§8/§11/§12 | [80](conformance/test_evaluate.py) |
+| [conformance/gate.py](conformance/gate.py) | 판정 진입점: schema → fidelity → (선택)parity 를 fail-closed 로 묶고 `--junit` 방출. **선언 fidelity 와 `fidelity_evidenced` 를 대조하지는 않는다** | §11/§16 | [10](conformance/test_gate.py) |
+| [conformance/import_openscenario.py](conformance/import_openscenario.py) | `.xosc` → `requirements.yaml`. 매핑은 `SpeedCondition`·`AccelerationCondition` **2종만**, 미매핑 8종은 리포트. `ParameterDeclarations` `$name` 치환 지원(체인·순환·미선언·`${expr}` 명시 처리). 시나리오를 **실행하지 않으며** StopTrigger polarity 는 리뷰 대상 | §요구 | [14](conformance/test_import_openscenario.py) |
 | [conformance/to_junit.py](conformance/to_junit.py) | verdict → JUnit XML(CI 수집). PASS/FAIL/ABORTED/INCOMPLETE → testcase/failure/error | §16 | [12](conformance/test_to_junit.py) |
-| [conformance/capture_golden.py](conformance/capture_golden.py) | run trace → 정규화 golden(식별자 제거·시각 rebase). PASSED+conformant·결정론 모드만 허용 | §12.4 | [8](conformance/test_capture_golden.py) |
-| [conformance/compare_golden.py](conformance/compare_golden.py) | candidate vs golden 회귀 판정(FP tolerance·behavior/plant/scenario 값 비교=model correlation·ordering·missing/extra 정책·입력모드 게이트·lockstep 시 벽시계 latency 스킵) | §11/§12.4 | [18](conformance/test_compare_golden.py) |
+| [conformance/capture_golden.py](conformance/capture_golden.py) | run trace → 정규화 golden(식별자 제거·시각 rebase). PASSED+conformant·결정론 모드만 허용. **`--plant`** 로 플랜트 정체를 `golden_meta` 에 기록 | §12.4 | [12](conformance/test_capture_golden.py) |
+| [conformance/compare_golden.py](conformance/compare_golden.py) | candidate vs golden 회귀 판정(FP tolerance·behavior/plant/scenario 값 비교=model correlation·ordering·missing/extra 정책·입력모드 게이트·lockstep 시 벽시계 latency 스킵). **`--plant` 플랜트 격리** — golden 과 다른 시뮬레이터면 REGRESSION 이 아니라 **정책 거부(exit 2)** | §11/§12.4 | [27](conformance/test_compare_golden.py) |
 | [conformance/parity.py](conformance/parity.py) | **L4 target parity** 판정: SiLS trace vs 실-타깃 레퍼런스 trace 비교(신호별 tolerance·timing) + attestation 게이트(arch/gateway/protocol). PARITY=L4 / PARITY_UNATTESTED=L3 / DIVERGENCE. golden(SiLS-vs-SiLS 재현성)과 달리 타깃이 authority | §11 | [12](conformance/test_parity.py) |
 | [ci/sils-ci.sh](ci/sils-ci.sh) | 위 전부를 한 진입점으로: lint→compile→run→evaluate→junit→compare→**parity(L4)→capture-golden**. 단계별 skip(`--parity-target/-contract`, `--capture-golden-dir`) | §9~§16 | [18](ci/test_sils_ci.sh) |
 
@@ -118,25 +123,52 @@ bash service/sils/run_coordinator/run_phase1.sh start --backend local --bin-dir 
 
 ## 테스트
 
-각 도구는 pytest 무의존의 자체 실행 테스트를 가진다(assert 기반). 전체 실행:
+### 의존성 (먼저)
 
 ```bash
-for t in tools/sils/topology_compiler/test_compile.py \
-         tools/sils/run_coordinator/test_domain_lease.py \
-         tools/sils/conformance/test_evaluate.py \
-         tools/sils/conformance/test_to_junit.py \
-         tools/sils/conformance/test_compare_golden.py \
-         tools/sils/conformance/test_capture_golden.py \
-         tools/sils/contracts/test_lint_catalog.py \
-         tools/sils/conformance/test_parity.py \
-         tools/sils/fmu/test_fmu_map.py \
-         tools/sils/fmu/test_fmu_gate.py; do
-    python3 "$t" || echo "FAILED: $t"
-done
-bash tools/sils/ci/test_sils_ci.sh
+python3 -m pip install -r tools/sils/requirements.txt   # PyYAML + pytest
 ```
 
-현재 전부 green: Python 10개 스위트(evaluate 61 · compare_golden 18 · capture 8 · to_junit 12 · parity 12 · lint 18 · compile 16 · domain_lease 7 · fmu_map 8 · fmu_gate 14 = 174) + shell smoke(fleet 17 · ci 18). 파이썬만 필요하며 DDS/도커 툴체인은 필요 없다.
+**PyYAML 은 선택이 아니다.** `topology_compiler/compile.py` 와 `resolved_to_shell.py` 는
+top-level `import yaml` 이라 없으면 즉시 실패하고, `sils-ci.sh` 는 compile 스테이지를 타므로 전 구간이
+막힌다. `evaluate.py --requirements`, `gate.py --requirements/--rules`, `compare_golden --rules`,
+`parity --contract`, `import_openscenario`, `lint_catalog`, `fmu_gate/fmu_map` 도 같다.
+**예외는 trace-only 경로 하나** — `gate.py <trace.jsonl>` 와 `validate_trace.py <trace.jsonl>` 은
+추가 인자 없이 쓰면 stdlib 만으로 동작한다(Phase 2 Tier A 판정 경로). 항목별 표는
+[requirements.txt](requirements.txt) 주석 참조.
+
+### 전체 실행 (정식 경로)
+
+```bash
+python3 -m pytest tools/sils -q          # 13개 스위트 · 242 tests
+bash tools/sils/ci/test_sils_ci.sh       # shell smoke · 23 tests
+```
+
+`pytest` 가 정식 경로다 — 대부분의 스위트는 `python3 <test_file>` 자체 실행도 지원하지만
+(각 파일의 `if __name__ == "__main__"`), 그 경로는 pytest 의 수집·리포트를 대체하지 않는다.
+자체 실행 루프를 쓸 때는 **실패를 삼키지 말 것**:
+
+```bash
+rc=0
+for t in $(find tools/sils -name 'test_*.py' | sort); do
+    python3 "$t" || { echo "FAILED: $t"; rc=1; }
+done
+exit "$rc"      # `|| echo` 만 쓰면 실패해도 shell 종료코드가 0 이 된다
+```
+
+### 현재 수치 (2026-08-06 실측, 전부 green)
+
+| 스위트 | tests | | 스위트 | tests |
+|---|---:|---|---|---:|
+| `conformance/test_evaluate` | 80 | | `conformance/test_capture_golden` | 12 |
+| `conformance/test_compare_golden` | 27 | | `conformance/test_validate_trace` | 12 |
+| `contracts/test_lint_catalog` | 18 | | `conformance/test_parity` | 12 |
+| `topology_compiler/test_compile` | 16 | | `conformance/test_gate` | 10 |
+| `fmu/test_fmu_gate` | 14 | | `fmu/test_fmu_map` | 8 |
+| `conformance/test_import_openscenario` | 14 | | `run_coordinator/test_domain_lease` | 7 |
+| `conformance/test_to_junit` | 12 | | **합계** | **242** |
+
+여기에 shell smoke(`test_sils_ci.sh` 23 · fleet 17)가 더해진다. DDS/도커 툴체인은 필요 없다.
 
 ---
 
@@ -144,7 +176,7 @@ bash tools/sils/ci/test_sils_ci.sh
 
 Phase 1 은 vECU 한 개가 `/VIN/Vehicle` 로 VISS 요청을 publish 하고 독립 검증기가 왕복을 확인하는 최소 수직 슬라이스다(§17 Scope Gate). 도구 계층은 이미 다중 인스턴스(replicas)·domain pool·회귀 루프를 지원한다.
 
-**실검증 완료(x86_64)**: C++ 빌드; `run_phase1.sh` local·docker 단일 왕복(`run_pass`); 병렬 격리(§12, 동시 2런 각자 도메인); **Fleet(§11/§13, vECU 3개 동시 기동·도메인 공유·`run_pass`)**; 위 모든 실 trace 를 `evaluate.py` 가 그대로 PASSED 로 판정(fleet 은 instance_id 3개 나열). Docker 백엔드는 `--network host`(discovery)에 더해 **`--ipc=host`(SHM 데이터 경로)** 가 필수임을 실측으로 확인해 반영했다.
+**실검증 완료(x86_64)**: C++ 빌드; `run_phase1.sh` local·docker 단일 왕복(`run_pass`); 병렬 격리(§12, 동시 2런 각자 도메인); **Fleet(§11/§13, vECU 3개 동시 기동·도메인 공유·`run_pass`)**; 위 모든 실 trace 를 `evaluate.py` 가 그대로 PASSED 로 판정(fleet 은 instance_id 3개 나열). Docker 백엔드는 `--network host`(discovery)가 필수이고, `--ipc=host` 는 SHM 전송이 살아 있는 구성에서 "matched-but-no-data" 를 막기 위해 추가했다(2026-07 실측). **단 현재 canonical 이미지는 SHM 을 쓰지 않는다** — [fastdds-profile.xml](../../docker/build_environment/fastdds-profile.xml) 이 UDPv4-only + `useBuiltinTransports=false` + `data_sharing OFF` 이고 [Dockerfile.rel](../../docker/Dockerfile.rel) 의 `runtime` 스테이지가 이를 `FASTDDS_DEFAULT_PROFILES_FILE` 로 고정(SiLS 스테이지가 상속)하므로, `--ipc=host` 는 프로파일 미적용 커스텀 이미지에 대한 **방어적 유지**다. 경계 설명은 [understanding §4.7.1](../../docs/sils/sils-understanding.md).
 
 **모드 전환(§8) + 입력 스테이징(§7) 확인**: `SILS_CLOCK_MODE=lockstep` 로 ClockMaster
 +probe+verify 왕복 시 evaluate.py 가 `clock.deterministic=true`(tick 1..N +1 단조,

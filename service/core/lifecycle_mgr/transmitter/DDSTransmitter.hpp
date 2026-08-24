@@ -18,13 +18,12 @@ namespace lifecycle_manager {
 class DDSTransmitter {
   public:
     DDSTransmitter();
-    virtual ~DDSTransmitter();
-
+    virtual ~DDSTransmitter() = default;
     bool Initialize();
     void Finalize();
 
-    bool AddMessageEndpoint(std::shared_ptr<DDSMessageEndPoint> endpoint);
-    std::shared_ptr<DDSMessageEndPoint> GetMessageEndPoint(std::string topic);
+    bool AddMessageEndpoint(const std::shared_ptr<DDSMessageEndPoint>& endpoint);
+    std::shared_ptr<DDSMessageEndPoint> GetMessageEndPoint(const std::string& topic);
 
     DomainParticipant* GetDomain();
     Publisher* GetPublisher();

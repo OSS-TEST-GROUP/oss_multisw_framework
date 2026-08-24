@@ -97,9 +97,9 @@ do_prepare_build_environment()
 		fi
 		#if [[ ${TARGET_MF_NAME} = "agl" ]]; then
 		#	if [[ ! -d ${SDK_DIR}/agl-adt ]]; then
-		#		curl -v -u "ossdev:ossdev1234" \
-		#			-o /tmp/oss-agl-ivi-flutter-aarch64-toolchain-18.94.0.sh \
-		#			https://repo.obigo.com/repository/yocto-adt/agl/oss-agl-ivi-flutter-aarch64-toolchain-18.94.0.sh
+		#		# AGL SDK 취득: Nexus (기본) 또는 S3 (선택, AGL_SDK_SOURCE=s3)
+		#		# Nexus: curl -v -u "${REPO_ID}:${REPO_PWD}" -o /tmp/oss-agl-ivi-flutter-aarch64-toolchain-18.94.0.sh https://repo.obigo.com/repository/yocto-adt/agl/oss-agl-ivi-flutter-aarch64-toolchain-18.94.0.sh
+		#		# S3   : aws s3 cp s3://oss-artifact/yocto-adt/agl/oss-agl-ivi-flutter-aarch64-toolchain-18.94.0.sh /tmp/oss-agl-ivi-flutter-aarch64-toolchain-18.94.0.sh
 		#		do_error_check
 
 		#		chmod a+x /tmp/oss-agl-ivi-flutter-aarch64-toolchain-18.94.0.sh

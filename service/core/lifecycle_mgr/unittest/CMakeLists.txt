@@ -58,7 +58,13 @@ enable_testing()
 include (GoogleTest)
 
 # Add test executable
-add_executable ( LifecycleManagerTest LifecycleManagerTest.cpp ../manager/LifecycleManager.cpp )
+# GENERATED_DDS_FILES 는 on_notify_container_state 핸들러 테스트가 실제
+# NotifyContainerState 를 만들어야 해서 필요하다 (생성 타입의 생성자는
+# 헤더에 인라인돼 있지 않다). 나머지 핸들러는 포인터를 통과만 시키므로
+# nullptr 로 검증한다.
+add_executable ( LifecycleManagerTest LifecycleManagerTest.cpp ../manager/LifecycleManager.cpp
+                ${GENERATED_DDS_FILES}
+                )
 add_executable ( DDSTransmitterTest DDSTransmitterTest.cpp ../transmitter/DDSTransmitter.cpp )
 add_executable ( DDSMessageEndPointTest DDSMessageEndPointTest.cpp ../transmitter/DDSMessageEndPoint.cpp )
 add_executable ( DDSMessageEndPointReadTest DDSMessageEndPointReadTest.cpp 
@@ -100,9 +106,28 @@ add_executable ( LFPolicyManagerTest PolicyManagerTest.cpp
                 ../policy/PolicyOnNotResponding.cpp
                 )
 add_executable ( ServiceRegistryTest ServiceRegistryTest.cpp ../service/ServiceRegistry.cpp ../service/Container.cpp ../logger/Logger.cpp )
+# UpdateServiceList 전용 바이너리. ServiceRegistryTest 와 달리 **진짜**
+# Service.cpp 를 링크한다 — mock_service.hpp 심을 쓰면 UpdateServiceList 가
+# 스스로 만드는 Service 객체들이 전역 mock 하나를 공유해 이름이 뭉개진다.
+# 자세한 이유는 ServiceRegistryUpdateTest.cpp 상단 주석 참고.
+add_executable ( ServiceRegistryUpdateTest ServiceRegistryUpdateTest.cpp
+                 ../service/ServiceRegistry.cpp
+                 ../service/Service.cpp
+                 ../service/Container.cpp
+                 ../logger/Logger.cpp
+                 ${GENERATED_DDS_FILES}
+                 )
 add_executable ( ServiceTest ServiceTest.cpp ../service/Service.cpp )
-add_executable ( StateManagerTest StateManagerTest.cpp ../state/StateManager.cpp )
-add_executable ( StateMonitorTest StateMonitorTest.cpp ../state/StateMonitor.cpp)
+# Container.cpp: ctrl/StartContainer·StopContainer 게이트가 ServiceRegistry 에서
+# 받은 Container 를 다룬다. 링크해 두면 그 경로를 실제 객체로 테스트할 수 있고,
+# 커버리지 0% 였던 Container.cpp / Container.hpp 도 함께 잡힌다.
+add_executable ( StateManagerTest StateManagerTest.cpp ../state/StateManager.cpp
+                 ../service/Container.cpp )
+# Container 는 5인자 생성자만 Container.cpp 에 있고 나머지 접근자는 헤더에 있다.
+# F008 컨테이너 집계 리포트 테스트가 실제 Container 를 만들어야 해서 링크한다
+# (목/링크 심이 없는 순수 값 타입이라 중복 정의 걱정이 없다).
+add_executable ( StateMonitorTest StateMonitorTest.cpp ../state/StateMonitor.cpp
+                 ../service/Container.cpp )
 add_executable ( ArgumentConfigTest ArgumentConfigTest.cpp ../service/ArgumentConfig.cpp )
 add_executable ( MWServiceTest MWServiceTest.cpp ../service/MWService.cpp ../service/ArgumentConfig.cpp )
 add_executable ( HelperTest HelperTest.cpp )
@@ -117,6 +142,48 @@ add_executable ( ConcreteEndpointIntegrationTest
                 ../endpoint/UpdateServiceListEndPoint.cpp
                 ../endpoint/SetServiceModeEndPoint.cpp
                 ../endpoint/LifecycleDiagReportEndPoint.cpp
+                # F013/F014 ctrl·container 엔드포인트 10종.
+                # 이들의 OnDataAvailable 콜백 디스패치는 Read<T>() 가 성공해야
+                # 도달하고, Read 는 실제 DataReader 없이는 언제나 false 다.
+                # 즉 실 DDS 왕복이 있는 이 타겟에서만 덮을 수 있다.
+                ../endpoint/CtrlStartServiceEndPoint.cpp
+                ../endpoint/CtrlStopServiceEndPoint.cpp
+                ../endpoint/CtrlSetServiceModeEndPoint.cpp
+                ../endpoint/CtrlSetRecoveryPolicyEndPoint.cpp
+                ../endpoint/CtrlStartContainerEndPoint.cpp
+                ../endpoint/CtrlStopContainerEndPoint.cpp
+                ../endpoint/SetRecoveryPolicyEndPoint.cpp
+                ../endpoint/StartContainerEndPoint.cpp
+                ../endpoint/StopContainerEndPoint.cpp
+                ../endpoint/NotifyContainerStateEndPoint.cpp
+                ../transmitter/DDSMessageEndPoint.cpp
+                ../transmitter/MessageEndPoint.cpp
+                ${GENERATED_DDS_FILES}
+                )
+
+# F013/F014 ctrl·container 엔드포인트 10종 — 유닛 레인용 방어 경로.
+# 실 DDS 를 쓰지 않는다. reader_ 가 nullptr 일 때 조용히 끝나는지, 콜백이
+# 없을 때 터지지 않는지를 본다. 자세한 이유는 CtrlEndPointTest.cpp 상단 주석 참고.
+#
+# 예전 주석은 "커버리지는 유닛 레인 실행분으로만 측정되므로 통합 레인에 넣으면
+# 수치에 반영되지 않는다"고 적혀 있었는데, 그 전제는 더 이상 맞지 않는다.
+# coverage 캡처 전에 run_integration.sh 를 돌리도록 바뀐 뒤로 통합 레인 실행분도
+# 함께 잡힌다 (Jenkinsfile.unittest 의 'Integration ctest (for coverage)' 스테이지).
+# 근거: StartServiceEndPoint.cpp 의 `if (on_data_cb_)` 는 통합 레인에서만
+# 실행되는데 현재 두 분기 모두 taken 으로 잡힌다.
+# 그래서 콜백 디스패치는 위 통합 타겟에서 덮고, 이 타겟은 방어 경로만 맡는다.
+add_executable ( CtrlEndPointTest
+                CtrlEndPointTest.cpp
+                ../endpoint/CtrlStartServiceEndPoint.cpp
+                ../endpoint/CtrlStopServiceEndPoint.cpp
+                ../endpoint/CtrlSetServiceModeEndPoint.cpp
+                ../endpoint/CtrlSetRecoveryPolicyEndPoint.cpp
+                ../endpoint/CtrlStartContainerEndPoint.cpp
+                ../endpoint/CtrlStopContainerEndPoint.cpp
+                ../endpoint/SetRecoveryPolicyEndPoint.cpp
+                ../endpoint/StartContainerEndPoint.cpp
+                ../endpoint/StopContainerEndPoint.cpp
+                ../endpoint/NotifyContainerStateEndPoint.cpp
                 ../transmitter/DDSMessageEndPoint.cpp
                 ../transmitter/MessageEndPoint.cpp
                 ${GENERATED_DDS_FILES}
@@ -216,12 +283,14 @@ gtest_discover_tests ( EndPointFactoryTest )
 gtest_discover_tests ( MWServiceManagerTest )
 gtest_discover_tests ( LFPolicyManagerTest )
 gtest_discover_tests ( ServiceRegistryTest )
+gtest_discover_tests ( ServiceRegistryUpdateTest )
 gtest_discover_tests ( ServiceTest )
 gtest_discover_tests ( StateManagerTest )
 gtest_discover_tests ( StateMonitorTest )
 gtest_discover_tests ( ArgumentConfigTest )
 gtest_discover_tests ( MWServiceTest )
 gtest_discover_tests ( HelperTest )
+gtest_discover_tests ( CtrlEndPointTest )
 gtest_discover_tests ( ConcreteEndpointIntegrationTest )
 gtest_discover_tests ( LifecycleAdswIntegrationTest )
 gtest_discover_tests ( LifecycleAutowareE2ETest )

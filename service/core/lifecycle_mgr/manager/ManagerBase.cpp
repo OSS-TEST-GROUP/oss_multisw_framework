@@ -1,5 +1,7 @@
 #include "ManagerBase.hpp"
+
 #include "endpoint/EndPointFactory.hpp"
+#include <utility>
 
 namespace lifecycle_manager {
 
@@ -7,7 +9,6 @@ ManagerBase::ManagerBase(LifecycleManager& lifecycle)
     : lifecycle_(lifecycle){
 
 }
-ManagerBase::~ManagerBase() {}
 
 
 std::shared_ptr<DDSTransmitter> ManagerBase::GetTransmitter(){
@@ -35,7 +36,7 @@ const char* ManagerBase::GetTopic(MessageType mtype){
 }
 
 std::shared_ptr<Service> ManagerBase::GetService(std::string name){
-    return lifecycle_.GetService(name);
+    return lifecycle_.GetService(std::move(name));
 }
 
 bool ManagerBase::IsK3sMode(){

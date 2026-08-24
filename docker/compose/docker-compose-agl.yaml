@@ -1,7 +1,7 @@
 services:
   mmf:
     container_name: oss-mmf-ext-agl
-    image: registry.obigo.com/oss/oss-mmf-ext-agl:latest
+    image: ${EXTAGL_IMG:-registry.obigo.com/oss/oss-mmf-ext-agl:latest}
     privileged: true
     network_mode: "host"
     cap_add:

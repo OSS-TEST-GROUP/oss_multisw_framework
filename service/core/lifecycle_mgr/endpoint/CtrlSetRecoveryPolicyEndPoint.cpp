@@ -1,5 +1,7 @@
 #include "CtrlSetRecoveryPolicyEndPoint.hpp"
 
+#include <utility>
+
 #include "lifecycle/LifecycleCtrlRequest.hpp"
 #include "logger/Log.hpp"
 
@@ -7,7 +9,7 @@ namespace lifecycle_manager {
 
 CtrlSetRecoveryPolicyEndPoint::CtrlSetRecoveryPolicyEndPoint(
     MessageType msgtype, std::string topic, Callback cb)
-    : DDSMessageEndPoint(topic), on_data_cb_(std::move(cb)) {
+    : DDSMessageEndPoint(std::move(topic)), on_data_cb_(std::move(cb)) {
     if (msgtype == MessageType::CTRL_SET_RECOVERY_POLICY_REQUEST) {
         SetTypeSupport(std::make_shared<TypeSupport>(
             new CtrlSetRecoveryPolicyRequestPubSubType()));
@@ -17,12 +19,11 @@ CtrlSetRecoveryPolicyEndPoint::CtrlSetRecoveryPolicyEndPoint(
     }
 }
 
-CtrlSetRecoveryPolicyEndPoint::~CtrlSetRecoveryPolicyEndPoint() {}
 
 void CtrlSetRecoveryPolicyEndPoint::OnDataAvailable() {
     LOG_DEBUG("Message Delivery for " << GetTopic());
 
-    if (Read<CtrlSetRecoveryPolicyRequest>(req_) == true) {
+    if (Read<CtrlSetRecoveryPolicyRequest>(req_)) {
         CtrlSetRecoveryPolicyRequest* msg =
             reinterpret_cast<CtrlSetRecoveryPolicyRequest*>(&req_);
         if (on_data_cb_) {

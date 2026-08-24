@@ -19,8 +19,7 @@ class Service;
 class LifecycleManager {
   public:
     LifecycleManager();
-    virtual ~LifecycleManager();
-
+    virtual ~LifecycleManager() = default;
     bool Initialize();
 
     bool Start();
@@ -53,9 +52,12 @@ class LifecycleManager {
     std::shared_ptr<PolicyManager> policy_manager_;
     std::shared_ptr<MWServiceManager> mw_service_manager_;
     std::shared_ptr<DDSTransmitter> msg_transmitter_;
-    EndPointFactory* endpoint_factory_;
+    // 생성자에서 초기화되지 않아 GetEndPointFactory() 가 Initialize() 전에
+    // 호출되면 쓰레기 포인터를 반환했다 (cppcheck uninitMemberVar).
+    EndPointFactory* endpoint_factory_ = nullptr;
 
-    ManagerState     manager_state_;
+    // 미초기화 enum 을 GetState() 가 그대로 반환하고 비교문에서도 읽혔다.
+    ManagerState     manager_state_ = ManagerState::MANAGER_INIT;
     bool             is_k3s_mode_{false};
 };
 

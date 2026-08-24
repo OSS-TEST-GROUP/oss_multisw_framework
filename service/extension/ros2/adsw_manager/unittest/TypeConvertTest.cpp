@@ -201,6 +201,38 @@ TEST_F(TypeConvertTest, ToMwType_ToLifecyclemgr_AUTOSAR) {
     EXPECT_EQ(TypeConvert::ToMwType(MwType::AUTOSAR), lifecyclemgr::MwType::AUTOSAR);
 }
 
+// MW_NATIVE: service/extension/general 이 관리하는 서비스 -- 미들웨어 프레임워크 없이
+// 도는 순수 프로세스/컨테이너. 이 값이 없던 동안 general adsw_manager 는 자기 서비스를
+// ROS2 로 보고했고, mw_type 은 라우팅 키라서 ros2 adsw_manager 와 같은 버스에 있으면
+// 둘 다 같은 요청에 반응했다.
+TEST_F(TypeConvertTest, ToMwType_FromLifecyclemgr_MW_NATIVE) {
+    EXPECT_EQ(TypeConvert::ToMwType(lifecyclemgr::MwType::MW_NATIVE), MwType::MW_NATIVE);
+}
+
+TEST_F(TypeConvertTest, ToMwType_ToLifecyclemgr_MW_NATIVE) {
+    EXPECT_EQ(TypeConvert::ToMwType(MwType::MW_NATIVE), lifecyclemgr::MwType::MW_NATIVE);
+}
+
+TEST_F(TypeConvertTest, ToMwType_FromLifecyclemgr_MW_UNKNOWN) {
+    EXPECT_EQ(TypeConvert::ToMwType(lifecyclemgr::MwType::MW_UNKNOWN), MwType::MW_UNKNOWN);
+}
+
+TEST_F(TypeConvertTest, ToMwType_ToLifecyclemgr_MW_UNKNOWN) {
+    EXPECT_EQ(TypeConvert::ToMwType(MwType::MW_UNKNOWN), lifecyclemgr::MwType::MW_UNKNOWN);
+}
+
+// ★ 열거자 밖의 값은 MW_UNKNOWN 으로 떨어져야 한다 -- ROS2 가 아니라.
+//
+// 이 함수에는 switch 뒤 return 이 **없었다**. 값 없이 함수를 벗어나는 UB 였고, IDL 이
+// 열거자를 늘리는 순간(지금 이 커밋이 그렇다) 그 값을 받은 기존 빌드가 거기로 빠진다.
+// 그리고 fallback 을 ROS2 로 두면 "모른다" 가 "라우팅 대상이다" 로 바뀐다 -- 이 값이
+// 라우팅 키이므로 조용히 남의 요청을 집어가게 된다.
+TEST_F(TypeConvertTest, ToMwType_UnknownEnumerator_FallsBackToUnknown) {
+    const auto out_of_range = static_cast<lifecyclemgr::MwType>(9999);
+    EXPECT_EQ(TypeConvert::ToMwType(out_of_range), MwType::MW_UNKNOWN);
+    EXPECT_EQ(TypeConvert::ToMwType(static_cast<MwType>(9999)), lifecyclemgr::MwType::MW_UNKNOWN);
+}
+
 // ============================================================================
 // Roundtrip tests (convert and convert back)
 // ============================================================================
@@ -230,10 +262,16 @@ TEST_F(TypeConvertTest, RecoveryPolicy_Roundtrip) {
 }
 
 TEST_F(TypeConvertTest, MwType_Roundtrip) {
-    EXPECT_EQ(TypeConvert::ToMwType(TypeConvert::ToMwType(lifecyclemgr::MwType::ROS2)), 
-              lifecyclemgr::MwType::ROS2);
-    EXPECT_EQ(TypeConvert::ToMwType(TypeConvert::ToMwType(lifecyclemgr::MwType::AGL)), 
-              lifecyclemgr::MwType::AGL);
+    // 열거자를 늘릴 때 여기도 늘릴 것. 빠뜨리면 새 값이 변환에서 조용히 뭉개져도
+    // 이 테스트는 통과한다 -- mw_type 은 라우팅 키라 그 침묵의 대가가 크다.
+    for (const auto mw : {lifecyclemgr::MwType::ROS2,
+                          lifecyclemgr::MwType::AGL,
+                          lifecyclemgr::MwType::AUTOSAR,
+                          lifecyclemgr::MwType::MW_NATIVE,
+                          lifecyclemgr::MwType::MW_UNKNOWN}) {
+        EXPECT_EQ(TypeConvert::ToMwType(TypeConvert::ToMwType(mw)), mw)
+            << "MwType roundtrip lost value " << static_cast<int>(mw);
+    }
 }
 
 

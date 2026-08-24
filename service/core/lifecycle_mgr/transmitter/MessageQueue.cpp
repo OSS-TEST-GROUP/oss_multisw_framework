@@ -15,7 +15,6 @@ MessageQueue::MessageQueue(DDSTransmitter* transmitter)
     : transmitter_(transmitter) {
 
 }
-MessageQueue::~MessageQueue() {}
 
 bool MessageQueue::Start() {
     
@@ -56,8 +55,9 @@ void MessageQueue::PublishingLoop()
             return stop_publisher_.load() || !outgoing_msg_queue_.empty();
         });
 
-        if (stop_publisher_.load())
+        if (stop_publisher_.load()) {
             break;
+        }
 
         while (!outgoing_msg_queue_.empty())
         {
@@ -71,8 +71,7 @@ void MessageQueue::PublishingLoop()
 
             if (endpoint != nullptr){
                 auto ret = endpoint->Write(msg.second);
-                if (ret != true)
-                {
+                if (!ret) {
                     LOG_DEBUG("Failed to write message: " << topic  );
                 }
             }

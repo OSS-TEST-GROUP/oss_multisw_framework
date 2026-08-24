@@ -162,7 +162,7 @@ footer{margin-top:52px;padding-top:16px;border-top:1px solid var(--line);color:v
 
 <h3>4.1 플랫폼 제약 (실측)</h3>
 <div class="table-wrap"><table><thead><tr><th>환경</th><th>vECU 본체(C++)</th><th>도구 계층(py/sh)</th><th>에이전트 루프 가능 경로</th></tr></thead><tbody>
-<tr><td>Linux x86_64 + FastDDS</td><td class="yes">✅ 실런타임 검증(L0·L2·L3)</td><td class="yes">✅</td><td>전 구간 (<code>run</code> 포함)</td></tr>
+<tr><td>Linux x86_64 + FastDDS</td><td class="yes">✅ 실런타임 검증(자동 판정 L0·L1·L3)</td><td class="yes">✅</td><td>전 구간 (<code>run</code> 포함)</td></tr>
 <tr><td>docker 백엔드</td><td class="yes">✅ (<code>--ipc=host</code> 필수 — SHM)</td><td class="yes">✅</td><td>전 구간</td></tr>
 <tr><td>macOS (현 개발 데스크톱)</td><td class="no">❌ 툴체인 없음</td><td class="yes">✅</td><td><code>--traces-dir</code>(사전 캡처) · <code>--dry-run</code> <strong>만</strong></td></tr>
 </tbody></table></div>
@@ -195,7 +195,7 @@ footer{margin-top:52px;padding-top:16px;border-top:1px solid var(--line);color:v
 <div class="table-wrap"><table><thead><tr><th>#</th><th>에이전트</th><th>입력</th><th>출력</th><th>권한</th><th>핵심 실패 모드 → 완화</th></tr></thead><tbody>
 <tr><td><strong>A</strong></td><td><strong>실패 트리아지</strong><br>우선순위 1</td><td><code>verdict.json</code>·<code>junit.xml</code>·지목된 trace 구간·<code>resolved-run.yaml</code>·최근 커밋 범위</td><td>① 깨진 불변식 ② 직전 tick 상태·입력 ③ 의심 변경 지점 ④ <strong>재현 명령</strong></td><td class="yes">읽기 전용</td><td>그럴듯한 오진 → 재현 명령을 <strong>필수 출력</strong>으로 강제, 재현 실패 시 "원인 미확정"</td></tr>
 <tr><td><strong>B</strong></td><td><strong>리포트 합성</strong><br>우선순위 2</td><td>N개 run의 verdict + <code>compare/</code> + <code>parity/</code> + 트리아지 노트</td><td>새로 깨진 것(delta) 최상단 · 충실도 분포 · 커버리지 공백</td><td class="yes">읽기 전용</td><td>verdict와 다른 인상("대체로 양호"류) → PASS/FAIL 수치를 <strong>먼저</strong> 쓴다</td></tr>
-<tr><td><strong>C</strong></td><td><strong>시나리오·토폴로지 확장</strong><br>우선순위 3</td><td>기존 토폴로지 2개 · <code>import_openscenario.py</code></td><td>미커버 조합의 신규 토폴로지 YAML</td><td class="wn">생성만</td><td>진짜 결함 vs 잘못된 YAML 구분 불가 → 첫 FAIL은 "유효성 미확인", lint·compile 통과 + 사람 확인 후 승격</td></tr>
+<tr><td><strong>C</strong></td><td><strong>시나리오·토폴로지 확장</strong><br>우선순위 3</td><td>기존 토폴로지 3개 · <code>import_openscenario.py</code></td><td>미커버 조합의 신규 토폴로지 YAML</td><td class="wn">생성만</td><td>진짜 결함 vs 잘못된 YAML 구분 불가 → 첫 FAIL은 "유효성 미확인", lint·compile 통과 + 사람 확인 후 승격</td></tr>
 <tr><td><strong>D</strong></td><td><strong>드리프트 감시</strong><br>우선순위 4</td><td>스키마 JSON ↔ 문서 표 ↔ analyzer 지원 이벤트</td><td>불일치 목록 + 제안 패치</td><td class="wn">제안만</td><td>노이즈 → 트리거를 <code>trace-schema/</code>·<code>conformance/</code> 변경으로 한정</td></tr>
 </tbody></table></div>
 
@@ -263,7 +263,7 @@ footer{margin-top:52px;padding-top:16px;border-top:1px solid var(--line);color:v
 <text x="547" y="124" text-anchor="middle" style="fill:#98a4bd;font-size:9.5px;font-weight:700">P1 없으면 의미 없음</text>
 <rect x="631" y="30" width="140" height="104" rx="10" fill="#1b2436" stroke="#293350" stroke-width="1.5"/>
 <text x="701" y="54" text-anchor="middle" style="fill:#e6ebf5;font-size:11.5px;font-weight:700">P3 · 시나리오</text>
-<text x="701" y="74" text-anchor="middle" style="fill:#98a4bd;font-size:9.5px">토폴로지 2개 → N</text>
+<text x="701" y="74" text-anchor="middle" style="fill:#98a4bd;font-size:9.5px">토폴로지 3개 → N</text>
 <text x="701" y="89" text-anchor="middle" style="fill:#98a4bd;font-size:9.5px">조합 커버리지</text>
 <text x="701" y="124" text-anchor="middle" style="fill:#98a4bd;font-size:9.5px;font-weight:700">새 결함 1건 이상</text>
 <rect x="785" y="30" width="140" height="104" rx="10" fill="#1b2436" stroke="#293350" stroke-width="1.5"/>
@@ -324,4 +324,6 @@ footer{margin-top:52px;padding-top:16px;border-top:1px solid var(--line);color:v
 </ul>
 
 <footer>본문(정확): <code>docs/sils/sils-agent-automation.md</code> · 근거: gate.py · evaluate.py(verdict 구조) · sils-ci.sh · domain_lease.py · Jenkinsfile* / .github/workflows(sils 참조 0건) · config/sils/topologies(2개) · 관련: sils-tool-confidence §1~§3 · sils-trace-schema · sils-extension-model §2 · tools/sils/README.md</footer>
-</main></body></html>
+</main>
+<div id="sils-doc-stamp" style="max-width:1100px;margin:2rem auto 1.5rem;padding:.75rem 1rem;border-left:3px solid #f0a800;background:rgba(240,168,0,.08);font:13px/1.6 system-ui,-apple-system,sans-serif;color:inherit;opacity:.9"><strong>이 HTML 은 손으로 만든 시각 요약이며 생성 스크립트가 없다 — 정본은 짝이 되는 <code>.md</code> 다.</strong> 내용이 충돌하면 <code>.md</code> 를 믿을 것. 기준 commit: <code>3c61230</code> · 정합성 점검 2026-08-04.</div>
+</body></html>

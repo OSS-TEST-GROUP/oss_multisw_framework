@@ -170,8 +170,8 @@ config/sils/{contracts,qos,topologies}  +  service/sils/vecu/descriptors/
 
 | 환경 | vECU 본체(C++) | 도구 계층(py/sh) | 에이전트 루프 가능 경로 |
 |---|---|---|---|
-| Linux x86_64 + FastDDS | ✅ 실런타임 검증 (L0·L2·L3) | ✅ | 전 구간 (`run` 포함) |
-| docker 백엔드 | ✅ (`--ipc=host` 필수 — SHM) | ✅ | 전 구간 |
+| Linux x86_64 + FastDDS | ✅ 실런타임 검증 (자동 판정 L0·L1·L3) | ✅ | 전 구간 (`run` 포함) |
+| docker 백엔드 | ✅ (`--network host` 필수 · `--ipc=host` 는 방어적 — [배포 계약](sils-understanding.md) 참조) | ✅ | 전 구간 |
 | macOS (현 개발 데스크톱) | ❌ 툴체인 없음 | ✅ | `--traces-dir`(사전 캡처) · `--dry-run` **만** |
 
 → **로컬 에이전트 작업은 사전 캡처 트레이스 기반으로 설계해야 한다.** `sils-ci.sh`가 이 경로를
@@ -337,7 +337,7 @@ lockstep run에서 golden 비교 시 벽시계 latency는 이미 스킵 대상�
 | **P0** | Jenkins에 `sils-ci.sh` 스테이지 + artifact 보존 | ❌ 없음 | `runs/<run_id>/` | 야간 1회 자동 생산 |
 | **P1** | 트리아지 에이전트 (읽기 전용) | ❌ | 트리아지 노트 | 재현 명령이 실패를 재현 |
 | **P2** | 리포트 합성 | ❌ | 일간 요약 | 새 회귀가 최상단에 뜬다 |
-| **P3** | 시나리오·토폴로지 확장 | 토폴로지 2개 | 신규 토폴로지 | 새 결함 1건 이상 발견 |
+| **P3** | 시나리오·토폴로지 확장 | 토폴로지 3개 | 신규 토폴로지 | 새 결함 1건 이상 발견 |
 | **P4** | 드리프트 감시 | ❌ | 불일치 목록 | 스키마 3자 일치 유지 |
 
 P1은 **macOS에서 사전 캡처 트레이스로 개발·검증 가능**하므로 P0과 병행 가능하다

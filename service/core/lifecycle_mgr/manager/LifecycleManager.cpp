@@ -1,5 +1,7 @@
 #include "LifecycleManager.hpp"
 
+#include <utility>
+
 #include "service/ServiceRegistry.hpp"
 #include "state/StateManager.hpp"
 #include "state/StateMonitor.hpp"
@@ -21,7 +23,6 @@
 namespace lifecycle_manager {
 
 LifecycleManager::LifecycleManager() {}
-LifecycleManager::~LifecycleManager() {}
 
 bool LifecycleManager::Initialize() {
     LOG_DEBUG("LifecycleManager::Initialize" );
@@ -48,22 +49,34 @@ bool LifecycleManager::Initialize() {
 
     EndPointHandlers handlers;
     handlers.on_start = [this](lifecyclemgr::StartServiceResponse* msg) {
-        if (state_manager_) state_manager_->OnStart(msg);
+        if (state_manager_) {
+            state_manager_->OnStart(msg);
+        }
     };
     handlers.on_stop = [this](lifecyclemgr::StopServiceResponse* msg) {
-        if (state_manager_) state_manager_->OnStop(msg);
+        if (state_manager_) {
+            state_manager_->OnStop(msg);
+        }
     };
     handlers.on_set_mode = [this](lifecyclemgr::SetServiceModeRequest* msg) {
-        if (state_manager_) state_manager_->SetServiceMode(msg);
+        if (state_manager_) {
+            state_manager_->SetServiceMode(msg);
+        }
     };
     handlers.on_get_state_resp = [this](lifecyclemgr::GetServiceStateResponse* msg) {
-        if (state_monitor_) state_monitor_->UpdateServicesState(msg);
+        if (state_monitor_) {
+            state_monitor_->UpdateServicesState(msg);
+        }
     };
     handlers.on_notify_state = [this](lifecyclemgr::NotifyServiceState* msg) {
-        if (state_monitor_) state_monitor_->UpdateServicesState(msg);
+        if (state_monitor_) {
+            state_monitor_->UpdateServicesState(msg);
+        }
     };
     handlers.on_update_list = [this](lifecyclemgr::UpdateServiceListRequest* msg) {
-        if (service_registry_) service_registry_->UpdateServiceList(msg);
+        if (service_registry_) {
+            service_registry_->UpdateServiceList(msg);
+        }
     };
 
     // F013: container actuator notifications from adsw_manager.
@@ -71,51 +84,87 @@ bool LifecycleManager::Initialize() {
     // We forward each to the registry so subsequent registry queries reflect
     // the latest known state.
     handlers.on_notify_container_state = [this](lifecyclemgr::NotifyContainerState* msg) {
-        if (!service_registry_ || msg == nullptr) return;
+        if (!service_registry_ || msg == nullptr) {
+            return;
+        }
         auto& names  = msg->container_list();
         auto& states = msg->container_state_list();
         auto& exits  = msg->exit_code_list();
         const size_t n = names.size();
+        bool any_changed = false;
         for (size_t i = 0; i < n; ++i) {
             ContainerState s = (i < states.size())
                 ? TypeConvert::ToContainerState(states[i])
                 : ContainerState::CS_UNKNOWN;
             int32_t ec = (i < exits.size()) ? exits[i] : 0;
-            service_registry_->UpdateContainerState(names[i], s, ec);
+            if (service_registry_->UpdateContainerState(names[i], s, ec)) {
+                any_changed = true;
+            }
+        }
+        // Latency: publish a fresh aggregated container/diag snapshot the moment
+        // a container actually transitions (e.g. stopped right after a Stop tap),
+        // instead of waiting up to one heartbeat for the periodic report. This
+        // mirrors the service publish-on-change in StateMonitor::updateServices;
+        // without it a container-only transition (no hosted-service state change)
+        // reaches lfc_monitor only on the next heartbeat. adsw already sends
+        // NotifyContainerState on-change and we gate on a real registry
+        // transition, so steady state adds no extra traffic. NotifyLifecycle-
+        // DiagnosticInfo is publish_mutex_-guarded, so calling it here (DDS
+        // receive thread) is safe against the periodic thread.
+        if (any_changed && state_monitor_) {
+            state_monitor_->NotifyLifecycleDiagnosticInfo(true);
         }
     };
     handlers.on_start_container_resp = [this](lifecyclemgr::StartContainerResponse* msg) {
-        if (state_manager_) state_manager_->OnStartContainer(msg);
+        if (state_manager_) {
+            state_manager_->OnStartContainer(msg);
+        }
     };
     handlers.on_stop_container_resp = [this](lifecyclemgr::StopContainerResponse* msg) {
-        if (state_manager_) state_manager_->OnStopContainer(msg);
+        if (state_manager_) {
+            state_manager_->OnStopContainer(msg);
+        }
     };
 
     // F013: ctrl/* gate from monitor/operator.  Each lambda forwards to a
     // StateManager handler that does (a) policy gating, (b) forwarding to
     // the actuator topic (adsw_manager), and (c) CtrlResponse publish.
     handlers.on_ctrl_start_service = [this](lifecyclemgr::CtrlStartServiceRequest* msg) {
-        if (state_manager_) state_manager_->HandleCtrlStartService(msg);
+        if (state_manager_) {
+            state_manager_->HandleCtrlStartService(msg);
+        }
     };
     handlers.on_ctrl_stop_service = [this](lifecyclemgr::CtrlStopServiceRequest* msg) {
-        if (state_manager_) state_manager_->HandleCtrlStopService(msg);
+        if (state_manager_) {
+            state_manager_->HandleCtrlStopService(msg);
+        }
     };
     handlers.on_ctrl_set_service_mode = [this](lifecyclemgr::CtrlSetServiceModeRequest* msg) {
-        if (state_manager_) state_manager_->HandleCtrlSetServiceMode(msg);
+        if (state_manager_) {
+            state_manager_->HandleCtrlSetServiceMode(msg);
+        }
     };
     handlers.on_ctrl_start_container = [this](lifecyclemgr::CtrlStartContainerRequest* msg) {
-        if (state_manager_) state_manager_->HandleCtrlStartContainer(msg);
+        if (state_manager_) {
+            state_manager_->HandleCtrlStartContainer(msg);
+        }
     };
     handlers.on_ctrl_stop_container = [this](lifecyclemgr::CtrlStopContainerRequest* msg) {
-        if (state_manager_) state_manager_->HandleCtrlStopContainer(msg);
+        if (state_manager_) {
+            state_manager_->HandleCtrlStopContainer(msg);
+        }
     };
 
     // F014 follow-up: recovery policy actuator + ctrl gate.
     handlers.on_set_recovery_policy_resp = [this](lifecyclemgr::SetRecoveryPolicyResponse* msg) {
-        if (state_manager_) state_manager_->OnSetRecoveryPolicy(msg);
+        if (state_manager_) {
+            state_manager_->OnSetRecoveryPolicy(msg);
+        }
     };
     handlers.on_ctrl_set_recovery_policy = [this](lifecyclemgr::CtrlSetRecoveryPolicyRequest* msg) {
-        if (state_manager_) state_manager_->HandleCtrlSetRecoveryPolicy(msg);
+        if (state_manager_) {
+            state_manager_->HandleCtrlSetRecoveryPolicy(msg);
+        }
     };
 
     endpoint_factory_->CreateEndPoints(msg_transmitter_, handlers);
@@ -191,7 +240,7 @@ std::shared_ptr<Service> LifecycleManager::GetService(std::string name){
     std::shared_ptr<ServiceRegistry> registry = GetRegistry();
 
     if (registry){
-        return registry->GetService(name);
+        return registry->GetService(std::move(name));
     }
 
     return nullptr;

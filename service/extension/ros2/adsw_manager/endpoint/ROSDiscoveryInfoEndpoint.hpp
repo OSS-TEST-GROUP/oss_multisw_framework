@@ -15,14 +15,13 @@ namespace adsw_manager {
 class ROSDiscoveryInfoEndpoint : public DDSMessageEndpoint {
   public:
     ROSDiscoveryInfoEndpoint(MessageType msgtype, std::string topic);
-    virtual ~ROSDiscoveryInfoEndpoint();
+    ~ROSDiscoveryInfoEndpoint() override= default;
+    std::string GetTopic() override;
+    std::string GetTypeName() override;
+    std::shared_ptr<TypeSupport> GetTypeSupport() override;
 
-    virtual std::string GetTopic();
-    virtual std::string GetTypeName();
-    virtual std::shared_ptr<TypeSupport> GetTypeSupport();
+    void OnDataAvailable() override;
 
-    virtual void OnDataAvailable();
-  
   private:
     std::string topic_;
     std::shared_ptr<TypeSupport> type_support_;

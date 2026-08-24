@@ -6,7 +6,6 @@ namespace adsw_manager {
 
 DDSMessageEndpoint::DDSMessageEndpoint() : participant_(nullptr), publisher_(nullptr), subscriber_(nullptr), dds_topic_(nullptr),
         data_reader_(nullptr), data_writer_(nullptr) {}
-DDSMessageEndpoint::~DDSMessageEndpoint() {}
 
 bool DDSMessageEndpoint::Initialize(DomainParticipant* participant, Publisher* publisher, Subscriber* subscriber) {
     participant_ = participant;

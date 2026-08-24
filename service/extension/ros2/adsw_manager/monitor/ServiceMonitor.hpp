@@ -14,8 +14,7 @@ namespace adsw_manager {
 class ServiceMonitor {
   public:
     ServiceMonitor();
-    virtual ~ServiceMonitor();
-
+    virtual ~ServiceMonitor() = default;
     bool Initialize();
     void Finalize();
     
@@ -26,9 +25,9 @@ class ServiceMonitor {
 
     std::shared_ptr<ROSServiceDiscovery> GetServiceDiscovery();
 
-    int32_t NodeStarted(std::string service, std::string node);
-    int32_t NodeStopped(std::string service, std::string node);
-    int32_t NodeCount(std::string service);
+    int32_t NodeStarted(const std::string& service, const std::string& node);
+    int32_t NodeStopped(const std::string& service, const std::string& node);
+    int32_t NodeCount(const std::string& service);
 
     void UpdateServiceState();
 

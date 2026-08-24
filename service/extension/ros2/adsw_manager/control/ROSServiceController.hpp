@@ -20,27 +20,29 @@ class ROSServiceController  : public ServiceController {
     ROSServiceController();
     ~ROSServiceController();
 
-    virtual bool Initialize();
-    virtual void Finalize();
+    bool Initialize() override;
+    void Finalize() override;
 
-    virtual bool StartGroup(const std::string& group);
-    virtual bool StopGroup(const std::string& group);
+    bool StartGroup(const std::string& group) override;
+    bool StopGroup(const std::string& group) override;
 
-    virtual bool StartService(const std::string& service_name);
-    virtual bool StopService(const std::string& service_name);
+    bool StartService(const std::string& service_name) override;
+    bool StopService(const std::string& service_name) override;
 
-
-    virtual bool StartService(std::shared_ptr<Service> service);
-    virtual bool StopService(std::shared_ptr<Service> service);
+    bool StartService(std::shared_ptr<Service> service) override;
+    bool StopService(std::shared_ptr<Service> service) override;
 
     bool ProcessServiceStartRequest(lifecyclemgr::StartServiceRequest* message);
     bool ProcessServiceStopRequest(lifecyclemgr::StopServiceRequest* message);
 
+    bool GetNodeLists(const std::shared_ptr<Service>& service);
+    uint64_t GetPID(const std::shared_ptr<Service>& service);
 
-    bool GetNodeLists(std::shared_ptr<Service> service);
-    uint64_t GetPID(std::shared_ptr<Service> service);
-
-    std::shared_ptr<ContainerController> GetContainer() {return container_controller_;}
+    // virtual: MockROSServiceController 가 이미 GetContainer 를 MOCK_METHOD 로
+    // 선언해 두었지만 여기가 non-virtual 이라 오버라이드가 아니라 가려짐(shadow)
+    // 이었다. 그래서 ContainerHealthMonitor 처럼 ROSServiceController* 를 통해
+    // 부르는 쪽은 항상 실제 멤버를 받아 테스트에서 컨테이너를 주입할 수 없었다.
+    virtual std::shared_ptr<ContainerController> GetContainer() {return container_controller_;}
 
     // True when adsw_manager is starting services as native host processes
     // (no docker exec wrapper, no `ros2 run/launch` indirection). Used by

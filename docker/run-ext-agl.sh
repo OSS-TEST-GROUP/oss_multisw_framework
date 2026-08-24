@@ -29,7 +29,23 @@
 set -e
 
 IMAGE="${IMAGE:-registry.obigo.com/oss/oss-mmf-ext-agl:latest}"
-DOMAIN="${ROS_DOMAIN_ID:-0}"
+
+# 도메인 결정 우선순위: ① 명시한 ROS_DOMAIN_ID env ② 도메인 파일 ③ 기본값 42.
+# 도메인 파일(`ROS_DOMAIN_ID=<n>`)은 HMI 런처 Settings 가 기록하며 **다음 기동에** 반영된다
+# (ROS_DOMAIN_ID 는 프로세스 시작 시점에만 읽힘). run-mmf.sh 와 동일 규칙 — 두 호스트에
+# 같은 값을 두어야 core/ext-ros2 ↔ ext-agl 이 한 도메인에서 만난다.
+# 기본 42: Autoware adsw 파티션이 42 라, 0 이면 adsw_monitor 가 데이터를 못 받는다(실측).
+MMF_DOMAIN_ENV_FILE="${MMF_DOMAIN_ENV_FILE:-/opt/mmf/config/domain.env}"
+_file_domain=""
+if [ -f "$MMF_DOMAIN_ENV_FILE" ]; then
+  _file_domain="$(sed -n 's/^[[:space:]]*ROS_DOMAIN_ID[[:space:]]*=[[:space:]]*\([0-9]\{1,3\}\).*/\1/p' \
+                    "$MMF_DOMAIN_ENV_FILE" | tail -1)"
+fi
+DOMAIN="${ROS_DOMAIN_ID:-${_file_domain:-42}}"
+if ! [ "$DOMAIN" -ge 0 ] 2>/dev/null || [ "$DOMAIN" -gt 232 ]; then
+  echo "[run-ext-agl] ⚠️ 잘못된 도메인 '$DOMAIN' → 42 사용 (유효 범위 0~232)" >&2
+  DOMAIN=42
+fi
 DOCKER_GID="$(getent group docker | cut -d: -f3)"
 HMI_GPU="${HMI_GPU:-auto}"
 
@@ -76,6 +92,12 @@ if [ "$(uname -m)" = "x86_64" ]; then
   esac
   DISP="${DISPLAY:-:0}"
   UIDN="$(id -u)"
+  # 런처가 쓰는 호스트 디렉토리 (없으면 docker 가 root 소유로 만들어 버린다)
+  HMI_LAUNCHER_IMAGE="${HMI_LAUNCHER_IMAGE:-registry.obigo.com/oss/oss-hmi-launcher:latest}"
+  MMF_DOMAIN_DIR="$(dirname "${MMF_DOMAIN_ENV_FILE}")"
+  LAUNCHER_CFG_DIR="${LAUNCHER_CFG_DIR:-/opt/mmf/hmi_launcher_cfg}"
+  mkdir -p "${MMF_DOMAIN_DIR}" "${LAUNCHER_CFG_DIR}" 2>/dev/null \
+    || sudo mkdir -p "${MMF_DOMAIN_DIR}" "${LAUNCHER_CFG_DIR}"
   GEN_X86=/tmp/agl-service-list.x86.gen.yaml
   cat > "$GEN_X86" <<YAML
 services:
@@ -103,7 +125,8 @@ services:
   is_enabled: true
   mw_type: AGL
   init_state: NOT_RUNNING
-  image: registry.obigo.com/oss/oss-hmi-launcher:latest
+  # 기본은 :latest, 특정 빌드가 필요할 때만 HMI_LAUNCHER_IMAGE 로 지정한다.
+  image: ${HMI_LAUNCHER_IMAGE}
   extra_args:
   - "-it"
   - --net=host
@@ -129,6 +152,19 @@ ${GPU_YAML}
   - /usr/share/fonts:/usr/share/fonts:ro
   - "-v"
   - /etc/fonts:/etc/fonts:ro
+  # 런처 사용자 설정(앱 표시/숨김·타임존) 영속화 — 미설정 시 재생성마다 초기화된다.
+  - "-v"
+  - ${LAUNCHER_CFG_DIR}:/cfg:rw
+  - "-e"
+  - XDG_CONFIG_HOME=/cfg
+  # DDS 도메인 정본 파일 — 런처 Settings 의 "DDS domain" 이 여기에 기록한다.
+  - "-v"
+  - ${MMF_DOMAIN_DIR}:/mmf-config:rw
+  - "-e"
+  - MMF_DOMAIN_ENV_FILE=/mmf-config/domain.env
+  # F010 (direct-docker): rviz2_panel 이 docker CLI 로 rviz2 컨테이너를 제어한다.
+  - "-v"
+  - /var/run/docker.sock:/var/run/docker.sock
 YAML
   X86_MOUNT=(-v "${GEN_X86}:/oss/bin/config/agl-service-list.x86.yaml:ro")
   echo "[run-ext-agl] amd64 hmi_launcher config 생성: gpu=$gpu display=$DISP uid=$UIDN"

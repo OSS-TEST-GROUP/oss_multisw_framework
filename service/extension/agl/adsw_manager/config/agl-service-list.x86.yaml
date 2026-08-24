@@ -37,6 +37,8 @@ services:
   is_enabled: true
   mw_type: AGL
   init_state: NOT_RUNNING
+  # 기본은 :latest. 특정 빌드로 고정해야 하면 이 파일을 복사해 image 를 바꾸고
+  # ADSW_CONFIG 로 마운트한다(재빌드 불필요).
   image: registry.obigo.com/oss/oss-hmi-launcher:latest
   extra_args:
   - "-it"
@@ -64,13 +66,30 @@ services:
   - /usr/share/fonts:/usr/share/fonts:ro
   - "-v"
   - /etc/fonts:/etc/fonts:ro
-  # F010 (direct-docker): rviz2_monitor controls rviz2 via docker CLI.
-  # docker.sock lets rviz2_monitor run `docker run/stop/inspect/logs rviz2`.
+  # 런처 사용자 설정(앱 표시/숨김 = app_visibility.json, 타임존 등) 영속화.
+  # XDG_CONFIG_HOME 미설정이면 HOME 으로 떨어져 **컨테이너 재생성마다 초기화**된다
+  # (기본 숨김 앱을 켜 놓아도 재시작하면 사라짐). arm64 와 동일한 처리.
+  # x86 런처 컨테이너는 root(uid 0)로 돌므로 arm64 의 uid 1001 소유권 요구는 없다.
+  #   준비: mkdir -p /opt/mmf/hmi_launcher_cfg
+  - "-v"
+  - /opt/mmf/hmi_launcher_cfg:/cfg:rw
+  - "-e"
+  - XDG_CONFIG_HOME=/cfg
+  # DDS 도메인 정본 파일. 런처 Settings 의 "DDS domain"(기본 42)이 여기에 기록하고,
+  # run-mmf.sh / run-ext-agl.sh 가 기동 시 읽는다 → 변경은 **다음 기동 때** 반영된다.
+  # run-ext-agl.sh 의 MMF_DOMAIN_ENV_FILE 기본값(/opt/mmf/config/domain.env)과 같은 경로다.
+  #   준비: mkdir -p /opt/mmf/config
+  - "-v"
+  - /opt/mmf/config:/mmf-config:rw
+  - "-e"
+  - MMF_DOMAIN_ENV_FILE=/mmf-config/domain.env
+  # F010 (direct-docker): rviz2_panel controls rviz2 via docker CLI.
+  # docker.sock lets rviz2_panel run `docker run/stop/inspect/logs rviz2`.
   # On x86, agl-shell-activator / gRPC :14005 are not present (AGL-only);
   # showRviz2/showHome calls will return a gRPC error (non-fatal, UI stays).
   - "-v"
   - /var/run/docker.sock:/var/run/docker.sock
 # rviz2 is not registered with ext-agl on x86 (F010 direct-docker).
-# rviz2_monitor controls it directly via docker CLI (same as arm64).
+# rviz2_panel controls it directly via docker CLI (same as arm64).
 # On x86 development, rviz2 can also be run manually:
 #   bash apps/docker/script/run-rviz2-x86.sh   (GPU=nvidia|none)

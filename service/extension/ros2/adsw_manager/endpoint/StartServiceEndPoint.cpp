@@ -1,5 +1,7 @@
 #include "StartServiceEndPoint.hpp"
 
+#include <utility>
+
 #include "lifecycle/StartServiceRequest.hpp"
 #include "ADSWManager.hpp"
 
@@ -7,10 +9,9 @@
 
 namespace ros2 {
 namespace adsw_manager {
-    
-StartServiceEndPoint::StartServiceEndPoint(MessageType msgtype, std::string topic) 
-    : DDSMessageEndpoint() {
-    topic_ = topic;
+
+StartServiceEndPoint::StartServiceEndPoint(MessageType msgtype, std::string topic) : topic_(std::move(topic)) {
+
     if (msgtype == MessageType::START_SERVICE_REQUEST){
         type_support_ = std::make_shared<TypeSupport>(new StartServiceRequestPubSubType());
     }else if (msgtype == MessageType::START_SERVICE_RESPONSE){
@@ -37,7 +38,7 @@ std::shared_ptr<TypeSupport> StartServiceEndPoint::GetTypeSupport() {
 void StartServiceEndPoint::OnDataAvailable(){
     LOG_DEBUG("Message Delivery for " << GetTopic() );
 
-    if (Read<StartServiceRequest>(req_) == true){
+    if (Read<StartServiceRequest>(req_)) {
 
         // Phantom-publisher guard. Only the participant identified by the
         // first UpdateServiceListResponse (i.e. the real lifecycle_mgr) may

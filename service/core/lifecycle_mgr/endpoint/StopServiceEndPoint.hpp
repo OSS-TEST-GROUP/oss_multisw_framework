@@ -19,11 +19,11 @@ class StopServiceEndPoint : public DDSMessageEndPoint {
     using Callback = std::function<void(StopServiceResponse*)>;
 
     StopServiceEndPoint(MessageType msgtype, std::string topic, Callback cb = nullptr);
-    virtual ~StopServiceEndPoint();
+    ~StopServiceEndPoint() override;
 
-    virtual void  OnDataAvailable() override;
+    void OnDataAvailable() override;
 
-    virtual void OnDataPublished(bool ret) override;
+    void OnDataPublished(bool ret) override;
 
   private:
     StopServiceRequest req_;

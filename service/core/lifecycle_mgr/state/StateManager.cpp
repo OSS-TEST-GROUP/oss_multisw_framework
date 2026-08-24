@@ -17,7 +17,6 @@ namespace lifecycle_manager {
 StateManager::StateManager(LifecycleManager& lifecycle)
     : ManagerBase(lifecycle){
 }
-StateManager::~StateManager() {}
 
 
 bool StateManager::Start() {
@@ -30,7 +29,7 @@ void StateManager::Stop() {
     
 }
 
-bool StateManager::StartService(std::shared_ptr<Service> service) {
+bool StateManager::StartService(const std::shared_ptr<Service>& service) {
 
     std::shared_ptr<DDSTransmitter> transmitter = GetTransmitter();
 
@@ -48,7 +47,7 @@ bool StateManager::StartService(std::shared_ptr<Service> service) {
     return false;
 }
 
-void StateManager::StopService(std::shared_ptr<Service> service) {
+void StateManager::StopService(const std::shared_ptr<Service>& service) {
 
     std::shared_ptr<DDSTransmitter> transmitter = GetTransmitter();
     stop_request_.service_list().clear();
@@ -85,7 +84,7 @@ bool StateManager::SetServiceMode(lifecyclemgr::SetServiceModeRequest* message){
     return true;
 }
 
-void StateManager::ProcessServiceHandling(std::set<std::shared_ptr<Service>> service_list){
+void StateManager::ProcessServiceHandling(const std::set<std::shared_ptr<Service>>& service_list) {
 
     /* udpated service list passed */
 
@@ -97,7 +96,7 @@ void StateManager::ProcessServiceHandling(std::set<std::shared_ptr<Service>> ser
 
     for( auto it_service = service_list.begin(); it_service != service_list.end(); ++it_service ){
 
-        std::shared_ptr<Service> service = *it_service;
+        const std::shared_ptr<Service>& service = *it_service;
         ServiceControlAction action = policy_manager->Evaluate(service);
 
         switch (action)
@@ -123,7 +122,9 @@ void StateManager::ProcessServiceHandling(std::set<std::shared_ptr<Service>> ser
 
     // Non-K3S 모드: adsw_manager에 DDS 명령 전송
     std::shared_ptr<DDSTransmitter> transmitter = GetTransmitter();
-    if (transmitter == nullptr) return;
+    if (transmitter == nullptr) {
+        return;
+    }
 
     for (auto& entry : start_map){
         start_request_.service_list() = entry.second;
@@ -145,7 +146,6 @@ void StateManager::ProcessServiceHandling(std::set<std::shared_ptr<Service>> ser
         transmitter->SendMessage(MessageType::STOP_SERVICE_REQUEST, reinterpret_cast<void*>(&stop_request_));
     }
 }
-
 
 void StateManager::RequestStopAll(){
 
@@ -175,7 +175,9 @@ void StateManager::RequestStopAll(){
 }
 
 void StateManager::OnStart(lifecyclemgr::StartServiceResponse* message){
-    if (!message) return;
+    if (!message) {
+        return;
+    }
     // Phantom-response guard. A zombie DDS participant on the same domain can
     // replay a stale StartServiceResponse(ret_code=FAILED) on
     // mmf/lifecyclemgr/StartServiceResponse even when we haven't dispatched a
@@ -212,7 +214,9 @@ void StateManager::OnStart(lifecyclemgr::StartServiceResponse* message){
 }
 
 void StateManager::OnStop(lifecyclemgr::StopServiceResponse* message){
-    if (!message) return;
+    if (!message) {
+        return;
+    }
     // Same phantom guard as OnStart — see commentary there.
     int expected = stop_in_flight_.load(std::memory_order_acquire);
     while (expected > 0) {
@@ -237,7 +241,9 @@ void StateManager::OnStop(lifecyclemgr::StopServiceResponse* message){
 // ── F013: actuator response relays ─────────────────────────────────────
 
 void StateManager::OnStartContainer(lifecyclemgr::StartContainerResponse* message){
-    if (!message) return;
+    if (!message) {
+        return;
+    }
     if (message->ret_code() != lifecyclemgr::ReturnCode::SUCCESS){
         LOG_ERROR("Container Start Failure " << static_cast<int32_t>(message->ret_code()));
     }
@@ -247,7 +253,9 @@ void StateManager::OnStartContainer(lifecyclemgr::StartContainerResponse* messag
 }
 
 void StateManager::OnStopContainer(lifecyclemgr::StopContainerResponse* message){
-    if (!message) return;
+    if (!message) {
+        return;
+    }
     if (message->ret_code() != lifecyclemgr::ReturnCode::SUCCESS){
         LOG_ERROR("Container Stop Failure " << static_cast<int32_t>(message->ret_code()));
     }
@@ -396,7 +404,9 @@ void StateManager::HandleCtrlSetServiceMode(lifecyclemgr::CtrlSetServiceModeRequ
     ServiceMode mode = TypeConvert::ToServiceMode(message->service_mode());
     for (const auto& name : names){
         auto svc = GetService(name);
-        if (svc) svc->SetServiceMode(mode);
+        if (svc) {
+            svc->SetServiceMode(mode);
+        }
     }
 
     PublishCtrlResponse(MessageType::CTRL_SET_SERVICE_MODE_RESPONSE,
@@ -478,7 +488,9 @@ void StateManager::HandleCtrlStopContainer(lifecyclemgr::CtrlStopContainerReques
 bool StateManager::PublishCtrlResponse(MessageType response_topic,
                                         lifecyclemgr::ReturnCode code){
     std::shared_ptr<DDSTransmitter> transmitter = GetTransmitter();
-    if (transmitter == nullptr) return false;
+    if (transmitter == nullptr) {
+        return false;
+    }
     ctrl_response_.ret_code() = code;
     return transmitter->SendMessage(response_topic,
                                      reinterpret_cast<void*>(&ctrl_response_));
@@ -530,7 +542,9 @@ void StateManager::HandleCtrlSetRecoveryPolicy(
         TypeConvert::ToRecoveryPolicy(message->recovery_policy());
     for (const auto& name : names){
         auto svc = GetService(name);
-        if (svc) svc->SetRecoveryPolicy(policy);
+        if (svc) {
+            svc->SetRecoveryPolicy(policy);
+        }
     }
     // Final ctrl/* response is published by OnSetRecoveryPolicy when the
     // SetRecoveryPolicyResponse arrives — same pattern as Start/StopContainer.
@@ -538,7 +552,9 @@ void StateManager::HandleCtrlSetRecoveryPolicy(
 
 void StateManager::OnSetRecoveryPolicy(
         lifecyclemgr::SetRecoveryPolicyResponse* message){
-    if (!message) return;
+    if (!message) {
+        return;
+    }
     if (message->ret_code() != lifecyclemgr::ReturnCode::SUCCESS){
         LOG_ERROR("SetRecoveryPolicy Failure "
                   << static_cast<int32_t>(message->ret_code()));

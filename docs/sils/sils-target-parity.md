@@ -15,12 +15,14 @@
 |---|---|---|---|---|
 | L0 | Interface Stub | type/topic match·기본 sample | endpoint matching | evaluate |
 | L1 | Protocol Fidelity | QoS·req/resp·오류 semantics | protocol conformance | evaluate `analyze_protocol` |
-| L2 | Behavioral Fidelity | 상태기계·timing·failure | golden scenario | evaluate + compare_golden |
+| L2 | Behavioral Fidelity | 상태기계·timing·failure | golden scenario | `compare_golden` 전용 (evaluate 는 등급 미발급) |
 | L3 | Plant-coupled Fidelity | FMU 기반 폐루프 | model correlation | evaluate `analyze_plant` |
 | **L4** | **Target-like Fidelity** | **ARM64·실 gateway/protocol** | **target parity** | **`parity.py`** |
 
-L0–L3 은 **단일 trace** 로 판정된다(그 run 하나의 증거). **L4 는 단일 trace 로 판정할 수
-없다** — 실제 타깃과의 동등성이라, 두 개의 trace(실 타깃 · SiLS)를 교차 비교해야 한다.
+L0·L1·L3 은 **단일 trace** 로 판정된다(그 run 하나의 증거). **L2 는 `fidelity_evidenced` 에
+나타나지 않는다** — golden 비교(`compare_golden`)의 `MATCH`/`REGRESSION` 이 유일한 증거이며
+등급으로 환산되지 않는다(architecture-v3 §11). **L4 도 단일 trace 로 판정할 수 없다** — 실제
+타깃과의 동등성이라, 두 개의 trace(실 타깃 · SiLS)를 교차 비교해야 한다.
 
 ---
 

@@ -20,21 +20,20 @@ namespace adsw_manager {
 class ServiceRegistry {
 public:
   ServiceRegistry();
-  virtual ~ServiceRegistry();
-
+  virtual ~ServiceRegistry() = default;
   bool LoadServiceList();
 
   void AddGroup(const std::string &name);
   void RemoveGroup(const std::string &name);
   bool IsGroup(const std::string &name);
 
-  bool AddService(std::shared_ptr<Service> service, const std::string &group);
+  bool AddService(const std::shared_ptr<Service>& service, const std::string& group);
   void RemoveService(const std::string &name);
 
   std::shared_ptr<Service> GetService(const std::string &name);
   std::vector<std::shared_ptr<Service>>
   GetServicesByGroup(const std::string &group);
-  std::string GetGroupNameByService(std::shared_ptr<Service> service);
+  std::string GetGroupNameByService(const std::shared_ptr<Service>& service);
 
   uint64_t GetServicesNum();
   uint64_t GetServiceNumInGroup(const std::string &group);

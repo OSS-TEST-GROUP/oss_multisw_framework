@@ -30,8 +30,7 @@ enum class AdswState{
 class ADSWManager {
   public:
     ADSWManager();
-    virtual ~ADSWManager();
-
+    virtual ~ADSWManager() = default;
     static ADSWManager* Get();
 
     bool Initialize();
@@ -82,7 +81,7 @@ class ADSWManager {
     std::shared_ptr<ContainerServiceController> service_controller_;
     std::shared_ptr<EndPointFactory> endpoint_factory_;
 
-    AdswState adsw_state_;
+    AdswState adsw_state_ = AdswState::ADSW_INIT;   // GetState() 가 미초기화 값을 반환했다
 
     // UpdateServiceListRequest 재전송 제어
     static constexpr int32_t kUpdateListRetryMs  = 3000;   // ADSW_STARTED: 3초마다 재시도

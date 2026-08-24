@@ -97,6 +97,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", type=Path, default=None, help="write golden here (default stdout)")
     parser.add_argument("--lean", action="store_true", help="keep only compare_events (+timing anchor)")
     parser.add_argument("--input-mode", default=None, help="declared capture mode; overrides rules.input_mode")
+    parser.add_argument("--plant", default=None, metavar="ID",
+                        help="plant/simulator identity this run used (e.g. morai, "
+                             "scenario_simulator_v2, fmu, fixture). Stamped into golden_meta "
+                             "so compare_golden --plant can refuse a cross-plant comparison")
     parser.add_argument("--meta", action="append", default=[], metavar="K=V",
                         help="extra golden_meta fields (e.g. catalog_version=0.1.0)")
     parser.add_argument("--force", action="store_true", help="baseline even a non-conformant / non-deterministic run")
@@ -141,25 +145,40 @@ def main(argv: list[str] | None = None) -> int:
 
     normalized = normalize(events, rules, args.lean)
 
+    # `plant` identifies WHICH plant/simulator produced these values. Two simulators have
+    # different vehicle dynamics, so their traces legitimately differ -- comparing across
+    # them reads as a REGRESSION with no hint that the plant, not the code, changed.
+    # compare_golden --plant enforces the isolation; this records the golden's side of it.
+    plant = args.plant if args.plant is not None else meta.get("plant")
+
     meta_event = {
         "event": "golden_meta",
         "source_run_id": run["run_id"],
         "source_verdict": run["verdict"],
         "input_mode": rules.get("input_mode"),
+        "plant": plant,
         "lean": args.lean,
         "normalized_events": len(normalized),
         "forced": bool(args.force),
     }
     meta_event.update(meta)
+    meta_event["plant"] = plant          # --meta plant=X must not diverge from the field
 
     lines = [json.dumps(meta_event)] + [json.dumps(e) for e in normalized]
     text = "\n".join(lines) + "\n"
+
+    if plant is None:
+        print("# warn: no --plant declared; this golden cannot be plant-isolated and "
+              "compare_golden will not be able to refuse a cross-plant comparison. "
+              "Declare it whenever more than one plant/simulator is in play.",
+              file=sys.stderr)
 
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(text, encoding="utf-8")
         print(f"# wrote golden {args.out} ({len(normalized)} normalized event(s), "
-              f"source={run['run_id']}, mode={rules.get('input_mode')})", file=sys.stderr)
+              f"source={run['run_id']}, mode={rules.get('input_mode')}, "
+              f"plant={plant or '<undeclared>'})", file=sys.stderr)
     else:
         sys.stdout.write(text)
     return EXIT_OK

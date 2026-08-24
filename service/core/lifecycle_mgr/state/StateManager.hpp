@@ -25,16 +25,15 @@ namespace lifecycle_manager {
 class StateManager : public ManagerBase {
   public:
     StateManager(LifecycleManager& lifecycle);
-    virtual ~StateManager();
-
+    ~StateManager() override= default;
     bool Start();
     void Stop();
 
-    bool StartService(std::shared_ptr<Service> service);
-    void StopService(std::shared_ptr<Service> service);
+    bool StartService(const std::shared_ptr<Service>& service);
+    void StopService(const std::shared_ptr<Service>& service);
 
     bool SetServiceMode(lifecyclemgr::SetServiceModeRequest* message);
-    void ProcessServiceHandling(std::set<std::shared_ptr<Service>> service_list);
+    void ProcessServiceHandling(const std::set<std::shared_ptr<Service>>& service_list);
 
     void RequestStopAll();
 

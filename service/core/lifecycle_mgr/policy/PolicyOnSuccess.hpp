@@ -10,8 +10,7 @@ namespace lifecycle_manager {
 class PolicyOnSuccess : public PolicyBase {
   public:
     PolicyOnSuccess(RecoveryPolicy policy, std::string name);
-    virtual ~PolicyOnSuccess();
-
+    ~PolicyOnSuccess() override= default;
     ServiceControlAction Evaluate(std::shared_ptr<Service> service) override;
 
   private:

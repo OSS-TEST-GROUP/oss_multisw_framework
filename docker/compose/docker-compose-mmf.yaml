@@ -12,8 +12,13 @@
 # 사용 (oss_multisw_framework 루트에서):
 #   # 1) docker 소켓 그룹 gid 정확히 주입 (run-mmf.sh 의 `getent group docker` 등가)
 #   export DOCKER_SOCK_GID=$(stat -c '%g' /var/run/docker.sock)
-#   # 2) (선택) 보드별 DDS 도메인 격리
-#   export ROS_DOMAIN_ID=1
+#   # 2) DDS 도메인 — 기본 42 (Autoware adsw 파티션과 동일). 바꾸는 방법 3가지:
+#   #    a) 도메인 파일(HMI 런처 Settings 가 기록하는 정본):
+#   #       docker compose --env-file /opt/mmf/config/domain.env -f ... up -d
+#   #       (run-mmf.sh 는 compose 파일 옆에 `.env` 심링크를 만들어 --env-file 없이도 먹게 한다)
+#   #    b) 셸 env:  export ROS_DOMAIN_ID=1
+#   #    c) compose 파일 옆 `.env` 파일에 ROS_DOMAIN_ID=<n> (샘플: compose/domain.env.example)
+#   #    ⚠️ 도메인은 프로세스 시작 시점에만 읽힌다 → 변경은 재기동으로만 반영된다.
 #   # 3) (권장) 재기동 시 stale FastDDS SHM 세그먼트 청소 — compose 는 호스트 액션 불가라 수동
 #   find /dev/shm -maxdepth 1 \
 #     \( -name 'fastdds_*' -o -name 'fast_datasharing_*' -o -name 'sem.fastdds_*' \) -delete 2>/dev/null || true
@@ -41,9 +46,9 @@ services:
       - NET_ADMIN
     environment:
       # 세 도메인 env 를 ROS_DOMAIN_ID 한 값으로 통일 (run-mmf.sh 의 DOMAIN 과 동일)
-      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
-      MMF_DDS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
-      VISS_DDS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-42}
+      MMF_DDS_DOMAIN_ID: ${ROS_DOMAIN_ID:-42}
+      VISS_DDS_DOMAIN_ID: ${ROS_DOMAIN_ID:-42}
       HEARTBEAT_INTERVAL_SEC: ${HEARTBEAT_INTERVAL_SEC:-3}
     volumes:
       - /dev/shm:/dev/shm
@@ -69,8 +74,8 @@ services:
       #   export DOCKER_SOCK_GID=$(stat -c '%g' /var/run/docker.sock)
       - "${DOCKER_SOCK_GID:-999}"
     environment:
-      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
-      MMF_DDS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-42}
+      MMF_DDS_DOMAIN_ID: ${ROS_DOMAIN_ID:-42}
     volumes:
       - /dev/shm:/dev/shm
       # adsw_manager 가 컨테이너(autoware 등)를 docker run/start/stop 하려면 필수.

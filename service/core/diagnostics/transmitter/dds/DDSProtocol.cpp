@@ -84,7 +84,20 @@ bool DDSProtocol::Initialize() {
     // ignores ROS_DOMAIN_ID; must match the other MMF participants on the board.
     int mmf_domain = 0;
     if (const char* e = std::getenv("MMF_DDS_DOMAIN_ID")) mmf_domain = std::atoi(e);
-    participant_ = factory->create_participant(mmf_domain, PARTICIPANT_QOS_DEFAULT, this, participant_mask);
+    // Passing PARTICIPANT_QOS_DEFAULT straight through DOES pick up the XML default profile
+    // (Fast DDS matches it by address -- 3.2.2, DomainParticipantFactory.cpp:160), so this
+    // site was already getting the shipped profile. But that leaves the protection below
+    // resting entirely on a deployment file: delete the block from fastdds-profile.xml and
+    // it silently disappears. Take the QoS explicitly and set the floor in code.
+    //
+    // ★ DO NOT PROPAGATE TypeObject. Cyclone participants on the domain cannot ingest it and
+    // log `ddsi_xt_type_init_impl with invalid type object` -- 1260 lines across the three
+    // Autoware partitions, measured 2026-08-12 on domain 42. They do not crash.
+    // The failure lands on the READER, so this line protects other processes, not this one.
+    // docs/sils/evidence/mmf-typeobject-2026-08-12.md
+    DomainParticipantQos pqos = factory->get_default_participant_qos();
+    pqos.properties().properties().emplace_back("fastdds.type_propagation", "disabled");
+    participant_ = factory->create_participant(mmf_domain, pqos, this, participant_mask);
 
     std::optional<std::string> diag_idl_path = getEnvPath("DIAG_IDL_PATH");
 

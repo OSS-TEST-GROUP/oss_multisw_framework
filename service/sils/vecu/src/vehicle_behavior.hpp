@@ -16,9 +16,21 @@
 #ifndef SILS_VECU_VEHICLE_BEHAVIOR_HPP
 #define SILS_VECU_VEHICLE_BEHAVIOR_HPP
 
+#include <string>
+#include <vector>
+
 #include "vehicle_sample.hpp"  // EgoStateSample / VehicleControlSample
 
 namespace sils {
+
+// One other vECU's command, read as an input. `name` is the CHANNEL NAME from the channel
+// map -- not the peer's process name, which we cannot know from the bus. It is what the
+// arbitration decision is logged against, so it has to be stable and human-meaningful:
+// pick channel names in the map that say which ECU they came from.
+struct ControlRequest {
+    std::string name;
+    VehicleControlSample sample;
+};
 
 struct VehicleBehaviorContext {
     uint64_t tick_seq = 0;
@@ -30,6 +42,15 @@ struct VehicleBehaviorContext {
     // simply ignore these; a Vehicle Interface reads them.
     ControlTargetSample target;
     bool have_target = false;
+    // ARBITRATION (docs/sils/sils-vecu-arbitration.md): other vECUs' commands this tick, one
+    // entry per `in` channel of type canonical/vehicle-control that has produced a sample.
+    // Empty for every single-ECU configuration, which is why this is additive: a behavior
+    // that ignores it behaves exactly as before.
+    //
+    // ORDER IS NOT MEANINGFUL. It follows channel-map order, and the arbitration rule must
+    // not depend on it -- min/clamp are commutative precisely so that two runs that receive
+    // the same set in a different order produce the same command (S3 lockstep determinism).
+    std::vector<ControlRequest> requests;
 };
 
 class IVehicleBehavior {

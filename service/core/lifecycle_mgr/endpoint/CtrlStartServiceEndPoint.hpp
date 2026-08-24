@@ -24,10 +24,9 @@ class CtrlStartServiceEndPoint : public DDSMessageEndPoint {
 
     CtrlStartServiceEndPoint(MessageType msgtype, std::string topic,
                               Callback cb = nullptr);
-    virtual ~CtrlStartServiceEndPoint();
-
-    virtual void OnDataAvailable() override;
-    virtual void OnDataPublished(bool ret) override;
+    ~CtrlStartServiceEndPoint() override= default;
+    void OnDataAvailable() override;
+    void OnDataPublished(bool ret) override;
 
   private:
     CtrlStartServiceRequest req_;

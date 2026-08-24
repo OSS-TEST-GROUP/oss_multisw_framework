@@ -28,20 +28,33 @@
 #  VssSubscriptionManagerTest.SubscriptionWithPathsFilter : period-timer timing
 #  OtamActorServiceTest.F012_.. : actor signal/timeout thread timing
 # ── adsw_manager ROS2 extension — runtime-dependent tests ─────────────────
-#  ADSWManagerTest (5 tests)    : InitializeAndStartStop / InitializeMultipleTimes /
-#                                 StartAndStopMultipleTimes / Process_InStartedState /
-#                                 Process_UpdateServiceListRequestFails
-#                                 — all require a real ROS2 DDS participant + graph
 #  ContainerDockerComposeTest (4 tests) : StartComposeContainer_Success_IT010 /
 #                                 GetContainerStatusStr_Running_IT011 /
 #                                 StopComposeContainer_Success_IT012 /
 #                                 RestartComposeContainer_IT013
 #                                 — invoke `docker compose` subprocess at runtime
-#  ROSDiscoveryInfoEndpointTest (6 tests) : OnDataAvailable_DirectCall_ReadFails /
+#  ROSDiscoveryInfoEndpointTest (3 tests) : OnDataAvailable_DirectCall_ReadFails /
 #                                 OnDataAvailable_MultipleCalls /
-#                                 InitializeAndFinalize /
-#                                 Testable_OnDataAvailable_ReadSucceeds_ManagerValid /
-#                                 Testable_OnDataAvailable_WithMockInfo /
-#                                 Testable_OnDataAvailable_MultipleCalls
+#                                 InitializeAndFinalize
 #                                 — require real FastDDS DataReader participant
-GrpcTransportTest\.|ConcreteEndpointIntegrationTest\.|LifecycleAdswIntegrationTest\.|MessageTransmitterTest\..*ROS|DDSProtocolTest\..*_with_(reader|writer)|DDSProtocolDeserializeTest\.Deserialize_Direct_TC016_sequence_string|DDSProtocolBranchCoverageTest\.register_type_object_TC003_comprehensive_sequence|GrpcProviderTest\.|VssSubscriptionManagerTest\.SubscriptionWithPathsFilter|OtamActorServiceTest\.F012_AllSignalsBeforeTimeout_NoTimeout|ADSWManagerTest\.(InitializeAndStartStop|InitializeMultipleTimes|StartAndStopMultipleTimes|Process_InStartedState|Process_UpdateServiceListRequestFails)|ContainerDockerComposeTest\.(StartComposeContainer_Success_IT010|GetContainerStatusStr_Running_IT011|StopComposeContainer_Success_IT012|RestartComposeContainer_IT013)|ROSDiscoveryInfoEndpointTest\.(OnDataAvailable_DirectCall_ReadFails|OnDataAvailable_MultipleCalls|InitializeAndFinalize|Testable_OnDataAvailable_ReadSucceeds_ManagerValid|Testable_OnDataAvailable_WithMockInfo|Testable_OnDataAvailable_MultipleCalls)
+#
+# ── 여기서 뺀 것 (순수 mock 으로 확인됨) ───────────────────────────────────
+#  ADSWManagerTest 5종 (InitializeAndStartStop / InitializeMultipleTimes /
+#    StartAndStopMultipleTimes / Process_InStartedState* /
+#    Process_UpdateServiceListRequestFails*) 과
+#  ROSDiscoveryInfoEndpointTest.Testable_* 3종.
+#
+#  "real ROS2 DDS participant + graph 가 필요하다" 고 적혀 있었지만 실측하면
+#  전부 링크 심 mock 만 쓰고 1ms 안에 끝난다. 결정적 근거는 **같은 픽스처의
+#  나머지 테스트가 이미 유닛 레인에서 돌고 있다**는 것이다 (ADSWManagerTest 24종,
+#  ROSDiscoveryInfoEndpointTest 20종). DDS 가 필요했다면 그쪽도 못 돌았을 것이다.
+#
+#  이 8종은 실제로는 낡아서 실패하던 테스트였고 (구현이 F013 에서 바뀌었는데
+#  기대치가 따라가지 못함), 이 목록에 들어간 뒤로는 유닛 레인에서 제외되고
+#  runnable 목록에는 없어서 **어느 레인도 돌리지 않아** 드러나지 않았다.
+#  테스트를 고쳤으므로 (커밋 08fa8f0) 유닛 레인으로 되돌린다.
+#
+#  주의: 이 정규식은 부분일치다. 이름을 Process_InStartedState 에서
+#  Process_InStartedState_SendsRequestAndKeepsState 로 바꿔도 옛 패턴이 남아
+#  있으면 계속 제외된다. 그래서 패턴 자체를 지웠다.
+GrpcTransportTest\.|ConcreteEndpointIntegrationTest\.|LifecycleAdswIntegrationTest\.|MessageTransmitterTest\..*ROS|DDSProtocolTest\..*_with_(reader|writer)|DDSProtocolDeserializeTest\.Deserialize_Direct_TC016_sequence_string|DDSProtocolBranchCoverageTest\.register_type_object_TC003_comprehensive_sequence|GrpcProviderTest\.|VssSubscriptionManagerTest\.SubscriptionWithPathsFilter|OtamActorServiceTest\.F012_AllSignalsBeforeTimeout_NoTimeout|ContainerDockerComposeTest\.(StartComposeContainer_Success_IT010|GetContainerStatusStr_Running_IT011|StopComposeContainer_Success_IT012|RestartComposeContainer_IT013)|ROSDiscoveryInfoEndpointTest\.(OnDataAvailable_DirectCall_ReadFails|OnDataAvailable_MultipleCalls|InitializeAndFinalize)

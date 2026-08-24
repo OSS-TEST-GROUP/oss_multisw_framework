@@ -20,10 +20,9 @@ class CtrlStopServiceEndPoint : public DDSMessageEndPoint {
 
     CtrlStopServiceEndPoint(MessageType msgtype, std::string topic,
                              Callback cb = nullptr);
-    virtual ~CtrlStopServiceEndPoint();
-
-    virtual void OnDataAvailable() override;
-    virtual void OnDataPublished(bool ret) override;
+    ~CtrlStopServiceEndPoint() override= default;
+    void OnDataAvailable() override;
+    void OnDataPublished(bool ret) override;
 
   private:
     CtrlStopServiceRequest req_;

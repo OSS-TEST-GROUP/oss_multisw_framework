@@ -27,28 +27,6 @@
 
 namespace lifecycle_manager {
 
-
-constexpr const char* const topic_diag_report = "mmf/lifecyclemgr/LifecycleDiagReport";
-
-constexpr const char* const topic_set_svc_req = "mmf/lifecyclemgr/SetServiceModeRequest";
-constexpr const char* const topic_set_svc_resp = "mmf/lifecyclemgr/SetServiceModeResponse";
-
-constexpr const char* const topic_update_svc_req = "mmf/lifecyclemgr/UpdateServiceListRequest";
-constexpr const char* const topic_update_svc_resp = "mmf/lifecyclemgr/UpdateServiceListResponse";
-
-constexpr const char* const topic_start_svc_req = "mmf/lifecyclemgr/StartServiceRequest";
-constexpr const char* const topic_start_svc_resp = "mmf/lifecyclemgr/StartServiceResponse";
-
-constexpr const char* const topic_stop_svc_req = "mmf/lifecyclemgr/StopServiceRequest";
-constexpr const char* const topic_stop_svc_resp = "mmf/lifecyclemgr/StopServiceResponse";
-
-constexpr const char* const topic_get_svc_state_req = "mmf/lifecyclemgr/GetServiceStateRequest";
-constexpr const char* const topic_get_svc_state_resp = "mmf/lifecyclemgr/GetServiceStateResponse";
-
-constexpr const char* const topic_notify_svc_state = "mmf/lifecyclemgr/NotifyServiceState";
-
-constexpr const char* const topic_type = "lifecyclemgr";
-
 using namespace lifecyclemgr;
 
 EndPointFactory::EndPointFactory(){
@@ -107,13 +85,14 @@ int32_t EndPointFactory::Initialize(){
     topic_lists_[MessageType::CTRL_SET_RECOVERY_POLICY_REQUEST]   = MessageTopic::GetTopicStr(MessageType::CTRL_SET_RECOVERY_POLICY_REQUEST);
     topic_lists_[MessageType::CTRL_SET_RECOVERY_POLICY_RESPONSE]  = MessageTopic::GetTopicStr(MessageType::CTRL_SET_RECOVERY_POLICY_RESPONSE);
 
-    return topic_lists_.size();
+    // 토픽 표는 MessageType enum 크기로 상한이 잡힌다(수십 개). 축소는 안전하나
+    // 암묵적으로 두면 bugprone-narrowing-conversions 가 잡으므로 의도를 명시한다.
+    return static_cast<int32_t>(topic_lists_.size());
 
 }
 
-int32_t EndPointFactory::CreateEndPoints(std::shared_ptr<DDSTransmitter> transmitter,
-                                          const EndPointHandlers& handlers){
-
+int32_t EndPointFactory::CreateEndPoints(const std::shared_ptr<DDSTransmitter>& transmitter,
+                                         const EndPointHandlers& handlers) {
 
     DomainParticipant* participant = transmitter->GetDomain();
     Publisher* publisher = transmitter->GetPublisher();
@@ -410,10 +389,10 @@ int32_t EndPointFactory::CreateEndPoints(std::shared_ptr<DDSTransmitter> transmi
 
     }
 
-    return topic_lists_.size();
-
+    // 토픽 표는 MessageType enum 크기로 상한이 잡힌다(수십 개). 축소는 안전하나
+    // 암묵적으로 두면 bugprone-narrowing-conversions 가 잡으므로 의도를 명시한다.
+    return static_cast<int32_t>(topic_lists_.size());
 }
-
 
 const char* EndPointFactory::GetTopic(MessageType mtype){
 
@@ -424,6 +403,5 @@ const char* EndPointFactory::GetTopic(MessageType mtype){
 
     return nullptr;
 }
-
 
 } // namespace lifecycle_manager

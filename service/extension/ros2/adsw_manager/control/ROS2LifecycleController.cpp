@@ -100,13 +100,26 @@ bool ROS2LifecycleController::SetState(const std::string& basecommand, const std
 bool ROS2LifecycleController::RestartNode(const std::string& basecommand, const std::string& package, const std::string& nodename) {
     LOG_DEBUG("Restarting ROS2 node: " << basecommand << "/" << nodename);
     // Logic to restart the ROS2 node
+    // deactivate / cleanup 의 실패는 의도적으로 무시한다.
+    //
+    // 노드가 이미 inactive 거나 unconfigured 면 이 두 전이는 정당하게 실패한다.
+    // Restart 는 "어떤 상태였든 configure → activate 로 되돌린다" 가 목적이므로
+    // 여기서 끊으면 안 된다. 실패로 처리하는 지점은 아래 configure / activate 뿐이고
+    // ROS2LifecycleControllerTest.RestartNodeFailureOn{Configure,Activate} 가 그
+    // 계약을 고정하고 있다.
+    //
+    // 반환값을 받아만 두고 안 읽으면 clang-analyzer-deadcode.DeadStores 가 잡는데,
+    // 그게 "검사를 빠뜨린 것"인지 "일부러 무시한 것"인지 코드만 봐선 구분이 안 된다.
+    // 로그로 남겨 의도를 드러낸다.
     std::string command = basecommand + " ros2 lifecycle set " + nodename + " deactivate";
     int result = system(command.c_str());
-    LOG_DEBUG("ROS2 node deactivated: " << basecommand << "/" << nodename);
+    LOG_DEBUG("ROS2 node deactivated: " << basecommand << "/" << nodename
+              << " (rc=" << result << ", 실패는 무시 — 이미 inactive 일 수 있다)");
 
     command = basecommand + " ros2 lifecycle set " + nodename + " cleanup";
     result = system(command.c_str());
-    LOG_DEBUG("ROS2 node cleaned up: " << basecommand << "/" << nodename);
+    LOG_DEBUG("ROS2 node cleaned up: " << basecommand << "/" << nodename
+              << " (rc=" << result << ", 실패는 무시 — 이미 unconfigured 일 수 있다)");
 
     command = basecommand + " ros2 lifecycle set " + nodename + " configure";
     result = system(command.c_str());

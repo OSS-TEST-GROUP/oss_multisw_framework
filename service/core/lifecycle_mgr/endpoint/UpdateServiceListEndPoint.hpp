@@ -20,12 +20,11 @@ class UpdateServiceListEndPoint : public DDSMessageEndPoint {
     using Callback = std::function<void(UpdateServiceListRequest*)>;
 
     UpdateServiceListEndPoint(MessageType msgtype, std::string topic, Callback cb = nullptr);
-    virtual ~UpdateServiceListEndPoint();
+    ~UpdateServiceListEndPoint() override;
 
-    virtual void  OnDataAvailable() override;
-    
-    virtual void OnDataPublished(bool ret) override;
+    void OnDataAvailable() override;
 
+    void OnDataPublished(bool ret) override;
 
   private:
     UpdateServiceListRequest data_;

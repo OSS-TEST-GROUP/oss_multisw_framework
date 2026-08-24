@@ -1,5 +1,7 @@
 #include "StopContainerEndPoint.hpp"
 
+#include <utility>
+
 #include "lifecycle/StopContainerRequest.hpp"
 #include "logger/Log.hpp"
 
@@ -7,7 +9,7 @@ namespace lifecycle_manager {
 
 StopContainerEndPoint::StopContainerEndPoint(
     MessageType msgtype, std::string topic, Callback cb)
-    : DDSMessageEndPoint(topic), on_data_cb_(std::move(cb)) {
+    : DDSMessageEndPoint(std::move(topic)), on_data_cb_(std::move(cb)) {
     if (msgtype == MessageType::STOP_CONTAINER_REQUEST) {
         SetTypeSupport(std::make_shared<TypeSupport>(
             new StopContainerRequestPubSubType()));
@@ -17,12 +19,11 @@ StopContainerEndPoint::StopContainerEndPoint(
     }
 }
 
-StopContainerEndPoint::~StopContainerEndPoint() {}
 
 void StopContainerEndPoint::OnDataAvailable() {
     LOG_DEBUG("Message Delivery for " << GetTopic());
 
-    if (Read<StopContainerResponse>(resp_) == true) {
+    if (Read<StopContainerResponse>(resp_)) {
         StopContainerResponse* msg =
             reinterpret_cast<StopContainerResponse*>(&resp_);
         if (on_data_cb_) {

@@ -44,8 +44,9 @@ MockServiceRegistry* Mock_ServiceRegistry;
 
 ServiceRegistry::ServiceRegistry() {
 }
-ServiceRegistry::~ServiceRegistry() {
-}
+// ~ServiceRegistry() 정의는 제거했다. 프로덕션 헤더가 `= default` 로 바뀌어
+// 아웃오브라인 정의가 위법(explicitly-defaulted 함수의 재정의)이 되고,
+// defaulted 소멸자는 컴파일러가 각 TU 에 만들어주므로 링크 심이 필요 없다.
 bool ServiceRegistry::LoadServiceList() {
     return Mock_ServiceRegistry->LoadServiceList();
 }
@@ -58,7 +59,7 @@ void ServiceRegistry::RemoveGroup(const std::string& name) {
 bool ServiceRegistry::IsGroup(const std::string& name) {
     return Mock_ServiceRegistry->IsGroup(name);
 }
-bool ServiceRegistry::AddService(std::shared_ptr<Service> service, const std::string& group) {
+bool ServiceRegistry::AddService(const std::shared_ptr<Service>& service, const std::string& group) {
     return Mock_ServiceRegistry->AddService(service, group);
 }
 void ServiceRegistry::RemoveService(const std::string& name) {
@@ -70,7 +71,7 @@ std::shared_ptr<Service> ServiceRegistry::GetService(const std::string& name) {
 std::vector<std::shared_ptr<Service>> ServiceRegistry::GetServicesByGroup(const std::string& group) {
     return Mock_ServiceRegistry->GetServicesByGroup(group);
 }
-std::string ServiceRegistry::GetGroupNameByService(std::shared_ptr<Service> service) {
+std::string ServiceRegistry::GetGroupNameByService(const std::shared_ptr<Service>& service) {
     return Mock_ServiceRegistry->GetGroupNameByService(service);
 }
 uint64_t ServiceRegistry::GetServicesNum() {

@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>autoware_stub</name>
+  <version>0.1.0</version>
+  <description>
+    Autoware stand-in for SiLS loop B stage 2 (B-det). Answers scenario_simulator_v2's
+    concealer lifecycle so an EgoEntity can exist without a real Autoware. Publishes no
+    control command -- that comes from the vECU.
+    See docs/sils/evidence/ss2-concealer-survey-2026-08-07.md
+  </description>
+  <maintainer email="jane.kim@obigo.com">Jane.Kim</maintainer>
+  <license>Apache-2.0</license>
+
+  <exec_depend>rclpy</exec_depend>
+  <!-- The three ADAPI state topics + the routing/localization/operation-mode services. -->
+  <exec_depend>autoware_adapi_v1_msgs</exec_depend>
+  <!-- /api/external/set/engage only. -->
+  <exec_depend>tier4_external_api_msgs</exec_depend>
+  <!-- Optional legacy /autoware/state path (legacy_state_topic:=true). Not a hard
+       dependency in spirit, but ament has no "weak" exec_depend and the SS_v2 workspace
+       ships it anyway (concealer depends on it). -->
+  <exec_depend>autoware_system_msgs</exec_depend>
+
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

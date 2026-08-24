@@ -17,13 +17,12 @@ using namespace lifecyclemgr;
 class StopContainerEndPoint : public DDSMessageEndpoint {
   public:
     StopContainerEndPoint(MessageType msgtype, std::string topic);
-    virtual ~StopContainerEndPoint();
+    ~StopContainerEndPoint() override= default;
+    std::string GetTopic() override;
+    std::string GetTypeName() override;
+    std::shared_ptr<TypeSupport> GetTypeSupport() override;
 
-    virtual std::string GetTopic();
-    virtual std::string GetTypeName();
-    virtual std::shared_ptr<TypeSupport> GetTypeSupport();
-
-    virtual void OnDataAvailable();
+    void OnDataAvailable() override;
 
   private:
     std::string                  topic_;

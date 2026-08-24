@@ -11,8 +11,7 @@ namespace lifecycle_manager {
 class MWService {
   public:
     MWService(int32_t code, const std::string& name, const std::string& exepath, bool active, const std::vector<ArgumentConfig>& args);
-    virtual ~MWService();
-
+    virtual ~MWService() = default;
     bool IsActive();
 
     std::string GetName();

@@ -20,13 +20,12 @@ namespace adsw_manager {
 class DDSTransmitter {
   public:
     DDSTransmitter();
-    virtual ~DDSTransmitter();
-
+    virtual ~DDSTransmitter() = default;
     bool Initialize();
     void Finalize();
 
-    bool AddMessageEndpoint(std::shared_ptr<DDSMessageEndpoint> endpoint);
-    std::shared_ptr<DDSMessageEndpoint> GetMessageEndpoint(std::string topic);
+    bool AddMessageEndpoint(const std::shared_ptr<DDSMessageEndpoint>& endpoint);
+    std::shared_ptr<DDSMessageEndpoint> GetMessageEndpoint(const std::string& topic);
 
     DomainParticipant* GetDomain();
     Publisher* GetPublisher();

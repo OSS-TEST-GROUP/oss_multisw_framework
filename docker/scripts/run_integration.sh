@@ -62,12 +62,26 @@ mkdir -p ${RESULT_DIR}
 
 for testdir in $(find .build/ -not -path "*/_deps/*" -name CTestTestfile.cmake -exec dirname {} \;)
 do
+	# 레이블은 결과 파일 경로가 된다. basename 만 쓰면
+	# service/extension/{ros2,general,agl}/adsw_manager 세 레인이 모두
+	# "adsw_manager" 가 되어 같은 junit_results.xml 에 덮어써진다 (ota_client 도
+	# ros2/agl 두 벌이라 같은 문제). 실측: ros2/adsw 가 14건을 통과했는데도
+	# 뒤이어 돌은 agl/adsw 가 "테스트 없음" 으로 같은 파일을 덮어써서 그 14건이
+	# 산출물에서 사라졌다 — CI 가 이걸 읽으면 조용히 절반을 못 본다.
+	# extension 레인은 플랫폼 세그먼트를 앞에 붙여 구분한다. core 레인의
+	# 레이블은 기존과 동일하게 유지된다. (run_unittest.sh 와 같은 규칙)
 	label=
-	if [[ ${testdir} == */unittest ]]; then
-		label=$(basename "$(dirname ${testdir})")
-	else
-		label=$(basename ${testdir})
-	fi
+	moddir=${testdir}
+	[[ ${moddir} == */unittest ]] && moddir=$(dirname ${moddir})
+	case ${moddir} in
+		*/service/extension/*)
+			rel=${moddir#*/service/extension/}   # <plat>/<mod>
+			label=${rel//\//_}
+			;;
+		*)
+			label=$(basename ${moddir})
+			;;
+	esac
 	mkdir -p ${RESULT_DIR}/${label}
 	# --tests-regex selects only the runnable subset; a dir with no match is a no-op.
 	ctest \

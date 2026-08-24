@@ -1,6 +1,8 @@
 # adaptive-ecu channel map -- AUTOSAR Adaptive ECU (MORAI/AWSIM plant coupling, Option 2).
-# Same wire as steer-ecu / ego-min.yaml. The AP service events (VehicleStatus in,
-# ControlCommand out) are bound to these canonical DDS channels by adaptive_behavior.hpp;
+# Same wire as ego-min.yaml (EgoState in, VehicleControl out on sils/ego/cmd; steer-ecu is
+# the one exception in the tree, driving sils/ego/steer_cmd). The AP service events
+# (VehicleStatus in, ControlCommand out) are bound to these DDS channels by
+# adaptive_behavior.hpp;
 # in production the vendor ara::com DDS binding maps them instead.
 #
 # Run:  SILS_CHANNELMAP=service/sils/examples/adaptive-ecu/channelmap/adaptive-min.yaml \
