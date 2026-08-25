@@ -100,19 +100,6 @@ services:
   - /root/oss/hmi_launcher_config.json:/etc/hmi_launcher/config.json:rw
   - "-e"
   - HMI_LAUNCHER_CONFIG=/etc/hmi_launcher/config.json
-  # 임베디드 rviz2_panel 의 실행 옵션(이미지 태그·docker run 인자·aglOutput 등).
-  # 패널의 설정 탐색은 `… → /etc/rviz2_panel/config.json → AppConfig.defaults()` 순서다
-  # (rviz2_panel/lib/config/config_loader.dart). 런처 프로세스의 cwd 가 `/` 라서
-  # 리포의 `apps/rviz2_panel/config/config.json` 은 **읽히지 않고** 코드 기본값으로
-  # 떨어졌다(보드 실측 2026-08-24). 이 마운트로 파일이 정본이 되고, 옵션을 바꿀 때
-  # 런처 이미지를 다시 만들 필요가 없다. 파일이 없으면 종전대로 코드 기본값을 쓴다.
-  #   scp apps/rviz2_panel/config/config.json root@<board>:/root/oss/rviz2_panel_config.json
-  # ⚠️ 소스 파일이 없으면 Docker 가 그 경로에 **디렉토리를 만든다** — 패널은 설계대로
-  #    코드 기본값으로 떨어지지만(실측), 나중에 파일을 넣으려 할 때 그 디렉토리 **안으로**
-  #    들어가 조용히 어긋난다. 파일을 배치할 때 `file /root/oss/rviz2_panel_config.json` 로
-  #    "JSON text data" 인지 확인할 것.
-  - "-v"
-  - /root/oss/rviz2_panel_config.json:/etc/rviz2_panel/config.json:ro
   # 런처의 사용자 설정(앱 표시/숨김 = app_visibility.json, 타임존 등)은
   # XDG_CONFIG_HOME 아래에 저장된다. 미설정이면 HOME(/tmp)으로 떨어져
   # **컨테이너 재생성마다 초기화**된다 → 기본 숨김 앱(ota_monitor, rviz2_panel)을
