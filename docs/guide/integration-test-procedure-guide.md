@@ -376,6 +376,18 @@ JSON
 cp /root/oss/hmi_launcher_config.json /root/oss/hmi_launcher_cfg/hmi_launcher/config.json  # (디렉토리 먼저 생성)
 chown -R 1001:1001 /root/oss/hmi_launcher_cfg
 
+# 2-1) (선택) rviz2_panel 사이트 기본값 — 없어도 된다
+#      adsw 정의가 /root/oss/rviz2_panel_config.json → /etc/rviz2_panel/config.json:ro
+#      로 마운트한다. **자동 생성되지 않으므로** 필요할 때만 직접 둔다.
+#      패널의 설정 우선순위는
+#        사용자 저장본($XDG_CONFIG_HOME/rviz2_panel/config.json) > /etc > 코드 기본값
+#      이라, 보통은 이 파일 없이 화면에서 바꿔 저장하는 편이 낫다(저장본은 위
+#      hmi_launcher_cfg 디렉토리에 남아 재기동 후에도 유지된다).
+scp apps/rviz2_panel/config/config.json root@<board>:/root/oss/rviz2_panel_config.json
+# ⚠️ 파일이 없으면 Docker 가 그 경로에 **디렉토리**를 만든다(폴백 자체는 정상 동작).
+#    나중에 파일을 넣을 땐 그 디렉토리부터 치울 것 — `file /root/oss/rviz2_panel_config.json`
+#    이 "JSON text data" 인지 확인한다.
+
 # 3) 기동 — **오버라이드와 env 파일을 함께** 지정한다
 cd /root/oss
 docker compose -f docker-compose-integration.yaml \
