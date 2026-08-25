@@ -376,17 +376,12 @@ JSON
 cp /root/oss/hmi_launcher_config.json /root/oss/hmi_launcher_cfg/hmi_launcher/config.json  # (디렉토리 먼저 생성)
 chown -R 1001:1001 /root/oss/hmi_launcher_cfg
 
-# 2-1) (선택) rviz2_panel 사이트 기본값 — 없어도 된다
-#      adsw 정의가 /root/oss/rviz2_panel_config.json → /etc/rviz2_panel/config.json:ro
-#      로 마운트한다. **자동 생성되지 않으므로** 필요할 때만 직접 둔다.
-#      패널의 설정 우선순위는
-#        사용자 저장본($XDG_CONFIG_HOME/rviz2_panel/config.json) > /etc > 코드 기본값
-#      이라, 보통은 이 파일 없이 화면에서 바꿔 저장하는 편이 낫다(저장본은 위
-#      hmi_launcher_cfg 디렉토리에 남아 재기동 후에도 유지된다).
-scp apps/rviz2_panel/config/config.json root@<board>:/root/oss/rviz2_panel_config.json
-# ⚠️ 파일이 없으면 Docker 가 그 경로에 **디렉토리**를 만든다(폴백 자체는 정상 동작).
-#    나중에 파일을 넣을 땐 그 디렉토리부터 치울 것 — `file /root/oss/rviz2_panel_config.json`
-#    이 "JSON text data" 인지 확인한다.
+# 2-1) rviz2_panel 설정 — **따로 둘 파일이 없다**
+#      패널이 첫 실행에 기기 기본값 `$XDG_CONFIG_HOME/rviz2_panel/config_def.json`
+#      (보드: /root/oss/hmi_launcher_cfg/rviz2_panel/config_def.json) 을 스스로 만든다.
+#      화면에서 저장한 값은 같은 디렉토리의 config.json 에 쌓이고, "기본값으로" 를
+#      누르면 config_def.json 으로 돌아간다. 기기 기본값을 바꾸고 싶으면 이미지를
+#      다시 굽지 말고 config_def.json 을 고치면 된다.
 
 # 3) 기동 — **오버라이드와 env 파일을 함께** 지정한다
 cd /root/oss
