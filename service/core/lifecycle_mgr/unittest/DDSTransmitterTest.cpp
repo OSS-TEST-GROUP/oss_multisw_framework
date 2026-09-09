@@ -493,35 +493,53 @@ TEST_F(DDSTransmitterTest, GetMessageEndPoint_BeforeAddingAny_TC012) {
 
 
 // ═══════════════════════════════════════════════════════════════════════════
-// MMF_DDS_DOMAIN_ID 오버라이드
+// DDS 평면 도메인 결정 — MMF_DDS_DOMAIN_ID > DDS_DOMAIN_ID > 0
 //
 // 왜 미커버였나: 도메인 결정은 익명 네임스페이스의 MmfDdsDomainId() 가 하고,
 // 그 안의 `if (const char* e = std::getenv("MMF_DDS_DOMAIN_ID"))` 는 참 쪽이
 // 실행 0회였다. 기존 Initialize 테스트들이 env 를 세팅하지 않아 항상 기본값
 // 0 으로만 지나갔기 때문이다.
 //
-// 왜 중요한가: Raw Fast-DDS 는 ROS_DOMAIN_ID 를 무시하므로 MMF 는 이 변수로
-// 보드별 도메인을 가른다. 한 보드의 모든 MMF 참가자(lifecycle_mgr /
-// adsw_manager / ota / diagnostics / dds_bridge)가 같은 값을 써야 하고,
-// 어긋나면 core↔adsw DDS 가 **조용히** 연결되지 않는다 — 에러도 로그도 없이
-// 그냥 상대를 못 찾는다. 그래서 값이 실제로 participant 에 반영되는지까지 본다.
+// 왜 중요한가: Raw Fast-DDS 는 ROS_DOMAIN_ID 를 무시한다(그쪽은 별개의 ROS2
+// 평면이다). MMF 는 DDS 평면 env 로 보드별 도메인을 가른다. 한 보드의 모든 MMF
+// 참가자(lifecycle_mgr / adsw_manager / ota / diagnostics / dds_bridge 의 raw
+// 측)가 같은 값을 써야 하고, 어긋나면 core↔adsw DDS 가 **조용히** 연결되지
+// 않는다 — 에러도 로그도 없이 그냥 상대를 못 찾는다. 그래서 값이 실제로
+// participant 에 반영되는지까지 본다.
+//
+// DDS_DOMAIN_ID 는 hmi_launcher Settings 가 domain.env 에 쓰는 정규 키이고,
+// MMF_DDS_DOMAIN_ID 는 서비스별 override 다 — 관례대로 구체적인 쪽이 이긴다.
 // ═══════════════════════════════════════════════════════════════════════════
 
 class DdsDomainIdTest : public DDSTransmitterTest {
   protected:
     void SetUp() override {
-        const char* prev = std::getenv("MMF_DDS_DOMAIN_ID");
-        had_env_ = (prev != nullptr);
-        if (had_env_) prev_env_ = prev;
+        // 두 키를 모두 저장·제거한다. 호스트 환경에 DDS_DOMAIN_ID 가 남아 있으면
+        // "env 없음 → 도메인 0" 테스트가 환경에 따라 흔들리기 때문이다.
+        Save("MMF_DDS_DOMAIN_ID", had_specific_, prev_specific_);
+        Save("DDS_DOMAIN_ID", had_generic_, prev_generic_);
+        unsetenv("MMF_DDS_DOMAIN_ID");
+        unsetenv("DDS_DOMAIN_ID");
         DDSTransmitterTest::SetUp();
     }
     void TearDown() override {
         DDSTransmitterTest::TearDown();
-        if (had_env_) setenv("MMF_DDS_DOMAIN_ID", prev_env_.c_str(), 1);
-        else unsetenv("MMF_DDS_DOMAIN_ID");
+        Restore("MMF_DDS_DOMAIN_ID", had_specific_, prev_specific_);
+        Restore("DDS_DOMAIN_ID", had_generic_, prev_generic_);
     }
-    bool had_env_ = false;
-    std::string prev_env_;
+
+  private:
+    static void Save(const char* key, bool& had, std::string& prev) {
+        const char* v = std::getenv(key);
+        had = (v != nullptr);
+        if (had) prev = v;
+    }
+    static void Restore(const char* key, bool had, const std::string& prev) {
+        if (had) setenv(key, prev.c_str(), 1);
+        else unsetenv(key);
+    }
+    bool had_specific_ = false, had_generic_ = false;
+    std::string prev_specific_, prev_generic_;
 };
 
 TEST_F(DdsDomainIdTest, EnvOverrideLandsOnTheParticipant) {
@@ -533,9 +551,43 @@ TEST_F(DdsDomainIdTest, EnvOverrideLandsOnTheParticipant) {
     EXPECT_EQ(ins->GetDomain()->get_domain_id(), 91u);
 }
 
-TEST_F(DdsDomainIdTest, NoEnvMeansDomainZero) {
-    unsetenv("MMF_DDS_DOMAIN_ID");
+TEST_F(DdsDomainIdTest, CanonicalDdsDomainIdLandsOnTheParticipant) {
+    // hmi_launcher Settings 가 쓰는 정규 키만 있어도 DDS 평면이 잡혀야 한다.
+    setenv("DDS_DOMAIN_ID", "77", 1);
 
+    ASSERT_TRUE(ins->Initialize());
+    ASSERT_NE(ins->GetDomain(), nullptr);
+    EXPECT_EQ(ins->GetDomain()->get_domain_id(), 77u);
+}
+
+TEST_F(DdsDomainIdTest, ServiceSpecificOverrideWinsOverCanonical) {
+    // 관례: 구체적인 키가 일반 키를 이긴다. SILS 처럼 한 서비스만 다른 도메인에
+    // 붙여야 하는 배치를 이 규칙으로 지원한다.
+    setenv("DDS_DOMAIN_ID", "77", 1);
+    setenv("MMF_DDS_DOMAIN_ID", "91", 1);
+
+    ASSERT_TRUE(ins->Initialize());
+    ASSERT_NE(ins->GetDomain(), nullptr);
+    EXPECT_EQ(ins->GetDomain()->get_domain_id(), 91u);
+}
+
+TEST_F(DdsDomainIdTest, RosDomainIdIsIgnored) {
+    // ROS_DOMAIN_ID 는 별개 평면이다 — raw Fast-DDS 가 이걸 집어가면 두 평면을
+    // 분리한 의미가 사라진다.
+    const char* prev = std::getenv("ROS_DOMAIN_ID");
+    const std::string saved = prev ? prev : "";
+    setenv("ROS_DOMAIN_ID", "55", 1);
+
+    ASSERT_TRUE(ins->Initialize());
+    ASSERT_NE(ins->GetDomain(), nullptr);
+    EXPECT_EQ(ins->GetDomain()->get_domain_id(), 0u);
+
+    if (prev) setenv("ROS_DOMAIN_ID", saved.c_str(), 1);
+    else unsetenv("ROS_DOMAIN_ID");
+}
+
+TEST_F(DdsDomainIdTest, NoEnvMeansDomainZero) {
+    // SetUp 이 두 키를 모두 제거했다.
     ASSERT_TRUE(ins->Initialize());
     ASSERT_NE(ins->GetDomain(), nullptr);
     EXPECT_EQ(ins->GetDomain()->get_domain_id(), 0u);

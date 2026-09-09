@@ -28,9 +28,10 @@ OtamActorService의 DDS 통신을 테스트하는 대화형 애플리케이션�
 
 ---
 
-### 2. mock_argocd_server
+### 2. mock_argocd_server.py
 
-OtamServerService가 호출하는 ArgoCD REST API를 모방하는 Mock HTTP 서버입니다.
+OtamServerService가 호출하는 ArgoCD REST API를 모방하는 FastAPI 기반 Mock HTTP 서버입니다.  
+(상세 가이드: [`README_MOCK_SERVER.md`](README_MOCK_SERVER.md))
 
 #### 지원 엔드포인트
 
@@ -54,37 +55,32 @@ OtamServerService가 호출하는 ArgoCD REST API를 모방하는 Mock HTTP 서�
    - Response: 업데이트된 Application 객체
 
 #### 실행 방법
+
+Python 의존성 설치:
+```bash
+pip install -r requirements.txt
+```
+
+서버 실행:
 ```bash
 # 기본 포트(8080)로 실행
-./bin/test/mock_argocd_server
+python3 mock_argocd_server.py
 
-# 커스텀 포트로 실행
-./bin/test/mock_argocd_server 9090
+# 커스텀 포트(-p) 및 디버그 모드(-d)로 실행
+python3 mock_argocd_server.py -p 9090 -d
 ```
+> 빌드 산출물 디렉토리에서 실행 시: `python3 ./bin/test/mock_argocd_server.py`
 
 #### Mock 데이터 수정
 
-Mock 서버는 `mock_data/` 디렉토리의 JSON 파일들을 사용합니다:
+Mock 서버는 `mock_data/` 디렉토리의 JSON 파일들을 로드합니다:
 
 - **session_response.json** - 세션 생성 응답 템플릿
 - **sync_response.json** - 동기화 응답 템플릿
 - **sample-app.json** - sample-app 애플리케이션 데이터
 - **test-app.json** - test-app 애플리케이션 데이터
 
-JSON 파일을 수정하여 다양한 시나리오를 테스트할 수 있습니다.
-
-##### 예제: 새 애플리케이션 추가
-
-1. `mock_data/` 디렉토리에 새 JSON 파일 생성 (예: `my-app.json`)
-2. ArgoCD Application 형식에 맞게 데이터 작성
-3. `mock_argocd_server.cc`의 `InitializeMockData()` 함수에서 파일 경로 추가:
-```cpp
-std::vector<std::string> app_files = {
-  "mock_data/sample-app.json",
-  "mock_data/test-app.json",
-  "mock_data/my-app.json"  // 추가
-};
-```
+JSON 파일을 수정하거나 `mock_data/`에 새 애플리케이션 JSON을 추가하여 다양한 시나리오를 테스트할 수 있습니다.
 
 #### OtamServerService 설정
 

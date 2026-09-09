@@ -282,10 +282,9 @@ bool VariantData::HasKey(const std::string& name) {
 
 std::vector<std::string> VariantData::GetKeyList() {
     std::vector<std::string> key_list;
-
-    for (auto& iter : members_) {
-        key_list.push_back(iter.first);
-    }
+    key_list.reserve(members_.size());
+    std::transform(members_.begin(), members_.end(), std::back_inserter(key_list),
+                   [](const auto& iter) { return iter.first; });
     return key_list;
 }
 

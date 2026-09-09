@@ -1,0 +1,24 @@
+# hmi_launcher Settings 가 도메인 파일을 고치면 oss-domain-apply.service 를 띄운다.
+#
+# 이 한 줄이 (C) "도메인 적용" 액션의 전부다 — 사용자는 Settings 에서 값만 바꾸고,
+# 각 보드가 **자기 호스트의** 플랫폼 컨테이너를 알아서 재생성한다. 순서 의존성
+# (core/ext-ros2 → Autoware, ext-agl → rviz2)은 스크립트가 코드로 갖고 있어
+# 사람이 기억할 필요가 없다.
+#
+# 두 보드 모두 이 유닛을 켜 두면 되고, 크로스-호스트 조율은 필요 없다:
+#   ① 81 런처가 자기 domain.env 를 쓴다        → 81 의 path 유닛이 발화
+#   ② domain_agent 가 151 의 domain.env 에 전파 → 151 의 path 유닛이 발화
+# (실측 2026-09-08: ① → ② 전파는 1초)
+#
+# PathChanged 를 쓰는 이유: 런처/domain_agent 는 임시파일 → rename 으로 원자적으로
+# 쓴다. PathModified 는 rename 을 놓칠 수 있다.
+[Unit]
+Description=Watch MMF domain file and re-apply it to this host's containers
+Documentation=https://github.com/obigo-gov/oss_multisw_framework
+
+[Path]
+PathChanged=/opt/mmf/config/domain.env
+Unit=oss-domain-apply.service
+
+[Install]
+WantedBy=multi-user.target

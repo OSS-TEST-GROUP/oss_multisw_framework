@@ -144,9 +144,20 @@ public:
 
 private:
     std::string idl_root_;
+    // DDS plane (bare `lifecyclemgr::X` types) — MMF raw services live here.
     eprosima::fastdds::dds::DomainParticipant* participant_ = nullptr;
     eprosima::fastdds::dds::Publisher*         publisher_   = nullptr;
     eprosima::fastdds::dds::Subscriber*        subscriber_  = nullptr;
+
+    // ROS2 plane (ROS-canonical `…::msg::dds_::X_` types) — rosbridge/rviz2 live
+    // here. When the two domains are equal these ALIAS the DDS-plane handles
+    // above (one participant, exactly as before); when they differ they point at
+    // a second participant created on ROS_DOMAIN_ID. Never delete them without
+    // checking ros_plane_separate_ — otherwise the aliased case double-frees.
+    eprosima::fastdds::dds::DomainParticipant* ros_participant_ = nullptr;
+    eprosima::fastdds::dds::Publisher*         ros_publisher_   = nullptr;
+    eprosima::fastdds::dds::Subscriber*        ros_subscriber_  = nullptr;
+    bool ros_plane_separate_ = false;
     std::vector<std::unique_ptr<ForwardListener>> listeners_;
 
     // Source-diagnostic publisher (std_msgs/String). Null until EnableSourceDiag.

@@ -7,7 +7,7 @@
 namespace diagnostic_manager {
 
 class ServiceTaskMock : public ServiceTask {
-    MOCK_METHOD4(Constructor, void(const TaskID task_id, const std::string name, const ServiceTaskType type, ExecutorFunctionType function));
+    MOCK_METHOD4(Constructor, void(const TaskID task_id, const std::string& name, const ServiceTaskType type, ExecutorFunctionType function));
     MOCK_METHOD0(GetTaskId, TaskID());
     MOCK_METHOD0(GetName, std::string());
     MOCK_METHOD0(GetType, ServiceTaskType());
@@ -27,7 +27,7 @@ class ServiceTaskMock : public ServiceTask {
 ServiceTaskMock* Mock_ServiceTaskMock;
 
 ServiceTask::ServiceTask() {}
-ServiceTask::ServiceTask(const TaskID task_id, const std::string name, const ServiceTaskType type, ExecutorFunctionType function) {
+ServiceTask::ServiceTask(const TaskID task_id, const std::string& name, const ServiceTaskType type, ExecutorFunctionType function) {
     Mock_ServiceTaskMock->Constructor(task_id, name, type, function);
     task_id_ = task_id;
     function_ = function;

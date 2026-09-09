@@ -93,3 +93,27 @@ TEST_F(OtamVehicleServiceTest, RequestId_CorrectlyPropagated) {
     EXPECT_EQ(received_ids[0], 1000);
     EXPECT_EQ(received_ids[1], 1001);
 }
+
+// ===== QA 커버리지 보강: 순수 getter/setter (DDS 불필요) =====
+
+// GetVehicleInfo: 응답으로 채워진 값을 이름으로 조회하면 반환한다.
+TEST_F(OtamVehicleServiceTest, GetVehicleInfo_ReturnsStoredValue) {
+    vehicle_service_.OnVehicleInfoResponseReceived(1, "Vehicle.Speed", "42");
+    EXPECT_EQ(vehicle_service_.GetVehicleInfo("Vehicle.Speed"), "42");
+}
+
+// GetVehicleInfo: 저장된 적 없는 이름은 빈 문자열을 반환한다.
+TEST_F(OtamVehicleServiceTest, GetVehicleInfo_UnknownName_ReturnsEmpty) {
+    EXPECT_EQ(vehicle_service_.GetVehicleInfo("Vehicle.DoesNotExist"), "");
+}
+
+// GetVehicleInfo: 값이 비면 저장하지 않는다(빈 반환).
+TEST_F(OtamVehicleServiceTest, GetVehicleInfo_EmptyValueNotStored) {
+    vehicle_service_.OnVehicleInfoResponseReceived(2, "Vehicle.Empty", "");
+    EXPECT_EQ(vehicle_service_.GetVehicleInfo("Vehicle.Empty"), "");
+}
+
+// SetOtamDiagnosticService: nullptr 설정도 크래시 없이 동작한다(setter 커버).
+TEST_F(OtamVehicleServiceTest, SetOtamDiagnosticService_NoThrow) {
+    EXPECT_NO_THROW(vehicle_service_.SetOtamDiagnosticService(nullptr));
+}

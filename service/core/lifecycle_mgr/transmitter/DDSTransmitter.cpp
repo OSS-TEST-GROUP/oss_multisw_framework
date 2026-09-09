@@ -10,12 +10,19 @@ namespace lifecycle_manager {
 
 namespace {
 // Per-board DDS domain isolation. Raw Fast-DDS ignores ROS_DOMAIN_ID (that is a
-// ROS2/rmw convention), so MMF reads its own env MMF_DDS_DOMAIN_ID (default 0).
+// ROS2/rmw convention -- the separate ROS2 plane), so MMF reads the DDS
+// plane: MMF_DDS_DOMAIN_ID (per-service override) > DDS_DOMAIN_ID (canonical,
+// written by hmi_launcher Settings into domain.env) > 0.
 // Every MMF participant on a board (lifecycle_mgr / adsw_manager / ota /
-// diagnostics / dds_bridge) must use the SAME value, else core↔adsw DDS breaks.
+// diagnostics / dds_bridge's raw side) must use the SAME value, else core↔adsw
+// DDS breaks.
 int MmfDdsDomainId() {
     if (const char* e = std::getenv("MMF_DDS_DOMAIN_ID")) {
         return std::atoi(e);
+    }
+    // Canonical DDS-plane knob (hmi_launcher Settings writes it to domain.env).
+    if (const char* g = std::getenv("DDS_DOMAIN_ID")) {
+        return std::atoi(g);
     }
     return 0;
 }

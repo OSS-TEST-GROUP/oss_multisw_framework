@@ -27,6 +27,12 @@ bool ContainerController::StartContainer(const std::string& container_name) {
     if (!container) {
         return false;
     }
+    if (container->IsObserveOnly()) {
+        // 호스트가 소유하는 인프라 컨테이너 — 상태만 보고한다 (Container.hpp 주석).
+        LOG_ERROR("ContainerController::StartContainer: " << container_name
+                  << " is observe-only; its lifecycle is owned by the host");
+        return false;
+    }
 
     switch (container->GetContainerType()) {
         case ContainerType::K3S:            return StartK3sContainer(container);
@@ -44,6 +50,12 @@ bool ContainerController::StopContainer(const std::string& container_name) {
     if (!container) {
         return false;
     }
+    if (container->IsObserveOnly()) {
+        // 호스트가 소유하는 인프라 컨테이너 — 상태만 보고한다 (Container.hpp 주석).
+        LOG_ERROR("ContainerController::StopContainer: " << container_name
+                  << " is observe-only; its lifecycle is owned by the host");
+        return false;
+    }
 
     switch (container->GetContainerType()) {
         case ContainerType::K3S:            return StopK3sContainer(container);
@@ -59,6 +71,12 @@ bool ContainerController::RestartContainer(const std::string& container_name) {
     LOG_DEBUG("ContainerController::RestartContainer " << container_name);
     std::shared_ptr<Container> container = GetContainer(container_name);
     if (!container) {
+        return false;
+    }
+    if (container->IsObserveOnly()) {
+        // 호스트가 소유하는 인프라 컨테이너 — 상태만 보고한다 (Container.hpp 주석).
+        LOG_ERROR("ContainerController::RestartContainer: " << container_name
+                  << " is observe-only; its lifecycle is owned by the host");
         return false;
     }
 

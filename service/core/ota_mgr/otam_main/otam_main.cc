@@ -11,6 +11,8 @@
 #include "otam_vehicle_service/otam_vehicle_service.h"
 #include "otam_actor_service/otam_actor_service.h"
 
+// LCOV_EXCL_START — main.cc 전체: 엔트리/조립 경계(Adapter + OtamMain wiring + main()).
+// 유닛 불가 → 통합/E2E 레인이 검증.
 // Adapter to make OtamActorService compatible with Service interface
 class OtamActorServiceAdapter : public OtamService {
  public:

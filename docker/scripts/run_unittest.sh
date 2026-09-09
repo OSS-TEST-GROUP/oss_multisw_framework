@@ -29,7 +29,7 @@ RESULT_DIR=${WORK_DIR}/output/unittest-results
 # 어긋났을 때 실제로 이렇게 터졌다 — 없는 경로가 대입되면서 libfastcdr.so.2
 # 를 못 찾아 general 레인 180건 중 127건이 로드 실패했고, 실행이 안 됐으니
 # .gcda 도 안 남아 커버리지까지 붕괴했다.
-export LD_LIBRARY_PATH=${WORK_DIR}/output/x86_64/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+export LD_LIBRARY_PATH=${WORK_DIR}/output/x86_64/lib:/opt/Fast-DDS/output/ros2_x86_64/lib:${HOME}/obigo-sdk/Fast-DDS/output/ros2_x86_64/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
 export MMF_CONFIG_PATH=${OUTPUT_DIR}/core/bin/config
 export DIAG_CONFIG_PATH=${OUTPUT_DIR}/core/bin/unittest/diagnostics/config
 export DIAG_IDL_PATH=${OUTPUT_DIR}/core/bin/unittest/diagnostics/idl

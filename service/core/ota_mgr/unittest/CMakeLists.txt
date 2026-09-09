@@ -28,6 +28,7 @@ add_executable(otam_main_tests
     test_otam_actor_service.cc
     test_otam_get_applist.cc
     test_otam_diagnostic_service.cc
+    test_otam_server_service.cc
 )
 
 # Link the test executable to GTest, GMock, OtamMain library, and our mocks.

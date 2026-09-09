@@ -11,18 +11,20 @@
 #include <filesystem>
 #include <csignal>
 #include <optional>
+#include <atomic>
 
 #include "VissServerApp.h"
 #include "Logger.h"
 #include "JsonSchemaValidator.h"
 
 // ################### Signal Handling ###################
-static VissServerApp* g_app_ptr = nullptr;
+static std::atomic<VissServerApp*> g_app_ptr{nullptr};
 
 void signal_handler(int signum) {
-    LOG_WARN << "Interrupt signal (" << signum << ") received. Shutting down..." << g_app_ptr;
-    if (g_app_ptr) {
-        g_app_ptr->stop();
+    auto ptr = g_app_ptr.load();
+    LOG_WARN << "Interrupt signal (" << signum << ") received. Shutting down..." << ptr;
+    if (ptr) {
+        ptr->stop();
     }
 }
 
@@ -56,15 +58,15 @@ int main(int argc, char** argv) {
     JsonSchemaValidator::init(schemaPath);
 
     VissServerApp app(himPath);
-    g_app_ptr = &app;
+    g_app_ptr.store(&app);
     std::signal(SIGINT, signal_handler);
     std::signal(SIGTERM, signal_handler);
 
     LOG_INFO << "Starting VISS Server. Press Ctrl+C to exit.";
     app.run();
+    g_app_ptr.store(nullptr);
     
     LOG_INFO << "VISS Server has shut down gracefully.";
-    g_app_ptr = nullptr;
     return 0;
 }
 #endif

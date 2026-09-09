@@ -276,12 +276,21 @@ void StateManager::OnStopContainer(lifecyclemgr::StopContainerResponse* message)
 //     mirroring how StartContainer already worked. The operator never
 //     sees an early SUCCESS that's contradicted by a later failure on a
 //     separate channel.
+//
+// Every rejection below MUST log.  `CtrlResponse` carries a single field
+// (`ReturnCode ret_code`) — no target name, no request id — so a FAILED
+// that reaches lfc_monitor is anonymous by construction.  The core log is
+// the only place the cause survives.  Measured 2026-09-07: a steady
+// ctrl/StartServiceResponse FAILED stream on board 81 was untraceable
+// because the empty-list and no-transmitter branches published FAILED
+// without a single log line, while the paths that *did* log showed 0 hits.
 
 void StateManager::HandleCtrlStartService(lifecyclemgr::CtrlStartServiceRequest* message){
     if (!message){ return; }
 
     auto& names = message->service_list();
     if (names.empty()){
+        LOG_ERROR("CtrlStartService: empty service_list — rejected");
         PublishCtrlResponse(MessageType::CTRL_START_SERVICE_RESPONSE,
                             lifecyclemgr::ReturnCode::FAILED);
         return;
@@ -308,6 +317,7 @@ void StateManager::HandleCtrlStartService(lifecyclemgr::CtrlStartServiceRequest*
 
     std::shared_ptr<DDSTransmitter> transmitter = GetTransmitter();
     if (transmitter == nullptr){
+        LOG_ERROR("CtrlStartService: no DDS transmitter — rejected");
         PublishCtrlResponse(MessageType::CTRL_START_SERVICE_RESPONSE,
                             lifecyclemgr::ReturnCode::FAILED);
         return;
@@ -330,6 +340,7 @@ void StateManager::HandleCtrlStopService(lifecyclemgr::CtrlStopServiceRequest* m
 
     auto& names = message->service_list();
     if (names.empty()){
+        LOG_ERROR("CtrlStopService: empty service_list — rejected");
         PublishCtrlResponse(MessageType::CTRL_STOP_SERVICE_RESPONSE,
                             lifecyclemgr::ReturnCode::FAILED);
         return;
@@ -349,6 +360,7 @@ void StateManager::HandleCtrlStopService(lifecyclemgr::CtrlStopServiceRequest* m
 
     std::shared_ptr<DDSTransmitter> transmitter = GetTransmitter();
     if (transmitter == nullptr){
+        LOG_ERROR("CtrlStopService: no DDS transmitter — rejected");
         PublishCtrlResponse(MessageType::CTRL_STOP_SERVICE_RESPONSE,
                             lifecyclemgr::ReturnCode::FAILED);
         return;
@@ -371,6 +383,7 @@ void StateManager::HandleCtrlSetServiceMode(lifecyclemgr::CtrlSetServiceModeRequ
 
     auto& names = message->service_list();
     if (names.empty()){
+        LOG_ERROR("CtrlSetServiceMode: empty service_list — rejected");
         PublishCtrlResponse(MessageType::CTRL_SET_SERVICE_MODE_RESPONSE,
                             lifecyclemgr::ReturnCode::FAILED);
         return;
@@ -386,6 +399,7 @@ void StateManager::HandleCtrlSetServiceMode(lifecyclemgr::CtrlSetServiceModeRequ
 
     std::shared_ptr<DDSTransmitter> transmitter = GetTransmitter();
     if (transmitter == nullptr){
+        LOG_ERROR("CtrlSetServiceMode: no DDS transmitter — rejected");
         PublishCtrlResponse(MessageType::CTRL_SET_SERVICE_MODE_RESPONSE,
                             lifecyclemgr::ReturnCode::FAILED);
         return;
@@ -418,6 +432,7 @@ void StateManager::HandleCtrlStartContainer(lifecyclemgr::CtrlStartContainerRequ
 
     auto& names = message->container_list();
     if (names.empty()){
+        LOG_ERROR("CtrlStartContainer: empty container_list — rejected");
         PublishCtrlResponse(MessageType::CTRL_START_CONTAINER_RESPONSE,
                             lifecyclemgr::ReturnCode::FAILED);
         return;
@@ -437,6 +452,7 @@ void StateManager::HandleCtrlStartContainer(lifecyclemgr::CtrlStartContainerRequ
 
     std::shared_ptr<DDSTransmitter> transmitter = GetTransmitter();
     if (transmitter == nullptr){
+        LOG_ERROR("CtrlStartContainer: no DDS transmitter — rejected");
         PublishCtrlResponse(MessageType::CTRL_START_CONTAINER_RESPONSE,
                             lifecyclemgr::ReturnCode::FAILED);
         return;
@@ -456,6 +472,7 @@ void StateManager::HandleCtrlStopContainer(lifecyclemgr::CtrlStopContainerReques
 
     auto& names = message->container_list();
     if (names.empty()){
+        LOG_ERROR("CtrlStopContainer: empty container_list — rejected");
         PublishCtrlResponse(MessageType::CTRL_STOP_CONTAINER_RESPONSE,
                             lifecyclemgr::ReturnCode::FAILED);
         return;
@@ -475,6 +492,7 @@ void StateManager::HandleCtrlStopContainer(lifecyclemgr::CtrlStopContainerReques
 
     std::shared_ptr<DDSTransmitter> transmitter = GetTransmitter();
     if (transmitter == nullptr){
+        LOG_ERROR("CtrlStopContainer: no DDS transmitter — rejected");
         PublishCtrlResponse(MessageType::CTRL_STOP_CONTAINER_RESPONSE,
                             lifecyclemgr::ReturnCode::FAILED);
         return;
@@ -511,6 +529,7 @@ void StateManager::HandleCtrlSetRecoveryPolicy(
 
     auto& names = message->service_list();
     if (names.empty()){
+        LOG_ERROR("CtrlSetRecoveryPolicy: empty service_list — rejected");
         PublishCtrlResponse(MessageType::CTRL_SET_RECOVERY_POLICY_RESPONSE,
                             lifecyclemgr::ReturnCode::FAILED);
         return;
@@ -526,6 +545,7 @@ void StateManager::HandleCtrlSetRecoveryPolicy(
 
     std::shared_ptr<DDSTransmitter> transmitter = GetTransmitter();
     if (transmitter == nullptr){
+        LOG_ERROR("CtrlSetRecoveryPolicy: no DDS transmitter — rejected");
         PublishCtrlResponse(MessageType::CTRL_SET_RECOVERY_POLICY_RESPONSE,
                             lifecyclemgr::ReturnCode::FAILED);
         return;

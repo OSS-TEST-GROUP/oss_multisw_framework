@@ -59,6 +59,19 @@ class OtamDiagnosticService : public OtamService {
   std::chrono::seconds heartbeat_interval() const { return heartbeat_interval_; }
   int32_t heartbeat_seq() const { return heartbeat_seq_.load(); }
 
+  // ---------------------------------------------------------------------------
+  // 유닛테스트 전용 seam (QA/docs/qa) — 실 FastDDS 참여자 없이 publish 경로를
+  // MockOtamDdsImpl 로 검증하기 위한 최소 주입점. 프로덕션 흐름에서는 쓰이지 않는다.
+  // (Initialize()/Start() 가 실 DDS + 상태를 세팅하는 경로를 대체 주입)
+  // ---------------------------------------------------------------------------
+  void InjectDdsForTest(const std::string& topic, std::shared_ptr<OtamDds> dds) {
+    dds_registry_[topic] = dds;
+  }
+  void ForceStartedForTest() { state_ = ServiceState::STARTED; }
+  void ForceMatchedForTest(int32_t n) { matched_count_.store(n); }
+  void StartHeartbeatForTest() { StartHeartbeat(); }
+  void StopHeartbeatForTest() { StopHeartbeat(); }
+
  private:
   // -----------------------------------------------------------------------
   // DataWriter listener: tracks subscriber connection events

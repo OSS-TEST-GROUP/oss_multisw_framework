@@ -227,15 +227,22 @@ FetchContent_MakeAvailable(libwebsockets)
         )
     endforeach()
 
-    # Create a library target from the generated protobuf files.
-    add_library(proto_gen_files INTERFACE)
-    target_sources(proto_gen_files INTERFACE
+    # Create an OBJECT library from the generated protobuf and grpc files.
+    # Using OBJECT library ensures 'cmake --build . --target proto_gen_files' works in CI
+    # while still being linkable via target_link_libraries.
+    add_library(proto_gen_files OBJECT
         ${GENERATED_PROTO_SRCS}
         ${GENERATED_GRPC_SRCS}
+        ${GENERATED_PROTO_HDRS}
+        ${GENERATED_GRPC_HDRS}
+    )
+    target_include_directories(proto_gen_files PUBLIC
+        ${CMAKE_CURRENT_BINARY_DIR}
+        ${Protobuf_INCLUDE_DIRS}
+        ${GRPC_INCLUDE_DIRS}
     )
 
-    # If using FetchContent, add dependency on the generated tools
-    if(NOT gRPC_FOUND)
+    if(TARGET grpc_cpp_plugin)
         add_dependencies(proto_gen_files protobuf::protoc grpc_cpp_plugin)
     endif()
 
@@ -397,6 +404,7 @@ target_include_directories(idl_types
     ${fastdds_INCLUDE_DIR}
     ${fastcdr_INCLUDE_DIR}
 )
+add_dependencies(proto_gen_files idl_types)
 
 # --- Googletest Integration using FetchContent ---
 include(FetchContent)
@@ -650,10 +658,13 @@ if (BUILD_UNITTEST)
 #	    unittest/can_provider_test.cpp
 	    unittest/dds_provider_test.cpp
 	    unittest/grpc_provider_test.cpp
+	    unittest/uds_provider_test.cpp
 #	    unittest/network_provider_test.cpp
 	    unittest/grpc_transport_test.cpp
 	    unittest/dds_transport_test.cpp
+	    unittest/viss_websocket_transport_test.cpp
 	    unittest/status_codes_test.cpp
+	    unittest/logger_level_test.cpp
 	    unittest/viss_server_app_test.cpp
         unittest/main_test.cpp
 	    src/app/VissServerApp.cpp
@@ -673,10 +684,18 @@ if (BUILD_UNITTEST)
         src/common/ConfigManager.cpp
 	)
 	
+	file(GLOB_RECURSE IDL_MSG_DIRS LIST_DIRECTORIES true "${GENERATED_IDL_DIR}/*")
+	set(IDL_INCLUDE_DIRS "${GENERATED_IDL_DIR}")
+	foreach(DIR ${IDL_MSG_DIRS})
+		if(IS_DIRECTORY ${DIR})
+			list(APPEND IDL_INCLUDE_DIRS ${DIR})
+		endif()
+	endforeach()
+
 	target_include_directories(VehicleInfoMgrTest
 	    PRIVATE
 	    ${PROJECT_INCLUDE_DIR}
-	    ${GENERATED_IDL_DIR}
+	    ${IDL_INCLUDE_DIRS}
         ${libwebsockets_SOURCE_DIR}/include
         ${libwebsockets_BINARY_DIR}
 	)
@@ -693,6 +712,8 @@ if (BUILD_UNITTEST)
             proto_gen_files
             websockets_shared
 	)
+	
+	target_link_options(VehicleInfoMgrTest PRIVATE -Wl,--allow-multiple-definition)
 	
 	include(GoogleTest)
 	gtest_discover_tests(VehicleInfoMgrTest)

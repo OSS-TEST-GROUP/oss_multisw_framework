@@ -16,6 +16,8 @@ void OtamServerService::SetOtamDiagnosticService(OtamDiagnosticService* svc) {
 }
 
 // ===== Lifecycle =====
+// LCOV_EXCL_START — 프레임워크 경계(Initialize/Start/Stop): 실 ApiClientImpl(libcurl)
+// 생성 + 세션 lifecycle. 유닛 불가 → 통합 레인이 검증.
 void OtamServerService::Initialize() {
     if (state_ != ServiceState::UNINITIALIZED) {
         std::cout << "[OtamServerService] Already initialized.\n";
@@ -84,6 +86,7 @@ void OtamServerService::Stop() {
 }
 
 // ===== ArgoCD Token Creation =====
+// LCOV_EXCL_STOP
 SessionResult OtamServerService::CreateOtaSession() {
     SessionResult result;
     result.ret_code = ReturnValue::FAIL;
@@ -371,6 +374,7 @@ ReturnValue OtamServerService::SetOtaSettings(
 }
 
 // ========== Private helpers ==========
+// LCOV_EXCL_START — config 파일 I/O 경계(LoadConfigFromFile): 통합/파일 픽스처 검증.
 OtamServerConfig OtamServerService::LoadConfigFromFile(const std::string& path) {
     OtamServerConfig cfg;
     cfg.config_path = path;

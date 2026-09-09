@@ -22,7 +22,7 @@ class DiagInfoRegistry {
     void ClearDiagInfoList();
 
     std::shared_ptr<DiagInfo> GetDiagInfo(int32_t code);
-    std::shared_ptr<DiagInfo> GetDiagInfoByName(std::string name);
+    std::shared_ptr<DiagInfo> GetDiagInfoByName(const std::string& name);
     std::vector<std::shared_ptr<DiagInfo>> GetAllDiagInfo();
 
     std::vector<int32_t> GetDiagInfoCodeList();

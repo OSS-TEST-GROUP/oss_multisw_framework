@@ -42,10 +42,10 @@ std::string convertTypeName(const std::string& input_type, bool to_simple = true
         }
     } else {
         // Convert simple type to ROS2 DDS type (for sending)
-        for (const auto& pair : ros2_dds_to_simple_map) {
-            if (pair.second == input_type) {
-                return pair.first;
-            }
+        auto it = std::find_if(ros2_dds_to_simple_map.begin(), ros2_dds_to_simple_map.end(),
+                               [&input_type](const auto& pair) { return pair.second == input_type; });
+        if (it != ros2_dds_to_simple_map.end()) {
+            return it->first;
         }
     }
     
@@ -62,8 +62,8 @@ std::string toRos2DdsType(const std::string& simple_type) {
     return convertTypeName(simple_type, false);
 }
 
-DDSProtocol::DDSProtocol() : participant_(nullptr), subscriber_(nullptr) {
-    dds_dynamic_idl_parser_ = std::make_unique<DDSDynamicIDLParser>();
+DDSProtocol::DDSProtocol() : participant_(nullptr), subscriber_(nullptr), publisher_(nullptr),
+      dds_dynamic_idl_parser_(std::make_unique<DDSDynamicIDLParser>()) {
 
     // Enable all logging categories
     eprosima::fastdds::dds::Log::SetVerbosity(eprosima::fastdds::dds::Log::Info);
@@ -71,7 +71,7 @@ DDSProtocol::DDSProtocol() : participant_(nullptr), subscriber_(nullptr) {
 }
 DDSProtocol::~DDSProtocol() {
     // Ensure cleanup is performed even if Finalize() wasn't called explicitly
-    Finalize();
+    DDSProtocol::Finalize();
 }
 
 bool DDSProtocol::Initialize() {
@@ -80,10 +80,13 @@ bool DDSProtocol::Initialize() {
     StatusMask participant_mask = StatusMask::data_available();
     participant_mask << eprosima::fastdds::dds::StatusMask::subscription_matched();
 
-    // Per-board DDS domain isolation (MMF_DDS_DOMAIN_ID, default 0). Raw Fast-DDS
-    // ignores ROS_DOMAIN_ID; must match the other MMF participants on the board.
+    // Per-board DDS-plane isolation. Precedence: MMF_DDS_DOMAIN_ID (per-service
+    // override) > DDS_DOMAIN_ID (canonical DDS plane) > 0. Raw Fast-DDS ignores
+    // ROS_DOMAIN_ID -- that is the separate ROS2 plane. Must match the other MMF
+    // participants on the board.
     int mmf_domain = 0;
     if (const char* e = std::getenv("MMF_DDS_DOMAIN_ID")) mmf_domain = std::atoi(e);
+    else if (const char* g = std::getenv("DDS_DOMAIN_ID")) mmf_domain = std::atoi(g);
     // Passing PARTICIPANT_QOS_DEFAULT straight through DOES pick up the XML default profile
     // (Fast DDS matches it by address -- 3.2.2, DomainParticipantFactory.cpp:160), so this
     // site was already getting the shipped profile. But that leaves the protection below
@@ -316,9 +319,9 @@ bool DDSProtocol::SerializeMessage(DynamicData::_ref_type dds_data, std::shared_
 
     std::vector<std::string> member_list = variant_data->GetKeyList();
     std::vector<std::type_index> type_list;
-    for (auto& iter : member_list) {
-        type_list.push_back(variant_data->GetValueType(iter));
-    }
+    type_list.reserve(member_list.size());
+    std::transform(member_list.begin(), member_list.end(), std::back_inserter(type_list),
+                   [&variant_data](const auto& iter) { return variant_data->GetValueType(iter); });
 
     for (uint64_t idx = 0; idx < member_list.size(); idx++) {
         auto& type = type_list[idx];
@@ -737,13 +740,10 @@ bool DDSProtocol::register_type_object_from_dynamic_idl(std::shared_ptr<TopicInf
     
     // Try to find the type directly first
     auto iter = parsed_dynamic_type_supports_.find(topic_information->topic_type);
-    
-    // If not found, try to map ROS2 DDS type names to simple names
+       // If not found, try to map ROS2 DDS type names to simple names
     if (iter == parsed_dynamic_type_supports_.end()) {
-        std::string mapped_type_name = topic_information->topic_type;
-        
         // Map ROS2 DDS type names to simple type names
-        mapped_type_name = toSimpleType(topic_information->topic_type);  // Convert to simple type for IDL lookup
+        std::string mapped_type_name = toSimpleType(topic_information->topic_type);  // Convert to simple type for IDL lookup
         
         LOG_DEBUG("Mapped ROS2 type '" << topic_information->topic_type << "' to '" << mapped_type_name << "'");
         iter = parsed_dynamic_type_supports_.find(mapped_type_name);
@@ -822,7 +822,7 @@ bool DDSProtocol::delete_datareader(std::shared_ptr<TopicInformation> topic_info
     }
     topic_information->reader = nullptr;
 
-    if (topic_information->reader == nullptr) {
+    if (topic_information->topic != nullptr) {
         if (participant_->delete_topic(topic_information->topic) != RETCODE_OK) {
             return false;
         }

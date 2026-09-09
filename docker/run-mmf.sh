@@ -12,8 +12,10 @@
 #   ssh <user>@<board> 'bash ~/run-mmf.sh'
 #
 # 사용 예:
-#   bash run-mmf.sh                          # domain 0, :latest
-#   ROS_DOMAIN_ID=1 bash run-mmf.sh          # 보드별 DDS domain 격리 (전 스택 동일 도메인)
+#   bash run-mmf.sh                          # 두 평면 모두 domain 42, :latest
+#   ROS_DOMAIN_ID=1 bash run-mmf.sh          # ROS2 평면만 1 로 (rviz2/Autoware)
+#   DDS_DOMAIN_ID=5 bash run-mmf.sh          # 순수 DDS 평면만 5 로 (MMF 버스)
+#   DDS_DOMAIN_ID=5 ROS_DOMAIN_ID=42 bash run-mmf.sh   # 두 평면 분리 운영
 #   EXTROS2_IMG=oss-mmf-ext-ros2:diag2-local bash run-mmf.sh   # 로컬 이미지 오버라이드
 #   SAVED_SERVICE_LIST=~/adsw-service-list.yaml bash run-mmf.sh  # ext-ros2 서비스목록 bind-mount
 #
@@ -28,28 +30,49 @@ set -e
 CORE_IMG="${CORE_IMG:-registry.obigo.com/oss/oss-mmf-core:latest}"
 EXTROS2_IMG="${EXTROS2_IMG:-registry.obigo.com/oss/oss-mmf-ext-ros2:latest}"
 
-# 보드별 DDS 도메인 격리. ROS_DOMAIN_ID 는 ROS2 노드/rmw 만 격리하므로, raw Fast-DDS
-# 를 쓰는 lifecycle_mgr/diagnostics/adsw/ota(MMF_DDS_DOMAIN_ID) 와 vehicle_info/viss
-# (VISS_DDS_DOMAIN_ID) 도 같은 값으로 맞춰야 전 스택이 실제로 한 도메인에 격리된다.
+# 보드별 도메인 격리 — **두 평면**을 따로 준다.
+#   · DDS 평면 (DDS_DOMAIN_ID): 순수 Fast-DDS 로 말하는 MMF 버스 —
+#     lifecycle_mgr/diagnostics/adsw/ota. raw Fast-DDS 는 ROS_DOMAIN_ID 를 보지 않는다.
+#   · ROS2 평면 (ROS_DOMAIN_ID): rmw/rclcpp — rviz2/Autoware/rosbridge.
+# 두 값을 다르게 두면 평면 간 통신은 dds_bridge 가 잇는다 — 브릿지가 참가자를 둘
+# 만들어 각 평면에 동시에 존재한다. 같은 값이면 참가자 하나(종전과 동일).
+# ⚠ 분리 운영은 이중 도메인 브릿지가 든 ext-ros2 이미지에서만 성립한다.
+# 상세: docs/guide/dds-ros-domain-guide.md §4
 #
-# 도메인 결정 우선순위: ① 명시한 ROS_DOMAIN_ID env  ② 도메인 파일  ③ 기본값 42.
-# 도메인 파일(`ROS_DOMAIN_ID=<n>` 한 줄, compose `--env-file` 과 같은 형식)은
-# HMI 런처 Settings 가 기록한다 → **다음 기동 때** 반영된다(ROS_DOMAIN_ID 는 프로세스
-# 시작 시점에만 읽히므로 실행 중 변경은 불가).
+# 각 평면 결정 우선순위: ① 명시한 env  ② 도메인 파일의 같은 키  ③ 기본값 42.
+# 도메인 파일(`DDS_DOMAIN_ID=<n>` / `ROS_DOMAIN_ID=<m>`, compose `--env-file` 형식)은
+# HMI 런처 Settings 가 기록한다 → **다음 기동 때** 반영된다(도메인은 프로세스 시작
+# 시점에만 읽히므로 실행 중 변경은 불가).
 # 기본값 42 인 이유: Autoware adsw 파티션(saved-service-list.yaml)이 42 를 쓰므로,
 # 기본이 0 이면 adsw_monitor 가 구독만 하고 발행자가 없어 화면이 전부 null 이 된다(실측).
 MMF_DOMAIN_ENV_FILE="${MMF_DOMAIN_ENV_FILE:-/opt/mmf/config/domain.env}"
-_file_domain=""
-if [ -f "$MMF_DOMAIN_ENV_FILE" ]; then
-  _file_domain="$(sed -n 's/^[[:space:]]*ROS_DOMAIN_ID[[:space:]]*=[[:space:]]*\([0-9]\{1,3\}\).*/\1/p' \
-                    "$MMF_DOMAIN_ENV_FILE" | tail -1)"
-fi
-DOMAIN="${ROS_DOMAIN_ID:-${_file_domain:-42}}"
-# ROS 2 도메인 유효 범위는 0~232. 벗어나면 조용히 잘못 도는 대신 기본값으로 되돌린다.
-if ! [ "$DOMAIN" -ge 0 ] 2>/dev/null || [ "$DOMAIN" -gt 232 ]; then
-  echo "[run-mmf] ⚠️ 잘못된 도메인 '$DOMAIN' → 42 사용 (유효 범위 0~232)" >&2
-  DOMAIN=42
-fi
+
+# 도메인 파일에서 키 하나를 읽는다 (없으면 빈 문자열).
+_domain_from_file() {
+  [ -f "$MMF_DOMAIN_ENV_FILE" ] || return 0
+  sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*\([0-9]\{1,3\}\).*/\1/p" \
+    "$MMF_DOMAIN_ENV_FILE" | tail -1
+}
+
+# 0~232 를 벗어나면 조용히 잘못 도는 대신 기본값으로 되돌린다.
+_valid_domain() {
+  [ -n "$1" ] && [ "$1" -ge 0 ] 2>/dev/null && [ "$1" -le 232 ] 2>/dev/null
+}
+
+_file_ros="$(_domain_from_file ROS_DOMAIN_ID)"
+# DDS 키가 없는 구 도메인 파일은 ROS 값을 그대로 쓴다 — 업그레이드 직후 동작 불변.
+_file_dds="$(_domain_from_file DDS_DOMAIN_ID)"
+_file_dds="${_file_dds:-$_file_ros}"
+
+ROS_DOMAIN="${ROS_DOMAIN_ID:-${_file_ros:-42}}"
+DDS_DOMAIN="${DDS_DOMAIN_ID:-${_file_dds:-42}}"
+for _plane in ROS DDS; do
+  eval "_v=\$${_plane}_DOMAIN"
+  if ! _valid_domain "$_v"; then
+    echo "[run-mmf] ⚠️ 잘못된 ${_plane} 도메인 '$_v' → 42 사용 (유효 범위 0~232)" >&2
+    eval "${_plane}_DOMAIN=42"
+  fi
+done
 
 # ContainerController 등이 `docker compose -f <file> up -d` 를 `--env-file` 없이
 # 호출하면 compose 는 **compose 파일 옆의 `.env`** 만 읽는다. 도메인 파일이 있으면
@@ -62,7 +85,7 @@ fi
 DOCKER_GID="$(getent group docker | cut -d: -f3)"
 
 echo "[run-mmf] core=$CORE_IMG"
-echo "[run-mmf] ext-ros2=$EXTROS2_IMG  domain=$DOMAIN  docker_gid=$DOCKER_GID"
+echo "[run-mmf] ext-ros2=$EXTROS2_IMG  dds_domain=$DDS_DOMAIN  ros_domain=$ROS_DOMAIN  docker_gid=$DOCKER_GID"
 
 # 최신 이미지 확보. registry 인증이 되어 있으면 pull, 로컬 전용 태그(:*-local)나
 # 오프라인/미인증이면 스킵하고 로컬 이미지로 진행 (PULL=0 으로 완전 비활성 가능).
@@ -94,9 +117,10 @@ docker run -d --name oss-mmf-core \
   --privileged --network host \
   --cap-add NET_RAW --cap-add NET_ADMIN \
   -v /dev/shm:/dev/shm \
-  -e ROS_DOMAIN_ID="$DOMAIN" \
-  -e MMF_DDS_DOMAIN_ID="$DOMAIN" \
-  -e VISS_DDS_DOMAIN_ID="$DOMAIN" \
+  -e ROS_DOMAIN_ID="$ROS_DOMAIN" \
+  -e DDS_DOMAIN_ID="$DDS_DOMAIN" \
+  -e MMF_DDS_DOMAIN_ID="$DDS_DOMAIN" \
+  -e VISS_DDS_DOMAIN_ID="$DDS_DOMAIN" \
   -e HEARTBEAT_INTERVAL_SEC=3 \
   "$CORE_IMG"
 
@@ -118,9 +142,12 @@ docker run -d --name oss-mmf-ext-ros2 \
   --group-add "$DOCKER_GID" \
   -v /dev/shm:/dev/shm \
   -v /var/run/docker.sock:/var/run/docker.sock \
+  -v "$(dirname "$MMF_DOMAIN_ENV_FILE")":/mmf-config:rw \
+  -e MMF_DOMAIN_ENV_FILE=/mmf-config/"$(basename "$MMF_DOMAIN_ENV_FILE")" \
   ${SVC_MOUNT[@]+"${SVC_MOUNT[@]}"} \
-  -e ROS_DOMAIN_ID="$DOMAIN" \
-  -e MMF_DDS_DOMAIN_ID="$DOMAIN" \
+  -e ROS_DOMAIN_ID="$ROS_DOMAIN" \
+  -e DDS_DOMAIN_ID="$DDS_DOMAIN" \
+  -e MMF_DDS_DOMAIN_ID="$DDS_DOMAIN" \
   "$EXTROS2_IMG"
 
 echo "[run-mmf] done."

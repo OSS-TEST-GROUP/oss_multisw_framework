@@ -74,6 +74,10 @@ done
 # adsw      : BUILD_EXTENSION=TRUE + ROS2 → service/extension/ros2.
 MODULES=(
     "lifecycle|FALSE|ROS2|service/core/lifecycle_mgr"
+    # ota_mgr 은 core 컴포넌트(service/core) — lifecycle 과 같은 configure(FALSE|ROS2).
+    "ota|FALSE|ROS2|service/core/ota_mgr"
+    # ota_client 은 AGL extension — ROS2 platform configure 로 잡힌다.
+    "otaclient|TRUE|ROS2|service/extension/agl/ota_client"
     "adsw|TRUE|ROS2|service/extension/ros2/adsw_manager"
     # general 판은 ros2 판의 복사본이 아니라 포크다 (58개 중 로거 2개만 동일하고
     # 나머지는 내용이 갈렸다). ros2 쪽 수정을 그대로 옮길 수 없으므로 별도 모듈로

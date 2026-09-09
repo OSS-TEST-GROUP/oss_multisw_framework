@@ -33,7 +33,9 @@ ext-ros2 컨테이너 1개 안에서 아래가 함께 돈다:
 
 - `exec_type: container` → adsw 가 StartService 시 **`docker run`**, StopService 시 **`docker stop`+`rm`** 한다 (컨테이너 CMD 가 워크로드; 별도 `docker exec ros2 launch` 안 함).
 - `recovery: MANUAL` → 운영자가 **lfc_monitor 에서 명시적으로** start/stop (자동 재기동 안 함).
-- autoware 는 `ROS_DOMAIN_ID=42` 로 **MMF(domain 0)와 격리**.
+- autoware 는 **ROS2 평면**이라 `ROS_DOMAIN_ID=42` 를 쓴다. MMF 서비스는 **DDS 평면**
+  (`DDS_DOMAIN_ID`, 기본 42)에 있다 — 두 평면 모델은
+  [dds-ros-domain-guide.md](dds-ros-domain-guide.md) 참조.
 
 ---
 
@@ -49,7 +51,7 @@ ext-ros2 컨테이너를 `docker run` 할 때 **아래가 없으면 조용히 �
 | **`-v /dev/shm:/dev/shm`** | DDS SHM 전송 불가 / 크로스 프로세스 discovery 저하 |
 | **`--network host`** | rosbridge·DDS 가 호스트 네트워크에 안 붙음 (HMI 연결/크로스호스트 DDS 실패) |
 | **`--privileged --cap-add NET_RAW --cap-add NET_ADMIN`** | DDS 멀티캐스트/네트워크 권한 부족 |
-| **`-e MMF_DDS_DOMAIN_ID=<n>`** (같은 보드 core 와 동일값) | 도메인 불일치 → core↔adsw 통신 끊김 (§4 참조) |
+| **`-e DDS_DOMAIN_ID=<n>`** (같은 보드 core 와 동일값; `MMF_DDS_DOMAIN_ID` 는 서비스별 override) | DDS 평면 불일치 → core↔adsw 통신 끊김 (§4 참조) |
 
 **docker gid 확인**: `getent group docker | cut -d: -f3` (보드마다 다름 — 예 999).
 
@@ -86,7 +88,7 @@ docker run -d --name oss-mmf-ext-ros2 --restart unless-stopped \
   -v /dev/shm:/dev/shm \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v ~/adsw-service-list.yaml:/oss/bin/config/saved-service-list.yaml:ro \
-  -e ROS_DOMAIN_ID=0 -e MMF_DDS_DOMAIN_ID=0 \
+  -e ROS_DOMAIN_ID=42 -e DDS_DOMAIN_ID=42 \
   registry.obigo.com/oss/oss-mmf-ext-ros2:latest
 ```
 

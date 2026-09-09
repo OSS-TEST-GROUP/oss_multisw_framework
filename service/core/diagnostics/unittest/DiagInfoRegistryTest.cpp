@@ -175,7 +175,31 @@ TEST_F(DiagInfoRegistryTest, GetDiagInfoNameList_TC001) {
 }
 
 
+TEST_F(DiagInfoRegistryTest, UpdateDiagInfo_DifferentContent_TC002) {
+    auto diag1 = std::make_shared<DiagInfo>();
+    auto diag2 = std::make_shared<DiagInfo>();
+
+    EXPECT_CALL(*Mock_DiagInfo, GetDiagCode()).WillRepeatedly(Return(100));
+
+    // First insert (new code)
+    ins->UpdateDiagInfo(diag1);
+    EXPECT_EQ(diag1, ins->GetDiagInfo(100));
+
+    // Update existing code with different DiagInfo
+    ins->UpdateDiagInfo(diag2);
+    EXPECT_EQ(diag2, ins->GetDiagInfo(100));
+}
+
+
+TEST_F(DiagInfoRegistryTest, RemoveDiagInfo_NonExistent_TC002) {
+    ins->ClearDiagInfoList();
+    // Removing code that does not exist should safely return
+    ins->RemoveDiagInfo(999);
+    EXPECT_EQ(0, ins->diag_info_list_.size());
+}
+
 int main(int argc, char* argv[]) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }
+

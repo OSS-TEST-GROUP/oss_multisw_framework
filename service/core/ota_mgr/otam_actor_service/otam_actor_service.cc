@@ -48,6 +48,8 @@ void OtamActorService::SetOtamDiagnosticService(OtamDiagnosticService* diagnosti
   std::cout << "OtamActorService: OtamDiagnosticService connected" << std::endl;
 }
 
+// LCOV_EXCL_START — 프레임워크 경계(Initialize/Start): 실 DomainParticipant/
+// DataReader/Writer + 리스너 등록. 유닛 불가 → 통합 레인이 검증.
 void OtamActorService::Initialize() {
     if (state_ != ServiceState::UNINITIALIZED) {
       std::cout << "OtamActorService already initialized"
@@ -187,6 +189,7 @@ void OtamActorService::Stop() {
 
 // ========== Request Handlers ==========
 
+// LCOV_EXCL_STOP
 void OtamActorService::OnAppUpdateSettingsRequested(
     const otamanager::GetAppUpdateSettings& msg) {
   std::cout << "OtamActorService: GetAppUpdateSettings received"
@@ -1017,6 +1020,8 @@ void OtamActorService::PublishSetAppUpdateResponse(
   }
 }
 
+// LCOV_EXCL_START — DDS 리스너 콜백(전 리스너 on_data_available): 실 DataReader.
+// 유닛 불가 → 통합 레인이 검증. (파일 끝까지 제외)
 void OtamActorService::GetAppUpdateSettingsListener::on_data_available(eprosima::fastdds::dds::DataReader* reader) {
     // This callback is invoked by FastDDS when new registration data arrives
     otamanager::GetAppUpdateSettings message;
@@ -1230,7 +1235,9 @@ otamanager::GetAppListResponse OtamActorService::BuildGetAppListResponse(
     }
 
     otamanager::GetAppListResponse resp;
-    resp.id(request_id);
+    // IDL GetAppListResponse.id 는 int32 — int64 request_id 를 명시적으로 좁힌다.
+    // (BuildGetAppListResponse 만 int64 파라미터 — 계약 불일치는 issues md 에 후속 기록)
+    resp.id(static_cast<int32_t>(request_id));
     resp.app_names(names);
     resp.owner_client_ids(owners);
     resp.owner_client_names(owner_names);

@@ -3,6 +3,7 @@
 #include "ThreadSafeQueue.h"
 #include "ObjectPool.h"
 #include "Types.h"
+#include "ConfigManager.h"
 #include <grpcpp/grpcpp.h>
 #include "VISSv3.0.grpc.pb.h"
 #include <thread>
@@ -13,13 +14,14 @@ class GrpcTransportTest : public ::testing::Test {
 protected:
     void SetUp() override {
         JsonSchemaValidator::init("../config/vissv3.0-schema.json");
+        ConfigManager::getInstance().grpc.port = 55443;
         pool = std::make_shared<ObjectPool<RequestData>>();
         response_pool = std::make_shared<ObjectPool<PooledResponseMap>>();
         queue = std::make_shared<ThreadSafeQueue<std::shared_ptr<RequestData>>>();
         transport = std::make_unique<GrpcTransport>(pool, queue);
         transport->start(); // Start the server
 
-        std::string server_address = "localhost:5443";
+        std::string server_address = "localhost:55443";
         channel = grpc::CreateChannel(server_address, grpc::InsecureChannelCredentials());
         stub = grpcProtobufMessages::VISS::NewStub(channel);
 
@@ -254,7 +256,7 @@ TEST_F(GrpcTransportTest, GetRequestAndResponseDataPackageTestDpIntValueIntTs) {
         EXPECT_EQ(data_pack.data_size(), 1);
         EXPECT_EQ(data_pack.data(0).path(), "Vehicle.Speed");
         EXPECT_EQ(data_pack.data(0).dp_size(), 1);
-        EXPECT_TRUE(data_pack.data(0).dp(0).value().empty());
+        EXPECT_EQ(data_pack.data(0).dp(0).value(), "111");
         EXPECT_TRUE(data_pack.data(0).dp(0).ts().empty());
     });
 
@@ -414,7 +416,7 @@ TEST_F(GrpcTransportTest, GetRequestAndResponseDataPackageTestArrayDpIntValueInt
         EXPECT_EQ(data_pack.data_size(), 1);
         EXPECT_EQ(data_pack.data(0).path(), "Vehicle.Speed");
         EXPECT_EQ(data_pack.data(0).dp_size(), 1);
-        EXPECT_TRUE(data_pack.data(0).dp(0).value().empty());
+        EXPECT_EQ(data_pack.data(0).dp(0).value(), "123");
         EXPECT_TRUE(data_pack.data(0).dp(0).ts().empty());
         
     });
@@ -2568,3 +2570,139 @@ TEST_F(GrpcTransportTest, SubscribeWithChangeFilterReturnsError) {
 
     client_thread.join();
 }
+
+TEST_F(GrpcTransportTest, GetRequestWithMetadataResponse) {
+    std::thread client_thread([this]() {
+        grpcProtobufMessages::GetRequestMessage req;
+        req.set_path("Vehicle.Speed");
+        req.set_requestid("test-get-meta-1");
+
+        grpcProtobufMessages::GetResponseMessage res;
+        grpc::ClientContext context;
+
+        grpc::Status status = stub->GetRequest(&context, req, &res);
+        EXPECT_TRUE(status.ok());
+        EXPECT_EQ(res.status(), grpcProtobufMessages::ResponseStatus::SUCCESS);
+        EXPECT_TRUE(res.has_successresponse());
+        EXPECT_FALSE(res.successresponse().metadata().empty());
+    });
+
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(queue->wait_and_pop(received_request));
+
+    auto mock_response = response_pool->acquire();
+    mock_response->SetObject();
+    rapidjson::Document::AllocatorType& allocator = mock_response->GetAllocator();
+    mock_response->AddMember("requestId", "test-get-meta-1", allocator);
+    mock_response->AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+
+    rapidjson::Value meta_val(rapidjson::kObjectType);
+    meta_val.AddMember("type", "sensor", allocator);
+    meta_val.AddMember("datatype", "float", allocator);
+    mock_response->AddMember("metadata", meta_val, allocator);
+
+    received_request->responseChan->push(mock_response);
+    client_thread.join();
+}
+
+TEST_F(GrpcTransportTest, SubscribeWithServerTerminationStatus) {
+    std::thread client_thread([this]() {
+        grpcProtobufMessages::SubscribeRequestMessage req;
+        req.set_path("Vehicle.Speed");
+        req.set_requestid("test-sub-term-1");
+
+        grpc::ClientContext context;
+        auto reader = stub->SubscribeRequest(&context, req);
+
+        grpcProtobufMessages::SubscribeStreamMessage initial_msg;
+        EXPECT_TRUE(reader->Read(&initial_msg));
+        EXPECT_EQ(initial_msg.status(), grpcProtobufMessages::ResponseStatus::SUCCESS);
+
+        grpcProtobufMessages::SubscribeStreamMessage event_msg;
+        EXPECT_TRUE(reader->Read(&event_msg));
+
+        // Read until stream ends (server termination)
+        grpcProtobufMessages::SubscribeStreamMessage dummy;
+        while (reader->Read(&dummy)) {}
+        reader->Finish();
+    });
+
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(queue->wait_and_pop(received_request));
+
+    // Send initial subscribe success
+    auto initial_resp = response_pool->acquire();
+    initial_resp->SetObject();
+    rapidjson::Document::AllocatorType& allocator = initial_resp->GetAllocator();
+    initial_resp->AddMember("requestId", "test-sub-term-1", allocator);
+    initial_resp->AddMember("subscriptionId", "sub-term-123", allocator);
+    initial_resp->AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    received_request->responseChan->push(initial_resp);
+
+    // Send one data event
+    auto event_doc = response_pool->acquire();
+    event_doc->SetObject();
+    event_doc->AddMember("subscriptionId", "sub-term-123", allocator);
+    event_doc->AddMember("ts", "2024-01-01T00:00:01Z", allocator);
+    rapidjson::Value data_val(rapidjson::kObjectType);
+    data_val.AddMember("path", "Vehicle.Speed", allocator);
+    rapidjson::Value dp_val(rapidjson::kObjectType);
+    dp_val.AddMember("value", "65.5", allocator);
+    dp_val.AddMember("ts", "2024-01-01T00:00:01Z", allocator);
+    data_val.AddMember("dp", dp_val, allocator);
+    event_doc->AddMember("data", data_val, allocator);
+    received_request->responseChan->push(event_doc);
+
+    // Send terminated event
+    auto term_doc = response_pool->acquire();
+    term_doc->SetObject();
+    term_doc->AddMember("subscriptionId", "sub-term-123", allocator);
+    term_doc->AddMember("status", "terminated", allocator);
+    received_request->responseChan->push(term_doc);
+
+    client_thread.join();
+}
+
+TEST_F(GrpcTransportTest, GetRequestWithHistoryFilterParam) {
+    std::thread client_thread([this]() {
+        grpcProtobufMessages::GetRequestMessage req;
+        req.set_path("Vehicle.Speed");
+        req.set_requestid("test-get-history-param-1");
+
+        auto filter = req.mutable_filter();
+        auto exp = filter->add_filterexp();
+        exp->set_variant(grpcProtobufMessages::FilterExpressions_FilterExpression_FilterVariant_HISTORY);
+        auto val = exp->mutable_value();
+        auto hist = val->mutable_valuehistory();
+        hist->set_timeperiod("PT5S");
+
+        grpcProtobufMessages::GetResponseMessage res;
+        grpc::ClientContext context;
+
+        grpc::Status status = stub->GetRequest(&context, req, &res);
+        EXPECT_TRUE(status.ok());
+    });
+
+    std::shared_ptr<RequestData> received_request;
+    ASSERT_TRUE(queue->wait_and_pop(received_request));
+
+    auto mock_response = response_pool->acquire();
+    mock_response->SetObject();
+    rapidjson::Document::AllocatorType& allocator = mock_response->GetAllocator();
+    mock_response->AddMember("requestId", "test-get-history-param-1", allocator);
+    mock_response->AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+
+    rapidjson::Value data_val(rapidjson::kObjectType);
+    data_val.AddMember("path", "Vehicle.Speed", allocator);
+    rapidjson::Value dp_arr(rapidjson::kArrayType);
+    rapidjson::Value dp_item(rapidjson::kObjectType);
+    dp_item.AddMember("value", "80", allocator);
+    dp_item.AddMember("ts", "2024-01-01T00:00:00Z", allocator);
+    dp_arr.PushBack(dp_item, allocator);
+    data_val.AddMember("dp", dp_arr, allocator);
+    mock_response->AddMember("data", data_val, allocator);
+
+    received_request->responseChan->push(mock_response);
+    client_thread.join();
+}
+

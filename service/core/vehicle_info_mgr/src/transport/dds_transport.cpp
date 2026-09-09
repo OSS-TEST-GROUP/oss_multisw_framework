@@ -109,12 +109,14 @@ struct DDSTransportImpl {
                     rapidjson::StringBuffer buffer;
                     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
                     response_doc->Accept(writer);
-                    LOG_INFO << "DDS Transport Received Response JSON: " << buffer.GetString();
+                    // 구독 응답 전문(JSON)은 **데이터 평면**이다 — 샘플마다 남기면
+                    // 구독이 붙어 있는 동안 무한히 쌓인다(실측: 376GB/13일).
+                    LOG_DEBUG << "DDS Transport Received Response JSON: " << buffer.GetString();
                 }
 
                 if (stop_flag_.load() || !response_doc) break;
 
-                LOG_INFO << "Received response from ServiceManager.";
+                LOG_DEBUG << "Received response from ServiceManager.";
 
                 std::string action;
                 std::string requestId;
@@ -279,28 +281,27 @@ DDSTransport::~DDSTransport() {
     }
 
     if (p_impl->participant != nullptr) {
-        if (p_impl->publisher != nullptr) {
-            for(auto const& [key, val] : p_impl->writer_map) {
-                p_impl->publisher->delete_datawriter(val.writer);
-                p_impl->participant->delete_topic(val.topic);
+        if (p_impl->request_reader != nullptr) {
+            p_impl->request_reader->set_listener(nullptr);
+        }
+        std::lock_guard<std::mutex> writer_lock(p_impl->writer_map_mutex);
+        for (auto const& [key, val] : p_impl->writer_map) {
+            if (val.writer != nullptr) {
+                val.writer->set_listener(nullptr);
             }
-            p_impl->participant->delete_publisher(p_impl->publisher);
         }
-        if (p_impl->subscriber != nullptr) {
-            if (p_impl->request_reader != nullptr) {
-                p_impl->subscriber->delete_datareader(p_impl->request_reader);
-            }
-            p_impl->participant->delete_subscriber(p_impl->subscriber);
-        }
-        if (p_impl->request_topic != nullptr) {
-            p_impl->participant->delete_topic(p_impl->request_topic);
-        }
+        p_impl->participant->delete_contained_entities();
         DomainParticipantFactory::get_instance()->delete_participant(p_impl->participant);
+        p_impl->participant = nullptr;
     }
     delete p_impl;
 }
 
 void DDSTransport::start() {
+    if (p_impl->participant != nullptr) {
+        LOG_INFO << "DDSTransport already started.";
+        return;
+    }
     // ★ get_default_participant_qos(), not a default-constructed QoS.
     //
     // A bare `DomainParticipantQos pqos;` never sees the XML profile at all -- Fast DDS
@@ -316,19 +317,28 @@ void DDSTransport::start() {
     // docs/sils/evidence/mmf-typeobject-2026-08-12.md
     pqos.properties().properties().emplace_back("fastdds.type_propagation", "disabled");
 
+    // VISS sits on the pure-DDS plane. Precedence: VISS_DDS_DOMAIN_ID (per-service
+    // override -- SILS contracts pin it to the vECU's domain, §3.4) > DDS_DOMAIN_ID
+    // (canonical DDS plane, written by hmi_launcher Settings) > 0. ROS_DOMAIN_ID is
+    // the separate ROS2 plane and is deliberately NOT consulted here.
     int domain_id = 0; // Default domain ID
-    const char* domain_id_env = std::getenv("VISS_DDS_DOMAIN_ID");
+    const char* domain_env_name = "VISS_DDS_DOMAIN_ID";
+    const char* domain_id_env = std::getenv(domain_env_name);
+    if (!domain_id_env) {
+        domain_env_name = "DDS_DOMAIN_ID";
+        domain_id_env = std::getenv(domain_env_name);
+    }
     if (domain_id_env) {
         try {
             domain_id = std::stoi(domain_id_env);
-            LOG_INFO << "Using DDS Domain ID from environment variable VISS_DDS_DOMAIN_ID: " << domain_id;
+            LOG_INFO << "Using DDS Domain ID from environment variable " << domain_env_name << ": " << domain_id;
         } catch (const std::invalid_argument& e) {
-            LOG_ERROR << "Invalid argument for VISS_DDS_DOMAIN_ID: " << e.what() << ". Using default domain ID 0.";
+            LOG_ERROR << "Invalid argument for " << domain_env_name << ": " << e.what() << ". Using default domain ID 0.";
         } catch (const std::out_of_range& e) {
-            LOG_ERROR << "VISS_DDS_DOMAIN_ID is out of range: " << e.what() << ". Using default domain ID 0.";
+            LOG_ERROR << domain_env_name << " is out of range: " << e.what() << ". Using default domain ID 0.";
         }
     } else {
-        LOG_INFO << "VISS_DDS_DOMAIN_ID not set. Using default domain ID 0.";
+        LOG_INFO << "VISS_DDS_DOMAIN_ID / DDS_DOMAIN_ID not set. Using default domain ID 0.";
     }
 
     p_impl->participant = DomainParticipantFactory::get_instance()->create_participant(domain_id, pqos, nullptr, StatusMask::none());

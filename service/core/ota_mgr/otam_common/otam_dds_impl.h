@@ -45,6 +45,9 @@
  * @brief Singleton that owns the single DomainParticipant, Publisher, Subscriber
  *        shared by all OtamDdsImpl instances.
  */
+// LCOV_EXCL_START — FastDDS 래퍼 경계(OtamDdsParticipant/OtamDdsImpl): 실 DomainParticipant/
+// DataWriter/DataReader 로 Create/Write/Read 를 포워딩하는 얇은 어댑터. 로직은 서비스가
+// MockOtamDdsImpl 로 검증, 실 DDS 전송은 통합 레인이 검증. (파일 전체 제외)
 class OtamDdsParticipant {
 public:
     /**
@@ -81,9 +84,12 @@ public:
         // the bridge's writes.
         participant_qos.properties().properties().emplace_back(
             "fastdds.type_propagation", "disabled");
-        // Per-board DDS domain isolation (MMF_DDS_DOMAIN_ID, default 0).
+        // Per-board DDS-plane isolation. Precedence: MMF_DDS_DOMAIN_ID (per-service
+        // override) > DDS_DOMAIN_ID (canonical DDS plane) > 0. Raw Fast-DDS ignores
+        // ROS_DOMAIN_ID -- that is the separate ROS2 plane.
         int mmf_domain = 0;
         if (const char* e = std::getenv("MMF_DDS_DOMAIN_ID")) mmf_domain = std::atoi(e);
+        else if (const char* g = std::getenv("DDS_DOMAIN_ID")) mmf_domain = std::atoi(g);
         participant_ = factory->create_participant(mmf_domain, participant_qos);
         if (!participant_) {
             throw std::runtime_error("OtamDdsParticipant: Failed to create shared DomainParticipant");

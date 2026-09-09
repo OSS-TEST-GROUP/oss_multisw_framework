@@ -19,9 +19,18 @@
 namespace ros2 {
 namespace adsw_manager {
 
+// 설정 경로 조회용 — **빈 문자열은 미설정으로 취급**한다 (셸 `${VAR:-default}` 와 같은
+// 규칙). compose 가 `SAVED_REGISTRY_BACKUP=` 를 빈 값으로 주입하는데, 이를 "설정됨"으로
+// 보면 경로가 `/saved-service-list.yaml`(루트) 이 되어 목록을 조용히 못 읽는다.
+// 지금은 entrypoint 가 `/oss/bin/config` 로 덮어써서 가려져 있을 뿐이다 —
+// 목록의 정본은 이미지 안이어야 하므로 그 기본값이 사라져도 상대경로 `config` 로
+// 떨어지게 둔다.
 std::optional<std::string> getEnv(const std::string &key) {
   const char *val = std::getenv(key.c_str());
-  return val ? std::optional<std::string>(val) : std::nullopt;
+  if (val == nullptr || *val == '\0') {
+    return std::nullopt;
+  }
+  return std::optional<std::string>(val);
 }
 
 ServiceRegistry::ServiceRegistry()
@@ -495,6 +504,11 @@ bool ServiceRegistry::Save() {
             ndcontainer["image"] = c->GetImage();
         }
       ndcontainer["container-type"] = ctype_to_str(c->GetContainerType());
+      if (c->IsObserveOnly()) {
+        // Save()/Load() 왕복에서 플래그가 유실되면 다음 기동에 인프라 컨테이너가
+        // 제어 대상으로 되살아난다.
+        ndcontainer["observe_only"] = true;
+      }
       if (!c->GetDeployFile().empty()) {
           ndcontainer["deploy-filepath"] = c->GetDeployFile();
       }
@@ -649,6 +663,8 @@ bool ServiceRegistry::LoadServiceSaved(const std::string &path) {
           LOG_DEBUG("Container required fields valid");
           std::shared_ptr<Container> container = std::make_shared<Container>(
               groupname, image, deployFilePath, namespace_, containerType);
+          container->SetObserveOnly(
+              containerData["observe_only"].as<bool>(false));
           container->SetExtraArgs(extraArgs);
           container->SetCommandArgs(commandArgs);
           LOG_DEBUG("Container created: " << groupname

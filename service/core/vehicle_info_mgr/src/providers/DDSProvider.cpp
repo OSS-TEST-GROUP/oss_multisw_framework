@@ -547,9 +547,14 @@ DDSProvider::DDSProvider()
     , active_(false)
     , discovery_listener_(std::make_unique<DiscoveryListener>())
 {
-    // Determine Domain ID from environment variable, default to 0
+    // VISS sits on the pure-DDS plane. Precedence: VISS_DDS_DOMAIN_ID (per-service
+    // override -- SILS contracts pin it to the vECU's domain, see
+    // config/sils/contracts/mmf-endpoints.yaml) > DDS_DOMAIN_ID (canonical DDS plane,
+    // written by hmi_launcher Settings) > 0. ROS_DOMAIN_ID is the separate ROS2 plane
+    // and is deliberately NOT consulted here.
     int domain_id = 0;
     const char* domain_id_str = std::getenv("VISS_DDS_DOMAIN_ID");
+    if (!domain_id_str) domain_id_str = std::getenv("DDS_DOMAIN_ID");
     if (domain_id_str) {
         try {
             domain_id = std::stoi(domain_id_str);
@@ -760,14 +765,16 @@ DDSProvider::~DDSProvider()
     stop();
     if (participant_ != nullptr)
     {
+        participant_->set_listener(nullptr);
         participant_->delete_contained_entities();
         DomainParticipantFactory::get_instance()->delete_participant(participant_);
+        participant_ = nullptr;
     }
 }
 
 void DDSProvider::start()
 {
-    if (participant_ == nullptr) return;
+    if (participant_ == nullptr || active_.load()) return;
 
     for (auto& sub : subscriptions_)
     {
@@ -805,16 +812,13 @@ void DDSProvider::stop()
         {
             if (sub->reader != nullptr)
             {
+                sub->reader->set_listener(nullptr);
                 subscriber_->delete_datareader(sub->reader);
                 sub->reader = nullptr;
             }
             sub->listener.reset();
         }
     }
-    // if (publisher_ != nullptr && vehicle_data_writer_ != nullptr)
-    // {
-    //     publisher_->delete_datawriter(vehicle_data_writer_);
-    // }
     LOG_INFO << "DDSProvider stopped.";
 }
 

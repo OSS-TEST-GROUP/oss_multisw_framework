@@ -16,9 +16,22 @@
 # ⚠️ 통합 테스트에서 도메인 격리가 필요하면 ROS_DOMAIN_ID 를 명시해 오버라이드한다
 #    (예: ROS_DOMAIN_ID=7 docker compose ... — 기본값에 의존하지 말 것).
 
+# ── 로그 로테이션 (전 서비스 공통) ──────────────────────────────────────────
+# 도커 기본값은 **무제한**이다. 151 보드에서 oss-mmf-core 의 json 로그 하나가
+# 376GB 까지 자라 루트 파일시스템을 100% 채웠고, 헬스체크 exec 이 "no space left on
+# device" 로 실패해 컨테이너가 13일간 unhealthy 였다(2026-09-03 실측).
+# 컨테이너당 상한 = max-size × max-file = 250MB.
+# ⚠️ 로테이션은 **상한만** 정한다. 로그 양 자체는 MMF_LOG_LEVEL(기본 info)로 줄인다.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "5"
+
 services:
   mmf-core:
     container_name: oss-mmf-core
+    logging: *default-logging
     image: ${CORE_IMG:-registry.obigo.com/oss/oss-mmf-core:latest}
     privileged: true
     network_mode: "host"
@@ -38,8 +51,9 @@ services:
     restart: unless-stopped
     environment:
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-42} # DDS 도메인 격리 (보드별 동일 값 사용)
-      - MMF_DDS_DOMAIN_ID=${ROS_DOMAIN_ID:-42} # raw Fast-DDS (lifecycle_mgr/diagnostics/adsw/ota)
-      - VISS_DDS_DOMAIN_ID=${ROS_DOMAIN_ID:-42} # vehicle_info/viss
+      - DDS_DOMAIN_ID=${DDS_DOMAIN_ID:-${ROS_DOMAIN_ID:-42}}
+      - MMF_DDS_DOMAIN_ID=${DDS_DOMAIN_ID:-${ROS_DOMAIN_ID:-42}} # raw Fast-DDS (lifecycle_mgr/diagnostics/adsw/ota)
+      - VISS_DDS_DOMAIN_ID=${DDS_DOMAIN_ID:-${ROS_DOMAIN_ID:-42}} # vehicle_info/viss
       - HEARTBEAT_INTERVAL_SEC=3
       - REST_URL=http://172.16.10.47:8080/upload
     healthcheck:
@@ -51,6 +65,7 @@ services:
 
   mmf-ext-ros2:
     container_name: oss-mmf-ext-ros2
+    logging: *default-logging
     image: ${EXTROS2_IMG:-registry.obigo.com/oss/oss-mmf-ext-ros2:latest}
     depends_on:
       mmf-core:
@@ -78,17 +93,22 @@ services:
     volumes:
       - /dev/shm:/dev/shm
       #      - /run/user/1000:/run/user/1000
-      - /var/run/docker.sock:/var/run/docker.sock # adsw_manager → 컨테이너 기동 필수
+      - /var/run/docker.sock:/var/run/docker.sock
+      # domain_agent 가 이 호스트의 도메인 파일을 쓴다 (원격 Settings 반영)
+      - ${MMF_DOMAIN_DIR:-/opt/mmf/config}:/mmf-config:rw # adsw_manager → 컨테이너 기동 필수
       # SAVED_SERVICE_LIST가 존재할 때만 전체 마운트 구문을 반환하고, 없으면 빈 문자열("")이 됨
       - ${SAVED_REGISTRY_BACKUP:-/dev/null}:/config
     restart: unless-stopped
     environment:
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-42} # DDS 도메인 격리
-      - MMF_DDS_DOMAIN_ID=${ROS_DOMAIN_ID:-42} # raw Fast-DDS
+      - DDS_DOMAIN_ID=${DDS_DOMAIN_ID:-${ROS_DOMAIN_ID:-42}}
+      - MMF_DOMAIN_ENV_FILE=/mmf-config/domain.env
+      - MMF_DDS_DOMAIN_ID=${DDS_DOMAIN_ID:-${ROS_DOMAIN_ID:-42}} # raw Fast-DDS
       - SAVED_REGISTRY_BACKUP=${SAVED_REGISTRY_BACKUP:+/config} # 서비스목록 백업/설정 디렉토리 경로
 
   mmf-ext-agl:
     container_name: oss-mmf-ext-agl
+    logging: *default-logging
     image: ${IMAGE:-registry.obigo.com/oss/oss-mmf-ext-agl:latest}
     # x86_64에서 hmi_launcher config 를 동적 생성한 뒤 원본 /oss/entrypoint.sh 를 실행
     # - GPU(nvidia/mesa/none) 는 마운트된 docker.sock 으로 컨테이너 내부에서 감지
@@ -170,6 +190,19 @@ services:
           - /usr/share/fonts:/usr/share/fonts:ro
           - "-v"
           - /etc/fonts:/etc/fonts:ro
+          # 런처 사용자 설정(앱 표시/숨김·타임존) 영속화 — 미설정 시 재생성마다 초기화된다.
+          - "-v"
+          - /opt/mmf/hmi_launcher_cfg:/cfg:rw
+          - "-e"
+          - XDG_CONFIG_HOME=/cfg
+          # DDS 도메인 정본 파일 — 런처 Settings의 "DDS domain"이 여기에 기록한다.
+          - "-v"
+          - /opt/mmf/config:/mmf-config:rw
+          - "-e"
+          - MMF_DOMAIN_ENV_FILE=/mmf-config/domain.env
+          # F010 (direct-docker): rviz2_panel이 docker CLI로 rviz2 컨테이너를 제어한다.
+          - "-v"
+          - /var/run/docker.sock:/var/run/docker.sock
         YAML
         fi
         exec /oss/entrypoint.sh
@@ -198,13 +231,20 @@ services:
     restart: unless-stopped
     environment:
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-42} # DDS 도메인 격리
-      - MMF_DDS_DOMAIN_ID=${ROS_DOMAIN_ID:-42} # raw Fast-DDS
+      - DDS_DOMAIN_ID=${DDS_DOMAIN_ID:-${ROS_DOMAIN_ID:-42}}
+      - MMF_DDS_DOMAIN_ID=${DDS_DOMAIN_ID:-${ROS_DOMAIN_ID:-42}} # raw Fast-DDS
       - HMI_RUNTIME_UID=${HMI_RUNTIME_UID:-1000}
+      # adsw_manager 가 agl-service-list.yaml 의 `${DOCKER_GID:-999}` 를 확장하는 데
+      # 쓴다 (hmi_launcher 의 --group-add). 위 `group_add` 는 **이 컨테이너**의
+      # 그룹이고, 이건 **이 컨테이너가 만들 런처 컨테이너**의 그룹이라 별개다.
+      # 서비스 목록의 정본을 이미지에 두려면 보드별 gid 가 목록이 아니라 여기서 와야 한다.
+      - DOCKER_GID=${DOCKER_GID:-999}
       - HMI_GPU=${HMI_GPU:-auto}
       - DISPLAY=${DISPLAY:-:0}
 
   oss-adsw-decision:
     container_name: oss-adsw-decision-container
+    logging: *default-logging
     image: ghcr.io/oss-test-group/autoware-partition:adsw-decision
     network_mode: "host"
     ipc: "host"
@@ -251,6 +291,7 @@ services:
 
   oss-adsw-control:
     container_name: oss-adsw-control-container
+    logging: *default-logging
     image: ghcr.io/oss-test-group/autoware-partition:adsw-control
     network_mode: "host"
     ipc: "host"
@@ -297,6 +338,7 @@ services:
 
   oss-adsw-perception:
     container_name: oss-adsw-perception-container
+    logging: *default-logging
     image: ghcr.io/oss-test-group/autoware-partition:adsw-perception
     network_mode: "host"
     ipc: "host"
@@ -342,6 +384,7 @@ services:
 
   oss-adsw-rviz:
     container_name: adsw-remote-rviz
+    logging: *default-logging
     image: ${PARTITION_IMAGE_REPO:-ghcr.io/oss-test-group/autoware-partition}:adsw-perception
     network_mode: "host"
     ipc: "host"
@@ -409,6 +452,7 @@ services:
   rviz2-agl:
     profiles: [ rviz2 ]
     container_name: rviz2            # 패널이 기대하는 이름 (docker stop/logs/inspect rviz2)
+    logging: *default-logging
     image: ${RVIZ2_IMAGE:-registry.obigo.com/oss/rviz2-agl:latest}
     network_mode: "host"             # agl-shell gRPC 127.0.0.1:14005 접근
     ipc: "host"                      # ROS2 공유메모리 전송
@@ -430,6 +474,7 @@ services:
   security_processor:
     image: ghcr.io/oss-test-group/oss-ids/security_processor:v0.1.0
     container_name: security_processor
+    logging: *default-logging
     restart: unless-stopped
     network_mode: host
     ipc: host
@@ -440,6 +485,7 @@ services:
   attack_env:
     image: ghcr.io/oss-test-group/oss-ids/attack_env:v0.1.0
     container_name: attack_env
+    logging: *default-logging
     restart: unless-stopped
     network_mode: host
     ipc: host
@@ -450,6 +496,7 @@ services:
   security_monitor:
     image: ghcr.io/oss-test-group/oss-ids/security_monitor:v0.1.0
     container_name: security_monitor
+    logging: *default-logging
     restart: unless-stopped
     network_mode: host
     ipc: host

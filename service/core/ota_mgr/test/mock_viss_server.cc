@@ -376,6 +376,7 @@ int main(int argc, char* argv[]) {
     // Initialize and start server
     if (!server.Initialize()) {
       std::cerr << "Server initialization failed!" << std::endl;
+      g_server = nullptr;  // 스택 객체(server) 소멸 전 전역 dangling 참조 해제
       return 1;
     }
 
@@ -387,9 +388,11 @@ int main(int argc, char* argv[]) {
     }
 
     std::cout << "Mock VISS Server terminated." << std::endl;
+    g_server = nullptr;  // 정상 종료 — 스택 객체 소멸 전 전역 해제
     return 0;
 
   } catch (const std::exception& e) {
+    g_server = nullptr;  // 언와인딩으로 server 가 소멸했으니 전역도 해제
     std::cerr << "Fatal error: " << e.what() << std::endl;
     return 1;
   }

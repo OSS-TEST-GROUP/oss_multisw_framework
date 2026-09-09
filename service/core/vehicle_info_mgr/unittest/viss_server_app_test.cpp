@@ -13,13 +13,14 @@ protected:
     }
 
     void SetUp() override {
+        ::testing::FLAGS_gtest_death_test_style = "threadsafe";
         // It's crucial to have a valid HIM and schema for the app to initialize.
         // We assume these are in the standard config path relative to where the test is run.
         JsonSchemaValidator::init("../config/vissv3.0-schema.json");
     }
 
     void TearDown() override {
-        // Cleanup if needed
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
 };
 
@@ -32,7 +33,7 @@ TEST_F(VissServerAppTest, AppInitializesAndShutsDown) {
     std::thread app_thread(&VissServerApp::run, &app);
 
     // 3. Let the app run for a short period
-    std::this_thread::sleep_for(std::chrono::seconds(2));
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
     // 4. Call stop() to initiate shutdown
     app.stop();
@@ -55,7 +56,7 @@ TEST_F(VissServerAppTest, StopIsIdempotent) {
 
     // 2. Run the app in a separate thread
     std::thread app_thread(&VissServerApp::run, &app);
-    std::this_thread::sleep_for(std::chrono::seconds(1));
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
     // 3. Call stop multiple times
     app.stop();
@@ -80,7 +81,7 @@ TEST_F(VissServerAppTest, RunIsIdempotent) {
 
     // 2. Run the app in a separate thread
     std::thread app_thread(&VissServerApp::run, &app);
-    std::this_thread::sleep_for(std::chrono::seconds(1));
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
     // 3. Calling run() again while it's running should be a no-op
     app.run();

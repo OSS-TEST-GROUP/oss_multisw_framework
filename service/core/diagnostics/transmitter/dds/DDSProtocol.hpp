@@ -45,15 +45,15 @@ class DDSProtocol : public MessageProtocol, DomainParticipantListener {
     DDSProtocol();
     virtual ~DDSProtocol();
 
-    bool Initialize();
-    void Finalize();
+    bool Initialize() override;
+    void Finalize() override;
 
-    MessageProtocolType GetProtocolType();
+    MessageProtocolType GetProtocolType() override;
 
-    bool PublishMessage(std::shared_ptr<Message> message);
+    bool PublishMessage(std::shared_ptr<Message> message) override;
 
-    bool SubscribeMessage(const std::string& name);
-    bool UnsubscribeMessage(const std::string& name);
+    bool SubscribeMessage(const std::string& name) override;
+    bool UnsubscribeMessage(const std::string& name) override;
 
   private:
     bool SerializeMessage(DynamicData::_ref_type dds_data, std::shared_ptr<VariantData> variant_data);

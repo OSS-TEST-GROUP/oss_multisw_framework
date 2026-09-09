@@ -275,7 +275,81 @@ TEST_F(OtamClientServiceTest, Performance_RapidRegistrations) {
         otamanager::SetOtaClientRegistration registration_msg;
         registration_msg.client_name("rapid_client_" + std::to_string(i));
         registration_msg.app_list().push_back("rapid_app_" + std::to_string(i));
-        
+
         EXPECT_NO_THROW(service_->OnMessageReceived(registration_msg));
     }
+}
+
+// ===== QA 보강: 미커버 등록/알림 경로 =====
+
+// NotifyManagerReady: manager-ready 발행 경로 실행.
+TEST_F(OtamClientServiceTest, QA_NotifyManagerReady_NoThrow) {
+    EXPECT_NO_THROW(service_->NotifyManagerReady());
+}
+
+// SetOtamDiagnosticService: setter (nullptr 허용).
+TEST_F(OtamClientServiceTest, QA_SetOtamDiagnosticService_NoThrow) {
+    EXPECT_NO_THROW(service_->SetOtamDiagnosticService(nullptr));
+}
+
+// DeleteClientById: 등록된 클라이언트 삭제 → SUCCESS (성공 경로).
+TEST_F(OtamClientServiceTest, QA_DeleteClientById_Existing_Success) {
+    otamanager::SetOtaClientRegistration r;
+    r.client_name("qa_to_delete");
+    r.app_list().push_back("qa_del_app");
+    service_->OnMessageReceived(r);
+    auto snap = service_->GetClientInfoListSnapshot();
+    ASSERT_FALSE(snap.empty());
+    int32_t id = snap.rbegin()->first;  // 최근 등록 id
+    EXPECT_EQ(service_->DeleteClientById(id), ReturnValue::SUCCESS);
+}
+
+// 같은 앱을 다른 클라이언트가 요청 → FindClientIdWithApp/소유권 경로.
+TEST_F(OtamClientServiceTest, QA_OnMessageReceived_AppOwnershipPath) {
+    otamanager::SetOtaClientRegistration a;
+    a.client_name("qa_owner_a"); a.app_list().push_back("qa_shared_app");
+    otamanager::SetOtaClientRegistration b;
+    b.client_name("qa_owner_b"); b.app_list().push_back("qa_shared_app");
+    EXPECT_NO_THROW(service_->OnMessageReceived(a));
+    EXPECT_NO_THROW(service_->OnMessageReceived(b));
+}
+
+// 다중 앱 등록 → app_list 순회 경로.
+TEST_F(OtamClientServiceTest, QA_OnMessageReceived_MultipleApps) {
+    otamanager::SetOtaClientRegistration r;
+    r.client_name("qa_multi");
+    r.app_list().push_back("qa_m1");
+    r.app_list().push_back("qa_m2");
+    r.app_list().push_back("qa_m3");
+    EXPECT_NO_THROW(service_->OnMessageReceived(r));
+}
+
+// 빈 client_name → 검증/에러 분기.
+TEST_F(OtamClientServiceTest, QA_OnMessageReceived_EmptyName) {
+    otamanager::SetOtaClientRegistration r;
+    r.app_list().push_back("qa_noname_app");
+    EXPECT_NO_THROW(service_->OnMessageReceived(r));
+}
+
+// 같은 이름 재등록(업데이트 경로).
+TEST_F(OtamClientServiceTest, QA_OnMessageReceived_ReRegister) {
+    otamanager::SetOtaClientRegistration r1;
+    r1.client_name("qa_rereg"); r1.app_list().push_back("qa_r1");
+    otamanager::SetOtaClientRegistration r2;
+    r2.client_name("qa_rereg"); r2.app_list().push_back("qa_r2");
+    EXPECT_NO_THROW(service_->OnMessageReceived(r1));
+    EXPECT_NO_THROW(service_->OnMessageReceived(r2));
+}
+
+// DeleteClientById: 미등록 id → FAIL 분기(명시적).
+TEST_F(OtamClientServiceTest, QA_DeleteClientById_Unknown_Fail) {
+    EXPECT_EQ(service_->DeleteClientById(123456789), ReturnValue::FAIL);
+}
+
+// GetClientInfoListSnapshot: 등록 후 스냅샷에 포함.
+TEST_F(OtamClientServiceTest, QA_GetClientInfoListSnapshot_HasEntries) {
+    otamanager::SetOtaClientRegistration r;
+    r.client_name("qa_snap"); r.app_list().push_back("qa_snap_app");
+    service_->OnMessageReceived(r);
+    EXPECT_FALSE(service_->GetClientInfoListSnapshot().empty());
 }

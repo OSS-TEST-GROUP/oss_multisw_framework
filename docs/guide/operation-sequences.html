@@ -1,0 +1,655 @@
+<title>MMF 보드 운영 시퀀스</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Sans+3:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root{
+    --ink:#10161c; --ink-2:#3c4a54; --ink-3:#6b7b86;
+    --paper:#f5f7f8; --card:#ffffff; --rule:#c3ced4; --rule-soft:#e2e8ea;
+    --bus:#0f7d8c; --host:#b4531f; --danger:#a12d2d;
+    --lane:#eef2f3;
+  }
+  :root:not([data-theme="light"]){ }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ink:#e6edf1; --ink-2:#aebbc4; --ink-3:#7d8d97;
+      --paper:#0c1216; --card:#141d23; --rule:#31424c; --rule-soft:#212e35;
+      --bus:#4fc3cf; --host:#e58b52; --danger:#e2716b;
+      --lane:#18232a;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ink:#e6edf1; --ink-2:#aebbc4; --ink-3:#7d8d97;
+    --paper:#0c1216; --card:#141d23; --rule:#31424c; --rule-soft:#212e35;
+    --bus:#4fc3cf; --host:#e58b52; --danger:#e2716b;
+    --lane:#18232a;
+  }
+
+  *{ box-sizing:border-box; }
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:"Source Sans 3","Noto Sans KR",system-ui,sans-serif;
+    font-size:15px; line-height:1.5;
+    padding:28px 20px 48px;
+  }
+  .deck{ max-width:1120px; margin:0 auto; display:flex; flex-direction:column; gap:28px; }
+
+  .deck-head{ display:flex; align-items:baseline; gap:14px; flex-wrap:wrap;
+    border-bottom:2px solid var(--ink); padding-bottom:10px; }
+  .deck-head h1{ font-family:Archivo,system-ui,sans-serif; font-weight:700;
+    font-size:22px; margin:0; letter-spacing:-.01em; }
+  .deck-head .meta{ font-family:"IBM Plex Mono",ui-monospace,monospace;
+    font-size:11.5px; color:var(--ink-3); }
+
+  .slide{
+    background:var(--card); border:1px solid var(--rule); border-radius:3px;
+    aspect-ratio:16/9; min-height:420px;
+    padding:26px 30px 22px; display:flex; flex-direction:column; gap:14px;
+    position:relative; overflow:hidden;
+  }
+  .s-head{ display:flex; align-items:flex-start; gap:16px; }
+  .s-num{ font-family:Archivo,sans-serif; font-weight:700; font-size:13px;
+    color:var(--host); letter-spacing:.14em; padding-top:5px; }
+  .s-title{ font-family:Archivo,"Noto Sans KR",sans-serif; font-weight:600;
+    font-size:26px; margin:0; letter-spacing:-.015em; text-wrap:balance; line-height:1.15; }
+  .s-sub{ font-size:13.5px; color:var(--ink-2); margin:3px 0 0; max-width:62ch; }
+
+  .figwrap{ flex:1; min-height:0; display:flex; align-items:center; overflow-x:auto; }
+  figure{ margin:0; width:100%; }
+  svg{ width:100%; height:auto; display:block; color:var(--ink); }
+  figcaption{ font-size:12px; color:var(--ink-3); margin-top:6px; }
+
+  .traps{ display:grid; grid-template-columns:repeat(3,1fr); gap:0;
+    border-top:1px solid var(--rule); }
+  .traps.two{ grid-template-columns:repeat(2,1fr); }
+  .trap{ padding:10px 16px 2px; border-left:1px solid var(--rule-soft); }
+  .trap:first-child{ border-left:0; padding-left:0; }
+  .trap dt{ font-family:Archivo,"Noto Sans KR",sans-serif; font-weight:600;
+    font-size:12px; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--host); margin-bottom:3px; }
+  .trap dd{ margin:0; font-size:12.5px; color:var(--ink-2); line-height:1.45; }
+  code{ font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:.92em;
+    color:var(--ink); background:var(--lane); padding:.5px 3px; border-radius:2px; }
+
+  .page-no{ position:absolute; right:14px; bottom:8px;
+    font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--ink-3); }
+
+  @media print{
+    body{ padding:0; background:#fff; }
+    .deck{ gap:0; max-width:none; }
+    .deck-head{ display:none; }
+    .slide{ border:0; border-radius:0; break-after:page; page-break-after:always; }
+  }
+  @media (max-width:760px){
+    .slide{ aspect-ratio:auto; }
+    .traps,.traps.two{ grid-template-columns:1fr; }
+    .trap{ border-left:0; padding-left:0; border-top:1px solid var(--rule-soft); }
+    .trap:first-child{ border-top:0; }
+  }
+</style>
+
+<div class="deck">
+  <div class="deck-head">
+    <h1>MMF 보드 운영 시퀀스</h1>
+    <span class="meta">81 Orin AGX (HMI) · 151 compute · 2026-09-09</span>
+  </div>
+
+  <!-- ─────────────── SLIDE 1 ─────────────── -->
+  <section class="slide">
+    <div class="s-head">
+      <div class="s-num">01</div>
+      <div>
+        <h2 class="s-title">Domain ID 갱신 — 파일은 전파되고, 컨테이너는 재생성돼야 한다</h2>
+        <p class="s-sub">도메인은 프로세스 시작 시점에만 읽힌다. 파일만 바꾸면 실행 중 컨테이너는 옛 도메인에 머문다.</p>
+      </div>
+    </div>
+
+    <div class="figwrap">
+    <figure>
+      <svg viewBox="0 0 1060 396" role="img"
+        aria-label="hmi_launcher Settings 가 81 의 domain.env 를 쓰고, domain_agent 가 151 로 전파하며, 각 호스트의 oss-domain-apply 가 플랫폼 컨테이너를 순서대로 재생성한 뒤 자식 컨테이너가 새 도메인을 상속하는 시퀀스">
+        <defs>
+          <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,1 L9,5 L0,9 z" fill="currentColor"/>
+          </marker>
+          <marker id="a1b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,1 L9,5 L0,9 z" fill="#0f7d8c"/>
+          </marker>
+          <marker id="a1h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,1 L9,5 L0,9 z" fill="#b4531f"/>
+          </marker>
+        </defs>
+
+        <!-- lifelines -->
+        <g font-family="Archivo, sans-serif" font-size="12" font-weight="600" text-anchor="middle">
+          <rect x="18" y="6" width="164" height="34" rx="2" fill="none" stroke="currentColor"/>
+          <text x="100" y="21">hmi_launcher</text><text x="100" y="34" font-size="10.5" font-weight="500">Settings · 81</text>
+          <rect x="222" y="6" width="164" height="34" rx="2" fill="none" stroke="currentColor"/>
+          <text x="304" y="21">domain.env</text><text x="304" y="34" font-size="10.5" font-weight="500">81 · 정본</text>
+          <rect x="426" y="6" width="164" height="34" rx="2" fill="none" stroke="currentColor"/>
+          <text x="508" y="21">domain_agent</text><text x="508" y="34" font-size="10.5" font-weight="500">ext-ros2 · 151</text>
+          <rect x="630" y="6" width="184" height="34" rx="2" fill="none" stroke="#b4531f"/>
+          <text x="722" y="21" fill="#b4531f">oss-domain-apply</text><text x="722" y="34" font-size="10.5" font-weight="500" fill="#b4531f">호스트 · 각 보드</text>
+          <rect x="854" y="6" width="188" height="34" rx="2" fill="none" stroke="currentColor"/>
+          <text x="948" y="21">컨테이너</text><text x="948" y="34" font-size="10.5" font-weight="500">core/ext-ros2/ext-agl</text>
+        </g>
+        <g stroke="currentColor" stroke-opacity=".3" stroke-dasharray="3 4">
+          <line x1="100" y1="44" x2="100" y2="352"/>
+          <line x1="304" y1="44" x2="304" y2="352"/>
+          <line x1="508" y1="44" x2="508" y2="352"/>
+          <line x1="948" y1="44" x2="948" y2="352"/>
+        </g>
+        <line x1="722" y1="44" x2="722" y2="352" stroke="#b4531f" stroke-opacity=".45" stroke-dasharray="3 4"/>
+
+        <g font-family="'IBM Plex Mono', monospace" font-size="11.5" fill="currentColor">
+          <!-- 1 -->
+          <line x1="100" y1="72" x2="298" y2="72" stroke="currentColor" marker-end="url(#a1)"/>
+          <text x="106" y="66">Apply(dds=n, ros=n) → 원자적 쓰기</text>
+          <!-- 2 -->
+          <line x1="100" y1="110" x2="502" y2="110" stroke="#0f7d8c" marker-end="url(#a1b)"/>
+          <text x="106" y="104" fill="#0f7d8c">/mmf/domain/set  (rosbridge · ROS 평면)</text>
+          <!-- 3 -->
+          <line x1="508" y1="140" x2="508" y2="158" stroke="#0f7d8c"/>
+          <path d="M508,158 h96 a6,6 0 0 1 6,6 v0" fill="none" stroke="#0f7d8c"/>
+          <text x="516" y="134" fill="#0f7d8c">151 의 domain.env 에 기록 — 실측 1초</text>
+          <!-- 4 ack -->
+          <line x1="502" y1="182" x2="106" y2="182" stroke="#0f7d8c" stroke-dasharray="5 3" marker-end="url(#a1b)"/>
+          <text x="150" y="176" fill="#0f7d8c">/mmf/domain/state  (acked / unconfirmed / failed)</text>
+
+          <!-- separator -->
+          <line x1="18" y1="202" x2="1042" y2="202" stroke="currentColor" stroke-opacity=".2"/>
+          <text x="18" y="218" font-family="Archivo, sans-serif" font-weight="600" font-size="11" fill="#b4531f">여기부터 호스트에서 — 파일 변경이 트리거</text>
+
+          <!-- 5 path unit -->
+          <line x1="310" y1="246" x2="716" y2="246" stroke="#b4531f" marker-end="url(#a1h)"/>
+          <text x="316" y="240" fill="#b4531f">.path 유닛 발화 (PathChanged) — 각 보드가 자기 파일만 본다</text>
+          <!-- 6 -->
+          <line x1="728" y1="284" x2="942" y2="284" stroke="#b4531f" marker-end="url(#a1h)"/>
+          <text x="600" y="278" fill="#b4531f">① core+ext-ros2 → ② ext-agl  재생성</text>
+          <!-- 7 -->
+          <line x1="942" y1="322" x2="728" y2="322" stroke="currentColor" stroke-dasharray="5 3" marker-end="url(#a1)"/>
+          <text x="640" y="316">새 도메인으로 기동</text>
+          <!-- 8 children -->
+          <text x="18" y="344" font-size="11">③ 자식(Autoware · rviz2)은 소유자가 재생성 → ext-ros2 / 도메인 파일의 값을 <tspan font-weight="500">상속</tspan></text>
+        </g>
+      </svg>
+      <figcaption>Settings 한 번으로 두 보드가 수렴한다 — 파일 전파는 <code>domain_agent</code>, 컨테이너 재생성은 각 호스트의 <code>oss-domain-apply</code>.</figcaption>
+    </figure>
+    </div>
+
+    <dl class="traps">
+      <div class="trap">
+        <dt>순서가 정보다</dt>
+        <dd><code>adsw_manager</code> 는 Autoware 를 띄울 때 <code>${ROS_DOMAIN_ID}</code> 를 <b>자기 셸 env</b> 로 확장한다. ext-ros2 를 먼저 재생성하지 않으면 몇 번 재시작해도 옛 도메인.</dd>
+      </div>
+      <div class="trap">
+        <dt>왜 호스트인가</dt>
+        <dd>재생성 대상 <b>안에</b> 실행 주체가 있다 — adsw_manager 는 ext-ros2 안, agl_adsw_manager 는 ext-agl 안. lfc_monitor 로는 자기를 죽이게 된다.</dd>
+      </div>
+      <div class="trap">
+        <dt>셸 오염</dt>
+        <dd>compose 는 <b>셸 env 가 <code>--env-file</code> 을 이긴다</b>. 151 의 <code>~/.bashrc</code> 에 <code>ROS_DOMAIN_ID=1</code> 이 있어 반쪽 적용이 났다 — 도메인 파일을 마지막에 source.</dd>
+      </div>
+    </dl>
+    <div class="page-no">1 / 7</div>
+  </section>
+
+  <!-- ─────────────── SLIDE 2 ─────────────── -->
+  <section class="slide">
+    <div class="s-head">
+      <div class="s-num">02</div>
+      <div>
+        <h2 class="s-title">컨테이너 · 서비스 시작 / 종료 — ctrl 평면과 액추에이터</h2>
+        <p class="s-sub">lfc_monitor 의 버튼 하나가 브릿지 → lifecycle_mgr 게이트 → adsw_manager → docker 를 지난다. 응답은 같은 길로 되돌아온다.</p>
+      </div>
+    </div>
+
+    <div class="figwrap">
+    <figure>
+      <svg viewBox="0 0 1060 404" role="img"
+        aria-label="lfc_monitor 의 ctrl 요청이 dds_bridge 를 거쳐 lifecycle_mgr 의 게이트를 통과하고 adsw_manager 가 docker 명령을 실행한 뒤 응답이 ctrl 응답 토픽으로 릴레이되는 시퀀스">
+        <defs>
+          <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,1 L9,5 L0,9 z" fill="currentColor"/>
+          </marker>
+          <marker id="a2b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,1 L9,5 L0,9 z" fill="#0f7d8c"/>
+          </marker>
+          <marker id="a2d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,1 L9,5 L0,9 z" fill="#a12d2d"/>
+          </marker>
+        </defs>
+
+        <g font-family="Archivo, sans-serif" font-size="12" font-weight="600" text-anchor="middle">
+          <rect x="18" y="6" width="156" height="34" rx="2" fill="none" stroke="currentColor"/>
+          <text x="96" y="21">lfc_monitor</text><text x="96" y="34" font-size="10.5" font-weight="500">런처 내 앱 · 81</text>
+          <rect x="214" y="6" width="156" height="34" rx="2" fill="none" stroke="#0f7d8c"/>
+          <text x="292" y="21" fill="#0f7d8c">dds_bridge</text><text x="292" y="34" font-size="10.5" font-weight="500" fill="#0f7d8c">rt/… ↔ mmf/…</text>
+          <rect x="410" y="6" width="176" height="34" rx="2" fill="none" stroke="currentColor"/>
+          <text x="498" y="21">lifecycle_mgr</text><text x="498" y="34" font-size="10.5" font-weight="500">core · 게이트</text>
+          <rect x="626" y="6" width="176" height="34" rx="2" fill="none" stroke="currentColor"/>
+          <text x="714" y="21">adsw_manager</text><text x="714" y="34" font-size="10.5" font-weight="500">ext-ros2 / ext-agl</text>
+          <rect x="842" y="6" width="200" height="34" rx="2" fill="none" stroke="currentColor"/>
+          <text x="942" y="21">docker</text><text x="942" y="34" font-size="10.5" font-weight="500">컨테이너 · 프로세스</text>
+        </g>
+        <g stroke="currentColor" stroke-opacity=".3" stroke-dasharray="3 4">
+          <line x1="96" y1="44" x2="96" y2="360"/>
+          <line x1="498" y1="44" x2="498" y2="360"/>
+          <line x1="714" y1="44" x2="714" y2="360"/>
+          <line x1="942" y1="44" x2="942" y2="360"/>
+        </g>
+        <line x1="292" y1="44" x2="292" y2="360" stroke="#0f7d8c" stroke-opacity=".45" stroke-dasharray="3 4"/>
+
+        <g font-family="'IBM Plex Mono', monospace" font-size="11.5" fill="currentColor">
+          <line x1="96" y1="70" x2="286" y2="70" stroke="currentColor" marker-end="url(#a2)"/>
+          <text x="102" y="64">ctrl/StartContainer  (rosbridge)</text>
+
+          <line x1="298" y1="102" x2="492" y2="102" stroke="#0f7d8c" marker-end="url(#a2b)"/>
+          <text x="304" y="96" fill="#0f7d8c">rt/… → mmf/…  (ros→raw, 타입 별칭)</text>
+
+          <!-- gate self-call -->
+          <line x1="498" y1="126" x2="498" y2="144" stroke="currentColor"/>
+          <path d="M498,144 h110 a6,6 0 0 1 6,6" fill="none" stroke="currentColor"/>
+          <text x="506" y="120">게이트: 빈 목록 · 미등록 · OTA_MODE · observe_only</text>
+          <line x1="492" y1="170" x2="102" y2="170" stroke="#a12d2d" stroke-dasharray="5 3" marker-end="url(#a2d)"/>
+          <text x="150" y="164" fill="#a12d2d">거부 시 즉시 ctrl/…Response(FAILED) — 여기서 끝난다</text>
+
+          <line x1="504" y1="204" x2="708" y2="204" stroke="currentColor" marker-end="url(#a2)"/>
+          <text x="510" y="198">StartContainerRequest  (액추에이터 토픽)</text>
+
+          <line x1="720" y1="236" x2="936" y2="236" stroke="currentColor" marker-end="url(#a2)"/>
+          <text x="600" y="230">docker run -d --init --name …  (env 확장 = adsw 셸)</text>
+
+          <line x1="936" y1="266" x2="720" y2="266" stroke="currentColor" stroke-dasharray="5 3" marker-end="url(#a2)"/>
+          <text x="800" y="260">exit code</text>
+
+          <line x1="708" y1="296" x2="504" y2="296" stroke="currentColor" stroke-dasharray="5 3" marker-end="url(#a2)"/>
+          <text x="512" y="290">StartContainerResponse(ret_code)</text>
+
+          <line x1="492" y1="328" x2="102" y2="328" stroke="#0f7d8c" stroke-dasharray="5 3" marker-end="url(#a2b)"/>
+          <text x="150" y="322" fill="#0f7d8c">ctrl/StartContainerResponse — 액추에이터의 실제 판정을 릴레이</text>
+
+          <text x="18" y="352" font-size="11" fill="#a12d2d">Stop 은 <tspan font-weight="500">docker stop &amp;&amp; docker rm</tspan> — 정지가 아니라 <tspan font-weight="500">삭제</tspan>다. Start 는 인자를 서비스 목록에서 다시 읽어 새로 만든다.</text>
+        </g>
+      </svg>
+      <figcaption>서비스(프로세스) 경로도 같은 모양이다 — 토픽만 <code>ctrl/StartService</code> · <code>StartServiceRequest</code> 로 바뀌고, adsw 는 <code>docker exec</code> 로 컨테이너 안 프로세스를 다룬다.</figcaption>
+    </figure>
+    </div>
+
+    <dl class="traps">
+      <div class="trap">
+        <dt>Stop = 삭제</dt>
+        <dd>정지만 원해도 컨테이너가 제거된다. 그래서 Start 는 항상 <b>목록의 인자로 재생성</b>이고, 그 덕에 도메인 같은 env 가 새로 반영된다.</dd>
+      </div>
+      <div class="trap">
+        <dt>이름이 없는 응답</dt>
+        <dd><code>CtrlResponse</code> 는 <code>ret_code</code> 한 필드뿐 — 대상 이름이 없다. lfc_monitor 가 <b>자기 요청과 짝지어</b> 표시하고, 짝이 없으면 <code>(unsolicited)</code>.</dd>
+      </div>
+      <div class="trap">
+        <dt>observe_only</dt>
+        <dd>플랫폼 컨테이너(core · ext-ros2 · ext-agl)는 게이트에서 거부된다 — 호스트 compose 가 소유하고, 실행 주체가 그 안에 있기 때문.</dd>
+      </div>
+    </dl>
+    <div class="page-no">2 / 7</div>
+  </section>
+
+  <!-- ─────────────── SLIDE 3 ─────────────── -->
+  <section class="slide">
+    <div class="s-head">
+      <div class="s-num">03</div>
+      <div>
+        <h2 class="s-title">rviz2 시작 / 종료 — 패널이 docker 를 직접 다룬다</h2>
+        <p class="s-sub">F010 direct-docker: rviz2 는 adsw 관리 대상이 아니다. 런처 안의 rviz2_panel 이 docker.sock 과 AGL 셸 gRPC 로 직접 제어한다.</p>
+      </div>
+    </div>
+
+    <div class="figwrap">
+    <figure>
+      <svg viewBox="0 0 1060 386" role="img"
+        aria-label="rviz2_panel 이 Run Options 를 저장하고 docker 로 rviz2 컨테이너를 재생성한 뒤 AGL 셸 gRPC 로 화면에 배치하고, 종료 시 docker stop 만 수행하는 시퀀스">
+        <defs>
+          <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,1 L9,5 L0,9 z" fill="currentColor"/>
+          </marker>
+          <marker id="a3h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,1 L9,5 L0,9 z" fill="#b4531f"/>
+          </marker>
+          <marker id="a3d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,1 L9,5 L0,9 z" fill="#a12d2d"/>
+          </marker>
+        </defs>
+
+        <g font-family="Archivo, sans-serif" font-size="12" font-weight="600" text-anchor="middle">
+          <rect x="18" y="6" width="188" height="34" rx="2" fill="none" stroke="currentColor"/>
+          <text x="112" y="21">rviz2_panel</text><text x="112" y="34" font-size="10.5" font-weight="500">런처 내 앱 · 81</text>
+          <rect x="262" y="6" width="188" height="34" rx="2" fill="none" stroke="#b4531f"/>
+          <text x="356" y="21" fill="#b4531f">config.json</text><text x="356" y="34" font-size="10.5" font-weight="500" fill="#b4531f">XDG_CONFIG_HOME</text>
+          <rect x="506" y="6" width="180" height="34" rx="2" fill="none" stroke="currentColor"/>
+          <text x="596" y="21">docker</text><text x="596" y="34" font-size="10.5" font-weight="500">docker.sock</text>
+          <rect x="742" y="6" width="140" height="34" rx="2" fill="none" stroke="currentColor"/>
+          <text x="812" y="21">rviz2</text><text x="812" y="34" font-size="10.5" font-weight="500">컨테이너</text>
+          <rect x="922" y="6" width="120" height="34" rx="2" fill="none" stroke="currentColor"/>
+          <text x="982" y="21">agl-shell</text><text x="982" y="34" font-size="10.5" font-weight="500">gRPC :14005</text>
+        </g>
+        <g stroke="currentColor" stroke-opacity=".3" stroke-dasharray="3 4">
+          <line x1="112" y1="44" x2="112" y2="342"/>
+          <line x1="596" y1="44" x2="596" y2="342"/>
+          <line x1="812" y1="44" x2="812" y2="342"/>
+          <line x1="982" y1="44" x2="982" y2="342"/>
+        </g>
+        <line x1="356" y1="44" x2="356" y2="342" stroke="#b4531f" stroke-opacity=".45" stroke-dasharray="3 4"/>
+
+        <g font-family="'IBM Plex Mono', monospace" font-size="11.5" fill="currentColor">
+          <line x1="112" y1="70" x2="350" y2="70" stroke="#b4531f" marker-end="url(#a3h)"/>
+          <text x="118" y="64" fill="#b4531f">Start 누름 → Run Options 저장 (ROS_DOMAIN_ID · RMW · RVIZ_CONFIG)</text>
+
+          <line x1="112" y1="104" x2="590" y2="104" stroke="#a12d2d" marker-end="url(#a3d)"/>
+          <text x="118" y="98" fill="#a12d2d">docker rm -f rviz2   (같은 이름 정리)</text>
+
+          <line x1="112" y1="138" x2="590" y2="138" stroke="currentColor" marker-end="url(#a3)"/>
+          <text x="118" y="132">docker run -d --name rviz2 --net=host --ipc=host  -e ROS_DOMAIN_ID=n …</text>
+
+          <line x1="602" y1="168" x2="806" y2="168" stroke="currentColor" marker-end="url(#a3)"/>
+          <text x="608" y="162">기동 · entrypoint: rviz2 -d $RVIZ_CONFIG</text>
+
+          <line x1="118" y1="204" x2="976" y2="204" stroke="currentColor" marker-end="url(#a3)"/>
+          <text x="124" y="198">SetAppNormal → SetAppFloat(x,y) → SetAppScale(w,h) → ActivateApp</text>
+
+          <line x1="976" y1="234" x2="118" y2="234" stroke="currentColor" stroke-dasharray="5 3" marker-end="url(#a3)"/>
+          <text x="360" y="228">패널 사각형에 표출 (전체화면이면 런처 탭이 가려진다)</text>
+
+          <!-- separator -->
+          <line x1="18" y1="254" x2="1042" y2="254" stroke="currentColor" stroke-opacity=".2"/>
+          <text x="18" y="270" font-family="Archivo, sans-serif" font-weight="600" font-size="11">종료</text>
+
+          <line x1="112" y1="298" x2="590" y2="298" stroke="currentColor" marker-end="url(#a3)"/>
+          <text x="118" y="292">docker stop rviz2   →  상태 exited (컨테이너는 남는다)</text>
+
+          <text x="18" y="330" font-size="11">앱 전환 시엔 <tspan font-weight="500">hideRviz2()</tspan> 만 — 컨테이너는 그대로 두어 'View rviz2' 로 즉시 복귀한다.</text>
+        </g>
+      </svg>
+      <figcaption>도메인은 <code>docker run</code> 시점 값으로 <b>고정</b>된다 — Autoware 와 같아야 맵이 보인다. Settings 를 바꾸면 rviz2 는 재생성 때 따라오지만 플랫폼 컨테이너는 따라오지 않는다(슬라이드 01).</figcaption>
+    </figure>
+    </div>
+
+    <dl class="traps two">
+      <div class="trap">
+        <dt>도메인이 어긋나면 빈 화면</dt>
+        <dd>맵 토픽은 <code>TRANSIENT_LOCAL</code> 이라 늦게 붙어도 받는다. 그래서 화면이 비었다면 대개 <b>도메인 불일치</b>다 — 발행자 0, 구독자 1 로 확인된다.</dd>
+      </div>
+      <div class="trap">
+        <dt>Run Options 는 저장된다</dt>
+        <dd>Start 시 <code>config.json</code> 에 기록되어 앱 재시작 후에도 유지되고, 그 뒤로는 <b>런처 Settings 가 이 값을 덮지 않는다</b>. 되돌리려면 “기기 기본값으로”.</dd>
+      </div>
+    </dl>
+    <div class="page-no">3 / 7</div>
+  </section>
+
+  <!-- ─────────────── SLIDE 4 ─────────────── -->
+  <section class="slide">
+    <div class="s-head">
+      <div class="s-num">04</div>
+      <div>
+        <h2 class="s-title">이미지 배포 — <code>:latest</code> 는 흐르고 <code>:provision</code> 은 기준선이다</h2>
+        <p class="s-sub">develop 커밋이 보드에 닿는 길은 둘이다: 레지스트리 pull(수시)과 Yocto 이미지에 구워진 아카이브(플래싱).</p>
+      </div>
+    </div>
+    <div class="figwrap">
+    <figure>
+      <svg viewBox="0 0 1060 398" role="img"
+        aria-label="develop 빌드가 아치별 태그로 push 되고 매니페스트 목록으로 latest 와 스냅샷 태그가 만들어지며, 별도로 Yocto 가 아카이브를 구워 보드에서 provision 으로 load 되고, oss-provision 이 latest 를 pull 해 컨테이너를 재생성하는 시퀀스">
+        <defs>
+          <marker id="a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="currentColor"/></marker>
+          <marker id="a4b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#0f7d8c"/></marker>
+          <marker id="a4h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#b4531f"/></marker>
+        </defs>
+        <g font-family="Archivo, sans-serif" font-size="12" font-weight="600" text-anchor="middle">
+          <rect x="18" y="6" width="150" height="34" rx="2" fill="none" stroke="currentColor"/>
+          <text x="93" y="21">develop</text><text x="93" y="34" font-size="10.5" font-weight="500">MMF 리포</text>
+          <rect x="206" y="6" width="176" height="34" rx="2" fill="none" stroke="currentColor"/>
+          <text x="294" y="21">build_multiarch</text><text x="294" y="34" font-size="10.5" font-weight="500">빌드 머신</text>
+          <rect x="420" y="6" width="184" height="34" rx="2" fill="none" stroke="#0f7d8c"/>
+          <text x="512" y="21" fill="#0f7d8c">registry.obigo.com</text><text x="512" y="34" font-size="10.5" font-weight="500" fill="#0f7d8c">oss/*</text>
+          <rect x="642" y="6" width="176" height="34" rx="2" fill="none" stroke="#b4531f"/>
+          <text x="730" y="21" fill="#b4531f">preload</text><text x="730" y="34" font-size="10.5" font-weight="500" fill="#b4531f">보드 첫 부팅</text>
+          <rect x="856" y="6" width="186" height="34" rx="2" fill="none" stroke="currentColor"/>
+          <text x="949" y="21">oss-provision</text><text x="949" y="34" font-size="10.5" font-weight="500">보드 운영</text>
+        </g>
+        <g stroke="currentColor" stroke-opacity=".3" stroke-dasharray="3 4">
+          <line x1="93" y1="44" x2="93" y2="354"/><line x1="294" y1="44" x2="294" y2="354"/>
+          <line x1="949" y1="44" x2="949" y2="354"/>
+        </g>
+        <line x1="512" y1="44" x2="512" y2="354" stroke="#0f7d8c" stroke-opacity=".45" stroke-dasharray="3 4"/>
+        <line x1="730" y1="44" x2="730" y2="354" stroke="#b4531f" stroke-opacity=".45" stroke-dasharray="3 4"/>
+        <g font-family="'IBM Plex Mono', monospace" font-size="11.5" fill="currentColor">
+          <line x1="93" y1="70" x2="288" y2="70" stroke="currentColor" marker-end="url(#a4)"/>
+          <text x="99" y="64">build.sh --release [--aarch64] × 4  →  output/&lt;arch&gt;/Release</text>
+          <line x1="294" y1="98" x2="294" y2="114" stroke="currentColor"/>
+          <path d="M294,114 h104 a6,6 0 0 1 6,6" fill="none" stroke="currentColor"/>
+          <text x="302" y="92">커밋 안 된 변경 → push 차단 · develop 브랜치만 허용</text>
+          <line x1="300" y1="142" x2="506" y2="142" stroke="#0f7d8c" marker-end="url(#a4b)"/>
+          <text x="306" y="136" fill="#0f7d8c">push :latest-amd64 · :latest-arm64</text>
+          <line x1="512" y1="166" x2="512" y2="182" stroke="#0f7d8c"/>
+          <path d="M512,182 h120 a6,6 0 0 1 6,6" fill="none" stroke="#0f7d8c"/>
+          <text x="520" y="160" fill="#0f7d8c">imagetools create → :latest + :&lt;branch&gt;-&lt;date&gt;-&lt;sha&gt; (매니페스트 목록)</text>
+          <line x1="18" y1="206" x2="1042" y2="206" stroke="currentColor" stroke-opacity=".2"/>
+          <text x="18" y="222" font-family="Archivo, sans-serif" font-weight="600" font-size="11" fill="#b4531f">플래싱 경로 — 아카이브로 굽는다</text>
+          <line x1="506" y1="250" x2="736" y2="250" stroke="#b4531f" stroke-dasharray="6 3" marker-end="url(#a4h)"/>
+          <text x="380" y="244" fill="#b4531f">Yocto: docker save → /opt/oss/images/*.tar.zst  (.ref = :provision)</text>
+          <line x1="730" y1="274" x2="730" y2="290" stroke="#b4531f"/>
+          <path d="M730,290 h96 a6,6 0 0 1 6,6" fill="none" stroke="#b4531f"/>
+          <text x="738" y="268" fill="#b4531f">docker load → :provision, 그리고 :latest 가 없을 때만 태깅</text>
+          <line x1="943" y1="322" x2="518" y2="322" stroke="#0f7d8c" marker-end="url(#a4b)"/>
+          <text x="560" y="316" fill="#0f7d8c">docker pull :latest → 컨테이너 재생성</text>
+          <text x="18" y="346" font-size="11">이 pull 시점에 entrypoint 가 호스트에 <tspan font-weight="500">oss-domain-apply</tspan> 를 설치한다 — 재플래싱해도 다시 깐다.</text>
+        </g>
+      </svg>
+      <figcaption>레지스트리의 <code>:provision</code> 은 "구워진 기준선"의 이름표다 — 무엇을 구울지는 불변 스냅샷 태그로 지정하는 편이 추적된다.</figcaption>
+    </figure>
+    </div>
+    <dl class="traps">
+      <div class="trap"><dt>preload 는 덮지 않는다</dt><dd><code>:latest</code> 가 이미 있으면 태깅을 <b>생략</b>한다 — oss-provision 이 pull 한 최신본을 보존하기 위해서다.</dd></div>
+      <div class="trap"><dt>아치를 명시할 것</dt><dd><code>:latest</code>·<code>:provision</code> 은 멀티아치 매니페스트다. 보드용은 <code>--platform linux/arm64</code> 로 뽑아야 한다.</dd></div>
+      <div class="trap"><dt>베이크본이 낡아도</dt><dd>수정은 프로비저닝 시점에 도착한다. 다만 <b>네트워크 없는 첫 부팅</b>은 베이크본이 전부다 — 그래서 베이크 갱신이 필요했다.</dd></div>
+    </dl>
+    <div class="page-no">4 / 7</div>
+  </section>
+
+  <!-- ─────────────── SLIDE 5 ─────────────── -->
+  <section class="slide">
+    <div class="s-head">
+      <div class="s-num">05</div>
+      <div>
+        <h2 class="s-title">상태 관측 — <code>docker inspect</code> 가 lfc_monitor 카드가 되는 길</h2>
+        <p class="s-sub">누가 만든 컨테이너인지 묻지 않는다. 등록만 되어 있으면 관측되고, 그래서 관찰 전용 노출이 가능하다.</p>
+      </div>
+    </div>
+    <div class="figwrap">
+    <figure>
+      <svg viewBox="0 0 1060 392" role="img"
+        aria-label="adsw ContainerHealthMonitor 가 3초마다 docker inspect 로 상태를 읽어 변화 시 NotifyContainerState 를 보내고, lifecycle_mgr 이 전이 시 즉시 DiagReport 를 발행해 브릿지를 거쳐 lfc_monitor 카드가 갱신되는 시퀀스">
+        <defs>
+          <marker id="a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="currentColor"/></marker>
+          <marker id="a5b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#0f7d8c"/></marker>
+        </defs>
+        <g font-family="Archivo, sans-serif" font-size="12" font-weight="600" text-anchor="middle">
+          <rect x="18" y="6" width="150" height="34" rx="2" fill="none" stroke="currentColor"/>
+          <text x="93" y="21">docker</text><text x="93" y="34" font-size="10.5" font-weight="500">호스트 데몬</text>
+          <rect x="206" y="6" width="204" height="34" rx="2" fill="none" stroke="currentColor"/>
+          <text x="308" y="21">HealthMonitor</text><text x="308" y="34" font-size="10.5" font-weight="500">adsw · 3초 폴</text>
+          <rect x="448" y="6" width="176" height="34" rx="2" fill="none" stroke="currentColor"/>
+          <text x="536" y="21">lifecycle_mgr</text><text x="536" y="34" font-size="10.5" font-weight="500">레지스트리</text>
+          <rect x="662" y="6" width="156" height="34" rx="2" fill="none" stroke="#0f7d8c"/>
+          <text x="740" y="21" fill="#0f7d8c">dds_bridge</text><text x="740" y="34" font-size="10.5" font-weight="500" fill="#0f7d8c">raw→ros</text>
+          <rect x="856" y="6" width="186" height="34" rx="2" fill="none" stroke="currentColor"/>
+          <text x="949" y="21">lfc_monitor</text><text x="949" y="34" font-size="10.5" font-weight="500">카드 · 이벤트</text>
+        </g>
+        <g stroke="currentColor" stroke-opacity=".3" stroke-dasharray="3 4">
+          <line x1="93" y1="44" x2="93" y2="348"/><line x1="308" y1="44" x2="308" y2="348"/>
+          <line x1="536" y1="44" x2="536" y2="348"/><line x1="949" y1="44" x2="949" y2="348"/>
+        </g>
+        <line x1="740" y1="44" x2="740" y2="348" stroke="#0f7d8c" stroke-opacity=".45" stroke-dasharray="3 4"/>
+        <g font-family="'IBM Plex Mono', monospace" font-size="11.5" fill="currentColor">
+          <line x1="302" y1="72" x2="99" y2="72" stroke="currentColor" marker-end="url(#a5)"/>
+          <text x="108" y="66">docker inspect  (등록된 컨테이너마다 · 3초 주기)</text>
+          <line x1="99" y1="100" x2="302" y2="100" stroke="currentColor" stroke-dasharray="5 3" marker-end="url(#a5)"/>
+          <text x="108" y="94">State.Status · ExitCode</text>
+          <line x1="314" y1="132" x2="530" y2="132" stroke="currentColor" marker-end="url(#a5)"/>
+          <text x="320" y="126">변화 시: NotifyContainerState</text>
+          <line x1="314" y1="164" x2="530" y2="164" stroke="currentColor" stroke-dasharray="2 4" marker-end="url(#a5)"/>
+          <text x="320" y="158">무변화: 같은 상태 하트비트 재발행 — 브릿지가 VOLATILE 이라 늦게 붙은 구독자를 위해</text>
+          <line x1="536" y1="190" x2="536" y2="206" stroke="currentColor"/>
+          <path d="M536,206 h116 a6,6 0 0 1 6,6" fill="none" stroke="currentColor"/>
+          <text x="544" y="184">레지스트리 갱신 → <tspan font-weight="500">실제 전이면 즉시</tspan> 발행 (하트비트를 기다리지 않는다)</text>
+          <line x1="542" y1="238" x2="734" y2="238" stroke="#0f7d8c" marker-end="url(#a5b)"/>
+          <text x="548" y="232" fill="#0f7d8c">LifecycleDiagReport (집계 스냅샷)</text>
+          <line x1="746" y1="270" x2="943" y2="270" stroke="#0f7d8c" marker-end="url(#a5b)"/>
+          <text x="640" y="264" fill="#0f7d8c">rt/… 로 포워딩 — trust pin 통과분만</text>
+          <line x1="949" y1="294" x2="949" y2="310" stroke="currentColor"/>
+          <path d="M949,310 h-90 a6,6 0 0 0 -6,6" fill="none" stroke="currentColor"/>
+          <text x="700" y="322">카드 · 상태 배지 갱신</text>
+          <text x="18" y="342" font-size="11">ext-agl 쪽은 1초 루프 + 앱 하트비트가 없으면 <tspan font-weight="500">docker inspect 폴백</tspan> — 같은 결론에 다른 경로.</text>
+        </g>
+      </svg>
+      <figcaption>이 경로가 컨테이너의 <b>출처를 묻지 않기</b> 때문에 <code>observe_only</code> 인프라 컨테이너도 카드로 보인다 — 관찰은 되고 제어만 막힌다.</figcaption>
+    </figure>
+    </div>
+    <dl class="traps">
+      <div class="trap"><dt>지연의 두 층</dt><dd>최악 3초(폴) + 전이 시 즉시 발행. 카드가 늦게 바뀌면 대개 폴 주기 안이다 — 버그가 아니다.</dd></div>
+      <div class="trap"><dt>하트비트가 필요한 이유</dt><dd>브릿지가 VOLATILE 이라 latch 가 없다. 무변화 재발행이 없으면 나중에 접속한 lfc_monitor 는 <b>빈 화면</b>을 본다.</dd></div>
+      <div class="trap"><dt>낙관적 갱신</dt><dd>버튼을 누르면 UI 가 먼저 상태를 칠한다. 다음 DiagReport 가 서버 측 진실로 덮어쓴다.</dd></div>
+    </dl>
+    <div class="page-no">5 / 7</div>
+  </section>
+
+  <!-- ─────────────── SLIDE 6 ─────────────── -->
+  <section class="slide">
+    <div class="s-head">
+      <div class="s-num">06</div>
+      <div>
+        <h2 class="s-title">dds_bridge — 두 평면을 잇고, 유령 발행자를 걸러낸다</h2>
+        <p class="s-sub">raw IDL 타입과 ROS 정규 타입은 XTypes 해시가 달라 그냥은 매칭되지 않는다. 브릿지가 같은 TypeObject 를 두 이름으로 등록해 잇는다.</p>
+      </div>
+    </div>
+    <div class="figwrap">
+    <figure>
+      <svg viewBox="0 0 1060 392" role="img"
+        aria-label="raw 발행자의 샘플이 DDS 평면 참가자로 들어와 trust pin 을 통과하면 ROS 평면 참가자를 통해 rt 토픽으로 전달되고, 발행자 이탈 시 pin 이 해제되며 발행자가 둘 이상이면 진단 토픽으로 경고가 발행되는 시퀀스">
+        <defs>
+          <marker id="a6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="currentColor"/></marker>
+          <marker id="a6b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#0f7d8c"/></marker>
+          <marker id="a6d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#a12d2d"/></marker>
+        </defs>
+        <g font-family="Archivo, sans-serif" font-size="12" font-weight="600" text-anchor="middle">
+          <rect x="18" y="6" width="172" height="34" rx="2" fill="none" stroke="currentColor"/>
+          <text x="104" y="21">raw 발행자</text><text x="104" y="34" font-size="10.5" font-weight="500">lifecycle_mgr · adsw</text>
+          <rect x="230" y="6" width="180" height="34" rx="2" fill="none" stroke="#0f7d8c"/>
+          <text x="320" y="21" fill="#0f7d8c">DDS 평면 참가자</text><text x="320" y="34" font-size="10.5" font-weight="500" fill="#0f7d8c">DDS_DOMAIN_ID</text>
+          <rect x="450" y="6" width="180" height="34" rx="2" fill="none" stroke="#0f7d8c"/>
+          <text x="540" y="21" fill="#0f7d8c">ROS 평면 참가자</text><text x="540" y="34" font-size="10.5" font-weight="500" fill="#0f7d8c">ROS_DOMAIN_ID</text>
+          <rect x="670" y="6" width="164" height="34" rx="2" fill="none" stroke="currentColor"/>
+          <text x="752" y="21">ROS 구독자</text><text x="752" y="34" font-size="10.5" font-weight="500">rosbridge · rviz2</text>
+          <rect x="874" y="6" width="168" height="34" rx="2" fill="none" stroke="currentColor"/>
+          <text x="958" y="21">lfc_monitor</text><text x="958" y="34" font-size="10.5" font-weight="500">경고 배너</text>
+        </g>
+        <g stroke="currentColor" stroke-opacity=".3" stroke-dasharray="3 4">
+          <line x1="104" y1="44" x2="104" y2="348"/><line x1="752" y1="44" x2="752" y2="348"/><line x1="958" y1="44" x2="958" y2="348"/>
+        </g>
+        <g stroke="#0f7d8c" stroke-opacity=".45" stroke-dasharray="3 4">
+          <line x1="320" y1="44" x2="320" y2="348"/><line x1="540" y1="44" x2="540" y2="348"/>
+        </g>
+        <g font-family="'IBM Plex Mono', monospace" font-size="11.5" fill="currentColor">
+          <line x1="104" y1="72" x2="314" y2="72" stroke="currentColor" marker-end="url(#a6)"/>
+          <text x="110" y="66">mmf/…  (타입 lifecyclemgr::X)</text>
+          <line x1="320" y1="96" x2="320" y2="112" stroke="#0f7d8c"/>
+          <path d="M320,112 h100 a6,6 0 0 1 6,6" fill="none" stroke="#0f7d8c"/>
+          <text x="328" y="90" fill="#0f7d8c">trust pin: 첫 샘플의 발행자 prefix 고정</text>
+          <line x1="326" y1="146" x2="534" y2="146" stroke="#0f7d8c" marker-end="url(#a6b)"/>
+          <text x="332" y="140" fill="#0f7d8c">포워딩 (같은 TypeObject, 이름만 다름)</text>
+          <line x1="546" y1="178" x2="746" y2="178" stroke="#0f7d8c" marker-end="url(#a6b)"/>
+          <text x="552" y="172" fill="#0f7d8c">rt/mmf/…  (…::msg::dds_::X_)</text>
+          <line x1="18" y1="202" x2="1042" y2="202" stroke="currentColor" stroke-opacity=".2"/>
+          <text x="18" y="218" font-family="Archivo, sans-serif" font-weight="600" font-size="11" fill="#a12d2d">유령 발행자가 있으면</text>
+          <line x1="104" y1="248" x2="314" y2="248" stroke="#a12d2d" stroke-dasharray="4 3" marker-end="url(#a6d)"/>
+          <text x="110" y="242" fill="#a12d2d">다른 참가자의 샘플 → <tspan font-weight="500">드롭</tspan> (pin 불일치)</text>
+          <line x1="326" y1="282" x2="952" y2="282" stroke="#a12d2d" marker-end="url(#a6d)"/>
+          <text x="360" y="276" fill="#a12d2d">발행자 2개 이상 감지 → rt/…/bridge_source_diag → 중복 실행 경고</text>
+          <text x="18" y="312" font-size="11">발행자가 도메인을 떠나면 <tspan font-weight="500">on_subscription_matched</tspan> 가 pin 을 해제한다 — 재기동한 발행자가 다시 pin 된다.</text>
+          <text x="18" y="336" font-size="11">두 평면 도메인이 <tspan font-weight="500">같으면</tspan> 참가자 하나로 aliasing, <tspan font-weight="500">다르면</tspan> 참가자 둘.</text>
+        </g>
+      </svg>
+      <figcaption>pin 이 없던 시절 lfc_monitor 의 상태가 RUNNING↔NOT_RUNNING 으로 진동했다 — 도메인을 공유하는 다른 MMF 의 샘플까지 충실히 포워딩했기 때문이다.</figcaption>
+    </figure>
+    </div>
+    <dl class="traps two">
+      <div class="trap"><dt>pin 은 영구가 아니다</dt><dd>unmatch 에 해제된다. 이게 없으면 발행자를 재기동했을 때 <b>영원히 드롭</b>되고 브릿지 재시작만이 복구였다.</dd></div>
+      <div class="trap"><dt>trust-on-first-use 의 대가</dt><dd>유령이 먼저 발행하면 유령을 신뢰한다. 정상 발행자(core·adsw)가 ROS 구독자보다 먼저 뜨기에 감수한 트레이드오프다.</dd></div>
+    </dl>
+    <div class="page-no">6 / 7</div>
+  </section>
+
+  <!-- ─────────────── SLIDE 7 ─────────────── -->
+  <section class="slide">
+    <div class="s-head">
+      <div class="s-num">07</div>
+      <div>
+        <h2 class="s-title">공장 초기화 · 재프로비저닝 — 순서가 경합을 없앤다</h2>
+        <p class="s-sub">초기화는 컨테이너를 먼저 지우고 파일을 나중에 쓴다. 그래서 도메인 파일 감시가 끼어들 자리가 없다.</p>
+      </div>
+    </div>
+    <div class="figwrap">
+    <figure>
+      <svg viewBox="0 0 1060 396" role="img"
+        aria-label="oss-provision factory-reset 이 컨테이너를 먼저 제거하고 호스트 파일을 공장값으로 되돌린 뒤 이미지를 기준선으로 되돌리고 스택을 기동하며, 그 사이 발화한 path 유닛은 대상이 없어 no-op 이 되는 시퀀스">
+        <defs>
+          <marker id="a7" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="currentColor"/></marker>
+          <marker id="a7d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#a12d2d"/></marker>
+          <marker id="a7h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#b4531f"/></marker>
+        </defs>
+        <g font-family="Archivo, sans-serif" font-size="12" font-weight="600" text-anchor="middle">
+          <rect x="18" y="6" width="140" height="34" rx="2" fill="none" stroke="currentColor"/>
+          <text x="88" y="21">운영자</text><text x="88" y="34" font-size="10.5" font-weight="500">보드 셸</text>
+          <rect x="196" y="6" width="172" height="34" rx="2" fill="none" stroke="currentColor"/>
+          <text x="282" y="21">oss-provision</text><text x="282" y="34" font-size="10.5" font-weight="500">호스트</text>
+          <rect x="406" y="6" width="150" height="34" rx="2" fill="none" stroke="currentColor"/>
+          <text x="481" y="21">docker</text><text x="481" y="34" font-size="10.5" font-weight="500">컨테이너·이미지</text>
+          <rect x="594" y="6" width="176" height="34" rx="2" fill="none" stroke="currentColor"/>
+          <text x="682" y="21">호스트 파일</text><text x="682" y="34" font-size="10.5" font-weight="500">목록·config·domain.env</text>
+          <rect x="808" y="6" width="234" height="34" rx="2" fill="none" stroke="#b4531f"/>
+          <text x="925" y="21" fill="#b4531f">.path → oss-domain-apply</text><text x="925" y="34" font-size="10.5" font-weight="500" fill="#b4531f">domain.env 감시</text>
+        </g>
+        <g stroke="currentColor" stroke-opacity=".3" stroke-dasharray="3 4">
+          <line x1="88" y1="44" x2="88" y2="352"/><line x1="282" y1="44" x2="282" y2="352"/>
+          <line x1="481" y1="44" x2="481" y2="352"/><line x1="682" y1="44" x2="682" y2="352"/>
+        </g>
+        <line x1="925" y1="44" x2="925" y2="352" stroke="#b4531f" stroke-opacity=".45" stroke-dasharray="3 4"/>
+        <g font-family="'IBM Plex Mono', monospace" font-size="11.5" fill="currentColor">
+          <line x1="88" y1="70" x2="276" y2="70" stroke="currentColor" marker-end="url(#a7)"/>
+          <text x="94" y="64">oss-provision --factory-reset --yes</text>
+          <line x1="288" y1="102" x2="475" y2="102" stroke="#a12d2d" marker-end="url(#a7d)"/>
+          <text x="294" y="96" fill="#a12d2d">① 스택 정지 + 컨테이너 제거 (launcher · ext-agl · rviz2)</text>
+          <line x1="288" y1="134" x2="676" y2="134" stroke="currentColor" marker-end="url(#a7)"/>
+          <text x="294" y="128">② 서비스 목록 → factory  ③ 런처 config → placeholder</text>
+          <line x1="288" y1="166" x2="676" y2="166" stroke="#b4531f" marker-end="url(#a7h)"/>
+          <text x="294" y="160" fill="#b4531f">④ domain.env → 공장값</text>
+          <line x1="688" y1="196" x2="919" y2="196" stroke="#b4531f" marker-end="url(#a7h)"/>
+          <text x="694" y="190" fill="#b4531f">PathChanged 발화</text>
+          <line x1="925" y1="220" x2="925" y2="236" stroke="#b4531f"/>
+          <path d="M925,236 h-100 a6,6 0 0 0 -6,6" fill="none" stroke="#b4531f"/>
+          <text x="560" y="252" fill="#b4531f">대상 컨테이너가 이미 없다 → <tspan font-weight="500">no-op</tspan> (경합 없음)</text>
+          <line x1="288" y1="284" x2="475" y2="284" stroke="currentColor" marker-end="url(#a7)"/>
+          <text x="294" y="278">⑤ :latest ← :provision 되돌리기 · docker logout · 스택 기동</text>
+          <line x1="18" y1="304" x2="1042" y2="304" stroke="currentColor" stroke-opacity=".2"/>
+          <line x1="88" y1="332" x2="276" y2="332" stroke="currentColor" marker-end="url(#a7)"/>
+          <text x="294" y="326">oss-provision --rosbridge &lt;IP&gt;  →  :latest pull · 재생성 · 호스트 설치 · 화면 표출</text>
+        </g>
+      </svg>
+      <figcaption>초기화는 <b>작동 상태가 아니다</b> — rosbridge 가 placeholder 이므로 재프로비저닝이 표준 다음 단계다. 스크립트 자신도 그렇게 안내한다.</figcaption>
+    </figure>
+    </div>
+    <dl class="traps">
+      <div class="trap"><dt>가드가 필요 없는 이유</dt><dd>제거(①)가 파일 쓰기(④)보다 <b>먼저</b>다. 감시가 발화해도 볼 컨테이너가 없다. 일반 프로비저닝은 domain.env 를 아예 쓰지 않는다.</dd></div>
+      <div class="trap"><dt>부팅 시엔 발화하지 않는다</dt><dd><code>PathChanged</code> 는 inotify 기반이다 — 파일이 이미 있는 상태로 감시를 시작해도 조용하다(<code>PathExists</code> 와 다른 점).</dd></div>
+      <div class="trap"><dt>백업도 지운다</dt><dd>초기화는 <code>agl-service-list.yaml.bak-*</code> 를 정리한다. 남겨야 할 사본은 다른 경로에 두어야 한다.</dd></div>
+    </dl>
+    <div class="page-no">7 / 7</div>
+  </section>
+</div>
