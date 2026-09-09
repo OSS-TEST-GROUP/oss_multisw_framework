@@ -6,9 +6,8 @@ DiagInfo::DiagInfo()
         : diag_code_(0), status_(DiagInfoStatus::UNKNOWN),
           update_time_(std::chrono::steady_clock::now()) {}
 DiagInfo::DiagInfo(const int32_t code, const std::string& name, DiagInfoStatus status, const std::string& message)
-        : diag_code_(code), diag_name_(name), status_(status), message_(message) {
-    update_time_ = std::chrono::steady_clock::now();
-}
+        : diag_code_(code), diag_name_(name), status_(status), message_(message),
+          update_time_(std::chrono::steady_clock::now()) {}
 
 DiagInfo::~DiagInfo() {}
 

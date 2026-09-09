@@ -56,10 +56,13 @@ int main(int argc, char* argv[]) {
 
     eprosima::fastdds::dds::DomainParticipantQos participant_qos;
     participant_qos.name("adsw_manager_participant");
-    // Per-board DDS domain isolation (MMF_DDS_DOMAIN_ID, default 0). Must match
-    // lifecycle_mgr's value on the board.
+    // Per-board DDS-plane isolation. Precedence: MMF_DDS_DOMAIN_ID (per-service
+    // override) > DDS_DOMAIN_ID (canonical DDS plane) > 0. Raw Fast-DDS ignores
+    // ROS_DOMAIN_ID -- that is the separate ROS2 plane. Must match lifecycle_mgr's
+    // value on the board.
     int mmf_domain = 0;
     if (const char* e = std::getenv("MMF_DDS_DOMAIN_ID")) mmf_domain = std::atoi(e);
+    else if (const char* g = std::getenv("DDS_DOMAIN_ID")) mmf_domain = std::atoi(g);
     eprosima::fastdds::dds::DomainParticipant* participant =
         eprosima::fastdds::dds::DomainParticipantFactory::get_instance()
             ->create_participant(mmf_domain, participant_qos);

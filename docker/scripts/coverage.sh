@@ -1,6 +1,11 @@
 #!/bin/bash - 
 
-WORK_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+if [[ "${SCRIPT_DIR}" == */docker/scripts ]]; then
+	WORK_DIR="$( cd "${SCRIPT_DIR}/../.." && pwd )"
+else
+	WORK_DIR="${SCRIPT_DIR}"
+fi
 BUILD_DIR=${WORK_DIR}/.build/Debug/ros2_x86_64
 COVERAGE_DIR=${WORK_DIR}/output/coverage
 

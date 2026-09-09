@@ -24,8 +24,11 @@ Logger* Logger::Get(){
 std::shared_ptr<Logger> Logger::getInstance()
 {
     // Note we need a custom deleter, since the destructor is protected.
+    // 기본 레벨을 DEBUG 로 박아 두면 정상 동작의 부산물이 그대로 쌓인다 —
+    // 151 보드에서 컨테이너 로그 하나가 376GB 까지 자란 사고의 같은 계열 원인이다
+    // (2026-09-03). MMF_LOG_LEVEL 로 제어하고 기본은 INFO 로 둔다.
     static std::shared_ptr<Logger> instance(
-        new Logger(LogLevel::DEBUG, "lifecycle_mgr.log"),
+        new Logger(MmfLogLevelFromEnv(), "lifecycle_mgr.log"),
         [](Logger* p)
         {
             delete p;

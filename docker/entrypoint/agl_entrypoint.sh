@@ -13,6 +13,11 @@ export ADSW_CONFIG=${ADSW_CONFIG:-$DEFAULT_ADSW_CONFIG}
 export OTA_CLIENT_CONFIG=${OTA_CLIENT_CONFIG:-/oss/bin/config/ota_client_config.json}
 echo "[agl_entrypoint] arch=$(uname -m)  ADSW_CONFIG=$ADSW_CONFIG"
 
+# 호스트에 oss-domain-apply 설치 (docker.sock 경유, 실패는 무시).
+# 도메인 변경 반영은 호스트에서 돌아야 하고, 이미지에만 담으면 재플래싱까지 미뤄진다.
+# 자세한 근거는 install-domain-apply.sh 헤더 참조.
+[ -x /oss/install-domain-apply.sh ] && /oss/install-domain-apply.sh /oss/host-install || true
+
 /oss/bin/agl_ota_client &
 
 exec /oss/bin/agl_adsw_manager

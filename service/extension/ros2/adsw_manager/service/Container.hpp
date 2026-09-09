@@ -43,6 +43,21 @@ class Container {
     void SetCommandArgs(const std::vector<std::string>& args);
     const std::vector<std::string>& GetCommandArgs() const;
 
+    // 관찰 전용(observe-only) 컨테이너 — 호스트의 run 스크립트·compose 가 만들고
+    // 소유하는 인프라 컨테이너(oss-mmf-core / oss-mmf-ext-ros2)를 lfc_monitor 에
+    // 보이게만 한다. 상태는 ContainerHealthMonitor 가 `docker inspect` 로 읽으므로
+    // 등록만으로 충분하고, 제어는 막는다:
+    //   · StopContainer 는 `docker stop && docker rm` 이다 — 정지가 아니라 **삭제**다.
+    //   · ext-ros2 를 멈추면 dds_bridge 가 죽어 lfc_monitor 자신의 데이터 경로가 끊긴다.
+    //   · 재생성 시 우리 yaml 인자를 쓰므로 호스트가 의도한 것과 다른 컨테이너가 된다.
+    //
+    // 접근자는 **헤더 인라인**이다: 단위 테스트 타깃 일부(ADSWServiceRegistryTest)가
+    // ServiceRegistry.cpp 만 컴파일하고 Container.cpp 는 링크하지 않아서, 별도 TU 에
+    // 두면 undefined reference 가 난다. 사소한 게터/세터를 위해 테스트 CMake 에
+    // 소스를 추가하는 것보다 인라인이 낫다.
+    void SetObserveOnly(bool v) { observe_only_ = v; }
+    bool IsObserveOnly() const { return observe_only_; }
+
   private:
     std::string name_;
     std::string image_;
@@ -51,6 +66,7 @@ class Container {
     ContainerType container_type_;
     std::vector<std::string> extra_args_;
     std::vector<std::string> command_args_;
+    bool observe_only_ = false;
 };
 
 } // namespace adsw_manager

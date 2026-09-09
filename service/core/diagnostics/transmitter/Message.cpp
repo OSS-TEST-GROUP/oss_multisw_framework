@@ -2,13 +2,13 @@
 
 namespace diagnostic_manager {
 
-Message::Message() {
-    update_time_ = std::chrono::steady_clock::now();
-}
+Message::Message()
+    : protocol_(MessageProtocolType::NOT_DEFINED),
+      update_time_(std::chrono::steady_clock::now()) {}
+
 Message::Message(const std::string& name, MessageProtocolType protocol_type, const std::string& type, std::shared_ptr<VariantData> data, const std::string& identifier)
-         : name_(name), protocol_(protocol_type), type_name_(type), data_(data), identifier_(identifier) {
-    Message();
-}
+         : name_(name), protocol_(protocol_type), type_name_(type), data_(data), identifier_(identifier),
+           update_time_(std::chrono::steady_clock::now()) {}
 
 Message::~Message() {}
 

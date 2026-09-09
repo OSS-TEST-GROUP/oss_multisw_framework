@@ -1,22 +1,31 @@
 services:
-- name: adsw_monitor
+# ── 인프라 컨테이너 (관찰 전용) ────────────────────────────────────────────
+# oss-hmi-launcher 처럼 lfc_monitor 에 카드로 보이게 한다. 다만 **수명은 호스트가
+# 소유**한다 (run-ext-agl.sh / compose 가 만든다) → observe_only: true.
+#   · image 가 있어야 컨테이너 카드로 발행되고(MessageTransmitter::PublishContainerState)
+#     ServiceMonitor 가 `docker inspect -f {{.State.Running}}` 로 실상태를 읽는다
+#   · observe_only 가 CanControlApp 을 막아 자동복구/시작/정지를 모두 거부한다.
+#     ext-agl 은 adsw_manager **자신이 도는 컨테이너**라 stop 은 자살이고,
+#     자동복구는 호스트 인자 대신 이 yaml 인자로 다른 컨테이너를 만들어 버린다.
+# ⚠️ 호스트가 다르면 보이지 않는다 — `docker inspect` 는 이 컨테이너의 docker.sock,
+#    즉 **같은 호스트**만 본다. oss-mmf-core / oss-mmf-ext-ros2 는 151 에서 돌므로
+#    ext-ros2 쪽 saved-service-list.yaml 에 등록한다(여기 넣으면 항상 NOT_RUNNING).
+- name: oss-mmf-ext-agl
   service_type: NORMAL
-  recovery_policy: ALWAYS
+  recovery_policy: MANUAL
   is_enabled: true
   mw_type: AGL
-  init_state: NOT_RUNNING
-- name: ota_monitor
-  service_type: NORMAL
-  recovery_policy: R_DEFAULT
-  is_enabled: true
-  mw_type: AGL
-  init_state: NOT_RUNNING
-- name: lfc_monitor
-  service_type: NORMAL
-  recovery_policy: R_DEFAULT
-  is_enabled: true
-  mw_type: AGL
-  init_state: NOT_RUNNING
+  init_state: RUNNING
+  image: registry.obigo.com/oss/oss-mmf-ext-agl:latest
+  observe_only: true
+# adsw_monitor / ota_monitor / lfc_monitor 는 **관리 대상이 아니다** (2026-09-07 제거).
+# 이 셋은 hmi_launcher 안에서 실행되는 화면(앱)이지 독립 서비스가 아니다. 등록만 돼
+# 있었고 `image`/`command_args` 가 없어 adsw_manager 는 이들을 **애초에 기동할 수
+# 없었다** — 그런데 adsw_monitor 는 `recovery_policy: ALWAYS` 라 복구 정책이 끝없이
+# 재시도를 걸었다. 그 실패는 ctrl/StartServiceResponse 로 흘러 lfc_monitor Events 에
+# `ctrl start svc FAILED` 로만 찍혔고, CtrlResponse 에는 대상 이름 필드가 없어
+# **어느 서비스인지 알 수 없었다**(보드 81 실측 2026-09-07).
+# rviz2 와 같은 취급 — 아래 주석 참조.
 - name: hmi_launcher
   service_type: NORMAL
   recovery_policy: ALWAYS
@@ -44,7 +53,8 @@ services:
   - --device
   - /dev/dri:/dev/dri
   - "-v"
-  - /run/user/1001:/run/user/1001
+  # 보드별 런타임 uid — board.env 의 HMI_RUNTIME_UID 로 치환된다 (기본 1001).
+  - /run/user/${HMI_RUNTIME_UID:-1001}:/run/user/${HMI_RUNTIME_UID:-1001}
   # ── Wayland 연결 + NVIDIA(Tegra) GL 스택 (보드 실측 2026-08-10) ──────────────
   # 이게 없으면 런처는 기동되지만 **화면을 그리지 못한다**:
   #   [INFO] WAYLAND_DISPLAY=                     ← 컴포지터 소켓을 못 찾음
@@ -61,7 +71,7 @@ services:
   #      ⚠️ /usr/lib 를 통째로 걸면 컨테이너 bash 가 보드 libc/vDSO 를 끌어와 깨진다.
   #      스테이징은 AGL 이미지의 oss-integration-compose(oss-nv-gl-stage)가 부팅 시 수행한다.
   - "-e"
-  - XDG_RUNTIME_DIR=/run/user/1001
+  - XDG_RUNTIME_DIR=/run/user/${HMI_RUNTIME_UID:-1001}
   - "-e"
   - WAYLAND_DISPLAY=wayland-0
   - "-e"
@@ -132,8 +142,10 @@ services:
   # The container runs as uid 1001, but docker.sock is owned by root:docker.
   # Add the host `docker` group gid (999 on this Orin board — verify with
   # `stat -c %g /var/run/docker.sock`) so rviz2_panel can talk to the daemon.
+  # 호스트 docker 그룹 gid 는 보드마다 다르다 — board.env 의 DOCKER_GID 로 치환된다.
+  #   확인: stat -c %g /var/run/docker.sock
   - --group-add
-  - "999"
+  - "${DOCKER_GID:-999}"
   command_args:
   - hmi_launcher
   # ── 배경(BG) 롤로 띄운다 — **가로 1920x1080 출력에서는 이것만 동작한다** ─────────

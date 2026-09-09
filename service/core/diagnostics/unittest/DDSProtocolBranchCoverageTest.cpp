@@ -1159,7 +1159,7 @@ TEST_F(DDSProtocolBranchCoverageTest, register_type_object_TC003_comprehensive_s
     // Test 1: Valid type from IDL (should succeed via dynamic_idl path)
     auto topic_info1 = std::make_shared<TopicInformation>();
     topic_info1->topic_name = "/ValidIDLTopic";
-    topic_info1->topic_type = "DataTypeTest";
+    topic_info1->topic_type = "DataTypeTestSimple";
     
     bool result1 = ins->register_type_object(topic_info1);
     EXPECT_TRUE(result1) << "Should succeed via dynamic IDL";  // Should succeed via dynamic IDL

@@ -40,7 +40,7 @@ bool DiagnosticAnalyzer::Initialize() {
         return false;
     }
     std::string config_path = getEnvVariable("DIAG_CONFIG_PATH").value_or("config");
-    if (!policy_manager_->LoadAllPolicy(config_path.c_str())) {
+    if (!policy_manager_->LoadAllPolicy(config_path)) {
         LOG_ERROR("Failed to load diagnostic policies.");
         return false;
     }
@@ -122,11 +122,11 @@ std::vector<std::shared_ptr<DiagInfo>> DiagnosticAnalyzer::Analyze(std::shared_p
                             LOG_DEBUG("raw json len=" << s.size() << " head=" << s.substr(0, 120));
 
                             // UTF-8 검증(간단히: 제어문자/비정상 바이트 체크)
-                            for (unsigned char c : s) {
-                                if (c < 0x20 && c != '\n' && c != '\r' && c != '\t') {
-                                    LOG_DEBUG("raw json has control byte: 0x" << std::hex << (int)c);
-                                    break;
-                                }
+                            auto it_ctrl = std::find_if(s.begin(), s.end(), [](unsigned char c) {
+                                return c < 0x20 && c != '\n' && c != '\r' && c != '\t';
+                            });
+                            if (it_ctrl != s.end()) {
+                                LOG_DEBUG("raw json has control byte: 0x" << std::hex << (int)*it_ctrl);
                             }
                             info->SetRawData(s);
                             //info->SetRawData(source_data->ToJson());
@@ -207,9 +207,9 @@ std::vector<std::shared_ptr<DiagPolicy>> DiagnosticAnalyzer::GetDiagPoliciesToAn
         diag_codes.insert(ref_msg_diag_codes.begin(), ref_msg_diag_codes.end());
     }
 
-    for (auto diag_code : diag_codes) {
-        policies.push_back(policy_manager_->GetPolicy(diag_code));
-    }
+    policies.reserve(diag_codes.size());
+    std::transform(diag_codes.begin(), diag_codes.end(), std::back_inserter(policies),
+                   [this](auto diag_code) { return policy_manager_->GetPolicy(diag_code); });
 
     return policies;
 }

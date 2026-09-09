@@ -783,7 +783,181 @@ TEST_F(VariantDataTest, GetInt64FromList_WrongType_TC021) {
     EXPECT_FALSE(ins->GetInt64FromList("str_list", 0, out));
 }
 
+// ============================================================================
+// ToJson & GetValueNum Coverage Tests
+// ============================================================================
+
+TEST_F(VariantDataTest, GetValueNum_TC002) {
+    EXPECT_EQ(0ULL, ins->GetValueNum());
+    ins->SetValue("k1", 10);
+    ins->SetValue("k2", "val");
+    EXPECT_EQ(2ULL, ins->GetValueNum());
+}
+
+TEST_F(VariantDataTest, ToJson_Comprehensive_TC001) {
+    ins->SetValue("b_true", true);
+    ins->SetValue("b_false", false);
+    ins->SetValue("str_val", "hello");
+    ins->SetValue("i32_val", (int32_t)-42);
+    ins->SetValue("i64_val", (int64_t)-9999LL);
+    ins->SetValue("u32_val", (uint32_t)100);
+    ins->SetValue("u64_val", (uint64_t)200ULL);
+    ins->SetValue("f_val", 1.25f);
+    ins->SetValue("d_val", 3.75);
+
+    std::vector<int32_t> vec_i32 = {1, 2, 3};
+    ins->SetValue("vec_i32", vec_i32);
+
+    std::vector<int64_t> vec_i64 = {10LL, 20LL};
+    ins->SetValue("vec_i64", vec_i64);
+
+    std::vector<uint32_t> vec_u32 = {100U, 200U};
+    ins->SetValue("vec_u32", vec_u32);
+
+    std::vector<uint64_t> vec_u64 = {1000ULL, 2000ULL};
+    ins->SetValue("vec_u64", vec_u64);
+
+    std::vector<std::string> vec_str = {"alpha", "beta"};
+    ins->SetValue("vec_str", vec_str);
+
+    std::vector<bool> vec_bool = {true, false, true};
+    ins->SetValue("vec_bool", vec_bool);
+
+    VariantData child;
+    child.SetValue("child_str", "nested");
+    ins->SetValue("child_obj", child);
+
+    std::string json = ins->ToJson();
+    EXPECT_FALSE(json.empty());
+    EXPECT_NE(std::string::npos, json.find("\"b_true\":true"));
+    EXPECT_NE(std::string::npos, json.find("\"b_false\":false"));
+    EXPECT_NE(std::string::npos, json.find("\"str_val\":\"hello\""));
+    EXPECT_NE(std::string::npos, json.find("\"vec_i32\":[1,2,3]"));
+    EXPECT_NE(std::string::npos, json.find("\"vec_str\":[\"alpha\",\"beta\"]"));
+    EXPECT_NE(std::string::npos, json.find("\"vec_bool\":[true,false,true]"));
+    EXPECT_NE(std::string::npos, json.find("\"child_obj\":{"));
+    EXPECT_NE(std::string::npos, json.find("\"child_str\":\"nested\""));
+}
+
+TEST_F(VariantDataTest, GetValueAsVariantFromList_AllTypes_TC001) {
+    // Non-existent key
+    auto v_none = ins->GetValueAsVariantFromList("not_exist", 0);
+    EXPECT_EQ(std::type_index(typeid(void)), v_none.type);
+
+    // Non-vector member
+    ins->SetValue("scalar_int", 42);
+    auto v_scalar = ins->GetValueAsVariantFromList("scalar_int", 0);
+    EXPECT_EQ(std::type_index(typeid(void)), v_scalar.type);
+
+    // char
+    std::vector<char> v_char = {'a', 'b'};
+    ins->SetValue("v_char", v_char);
+    auto res_char = ins->GetValueAsVariantFromList("v_char", 0);
+    EXPECT_EQ(std::type_index(typeid(char)), res_char.type);
+    auto res_char_oob = ins->GetValueAsVariantFromList("v_char", 10);
+    EXPECT_EQ(std::type_index(typeid(char)), res_char_oob.type);
+
+    // wchar_t
+    std::vector<wchar_t> v_wchar = {L'x', L'y'};
+    ins->SetValue("v_wchar", v_wchar);
+    auto res_wchar = ins->GetValueAsVariantFromList("v_wchar", 0);
+    EXPECT_EQ(std::type_index(typeid(wchar_t)), res_wchar.type);
+
+    // int8_t
+    std::vector<int8_t> v_i8 = {1, 2};
+    ins->SetValue("v_i8", v_i8);
+    auto res_i8 = ins->GetValueAsVariantFromList("v_i8", 0);
+    EXPECT_EQ(std::type_index(typeid(int8_t)), res_i8.type);
+
+    // int16_t
+    std::vector<int16_t> v_i16 = {10, 20};
+    ins->SetValue("v_i16", v_i16);
+    auto res_i16 = ins->GetValueAsVariantFromList("v_i16", 0);
+    EXPECT_EQ(std::type_index(typeid(int16_t)), res_i16.type);
+
+    // int32_t
+    std::vector<int32_t> v_i32 = {100, 200};
+    ins->SetValue("v_i32", v_i32);
+    auto res_i32 = ins->GetValueAsVariantFromList("v_i32", 0);
+    EXPECT_EQ(std::type_index(typeid(int32_t)), res_i32.type);
+
+    // int64_t
+    std::vector<int64_t> v_i64 = {1000LL, 2000LL};
+    ins->SetValue("v_i64", v_i64);
+    auto res_i64 = ins->GetValueAsVariantFromList("v_i64", 0);
+    EXPECT_EQ(std::type_index(typeid(int64_t)), res_i64.type);
+
+    // uint8_t
+    std::vector<uint8_t> v_u8 = {5, 6};
+    ins->SetValue("v_u8", v_u8);
+    auto res_u8 = ins->GetValueAsVariantFromList("v_u8", 0);
+    EXPECT_EQ(std::type_index(typeid(uint8_t)), res_u8.type);
+
+    // uint16_t
+    std::vector<uint16_t> v_u16 = {50, 60};
+    ins->SetValue("v_u16", v_u16);
+    auto res_u16 = ins->GetValueAsVariantFromList("v_u16", 0);
+    EXPECT_EQ(std::type_index(typeid(uint16_t)), res_u16.type);
+
+    // uint32_t
+    std::vector<uint32_t> v_u32 = {500U, 600U};
+    ins->SetValue("v_u32", v_u32);
+    auto res_u32 = ins->GetValueAsVariantFromList("v_u32", 0);
+    EXPECT_EQ(std::type_index(typeid(uint32_t)), res_u32.type);
+
+    // uint64_t
+    std::vector<uint64_t> v_u64 = {5000ULL, 6000ULL};
+    ins->SetValue("v_u64", v_u64);
+    auto res_u64 = ins->GetValueAsVariantFromList("v_u64", 0);
+    EXPECT_EQ(std::type_index(typeid(uint64_t)), res_u64.type);
+
+    // float
+    std::vector<float> v_f = {1.1f, 2.2f};
+    ins->SetValue("v_f", v_f);
+    auto res_f = ins->GetValueAsVariantFromList("v_f", 0);
+    EXPECT_EQ(std::type_index(typeid(float)), res_f.type);
+
+    // double
+    std::vector<double> v_d = {3.3, 4.4};
+    ins->SetValue("v_d", v_d);
+    auto res_d = ins->GetValueAsVariantFromList("v_d", 0);
+    EXPECT_EQ(std::type_index(typeid(double)), res_d.type);
+
+    // bool
+    std::vector<bool> v_b = {true, false};
+    ins->SetValue("v_b", v_b);
+    auto res_b = ins->GetValueAsVariantFromList("v_b", 0);
+    EXPECT_EQ(std::type_index(typeid(bool)), res_b.type);
+
+    // string
+    std::vector<std::string> v_str = {"foo", "bar"};
+    ins->SetValue("v_str", v_str);
+    auto res_str = ins->GetValueAsVariantFromList("v_str", 0);
+    EXPECT_EQ(std::type_index(typeid(std::string)), res_str.type);
+
+    // wstring
+    std::vector<std::wstring> v_wstr = {L"wfoo", L"wbar"};
+    ins->SetValue("v_wstr", v_wstr);
+    auto res_wstr = ins->GetValueAsVariantFromList("v_wstr", 0);
+    EXPECT_EQ(std::type_index(typeid(std::wstring)), res_wstr.type);
+}
+
+TEST_F(VariantDataTest, GetChild_EdgeCases_TC001) {
+    EXPECT_EQ(nullptr, ins->GetChild("not_exist"));
+
+    ins->SetValue("scalar", 123);
+    EXPECT_EQ(nullptr, ins->GetChild("scalar"));
+
+    VariantData child;
+    child.SetName("child_name");
+    ins->SetValue("child", child);
+    VariantData* p_child = ins->GetChild("child");
+    ASSERT_NE(nullptr, p_child);
+    EXPECT_EQ("child_name", p_child->GetName());
+}
+
 int main(int argc, char* argv[]) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }
+

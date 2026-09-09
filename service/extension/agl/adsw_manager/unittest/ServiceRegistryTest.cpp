@@ -1,5 +1,6 @@
 #include "service_registry/ServiceRegistry.hpp"
 #include <gtest/gtest.h>
+#include <cstdlib>   // setenv / unsetenv (ExpandEnvVars 테스트)
 #include <optional>
 #include <algorithm>
 #include "TestPrinter.hpp"
@@ -151,4 +152,53 @@ TEST_F(ServiceRegistryTest, GetNameStatePairs_ReflectsUpdates) {
     EXPECT_EQ(after.size(), before.size() + 1);
     EXPECT_TRUE(ContainsName(after, "localization"));
     EXPECT_EQ(registry.GetAppState("localization"), ServiceState::RUNNING);
+}
+
+// ── ExpandEnvVars — 서비스 목록 정본을 이미지에 두기 위한 확장 규칙 ──────────
+//
+// 이 함수가 틀리면 런처의 --group-add gid 가 조용히 어긋나 docker.sock 접근을
+// 잃는다(보드에서 실측으로 판별하기 어려운 종류의 회귀 — DOCKER_GID 가
+// ext-agl 자신의 group_add 에도 쓰여서 값을 따로 바꿔 볼 수 없다).
+
+TEST(ExpandEnvVars, EnvValueWinsOverDefault) {
+    ::setenv("ADSW_TEST_GID", "4242", 1);
+    EXPECT_EQ(ExpandEnvVars("${ADSW_TEST_GID:-999}"), "4242");
+    ::unsetenv("ADSW_TEST_GID");
+}
+
+TEST(ExpandEnvVars, FallsBackToDefaultWhenUnset) {
+    ::unsetenv("ADSW_TEST_GID");
+    EXPECT_EQ(ExpandEnvVars("${ADSW_TEST_GID:-999}"), "999");
+}
+
+// compose 가 `SAVED_REGISTRY_BACKUP=` 처럼 빈 값을 주입하는 일이 실제로 있다.
+// 셸과 같이 빈 값은 미설정으로 본다 — 그러지 않으면 경로/인자가 빈칸이 된다.
+TEST(ExpandEnvVars, EmptyEnvTreatedAsUnset) {
+    ::setenv("ADSW_TEST_GID", "", 1);
+    EXPECT_EQ(ExpandEnvVars("${ADSW_TEST_GID:-999}"), "999");
+    ::unsetenv("ADSW_TEST_GID");
+}
+
+TEST(ExpandEnvVars, NoDefaultAndUnsetYieldsEmpty) {
+    ::unsetenv("ADSW_TEST_NONE");
+    EXPECT_EQ(ExpandEnvVars("a${ADSW_TEST_NONE}b"), "ab");
+}
+
+// 실제 yaml 의 형태: 한 값 안에 같은 변수가 두 번 들어간다
+// (`/run/user/${UID}:/run/user/${UID}`).
+TEST(ExpandEnvVars, ExpandsMultipleOccurrencesAndKeepsSurroundingText) {
+    ::setenv("ADSW_TEST_UID", "1001", 1);
+    EXPECT_EQ(ExpandEnvVars("/run/user/${ADSW_TEST_UID:-1000}:/run/user/${ADSW_TEST_UID:-1000}"),
+              "/run/user/1001:/run/user/1001");
+    ::unsetenv("ADSW_TEST_UID");
+}
+
+TEST(ExpandEnvVars, LeavesPlainStringsAndLoneDollarsUntouched) {
+    EXPECT_EQ(ExpandEnvVars("--net=host"), "--net=host");
+    EXPECT_EQ(ExpandEnvVars("cost is $5"), "cost is $5");
+}
+
+// 닫는 중괄호가 없으면 삼켜 버리지 말고 원문을 남긴다 (yaml 오타를 눈에 보이게).
+TEST(ExpandEnvVars, UnterminatedBraceIsPreservedVerbatim) {
+    EXPECT_EQ(ExpandEnvVars("x${BROKEN"), "x${BROKEN");
 }

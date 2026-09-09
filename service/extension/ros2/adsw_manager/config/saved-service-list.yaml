@@ -1,3 +1,12 @@
+# `-e ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-42}` — 셸 확장으로 adsw_manager 의 env 를 따라간다.
+# ContainerController::RunCommand 가 `system()` 이라 이 args 는 /bin/sh 를 통과하므로
+# 값 치환 코드 없이 확장된다. adsw_manager 의 ROS_DOMAIN_ID 는 run-mmf.sh / compose 가
+# domain.env 에서 주입하므로 HMI Settings → domain.env → adsw_manager → Autoware 로
+# 이어진다. unset 이어도 `:-42` 폴백이 있어 종전 동작이 유지된다.
+#
+# ⚠️ 셸을 통과한다는 것은 이 파일의 args 에 `$`·백틱·따옴표를 쓰면 셸이 해석한다는
+#    뜻이다(이 변경 이전에도 그랬다). 보드 로컬 신뢰 설정 파일이라 위험은 낮지만
+#    임의 문자열을 넣지 말 것.
 version: 0.1
 
 # specs: ros2 adsw_manager 가 부팅 시 lifecycle_mgr 에 등록할 서비스 목록.
@@ -11,12 +20,35 @@ version: 0.1
 # 아래는 parted Autoware (인지/판단/제어) 3 역할 — 각 이미지가 자기 역할
 # start_script(/autoware/start_script/adsw-*.sh → sample_adsw_*_run.launch.xml)
 # 를 CMD 로 실행한다. 이미지: ghcr.io/oss-test-group/autoware-partition:adsw-* (2026-07 파티션
-# 샘플). domain 42 로 격리(ROS_DOMAIN_ID=42)하여
+# 샘플). domain 42 로 격리(ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-42})하여
 # MMF(domain 0)와 분리. 맵은 보드의 /home/goasp/autoware_map 를 마운트.
 # recovery: MANUAL — 운영자가 lfc_monitor 에서 start/stop/restart 를 명시적으로
 # 제어 (ALWAYS 면 stop 직후 lifecycle_mgr 가 즉시 재기동해 "정지"가 안 됨).
 specs:
   - containers:
+      # ── 인프라 컨테이너 (관찰 전용) ────────────────────────────────────────
+      # oss-hmi-launcher 가 lfc_monitor 에 카드로 보이는 것과 같게, MMF 자신의
+      # 컨테이너도 보이게 한다. ContainerHealthMonitor 의 poll 루프가 등록된
+      # 컨테이너마다 `docker inspect` 로 상태를 읽어 NotifyContainerState 를
+      # 발행하므로, **누가 만든 컨테이너든** 등록만 하면 상태가 보인다.
+      #
+      # `services:` 를 두지 않는다 — 서비스가 없으면 복구 정책이 걸릴 대상도 없어
+      # 자동 재기동이 발생하지 않는다. 거기에 observe_only 로 ctrl 경로
+      # (Start/Stop/RestartContainer) 도 막는다. StopContainer 는
+      # `docker stop && docker rm` 이라 **정지가 아니라 삭제**이기 때문이다.
+      #
+      # ⚠️ 호스트 경계: 이 두 컨테이너는 151 에서 돈다. `docker inspect` 는 이
+      #    컨테이너의 docker.sock, 즉 같은 호스트만 본다. 81 에서 도는
+      #    oss-mmf-ext-agl 은 ext-agl 쪽 agl-service-list.yaml 에 등록한다.
+      - name: oss-mmf-core
+        image: "registry.obigo.com/oss/oss-mmf-core:latest"
+        container-type: "docker"
+        observe_only: true
+      - name: oss-mmf-ext-ros2
+        image: "registry.obigo.com/oss/oss-mmf-ext-ros2:latest"
+        container-type: "docker"
+        observe_only: true
+
       # ── 인지 (perception) — 시뮬레이터 + rviz(:1) ──────────────────────────
       - name: autoware-perception
         image: "ghcr.io/oss-test-group/autoware-partition:adsw-perception"
@@ -29,7 +61,7 @@ specs:
           # duplicated_node_checker 의 /launch_ros_* 중복 경고를 없앤다.
           - "--pid=host"
           - "-e"
-          - "ROS_DOMAIN_ID=42"
+          - "ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-42}"
           - "-e"
           - "DISPLAY=:1"
           - "-e"
@@ -66,7 +98,7 @@ specs:
           # duplicated_node_checker 의 /launch_ros_* 중복 경고를 없앤다.
           - "--pid=host"
           - "-e"
-          - "ROS_DOMAIN_ID=42"
+          - "ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-42}"
           - "-v"
           - "/dev/shm:/dev/shm"
           - "-v"
@@ -95,7 +127,7 @@ specs:
           # duplicated_node_checker 의 /launch_ros_* 중복 경고를 없앤다.
           - "--pid=host"
           - "-e"
-          - "ROS_DOMAIN_ID=42"
+          - "ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-42}"
           - "-v"
           - "/dev/shm:/dev/shm"
           - "-v"

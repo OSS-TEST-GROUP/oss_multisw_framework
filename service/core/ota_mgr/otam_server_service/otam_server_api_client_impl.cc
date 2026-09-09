@@ -14,6 +14,8 @@ size_t WriteCallback(void* contents,
 }
 }  // namespace
 
+// LCOV_EXCL_START — 실 HTTP 경계(libcurl 래퍼 OtamServerApiClientImpl): 유닛 불가.
+// 로직은 MockOtamServerApiClient 로 검증, 실 전송은 통합 레인이 검증. (파일 전체 제외)
 void OtamServerApiClientImpl::SetAuthToken(const std::string& token) {
     default_headers_["Authorization"] = "Bearer " + token;
 }

@@ -215,7 +215,7 @@ oss-provision --factory-reset --yes --prune-dangling --purge-token   # 무인 + 
 |---|---|
 | 활성 서비스 목록 | 공장 기본(런처만) + `.bak-*` 정리 |
 | 런처 config | rosbridge URL → 베이크된 placeholder (cfg 사본까지, uid 1001) |
-| `domain.env` | 런처 Settings 가 바꾼 `ROS_DOMAIN_ID` → 공장값(42) |
+| `domain.env` | 런처 Settings 가 바꾼 `DDS_DOMAIN_ID` / `ROS_DOMAIN_ID` → 공장값(둘 다 42) |
 | 컨테이너 | `hmi_launcher`·`oss-mmf-ext-agl`·`rviz2` 제거 후 재기동 |
 | 이미지 | `:latest` → 베이크 `:provision` 재태깅, 스냅샷 태그(`develop-*-arm64`)·모니터 앱 이미지 제거 |
 | 레지스트리 로그인 | 로그아웃 (`--purge-token` 이면 `/etc/oss/registry-token` 도 삭제) |
@@ -334,13 +334,32 @@ f079e210a5c1   ghcr.io/oss-test-group/oss-ids/attack_env:v0.1.0           "/entr
 
 ### Step 2.3: Orin 보드 (또는 x86_64 대체 환경) AGL 및 HMI 기동
 
-Orin 타겟 보드에서 AGL Extension 서비스(`mmf-ext-agl`)를 기동합니다.
-`mmf-ext-agl` 서비스가 정상 기동되면 internal manager를 통해 `oss-hmi-launcher` (HMI 앱 서비스)가 자동으로 연동 기동됩니다.
+Orin 타겟 보드 또는 대체 x86_64 데스크톱에서 AGL Extension 서비스(`mmf-ext-agl`)를 기동합니다.
+`mmf-ext-agl` 서비스가 정상 기동되면 내부 `agl_adsw_manager`를 통해 `oss-hmi-launcher` (HMI 앱 서비스)가 자동으로 연동 기동됩니다.
+
+#### x86_64 대체 PC에서 기동할 때
+
+x86_64 환경에서는 GTK/X11 기반으로 런처 창이 뜨므로 호스트 X11 디스플레이 접근 권한과 설정 디렉토리 사전 준비가 필요합니다.
 
 ```bash
-# x86_64 대체 PC(nvidia 런타임 보유)에서 실행 — base 그대로 사용
+# 1) 호스트 디렉토리 준비 (런처 설정 및 DDS 도메인 영속화)
+mkdir -p /opt/mmf/config /opt/mmf/hmi_launcher_cfg 2>/dev/null \
+  || sudo mkdir -p /opt/mmf/config /opt/mmf/hmi_launcher_cfg
+
+# 2) X11 디스플레이 접근 권한 허용 (필수)
+#    컨테이너 내부(root)에서 호스트 X 서버(DISPLAY)에 창을 띄울 수 있도록 허용합니다.
+#    누락 시 "cannot open display: Authorization required" 오류로 런처가 크래시합니다.
+xhost +local:
+
+# 3) 기동 (base compose 그대로 사용)
 docker compose -f docker/compose/docker-compose-integration.yaml up -d mmf-ext-agl
 ```
+
+> [!TIP]
+> `docker/run-ext-agl.sh` 스크립트를 사용할 경우 위 디렉토리 생성 및 `xhost +local:` 처리가 스크립트 내에 자동 포함되어 있습니다:
+> ```bash
+> bash docker/run-ext-agl.sh
+> ```
 
 #### Orin 보드(arm64/AGL)에서 기동할 때 — 오버라이드 + 사전 준비 필요
 

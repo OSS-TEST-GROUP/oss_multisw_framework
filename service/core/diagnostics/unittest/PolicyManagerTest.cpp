@@ -176,6 +176,25 @@ TEST_F(PolicyManagerTest, GetReferenceMessageNum_TC001) {
     EXPECT_EQ(ins->GetReferenceMessageNum(), 3);
 }
 
+TEST_F(PolicyManagerTest, LoadAllPolicy_NonExistentDir_TC002) {
+    EXPECT_FALSE(ins->LoadAllPolicy("/non/existent/path/for/policies"));
+}
+
+TEST_F(PolicyManagerTest, LoadPolicy_InvalidFile_TC002) {
+    EXPECT_FALSE(ins->LoadPolicy("/non/existent/file.yaml"));
+}
+
+TEST_F(PolicyManagerTest, LoadPolicy_MissingCodeOrName_TC003) {
+    std::string tmp_yaml = "/tmp/test_missing_policy.yaml";
+    {
+        std::ofstream ofs(tmp_yaml);
+        ofs << "diagnosic_policies:\n"
+            << "  - code: 1\n"
+            << "  - name: test\n";
+    }
+    EXPECT_TRUE(ins->LoadPolicy(tmp_yaml));
+    std::filesystem::remove(tmp_yaml);
+}
 
 int main(int argc, char* argv[]) {
     ::testing::InitGoogleTest(&argc, argv);

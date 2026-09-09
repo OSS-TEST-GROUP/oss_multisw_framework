@@ -4,21 +4,37 @@
 #                  -f docker/compose/docker-compose-agl-board.override.yaml \
 #                  up -d mmf-ext-agl
 #
-# 왜 필요한가 (실측 2026-08-04, Orin AGX 보드):
-#   base 의 `mmf-ext-agl` 은 x86_64 일 때만 hmi_launcher 서비스 목록을 인라인 생성한다
-#   (`if [ "$(uname -m)" = "x86_64" ]`). arm64 보드에서는 그 분기를 타지 않으므로
-#   **이미지에 내장된** /oss/bin/config/agl-service-list.yaml 이 쓰이고, 보드에
-#   구성해 둔 목록(/opt/adsw/config/agl-service-list.yaml)이 무시된다.
-#   그 목록에는 실보드 시나리오에 필요한 항목들이 들어 있다:
-#     - docker.sock + --group-add <docker gid>  → rviz2_panel 이 rviz2 컨테이너 제어
-#     - /root/oss/hmi_launcher_config.json      → rosbridge URL(차량 컴퓨트 IP) 지정
-#     - /cfg (XDG_CONFIG_HOME)                  → 앱 표시/숨김·타임존 영속
-#     - /opt/mmf/config (도메인 파일)            → Settings 의 DDS domain 반영
-#     - 검증용 런처 이미지 태그 핀
-#   그래서 보드에서는 이 오버라이드로 호스트 목록을 마운트해 그대로 쓰게 한다.
-#
 # 보드 런타임 uid 는 1001(agl-driver) 이므로 HMI_RUNTIME_UID=1001 로 실행한다:
 #   HMI_RUNTIME_UID=1001 docker compose -f … -f … up -d mmf-ext-agl
+# (보드에서는 /etc/oss/compose/board.env 가 HMI_RUNTIME_UID·DOCKER_GID 를 준다)
+#
+# ── AGL 서비스 목록의 정본은 **컨테이너 이미지**다 (2026-09-07 변경) ──────────
+#
+# 예전에는 이 파일이 호스트 목록을 이미지 사본 위에 마운트했다:
+#   - ${AGL_SERVICE_LIST:-/opt/adsw/config/agl-service-list.yaml}:/oss/bin/config/agl-service-list.yaml:ro
+#
+# 그 마운트를 **제거했다.** 이유(보드 81 실측 2026-09-07):
+#   · 마운트가 있으면 목록의 정본이 이미지 밖으로 나가 **컨테이너를 업데이트해도
+#     목록이 반영되지 않는다.** 실제로 이미지에서 monitor 앱 3종을 지우고 배포했는데
+#     보드는 옛 목록을 계속 썼다.
+#   · 게다가 호스트 파일은 Yocto 패키지(oss-integration-compose)가 싣고
+#     `/usr/bin/oss-provision` 이 기본 `MODE=full` 로 되살린다 → 이미지 수정이
+#     프로비저닝 한 번에 되돌아간다.
+#
+# 마운트가 필요했던 이유는 목록에 **보드별 값**이 하드코딩돼 있었기 때문이다.
+# 그 값들만 환경변수로 뺐으므로(목록은 `${DOCKER_GID:-999}` /
+# `${HMI_RUNTIME_UID:-1001}` 를 참조, adsw_manager 가 로드 시 확장) 목록 자체는
+# 모든 보드에서 동일해지고 이미지에 담을 수 있다.
+#   - DOCKER_GID       → 런처의 --group-add (docker.sock 접근; rviz2_panel 제어용)
+#   - HMI_RUNTIME_UID  → /run/user/<uid> (Wayland 소켓), XDG_RUNTIME_DIR
+# 나머지 항목(/root/oss/hmi_launcher_config.json 의 rosbridge URL, /cfg,
+# /opt/mmf/config 도메인 파일)은 **경로가 보드마다 같고 내용만 다르므로** 목록을
+# 손댈 필요가 없다.
+#
+# 목록을 보드에서 임시로 바꿔야 하면 이미지를 가리지 말고 ADSW_CONFIG 로 지정한다
+# (main.cpp 의 우선순위: --config > ADSW_CONFIG > 이미지 내장 경로):
+#   ADSW_CONFIG=/opt/adsw/config/my-list.yaml docker compose … up -d mmf-ext-agl
+# 그래야 "가림"이 기본값이 아니라 **명시적 예외**로 남는다.
 services:
   mmf-ext-agl:
     # base 의 `deploy`(nvidia GPU 예약)를 **제거**한다 — Compose 2.24+ 의 `!reset` 태그.
@@ -31,6 +47,3 @@ services:
     # `--device /dev/dri:/dev/dri` 로 얻으므로 이 예약은 불필요하다.
     # x86 데스크탑(nvidia 런타임 보유)은 이 override 를 쓰지 않아 base 그대로 GPU 를 쓴다.
     deploy: !reset null
-    volumes:
-      # 호스트에 구성된 AGL 서비스 목록을 이미지 내장본 대신 사용 (읽기 전용)
-      - ${AGL_SERVICE_LIST:-/opt/adsw/config/agl-service-list.yaml}:/oss/bin/config/agl-service-list.yaml:ro

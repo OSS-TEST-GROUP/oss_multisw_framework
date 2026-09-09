@@ -12,6 +12,9 @@ public:
     MOCK_METHOD(int, GetLifecycleTimeoutSec, (), (const, override));
     MOCK_METHOD(int, GetVissTimeoutSec, (), (const, override));
     MOCK_METHOD(ReturnValue, RunOtaUpdate, (const std::string& app_name), (override));
+    MOCK_METHOD(AppSettingsResult, GetOtaSettings, (const std::string& app_name), (override));
+    MOCK_METHOD(AppUpdateStateResult, GetOtaUpdateState, (const std::string& app_name), (override));
+    MOCK_METHOD(ReturnValue, SetOtaSettings, (const std::string& app_name, const std::string& app_settings_json), (override));
 };
 
 #endif  // MOCK_OTAM_SERVER_SERVICE_H_

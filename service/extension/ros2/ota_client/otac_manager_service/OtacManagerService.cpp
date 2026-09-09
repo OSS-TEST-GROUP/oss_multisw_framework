@@ -18,9 +18,12 @@ namespace ros2::ota_client
 
         DomainParticipantQos participant_qos = PARTICIPANT_QOS_DEFAULT;
         participant_qos.name("ota client participant");
-        // Per-board DDS domain isolation (MMF_DDS_DOMAIN_ID, default 0).
+        // Per-board DDS-plane isolation. Precedence: MMF_DDS_DOMAIN_ID (per-service
+        // override) > DDS_DOMAIN_ID (canonical DDS plane) > 0. Raw Fast-DDS ignores
+        // ROS_DOMAIN_ID -- that is the separate ROS2 plane.
         int mmf_domain = 0;
         if (const char* e = std::getenv("MMF_DDS_DOMAIN_ID")) mmf_domain = std::atoi(e);
+        else if (const char* g = std::getenv("DDS_DOMAIN_ID")) mmf_domain = std::atoi(g);
         participant_ = DomainParticipantFactory::get_instance()->create_participant(mmf_domain, participant_qos);
 
         if (participant_ == nullptr)

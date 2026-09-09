@@ -542,7 +542,7 @@ void GrpcTransport::stop() {
 
     if (server) {
         LOG_INFO << "Sync GrpcTransport::stop() called. Shutting down gRPC server.";
-        server->Shutdown();
+        server->Shutdown(std::chrono::system_clock::now() + std::chrono::milliseconds(500));
 
         if (server_thread_.joinable()) {
             LOG_INFO << "Waiting for gRPC server thread to join...";

@@ -3,8 +3,10 @@
 # core + ext-ros2 런타임을 registry:latest 로 기동한다 (arm64 실보드/범용).
 # run-mmf.sh 와 동일 구성:
 #   - host network + privileged + NET_RAW/NET_ADMIN + /dev/shm 공유
-#   - 전 스택 동일 DDS 도메인 (raw FastDDS=MMF_DDS_DOMAIN_ID, VISS=VISS_DDS_DOMAIN_ID,
-#     ROS2=ROS_DOMAIN_ID — 세 env 를 같은 값으로 맞춰야 실제로 한 도메인에 격리됨)
+#   - 도메인 두 평면: DDS 평면(DDS_DOMAIN_ID → raw FastDDS/MMF_DDS·VISS)과
+#     ROS2 평면(ROS_DOMAIN_ID → rmw). 값을 나누면 dds_bridge 가 두 평면을 잇는다
+#     (참가자 2개). 같은 값이면 참가자 하나 — 종전과 동일.
+#     (docs/guide/dds-ros-domain-guide.md §4).
 #   - ext-ros2 는 docker.sock + docker group → adsw_manager 가 컨테이너(autoware 등) 기동
 #   - core 가 뜬 뒤(healthcheck) ext-ros2 기동 (discovery 레이스 방지 — run-mmf.sh 의 12s 대기 등가)
 #   - --restart unless-stopped → 부팅 시 자동 재기동
@@ -16,8 +18,9 @@
 #   #    a) 도메인 파일(HMI 런처 Settings 가 기록하는 정본):
 #   #       docker compose --env-file /opt/mmf/config/domain.env -f ... up -d
 #   #       (run-mmf.sh 는 compose 파일 옆에 `.env` 심링크를 만들어 --env-file 없이도 먹게 한다)
-#   #    b) 셸 env:  export ROS_DOMAIN_ID=1
-#   #    c) compose 파일 옆 `.env` 파일에 ROS_DOMAIN_ID=<n> (샘플: compose/domain.env.example)
+#   #    b) 셸 env:  export ROS_DOMAIN_ID=1  (DDS 평면은 export DDS_DOMAIN_ID=5)
+#   #    c) compose 파일 옆 `.env` 파일에 DDS_DOMAIN_ID=<n> / ROS_DOMAIN_ID=<m>
+#   #       (샘플: compose/domain.env.example)
 #   #    ⚠️ 도메인은 프로세스 시작 시점에만 읽힌다 → 변경은 재기동으로만 반영된다.
 #   # 3) (권장) 재기동 시 stale FastDDS SHM 세그먼트 청소 — compose 는 호스트 액션 불가라 수동
 #   find /dev/shm -maxdepth 1 \
@@ -35,9 +38,22 @@
 #
 # Linux 전용 — network_mode: host 는 Docker Desktop(mac/win) 미지원.
 
+# ── 로그 로테이션 (전 서비스 공통) ──────────────────────────────────────────
+# 도커 기본값은 **무제한**이다. 151 보드에서 oss-mmf-core 의 json 로그 하나가
+# 376GB 까지 자라 루트 파일시스템을 100% 채웠고, 헬스체크 exec 이 "no space left on
+# device" 로 실패해 컨테이너가 13일간 unhealthy 였다(2026-09-03 실측).
+# 컨테이너당 상한 = max-size × max-file = 250MB.
+# ⚠️ 로테이션은 **상한만** 정한다. 로그 양 자체는 MMF_LOG_LEVEL(기본 info)로 줄인다.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "5"
+
 services:
   mmf-core:
     container_name: oss-mmf-core
+    logging: *default-logging
     image: ${CORE_IMG:-registry.obigo.com/oss/oss-mmf-core:latest}
     privileged: true
     network_mode: host
@@ -45,10 +61,12 @@ services:
       - NET_RAW
       - NET_ADMIN
     environment:
-      # 세 도메인 env 를 ROS_DOMAIN_ID 한 값으로 통일 (run-mmf.sh 의 DOMAIN 과 동일)
+      # 두 평면 (run-mmf.sh 의 ROS_DOMAIN / DDS_DOMAIN 과 동일 규칙).
+      # DDS 키가 없는 구 .env 면 ROS 값을 그대로 써서 종전 동작을 유지한다.
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-42}
-      MMF_DDS_DOMAIN_ID: ${ROS_DOMAIN_ID:-42}
-      VISS_DDS_DOMAIN_ID: ${ROS_DOMAIN_ID:-42}
+      DDS_DOMAIN_ID: ${DDS_DOMAIN_ID:-${ROS_DOMAIN_ID:-42}}
+      MMF_DDS_DOMAIN_ID: ${DDS_DOMAIN_ID:-${ROS_DOMAIN_ID:-42}}
+      VISS_DDS_DOMAIN_ID: ${DDS_DOMAIN_ID:-${ROS_DOMAIN_ID:-42}}
       HEARTBEAT_INTERVAL_SEC: ${HEARTBEAT_INTERVAL_SEC:-3}
     volumes:
       - /dev/shm:/dev/shm
@@ -63,6 +81,7 @@ services:
 
   mmf-ext-ros2:
     container_name: oss-mmf-ext-ros2
+    logging: *default-logging
     image: ${EXTROS2_IMG:-registry.obigo.com/oss/oss-mmf-ext-ros2:latest}
     privileged: true
     network_mode: host
@@ -75,7 +94,8 @@ services:
       - "${DOCKER_SOCK_GID:-999}"
     environment:
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-42}
-      MMF_DDS_DOMAIN_ID: ${ROS_DOMAIN_ID:-42}
+      DDS_DOMAIN_ID: ${DDS_DOMAIN_ID:-${ROS_DOMAIN_ID:-42}}
+      MMF_DDS_DOMAIN_ID: ${DDS_DOMAIN_ID:-${ROS_DOMAIN_ID:-42}}
     volumes:
       - /dev/shm:/dev/shm
       # adsw_manager 가 컨테이너(autoware 등)를 docker run/start/stop 하려면 필수.

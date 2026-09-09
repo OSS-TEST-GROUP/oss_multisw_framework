@@ -134,6 +134,8 @@ lcov --remove "${RAW}" "${REMOVE[@]}" \
 # ── 3. 모듈별 추출 ──────────────────────────────────────────────────────────
 MODULES=(
     "lifecycle|service/core/lifecycle_mgr"
+    "ota|service/core/ota_mgr"
+    "otaclient|service/extension/agl/ota_client"
     "adsw|service/extension/ros2/adsw_manager"
     "general|service/extension/general/adsw_manager"
 )
@@ -278,6 +280,29 @@ for entry in "${MODULES[@]}"; do
     fi
 
     emit_by_file "${minfo}" "${out}"
+
+    # ── 방안 A: gcovr --exclude-throw-branches (실제 제어흐름 branch) ──
+    # C++ -fexceptions 는 모든 함수호출·<<·문자열연산에 숨은 throw/normal 분기쌍을
+    # 만든다. 이 예외 edge 는 유닛으로 트리거 불가라 lcov 의 branch% 를 왜곡한다.
+    # gcovr --exclude-throw-branches 로 예외 분기를 뺀 '실제 branch coverage' 를
+    # 병기한다(lcov 1.x 는 예외제외 미지원). 이게 branch 게이트 지표다.
+    if command -v gcovr >/dev/null 2>&1; then
+        gsum="$(gcovr --root "${WORKDIR}" --filter "${relpath}/" \
+            --exclude '.*/generated/.*' --exclude '.*/idl/.*' \
+            --exclude '.*/unittest/.*' --exclude '.*/test/.*' \
+            --exclude '.*/main\.(cc|cpp)$' \
+            --exclude-throw-branches --gcov-ignore-parse-errors --print-summary \
+            "${BUILD_DIR}" 2>/dev/null | grep -E '^branches:' | head -1)"
+        if [[ -n ${gsum} ]]; then
+            bh="$(sed -nE 's/.*\(([0-9]+) out of ([0-9]+)\).*/\1/p' <<< "${gsum}")"
+            bf="$(sed -nE 's/.*\(([0-9]+) out of ([0-9]+)\).*/\2/p' <<< "${gsum}")"
+            bp="$(sed -nE 's/^branches: ([0-9.]+)%.*/\1/p' <<< "${gsum}")"
+            { echo "branch_nothrow_hit=${bh}"
+              echo "branch_nothrow_found=${bf}"
+              echo "branch_nothrow_pct=${bp}"; } >> "${out}/totals.txt"
+            info "[${name}] branch(throw 제외, gcovr): ${bp}% (${bh}/${bf})"
+        fi
+    fi
 
     genhtml "${minfo}" \
         --output-directory "${out}/report" \

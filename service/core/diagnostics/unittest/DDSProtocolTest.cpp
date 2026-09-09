@@ -1807,7 +1807,7 @@ TEST_F(DDSProtocolDeserializeTest, Deserialize_Direct_TC016_sequence_string) {
     DynamicTypeBuilder::_ref_type seq_builder = factory->create_sequence_type(string_type, 100);
     
     MemberDescriptor::_ref_type member_desc = traits<MemberDescriptor>::make_shared();
-    member_desc->name("seq_values");
+    member_desc->name("seq_string");
     member_desc->type(seq_builder->build());
     builder->add_member(member_desc);
     
@@ -2031,11 +2031,10 @@ TEST_F(DDSProtocolTest, delete_datareader_TC002_with_writer) {
         EXPECT_NE(nullptr, topic_info->topic);
         
         // Delete the datareader - this exercises delete_datareader
-        // Note: The current implementation checks if reader == nullptr AFTER deleting reader
-        // which always evaluates to true, so topic will be deleted even if writer exists
-        // This appears to be a bug in the original code, but we test the current behavior
+        // writer가 남아있어 topic 삭제에 실패하므로 delete_datareader는 false를 반환하지만
+        // reader는 정상 삭제됨
         bool result = ins->delete_datareader(topic_info);
-        EXPECT_TRUE(result);
+        EXPECT_FALSE(result);
         EXPECT_EQ(nullptr, topic_info->reader);
         
         // Clean up writer if it still exists

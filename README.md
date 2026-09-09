@@ -51,6 +51,7 @@ git clone git@github.com:obigo-gov/oss_multisw_framework.git
 |---|---|
 | `--release` | Release 모드로 빌드 (기본: Debug) |
 | `--build-unittest` | 유닛 테스트 포함 빌드 (Debug 강제) |
+| `--build-sils` | SiLS vECU Phase 1 PoC 빌드 활성화 |
 | `--build-extension` | Extension 프레임워크 빌드 활성화 |
 | `--set-extension-platform=<PLATFORM>` | Extension 대상 플랫폼 지정 (`ROS2` \| `AGL` \| `AAutoSAR`) |
 | `--aarch64` | aarch64 크로스빌드 대상으로 설정 |
@@ -280,6 +281,7 @@ link_libraries(gtest gmock)
 | 문서 | 설명 |
 |---|---|
 | [`build-install-run-guide.md`](./docs/guide/build-install-run-guide.md) | MMF 빌드·설치·실행 (x86_64 / arm64) |
+| [`dds-ros-domain-guide.md`](./docs/guide/dds-ros-domain-guide.md) | DDS / ROS 도메인 가이드 — 두 평면 분리 및 브릿지 운용 |
 | [`static-analysis-unittest-guide.md`](./docs/guide/static-analysis-unittest-guide.md) | 모듈 스코프 정적분석·유닛테스트·커버리지 측정 절차 |
 | [`integration-test-procedure-guide.md`](./docs/guide/integration-test-procedure-guide.md) | 통합 테스트 절차 |
 | [`board-autostart-guide.md`](./docs/guide/board-autostart-guide.md) | 보드 재부팅 자동시작 — core / ext-ros2 / ext-agl |

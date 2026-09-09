@@ -572,3 +572,164 @@ TEST_F(OtamActorServiceTest, F010_CustomThreshold_AffectsDecision) {
     SendServiceModeSuccess();
     DeliverVehicleInfo(req_id, "acc", "0", "15");
 }
+
+// ========== QA 커버리지 보강: 미커버 요청 핸들러 (docs/qa) ==========
+// server API 경로(GetOtaSettings/SetOtaSettings)는 비-virtual 이라 실 HTTP-API 를
+// 호출하므로 유닛에서 다루지 않는다. 여기서는 client 경유 핸들러의 정상 경로와
+// 각 핸들러의 "서비스 미연결" 조기 반환 분기를 검증한다 (모두 동작 관찰 = 크래시 없음).
+
+// OnGetAppListRequested: 등록 클라이언트가 없으면 빈 응답을 구성해 발행한다.
+TEST_F(OtamActorServiceTest, QA_OnGetAppList_EmptyClientList_NoThrow) {
+    otamanager::GetAppList msg;
+    msg.id(9001);
+    EXPECT_NO_THROW(actor_service_->OnGetAppListRequested(msg));
+}
+
+// OnGetAppListRequested: client service 미연결 시 조기 반환.
+TEST_F(OtamActorServiceTest, QA_OnGetAppList_NoClientService_EarlyReturn) {
+    actor_service_->SetOtamClientService(nullptr);
+    otamanager::GetAppList msg;
+    msg.id(9002);
+    EXPECT_NO_THROW(actor_service_->OnGetAppListRequested(msg));
+    actor_service_->SetOtamClientService(mock_client_);
+}
+
+// OnDeleteClientRegistrationRequested: 미등록 client_id 는 실 DeleteClientById 가
+// FAIL 을 반환하고 응답을 구성한다.
+TEST_F(OtamActorServiceTest, QA_OnDeleteClientRegistration_UnknownClient_NoThrow) {
+    otamanager::DeleteOtaClientRegistration msg;
+    msg.id(9003);
+    msg.client_id(424242);  // 등록된 적 없는 client
+    EXPECT_NO_THROW(actor_service_->OnDeleteClientRegistrationRequested(msg));
+}
+
+// OnDeleteClientRegistrationRequested: client service 미연결 분기.
+TEST_F(OtamActorServiceTest, QA_OnDeleteClientRegistration_NoClientService_NoThrow) {
+    actor_service_->SetOtamClientService(nullptr);
+    otamanager::DeleteOtaClientRegistration msg;
+    msg.id(9004);
+    msg.client_id(1);
+    EXPECT_NO_THROW(actor_service_->OnDeleteClientRegistrationRequested(msg));
+    actor_service_->SetOtamClientService(mock_client_);
+}
+
+// OnAppUpdateSettingsRequested: server 미연결 시 FAIL 응답 + 진단 발행.
+TEST_F(OtamActorServiceTest, QA_OnAppUpdateSettingsRequested_NoServer_NoThrow) {
+    actor_service_->SetOtamServerService(nullptr);
+    otamanager::GetAppUpdateSettings msg;
+    msg.id(9005);
+    msg.app_name("qa_settings_app");
+    EXPECT_NO_THROW(actor_service_->OnAppUpdateSettingsRequested(msg));
+    actor_service_->SetOtamServerService(mock_server_);
+}
+
+// OnSetAppUpdateSettingsReceived: server 미연결 시 FAIL 응답 + 진단 발행.
+TEST_F(OtamActorServiceTest, QA_OnSetAppUpdateSettingsReceived_NoServer_NoThrow) {
+    actor_service_->SetOtamServerService(nullptr);
+    otamanager::SetAppUpdateSettings msg;
+    msg.id(9006);
+    msg.app_name("qa_set_settings_app");
+    msg.app_settings("{}");
+    EXPECT_NO_THROW(actor_service_->OnSetAppUpdateSettingsReceived(msg));
+    actor_service_->SetOtamServerService(mock_server_);
+}
+
+// OnAppUpdateStateRequested: server 미연결 시 FAIL 응답 + 진단 발행.
+TEST_F(OtamActorServiceTest, QA_OnAppUpdateStateRequested_NoServer_NoThrow) {
+    actor_service_->SetOtamServerService(nullptr);
+    otamanager::GetAppUpdateState msg;
+    msg.id(9007);
+    msg.app_name("qa_state_app");
+    EXPECT_NO_THROW(actor_service_->OnAppUpdateStateRequested(msg));
+    actor_service_->SetOtamServerService(mock_server_);
+}
+
+// ===== server-available 경로 (server 메서드 virtual+mock) =====
+
+// OnAppUpdateSettingsRequested: GetOtaSettings SUCCESS → 성공 응답 경로.
+TEST_F(OtamActorServiceTest, QA_OnAppUpdateSettings_ServerSuccess) {
+    AppSettingsResult r; r.ret_code = ReturnValue::SUCCESS; r.app_settings = "{\"prune\":true}";
+    EXPECT_CALL(*mock_server_, GetOtaSettings("qa_ok")).WillOnce(Return(r));
+    otamanager::GetAppUpdateSettings msg; msg.id(9101); msg.app_name("qa_ok");
+    EXPECT_NO_THROW(actor_service_->OnAppUpdateSettingsRequested(msg));
+}
+
+// OnAppUpdateSettingsRequested: GetOtaSettings FAIL → 실패 응답 경로.
+TEST_F(OtamActorServiceTest, QA_OnAppUpdateSettings_ServerFail) {
+    AppSettingsResult r; r.ret_code = ReturnValue::FAIL;
+    EXPECT_CALL(*mock_server_, GetOtaSettings(::testing::_)).WillOnce(Return(r));
+    otamanager::GetAppUpdateSettings msg; msg.id(9102); msg.app_name("qa_fail");
+    EXPECT_NO_THROW(actor_service_->OnAppUpdateSettingsRequested(msg));
+}
+
+// OnSetAppUpdateSettingsReceived: SetOtaSettings SUCCESS → 성공 응답 경로.
+TEST_F(OtamActorServiceTest, QA_OnSetAppUpdateSettings_ServerSuccess) {
+    EXPECT_CALL(*mock_server_, SetOtaSettings(::testing::_, ::testing::_))
+        .WillOnce(Return(ReturnValue::SUCCESS));
+    otamanager::SetAppUpdateSettings msg; msg.id(9103); msg.app_name("qa_set"); msg.app_settings("{}");
+    EXPECT_NO_THROW(actor_service_->OnSetAppUpdateSettingsReceived(msg));
+}
+
+// OnAppUpdateStateRequested: GetOtaUpdateState 결과 처리 경로.
+TEST_F(OtamActorServiceTest, QA_OnAppUpdateState_ServerResult) {
+    AppUpdateStateResult r; r.ret_code = ReturnValue::SUCCESS;
+    EXPECT_CALL(*mock_server_, GetOtaUpdateState(::testing::_)).WillOnce(Return(r));
+    otamanager::GetAppUpdateState msg; msg.id(9104); msg.app_name("qa_state");
+    EXPECT_NO_THROW(actor_service_->OnAppUpdateStateRequested(msg));
+}
+
+// ===== OTA 플로우 조건 브랜치 =====
+
+// vehicle_info 비활성 → 차량 체크 건너뛰고 업데이트 진행.
+TEST_F(OtamActorServiceTest, QA_VehicleInfoDisabled_DirectUpdate) {
+    EXPECT_CALL(*mock_server_, IsVehicleInfoEnabled()).WillRepeatedly(Return(false));
+    EXPECT_CALL(*mock_server_, RunOtaUpdate("qa_vdis")).WillOnce(Return(ReturnValue::SUCCESS));
+    CreatePendingRequest("qa_vdis", 8001);
+    SendServiceModeSuccess();
+}
+
+// vehicle_state=drive → 조건 미충족 → RunOtaUpdate 호출 안 됨(abort).
+TEST_F(OtamActorServiceTest, QA_VehicleDrive_UpdateAborted) {
+    EXPECT_CALL(*mock_server_, IsVehicleInfoEnabled()).WillRepeatedly(Return(true));
+    EXPECT_CALL(*mock_vehicle_, RequestVehicleInfo(_, _)).Times(AnyNumber());
+    EXPECT_CALL(*mock_server_, RunOtaUpdate(_)).Times(0);
+    int32_t req_id = CreatePendingRequest("qa_drive", 8002);
+    SendServiceModeSuccess();
+    DeliverVehicleInfo(req_id, "drive", "80");
+}
+
+// lifecycle 비활성 → service mode 요청 건너뜀.
+TEST_F(OtamActorServiceTest, QA_LifecycleDisabled_SkipsServiceMode) {
+    EXPECT_CALL(*mock_server_, IsLifecycleEnabled()).WillRepeatedly(Return(false));
+    EXPECT_CALL(*mock_server_, IsVehicleInfoEnabled()).WillRepeatedly(Return(false));
+    EXPECT_CALL(*mock_server_, RunOtaUpdate("qa_lcdis")).WillOnce(Return(ReturnValue::SUCCESS));
+    CreatePendingRequest("qa_lcdis", 8003);
+}
+
+// 배터리 SoC < threshold → 거부(업데이트 안 함).
+TEST_F(OtamActorServiceTest, QA_BatteryBelowThreshold_Rejected) {
+    EXPECT_CALL(*mock_server_, IsVehicleInfoEnabled()).WillRepeatedly(Return(true));
+    EXPECT_CALL(*mock_server_, GetBatteryThresholdPercent()).WillRepeatedly(Return(50.0));
+    EXPECT_CALL(*mock_vehicle_, RequestVehicleInfo(_, _)).Times(AnyNumber());
+    EXPECT_CALL(*mock_server_, RunOtaUpdate(_)).Times(0);
+    int32_t req_id = CreatePendingRequest("qa_lowbat", 8004);
+    SendServiceModeSuccess();
+    DeliverVehicleInfo(req_id, "acc", "0", "10");  // soc 10 < 50
+}
+
+// OnVehicleInfoReceived: 미지의 request_id → no-op.
+TEST_F(OtamActorServiceTest, QA_OnVehicleInfoReceived_UnknownId_NoThrow) {
+    EXPECT_NO_THROW(actor_service_->OnVehicleInfoReceived(999999, "Vehicle.Speed", "0"));
+}
+
+// OnSetServiceModeResponseReceived: pending 없음 → no-op.
+TEST_F(OtamActorServiceTest, QA_ServiceModeResponse_NoPending_NoThrow) {
+    lifecyclemgr::SetServiceModeResponse r;
+    r.ret_code(lifecyclemgr::ReturnCode::SUCCESS);
+    EXPECT_NO_THROW(actor_service_->OnSetServiceModeResponseReceived(r));
+}
+
+// SetOtamVehicleService: 콜백 등록(미커버 함수).
+TEST_F(OtamActorServiceTest, QA_SetOtamVehicleService_NoThrow) {
+    EXPECT_NO_THROW(actor_service_->SetOtamVehicleService(mock_vehicle_));
+}

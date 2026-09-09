@@ -4,7 +4,7 @@ namespace diagnostic_manager {
 
 ServiceTask::ServiceTask()
         : task_id_(0), type_(ServiceTaskType::UNKNOWN) {}
-ServiceTask::ServiceTask(const TaskID task_id, const std::string name, const ServiceTaskType type, ExecutorFunctionType function)
+ServiceTask::ServiceTask(const TaskID task_id, const std::string& name, const ServiceTaskType type, ExecutorFunctionType function)
         : task_id_(task_id), name_(name), type_(type), function_(function) {}
 
 ServiceTask::~ServiceTask() {}

@@ -37,7 +37,7 @@ class ConditionExpression {
     std::string lh;
     std::string rh;
     ConditionOperandType operand_type{ConditionOperandType::UNKNOWN};
-    ConditionOperatorType operator_type;
+    ConditionOperatorType operator_type{ConditionOperatorType::UNKNOWN};
 };
 
 class ConditionEvaluator {
@@ -53,28 +53,28 @@ class ConditionEvaluator {
     std::vector<std::string> Tokenize(const std::string& s, char delimiter);
     void ConcatReleatedToken(std::vector<std::string>& token_list);
 
-  private:
     std::string ConvertOperatorTypeToString(ConditionOperatorType type);
     ConditionOperatorType ConvertStringToOperatorType(const std::string& type);
     ConditionOperandType ConvertTypeIndexToOperandType(std::type_index type);
 
+    template<typename T>
+    bool EvaluateOperandByOperator(const T& lh, const T& rh, ConditionOperatorType op);
+
+    template<typename T>
+    bool EvaluateOperandByOperatorWithList(const T& lh, const std::string& rh, ConditionOperatorType op);
+
+    template<typename T>
+    std::set<T> ParseArrayValue(const std::string& operand);
+
+  private:
     bool IsConstantValue(const std::string& operand);
     bool IsArrayValue(const std::string& operand);
     ConditionOperandType EvaluateOperandTypeFromConstantValue(const std::string& operand);
-
-    template<typename T>
-    bool EvaluateOperandByOperator(T lh, T rh, ConditionOperatorType op);
-
-    template<typename T>
-    bool EvaluateOperandByOperatorWithList(T lh, const std::string& rh, ConditionOperatorType op);
 
     std::string ResolveMessageName(const std::string& name);
 
     template<typename T>
     bool FetchOrParseValue(const std::string& operand, T& out);
-
-    template<typename T>
-    std::set<T> ParseArrayValue(const std::string& operand);
 
     std::shared_ptr<DataManager> data_manager_;
     std::shared_ptr<PolicyManager> policy_manager_;

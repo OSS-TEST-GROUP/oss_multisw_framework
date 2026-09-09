@@ -1,3 +1,12 @@
+# `-e ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-42}` — 셸 확장으로 adsw_manager 의 env 를 따라간다.
+# ContainerController::RunCommand 가 `system()` 이라 이 args 는 /bin/sh 를 통과하므로
+# 값 치환 코드 없이 확장된다. adsw_manager 의 ROS_DOMAIN_ID 는 run-mmf.sh / compose 가
+# domain.env 에서 주입하므로 HMI Settings → domain.env → adsw_manager → Autoware 로
+# 이어진다. unset 이어도 `:-42` 폴백이 있어 종전 동작이 유지된다.
+#
+# ⚠️ 셸을 통과한다는 것은 이 파일의 args 에 `$`·백틱·따옴표를 쓰면 셸이 해석한다는
+#    뜻이다(이 변경 이전에도 그랬다). 보드 로컬 신뢰 설정 파일이라 위험은 낮지만
+#    임의 문자열을 넣지 말 것.
 version: 0.1
 
 # ==========================================================================
@@ -9,7 +18,7 @@ version: 0.1
 # 워크로드이므로 별도 `docker exec` launch 를 하지 않는다.
 #
 # 아래는 SiLS 가상 ECU(vECU) — viss_probe 컨테이너(oss-mmf-sils-vecu 이미지)의
-# 등록 예다. Autoware 예제(ROS_DOMAIN_ID=42, MMF 로부터 격리)와 달리 vECU 는
+# 등록 예다. Autoware 예제(ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-42}, MMF 로부터 격리)와 달리 vECU 는
 # SUT 의 도메인을 **공유**해야 한다(아키텍처 v3 §3.4/§18-B, P5) — 여기
 # VISS_DDS_DOMAIN_ID 는 실제 viss-server 컨테이너와 **동일한 값**이어야 한다.
 #

@@ -35,6 +35,8 @@
       app_status_dds_.reset();
   }
 
+  // LCOV_EXCL_START — 프레임워크 경계(Initialize/Start/Stop/InitializeDDS/Setup*):
+  // 실 DomainParticipant/Reader/Writer 생성. 유닛 불가 → 통합 레인이 검증.
   void OtamClientService::Initialize() {
 
   if (state_ != ServiceState::UNINITIALIZED) {
@@ -144,6 +146,7 @@
 
   }
 
+    // LCOV_EXCL_STOP
     int32_t OtamClientService::HandleClientRegistration(OtaClientInfo& app_list) {
         static int32_t cur_client_id = 0;
         int32_t circle = 0;
@@ -279,7 +282,8 @@
       try {
           // Create SetOtaClientRegistrationResponse message
           auto response_message = std::make_shared<otamanager::SetOtaClientRegistrationResponse>();
-          response_message->client_id(client_id);
+          // IDL client_id 는 int32 — 파라미터 long 을 명시적으로 좁혀 의도를 드러낸다.
+          response_message->client_id(static_cast<int32_t>(client_id));
           response_message->ret_code(ret_code);
           response_message->client_name(client_name);
 
@@ -335,6 +339,7 @@
       }
   }
 
+  // LCOV_EXCL_START — DDS 리스너 콜백(RegistrationListener): 실 DataReader. 통합 검증.
   void OtamClientService::RegistrationListener::on_data_available(eprosima::fastdds::dds::DataReader* reader) {
       // This callback is invoked by FastDDS when new registration data arrives
       otamanager::SetOtaClientRegistration message;
@@ -362,6 +367,7 @@
   // OtamClientService stays the source-of-truth for ota_client_info_list_.
   // OtamActorService consumes a snapshot via this accessor when servicing
   // the GetAppList query (which now lives on otaactor_service topics).
+  // LCOV_EXCL_STOP
   std::map<int32_t, OtaClientInfo>
   OtamClientService::GetClientInfoListSnapshot() const {
       return ota_client_info_list_;
@@ -394,6 +400,7 @@
       return OtamClientService::DEFAULT_CLIENT_APPS_CONFIG_PATH;
   }
 
+  // LCOV_EXCL_START — 클라이언트 목록 파일 I/O(Load/Save): 통합/파일 픽스처 검증. (EOF 까지)
   void OtamClientService::LoadClientListFromFile() {
       const std::string path = ResolveClientAppsConfigPath();
       std::ifstream ifs(path);

@@ -69,7 +69,7 @@ void MessageTransmitter::RemoveSubscriber(uint64_t subscriber_id) {
         }
 
         {
-            std::lock_guard<std::mutex> lock(subscription_handling_mutex_);
+            std::lock_guard<std::mutex> sub_lock(subscription_handling_mutex_);
             CleanSubscriptionID(subscriber_id);
         }
         service_executor_->RemoveTask(subscriber->second.executor_task_id);
@@ -198,10 +198,9 @@ std::vector<std::string> MessageTransmitter::GetSubscribedMessageList() {
     std::lock_guard<std::mutex> subscription_lock(subscription_handling_mutex_);
 
     std::vector<std::string> message_list;
-    for (auto& iter_protocol : subscription_list_) {
-        for (auto& iter_msg : iter_protocol.second) {
-            message_list.push_back(iter_msg.first);
-        }
+    for (const auto& iter_protocol : subscription_list_) {
+        std::transform(iter_protocol.second.begin(), iter_protocol.second.end(), std::back_inserter(message_list),
+                       [](const auto& iter_msg) { return iter_msg.first; });
     }
     return message_list;
 }

@@ -1,22 +1,31 @@
 services:
-- name: adsw_monitor
+# ── 인프라 컨테이너 (관찰 전용) ────────────────────────────────────────────
+# oss-hmi-launcher 처럼 lfc_monitor 에 카드로 보이게 한다. 다만 **수명은 호스트가
+# 소유**한다 (run-ext-agl.sh / compose 가 만든다) → observe_only: true.
+#   · image 가 있어야 컨테이너 카드로 발행되고(MessageTransmitter::PublishContainerState)
+#     ServiceMonitor 가 `docker inspect -f {{.State.Running}}` 로 실상태를 읽는다
+#   · observe_only 가 CanControlApp 을 막아 자동복구/시작/정지를 모두 거부한다.
+#     ext-agl 은 adsw_manager **자신이 도는 컨테이너**라 stop 은 자살이고,
+#     자동복구는 호스트 인자 대신 이 yaml 인자로 다른 컨테이너를 만들어 버린다.
+# ⚠️ 호스트가 다르면 보이지 않는다 — `docker inspect` 는 이 컨테이너의 docker.sock,
+#    즉 **같은 호스트**만 본다. oss-mmf-core / oss-mmf-ext-ros2 는 151 에서 돌므로
+#    ext-ros2 쪽 saved-service-list.yaml 에 등록한다(여기 넣으면 항상 NOT_RUNNING).
+- name: oss-mmf-ext-agl
   service_type: NORMAL
-  recovery_policy: ALWAYS
+  recovery_policy: MANUAL
   is_enabled: true
   mw_type: AGL
-  init_state: NOT_RUNNING
-- name: ota_monitor
-  service_type: NORMAL
-  recovery_policy: R_DEFAULT
-  is_enabled: true
-  mw_type: AGL
-  init_state: NOT_RUNNING
-- name: lfc_monitor
-  service_type: NORMAL
-  recovery_policy: R_DEFAULT
-  is_enabled: true
-  mw_type: AGL
-  init_state: NOT_RUNNING
+  init_state: RUNNING
+  image: registry.obigo.com/oss/oss-mmf-ext-agl:latest
+  observe_only: true
+# adsw_monitor / ota_monitor / lfc_monitor 는 **관리 대상이 아니다** (2026-09-07 제거).
+# 이 셋은 hmi_launcher 안에서 실행되는 화면(앱)이지 독립 서비스가 아니다. 등록만 돼
+# 있었고 `image`/`command_args` 가 없어 adsw_manager 는 이들을 **애초에 기동할 수
+# 없었다** — 그런데 adsw_monitor 는 `recovery_policy: ALWAYS` 라 복구 정책이 끝없이
+# 재시도를 걸었다. 그 실패는 ctrl/StartServiceResponse 로 흘러 lfc_monitor Events 에
+# `ctrl start svc FAILED` 로만 찍혔고, CtrlResponse 에는 대상 이름 필드가 없어
+# **어느 서비스인지 알 수 없었다**(보드 81 실측 2026-09-07).
+# rviz2 와 같은 취급 — 아래 주석 참조.
 # amd64(x86_64) 전용 hmi_launcher — GTK/X11 런타임.
 # arm64 보드용(agl-service-list.yaml)의 flutter-auto/Wayland 인자 대신 X11 을 쓴다.
 #   - flutter-auto 마운트(/usr/share/flutter) 제거 (GTK 번들은 자체 포함)

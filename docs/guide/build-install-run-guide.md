@@ -138,12 +138,19 @@ ssh <user>@<hmi-board> 'bash ~/run-ext-agl.sh'
   보여도 실제 생성 실패). 수동 `docker run` 으로 일부 옵션을 빠뜨리면 이 문제가 재발한다.
   ext-ros2 로 autoware 를 관리·기동하는 운영법·필수 전제조건·트러블슈팅은
   **[ext-ros2-adsw-operation-guide.md](ext-ros2-adsw-operation-guide.md)** 참조.
-- **DDS domain**: raw Fast-DDS 서비스는 `ROS_DOMAIN_ID` 가 아닌 **`MMF_DDS_DOMAIN_ID`**
-  (lifecycle/diagnostics/adsw/ota) 와 **`VISS_DDS_DOMAIN_ID`**(vehicle_info) env(기본 0)를
-  읽는다. run-mmf.sh/run-ext-agl.sh 는 `ROS_DOMAIN_ID` 값을 이 셋 모두에 동일하게 주입하므로
-  `ROS_DOMAIN_ID=<n>` 하나만 지정하면 전 스택이 한 도메인에 격리된다. 같은 서브넷에 ROS2
-  mw_type adsw 보드가 2대 이상이면 보드별로 다른 domain 을 줘야 서비스 상태 flapping 이
-  안 생긴다.
+- **도메인은 두 평면**이다: **`DDS_DOMAIN_ID`**(순수 Fast-DDS — lifecycle/diagnostics/
+  adsw/ota/VISS) 와 **`ROS_DOMAIN_ID`**(ROS2/rmw — rviz2/Autoware/rosbridge). raw Fast-DDS 는
+  `ROS_DOMAIN_ID` 를 **보지 않는다**. 기본값은 둘 다 42 이고, 같은 값이면 전 스택이 한
+  도메인에 있다. 다르게 두면 평면 간 통신은 `dds_bridge` 경유만 된다.
+  ```bash
+  DDS_DOMAIN_ID=5 ROS_DOMAIN_ID=42 bash run-mmf.sh   # 분리 운영
+  ```
+  HMI 런처 Settings → **DDS / ROS Domain** 에서 두 값을 바꾸면 `/opt/mmf/config/domain.env`
+  에 기록되고 **다음 기동(컨테이너 재생성)** 때 반영된다. 서비스별 예외는
+  `MMF_DDS_DOMAIN_ID`/`VISS_DDS_DOMAIN_ID` override 가 이긴다.
+  같은 서브넷에 ROS2 mw_type adsw 보드가 2대 이상이면 보드별로 다른 domain 을 줘야 서비스
+  상태 flapping 이 안 생긴다.
+  → 우선순위·적용시점·함정·트러블슈팅은 **[dds-ros-domain-guide.md](dds-ros-domain-guide.md)** 참조.
 
 ### 2-5. 검증
 ```bash

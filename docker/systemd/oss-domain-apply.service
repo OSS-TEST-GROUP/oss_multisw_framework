@@ -1,0 +1,30 @@
+# 바뀐 도메인을 이 호스트의 플랫폼 컨테이너에 반영한다.
+#
+# oss-domain-apply.path 가 /opt/mmf/config/domain.env 변경을 감지해 이 유닛을 띄운다.
+# 즉 hmi_launcher Settings 에서 도메인을 바꾸면(그리고 domain_agent 가 상대 보드로
+# 전파하면) **두 보드가 각자 알아서** 자기 컨테이너를 재생성한다 — 사용자가 순서를
+# 기억할 필요가 없다.
+#
+# 왜 컨테이너 안이 아니라 여기인가: 재생성해야 할 대상 안에 실행 주체가 있다
+# (adsw_manager 는 ext-ros2 안, agl_adsw_manager 는 ext-agl 안). 자세한 근거는
+# oss-domain-apply 스크립트 헤더 참조.
+[Unit]
+Description=Apply changed MMF domain to this host's platform containers
+Documentation=https://github.com/obigo-gov/oss_multisw_framework
+Requires=docker.service
+After=docker.service
+# 부팅 중 스택이 올라오기 전에 도메인 파일이 스쳐도 헛돌지 않게 한다.
+After=oss-integration.service
+
+[Service]
+Type=oneshot
+# 컨테이너 재생성은 수십 초가 걸린다 — 기본 타임아웃으로는 중간에 끊긴다.
+TimeoutStartSec=300
+# 경로가 /usr/bin 이 아닌 이유: 이 파일은 컨테이너 기동 시 host-install 헬퍼가
+# 호스트로 복사한다(Yocto 재빌드 없이 배포 + 151 Ubuntu 커버). 배포판 소유
+# 디렉토리를 건드리지 않도록 전용 경로를 쓴다. Yocto 로 패키징할 때도 같은 경로면
+# 두 경로가 충돌하지 않는다.
+ExecStart=/opt/mmf/bin/oss-domain-apply
+# 실패해도 부팅/타깃을 막지 않는다 — 도메인 반영은 편의 기능이고, 실패 사유는
+# journal 에 남는다(journalctl -u oss-domain-apply).
+SuccessExitStatus=0 1 2

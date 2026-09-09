@@ -52,10 +52,22 @@ public:
     SessionResult CreateOtaSession(); // now calls ArgoCD API
     ReturnValue    DestroyOtaSession();
 
-    AppSettingsResult    GetOtaSettings(const std::string& app_name);
-    AppUpdateStateResult GetOtaUpdateState(const std::string& app_name);
+    // virtual: 테스트에서 Mock 으로 오버라이드해 actor 의 server-available 경로를 커버.
+    virtual AppSettingsResult    GetOtaSettings(const std::string& app_name);
+    virtual AppUpdateStateResult GetOtaUpdateState(const std::string& app_name);
     virtual ReturnValue  RunOtaUpdate(const std::string& app_name);
-    ReturnValue          SetOtaSettings(const std::string& app_name, const std::string& app_settings_json);
+    virtual ReturnValue          SetOtaSettings(const std::string& app_name, const std::string& app_settings_json);
+
+    // ---------------------------------------------------------------------------
+    // 유닛테스트 전용 seam (QA/docs/qa) — 실 HTTP(ArgoCD) 없이 API 클라이언트를
+    // MockOtamServerApiClient 로 주입해 GetOtaSettings/SetOtaSettings/RunOtaUpdate
+    // 로직(엔드포인트 구성·응답 파싱)을 검증한다. 프로덕션 흐름에서는 쓰이지 않는다.
+    // ---------------------------------------------------------------------------
+    void ForceStartedForTest() { state_ = ServiceState::STARTED; }
+    void SetSessionIdForTest(const std::string& id) { session_id_ = id; }
+    void InjectApiClientForTest(std::unique_ptr<OtamServerApiClient> c) {
+        api_client_ = std::move(c);
+    }
 
 private:
     OtamServerConfig LoadConfigFromFile(const std::string& path);

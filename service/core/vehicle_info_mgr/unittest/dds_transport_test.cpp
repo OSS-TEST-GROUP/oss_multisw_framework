@@ -41,6 +41,7 @@ public:
             std::lock_guard<std::mutex> lock(mtx);
             payload = data.payload();
             received = true;
+            std::cout << "[TEST ResponseListener] received payload on topic: " << payload << std::endl;
             cv.notify_one();
         }
     }
@@ -49,8 +50,11 @@ public:
 class DdsTransportTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        // Set a specific domain ID for testing to avoid conflicts
-        setenv("VISS_DDS_DOMAIN_ID", "42", 1);
+        // Set a unique domain ID for testing to avoid conflicts with external nodes
+        setenv("VISS_DDS_DOMAIN_ID", "89", 1);
+
+        response_listener.received = false;
+        response_listener.payload.clear();
 
         request_queue = std::make_shared<ThreadSafeQueue<std::shared_ptr<RequestData>>>();
         auto request_pool = std::make_shared<ObjectPool<RequestData>>();
@@ -61,7 +65,7 @@ protected:
         // --- Mock DDS Participant Setup ---
         eprosima::fastdds::dds::DomainParticipantQos pqos;
         pqos.name("dds_unit_test");
-        participant = DomainParticipantFactory::get_instance()->create_participant(42, pqos, nullptr, eprosima::fastdds::dds::StatusMask::none());
+        participant = DomainParticipantFactory::get_instance()->create_participant(89, pqos, nullptr, eprosima::fastdds::dds::StatusMask::none());
         ASSERT_NE(participant, nullptr);
 
         request_type.register_type(participant);
@@ -75,6 +79,9 @@ protected:
         writer_qos.reliability().kind = eprosima::fastdds::dds::RELIABLE_RELIABILITY_QOS;
         request_writer = publisher->create_datawriter(request_topic, writer_qos, nullptr);
         ASSERT_NE(request_writer, nullptr);
+
+        static std::atomic<int> topic_counter{0};
+        RESPONSE_TOPIC = "/test/response_" + std::to_string(++topic_counter);
 
         // --- Mock DDS Subscriber for receiving responses ---
         subscriber = participant->create_subscriber(SUBSCRIBER_QOS_DEFAULT, nullptr);
@@ -90,22 +97,12 @@ protected:
     }
 
     void TearDown() override {
+        transport.reset();
         if (participant != nullptr) {
-            if (publisher != nullptr) {
-                publisher->delete_datawriter(request_writer);
-                participant->delete_publisher(publisher);
-            }
-            if (subscriber != nullptr) {
-                subscriber->delete_datareader(response_reader);
-                 participant->delete_subscriber(subscriber);
-            }
-            participant->delete_topic(request_writer->get_topic());
-            participant->delete_topic(response_topic);
+            participant->delete_contained_entities();
             DomainParticipantFactory::get_instance()->delete_participant(participant);
+            participant = nullptr;
         }
-        transport->stop();
-        
-        // Unset the environment variable to not affect other tests
         unsetenv("VISS_DDS_DOMAIN_ID");
     }
 
@@ -121,7 +118,7 @@ protected:
     Topic* response_topic = nullptr;
     TypeSupport request_type{new VissRequestTopicPubSubType()};
     ResponseListener response_listener;
-    const std::string RESPONSE_TOPIC = "/test/response";
+    std::string RESPONSE_TOPIC;
 
     std::string CreatePayload(const std::string& viss_request) {
         rapidjson::Document payload_doc;
@@ -1007,10 +1004,43 @@ TEST_F(DdsTransportTest, SetRequestReturnsError) {
 
 class DdsTransportDomainIdTest : public ::testing::Test {
 protected:
+    // Both DDS-plane keys are cleared so a value left in the host environment
+    // cannot make these tests pass or fail for the wrong reason. Precedence under
+    // test: VISS_DDS_DOMAIN_ID (per-service override) > DDS_DOMAIN_ID > 0.
+    void SetUp() override {
+        unsetenv("VISS_DDS_DOMAIN_ID");
+        unsetenv("DDS_DOMAIN_ID");
+    }
     void TearDown() override {
         unsetenv("VISS_DDS_DOMAIN_ID");
+        unsetenv("DDS_DOMAIN_ID");
     }
 };
+
+TEST_F(DdsTransportDomainIdTest, HonorsCanonicalDdsDomainId) {
+    // hmi_launcher Settings writes DDS_DOMAIN_ID into domain.env; VISS must follow
+    // the DDS plane even when its own per-service override is absent.
+    setenv("DDS_DOMAIN_ID", "89", 1);
+
+    auto request_queue = std::make_shared<ThreadSafeQueue<std::shared_ptr<RequestData>>>();
+    auto request_pool = std::make_shared<ObjectPool<RequestData>>();
+    auto transport = std::make_unique<DDSTransport>(request_pool, request_queue);
+
+    ASSERT_NO_THROW(transport->start());
+}
+
+TEST_F(DdsTransportDomainIdTest, PerServiceOverrideWinsOverCanonical) {
+    // SILS contracts pin VISS to the vECU's domain (§3.4) — that override must not
+    // be overridden by the board-wide DDS plane value.
+    setenv("DDS_DOMAIN_ID", "5", 1);
+    setenv("VISS_DDS_DOMAIN_ID", "89", 1);
+
+    auto request_queue = std::make_shared<ThreadSafeQueue<std::shared_ptr<RequestData>>>();
+    auto request_pool = std::make_shared<ObjectPool<RequestData>>();
+    auto transport = std::make_unique<DDSTransport>(request_pool, request_queue);
+
+    ASSERT_NO_THROW(transport->start());
+}
 
 TEST_F(DdsTransportDomainIdTest, HandlesInvalidArgument) {
     // Set an invalid (non-numeric) value for the environment variable

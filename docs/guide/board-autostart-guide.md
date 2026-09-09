@@ -55,15 +55,16 @@ docker run -d --name oss-mmf-core \
   --privileged --network host \
   --cap-add NET_RAW --cap-add NET_ADMIN \
   -v /dev/shm:/dev/shm \
-  -e ROS_DOMAIN_ID=0 -e MMF_DDS_DOMAIN_ID=0 \
+  -e ROS_DOMAIN_ID=42 -e DDS_DOMAIN_ID=42 \
   <core-image>
 
 # ext-ros2 는 추가로: -v /var/run/docker.sock:/var/run/docker.sock --group-add <docker-gid>
 # ext-agl  은 추가로: docker.sock (adsw_manager 가 hmi_launcher 컨테이너 제어)
 ```
-> `MMF_DDS_DOMAIN_ID` 는 보드별 DDS domain 격리용(기본 0). **같은 보드의
-> core/ext-ros2/ext-agl 은 반드시 동일 값**이어야 하며, 같은 서브넷의 다른 보드와
-> 격리하려면 보드마다 다른 값을 준다 (`docs/` 의 domain 격리 관련 커밋 참조).
+> 도메인은 두 평면이다: `DDS_DOMAIN_ID`(순수 Fast-DDS) / `ROS_DOMAIN_ID`(ROS2/rmw),
+> 기본 둘 다 42. **같은 보드의 core/ext-ros2/ext-agl 은 반드시 동일 값**이어야 하며,
+> 같은 서브넷의 다른 보드와 격리하려면 보드마다 다른 값을 준다.
+> 상세: [dds-ros-domain-guide.md](dds-ros-domain-guide.md).
 
 ---
 
@@ -107,7 +108,7 @@ services:
     network_mode: host
     cap_add: [NET_RAW, NET_ADMIN]
     volumes: [/dev/shm:/dev/shm]
-    environment: [ROS_DOMAIN_ID=0, MMF_DDS_DOMAIN_ID=0, HEARTBEAT_INTERVAL_SEC=3]
+    environment: [ROS_DOMAIN_ID=42, DDS_DOMAIN_ID=42, HEARTBEAT_INTERVAL_SEC=3]
   ext-ros2:
     image: registry.obigo.com/oss/oss-mmf-ext-ros2:latest
     container_name: oss-mmf-ext-ros2
@@ -118,7 +119,7 @@ services:
     cap_add: [NET_RAW, NET_ADMIN]
     group_add: ["999"]          # 보드 docker gid (getent group docker)
     volumes: [/dev/shm:/dev/shm, /var/run/docker.sock:/var/run/docker.sock]
-    environment: [ROS_DOMAIN_ID=0, MMF_DDS_DOMAIN_ID=0]
+    environment: [ROS_DOMAIN_ID=42, DDS_DOMAIN_ID=42]
 ```
 `docker compose up -d` 1회 → 이후 재부팅마다 자동 복원. 한계는 §3-1/§3-2 와 동일.
 

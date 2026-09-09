@@ -90,9 +90,9 @@ bool PolicyManager::LoadPolicy(const std::string& path) {
                     // Collect condition strings (if any)
                     std::vector<std::string> conditions;
                     if (ruleNode["condition"] && ruleNode["condition"].IsSequence()) {
-                        for (const auto& condNode : ruleNode["condition"]) {
-                            conditions.push_back(condNode.as<std::string>());
-                        }
+                        std::transform(ruleNode["condition"].begin(), ruleNode["condition"].end(),
+                                       std::back_inserter(conditions),
+                                       [](const auto& condNode) { return condNode.template as<std::string>(); });
                     }
 
                     ConditionOperator condition_operator = ConditionOperator::AND;
@@ -161,12 +161,9 @@ bool PolicyManager::LoadPolicy(const std::string& path) {
 }
 
 std::shared_ptr<DiagPolicy> PolicyManager::GetPolicy(int diag_code) {
-    for (const auto& policy : policies_) {
-        if (policy->GetDiagCode() == diag_code) {
-            return policy;
-        }
-    }
-    return nullptr;
+    auto it = std::find_if(policies_.begin(), policies_.end(),
+                           [diag_code](const auto& policy) { return policy->GetDiagCode() == diag_code; });
+    return (it != policies_.end()) ? *it : nullptr;
 }
 
 std::shared_ptr<DiagPolicy> PolicyManager::GetPolicyByIndex(size_t idx) {
@@ -177,30 +174,21 @@ std::shared_ptr<DiagPolicy> PolicyManager::GetPolicyByIndex(size_t idx) {
 }
 
 std::shared_ptr<DiagPolicy> PolicyManager::GetPolicyByName(const std::string& name) {
-    for (const auto& policy : policies_) {
-        if (policy->GetDiagName() == name) {
-            return policy;
-        }
-    }
-    return nullptr;
+    auto it = std::find_if(policies_.begin(), policies_.end(),
+                           [&name](const auto& policy) { return policy->GetDiagName() == name; });
+    return (it != policies_.end()) ? *it : nullptr;
 }
 
 std::shared_ptr<ReferenceMessage> PolicyManager::GetReferenceMessage(const std::string& name) {
-    for (const auto& refMsg : reference_msgs_) {
-        if (refMsg->GetName() == name) {
-            return refMsg;
-        }
-    }
-    return nullptr;
+    auto it = std::find_if(reference_msgs_.begin(), reference_msgs_.end(),
+                           [&name](const auto& refMsg) { return refMsg->GetName() == name; });
+    return (it != reference_msgs_.end()) ? *it : nullptr;
 }
 
 std::shared_ptr<ReferenceMessage> PolicyManager::GetReferenceMessageByMessageName(const std::string& name) {
-    for (const auto& refMsg : reference_msgs_) {
-        if (refMsg->GetMessage() == name) {
-            return refMsg;
-        }
-    }
-    return nullptr;
+    auto it = std::find_if(reference_msgs_.begin(), reference_msgs_.end(),
+                           [&name](const auto& refMsg) { return refMsg->GetMessage() == name; });
+    return (it != reference_msgs_.end()) ? *it : nullptr;
 }
 
 std::vector<std::shared_ptr<ReferenceMessage>> PolicyManager::GetAllReferenceMessage() {

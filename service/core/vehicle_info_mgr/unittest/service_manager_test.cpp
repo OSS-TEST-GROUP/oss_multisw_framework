@@ -692,3 +692,126 @@ TEST_F(ServiceManagerTest, ProcessUnknownRequest) {
     EXPECT_STREQ(response_map["requestId"].GetString(), "test-set-01");
     EXPECT_TRUE(response_map.HasMember("error"));
 }
+
+TEST_F(ServiceManagerTest, ProcessGetMetadataWithInvalidDepthString) {
+    auto request = std::make_shared<RequestData>();
+    request->requestId = "test-meta-invalid-depth";
+    request->responseChan = std::make_shared<ThreadSafeQueue<std::shared_ptr<PooledResponseMap>>>();
+    request->request_doc->Parse(R"({
+        "action": "get",
+        "path": "Vehicle.Speed",
+        "filter": [{"variant": "metadata", "parameter": ["not_a_number"]}],
+        "requestId": "test-meta-invalid-depth"
+    })");
+    request_queue->push(request);
+
+    std::shared_ptr<PooledResponseMap> response_ptr;
+    request->responseChan->wait_and_pop(response_ptr);
+    ASSERT_TRUE(response_ptr != nullptr);
+    auto& response_map = *response_ptr;
+
+    EXPECT_TRUE(response_map.HasMember("action"));
+    EXPECT_STREQ(response_map["action"].GetString(), "get");
+    EXPECT_TRUE(response_map.HasMember("metadata"));
+}
+
+TEST_F(ServiceManagerTest, ProcessSetRequestNotFoundAndInvalidData) {
+    // 1) Non-existent path -> 404
+    auto req1 = std::make_shared<RequestData>();
+    req1->requestId = "test-set-not-found";
+    req1->responseChan = std::make_shared<ThreadSafeQueue<std::shared_ptr<PooledResponseMap>>>();
+    req1->request_doc->Parse(R"({
+        "action": "set",
+        "path": "Vehicle.NonExistent.Path",
+        "value": "100",
+        "requestId": "test-set-not-found"
+    })");
+    request_queue->push(req1);
+
+    std::shared_ptr<PooledResponseMap> res1_ptr;
+    req1->responseChan->wait_and_pop(res1_ptr);
+    ASSERT_TRUE(res1_ptr != nullptr);
+    EXPECT_TRUE((*res1_ptr).HasMember("error"));
+    EXPECT_STREQ((*res1_ptr)["error"]["number"].GetString(), "404");
+
+    // 2) Sensor node -> 400 Invalid Data (update of sensor not supported)
+    auto req2 = std::make_shared<RequestData>();
+    req2->requestId = "test-set-sensor";
+    req2->responseChan = std::make_shared<ThreadSafeQueue<std::shared_ptr<PooledResponseMap>>>();
+    req2->request_doc->Parse(R"({
+        "action": "set",
+        "path": "Vehicle.Speed",
+        "value": "100",
+        "requestId": "test-set-sensor"
+    })");
+    request_queue->push(req2);
+
+    std::shared_ptr<PooledResponseMap> res2_ptr;
+    req2->responseChan->wait_and_pop(res2_ptr);
+    ASSERT_TRUE(res2_ptr != nullptr);
+    EXPECT_TRUE((*res2_ptr).HasMember("error"));
+    EXPECT_STREQ((*res2_ptr)["error"]["number"].GetString(), "400");
+}
+
+TEST_F(ServiceManagerTest, ProcessUnsubscribeMissingId) {
+    auto request = std::make_shared<RequestData>();
+    request->requestId = "test-unsub-missing-id";
+    request->responseChan = std::make_shared<ThreadSafeQueue<std::shared_ptr<PooledResponseMap>>>();
+    request->request_doc->Parse(R"({
+        "action": "unsubscribe",
+        "requestId": "test-unsub-missing-id"
+    })");
+    request_queue->push(request);
+
+    std::shared_ptr<PooledResponseMap> response_ptr;
+    request->responseChan->wait_and_pop(response_ptr);
+    ASSERT_TRUE(response_ptr != nullptr);
+    EXPECT_TRUE((*response_ptr).HasMember("error"));
+    EXPECT_STREQ((*response_ptr)["error"]["number"].GetString(), "400");
+}
+
+TEST_F(ServiceManagerTest, ProcessGetMultipleValues) {
+    // Set 2 values for ABS
+    auto set1 = std::make_shared<RequestData>();
+    set1->requestId = "set-1";
+    set1->responseChan = std::make_shared<ThreadSafeQueue<std::shared_ptr<PooledResponseMap>>>();
+    set1->request_doc->Parse(R"({
+        "action": "set",
+        "path": "Vehicle.ADAS.ABS.IsEnabled",
+        "value": "true",
+        "requestId": "set-1"
+    })");
+    request_queue->push(set1);
+    std::shared_ptr<PooledResponseMap> set1_res;
+    set1->responseChan->wait_and_pop(set1_res);
+
+    auto set2 = std::make_shared<RequestData>();
+    set2->requestId = "set-2";
+    set2->responseChan = std::make_shared<ThreadSafeQueue<std::shared_ptr<PooledResponseMap>>>();
+    set2->request_doc->Parse(R"({
+        "action": "set",
+        "path": "Vehicle.ADAS.ABS.IsEnabled",
+        "value": "false",
+        "requestId": "set-2"
+    })");
+    request_queue->push(set2);
+    std::shared_ptr<PooledResponseMap> set2_res;
+    set2->responseChan->wait_and_pop(set2_res);
+
+    // Get with history filter
+    auto get_req = std::make_shared<RequestData>();
+    get_req->requestId = "get-history";
+    get_req->responseChan = std::make_shared<ThreadSafeQueue<std::shared_ptr<PooledResponseMap>>>();
+    get_req->request_doc->Parse(R"({
+        "action": "get",
+        "path": "Vehicle.ADAS.ABS.IsEnabled",
+        "filter": [{"variant": "history", "parameter": ["PT1M"]}],
+        "requestId": "get-history"
+    })");
+    request_queue->push(get_req);
+
+    std::shared_ptr<PooledResponseMap> get_res;
+    get_req->responseChan->wait_and_pop(get_res);
+    ASSERT_TRUE(get_res != nullptr);
+    EXPECT_TRUE((*get_res).HasMember("data"));
+}

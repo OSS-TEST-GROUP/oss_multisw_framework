@@ -16,6 +16,8 @@ void OtamVehicleService::SetOtamDiagnosticService(OtamDiagnosticService* svc) {
   diagnostic_service_ = svc;
 }
 
+// LCOV_EXCL_START — 프레임워크 DDS 경계(Initialize/Start/Stop/RequestVehicleInfo):
+// 실 DomainParticipant/DataWriter/Reader 를 직접 구동. 유닛 불가 → 통합 레인이 검증.
 void OtamVehicleService::Initialize() {
   if (state_ != ServiceState::UNINITIALIZED) {
     std::cout << "OtamVehicleService already initialized"
@@ -121,6 +123,7 @@ void OtamVehicleService::RequestVehicleInfo(
   dds->Write(std::static_pointer_cast<void>(viss_msg));
 }
 
+// LCOV_EXCL_STOP
 void OtamVehicleService::OnVehicleInfoResponseReceived(
     int32_t request_id,
     const std::string& name,
@@ -168,6 +171,8 @@ void OtamVehicleService::RegisterCallback(VehicleInfoCallback callback) {
   }
 }
 
+// LCOV_EXCL_START — DDS 레지스트리/리스너 경계(RegisterDds/GetDds/ResponseListener):
+// 실 DataReader 콜백. 유닛 불가 → 통합 레인이 검증. (파일 끝까지 제외)
 void OtamVehicleService::RegisterDds(
     const std::string& topic_name,
     std::shared_ptr<OtamDdsImpl<VissRequestTopic>> dds) {

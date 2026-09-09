@@ -15,7 +15,7 @@ enum class ConditionOperator {
 
 class DiagPolicyRule {
   public:
-    DiagPolicyRule(DiagInfoStatus status, const std::string& message, std::vector<std::string> conditions, ConditionOperator condition_operator);
+    DiagPolicyRule(DiagInfoStatus status, const std::string& message, const std::vector<std::string>& conditions, ConditionOperator condition_operator);
     virtual ~DiagPolicyRule();
 
     DiagInfoStatus status;

@@ -113,14 +113,37 @@ bool DdsBridge::Initialize(const std::string& idl_root) {
     // property has been observed to subtly affect cross-process
     // matching in some FastDDS versions.
 
-    // Per-board DDS domain isolation (MMF_DDS_DOMAIN_ID, default 0). The bridge
-    // must sit on the SAME domain as the MMF raw services it forwards; keep the
-    // board's rosbridge/ros2 (ROS_DOMAIN_ID) at the same value too.
+    // This bridge spans the two domain planes.
+    //
+    //   DDS plane  (participant_)     : bare `lifecyclemgr::X` — MMF raw services.
+    //                                   MMF_DDS_DOMAIN_ID > DDS_DOMAIN_ID > 0.
+    //   ROS2 plane (ros_participant_) : ROS-canonical `…::msg::dds_::X_` — rosbridge,
+    //                                   rviz2. ROS_DOMAIN_ID, defaulting to the DDS
+    //                                   plane when unset.
+    //
+    // A ROS 2 topic on rmw_fastrtps is just a DDS topic with the `rt/` prefix and a
+    // mangled type name, so the ROS side needs no rclcpp -- only a participant on the
+    // right domain. That is why this stays a plain Fast-DDS program.
+    //
+    // Why two participants: a participant belongs to exactly ONE domain. Before this,
+    // both sides shared one participant, so setting DDS_DOMAIN_ID=5 / ROS_DOMAIN_ID=42
+    // put the forwarded `mmf/*` ROS-canonical topics on domain 5, where rosbridge (which
+    // rmw puts on 42) could not see them -- the HMI silently lost all MMF data
+    // (measured on board 172.16.10.151, 2026-09-04).
+    //
+    // When the two domains are EQUAL we deliberately keep using a single participant:
+    // that is the common configuration and it keeps discovery traffic and behaviour
+    // byte-identical to before this change.
     int mmf_domain = 0;
     if (const char* e = std::getenv("MMF_DDS_DOMAIN_ID")) mmf_domain = std::atoi(e);
+    else if (const char* g = std::getenv("DDS_DOMAIN_ID")) mmf_domain = std::atoi(g);
+
+    int ros_domain = mmf_domain;
+    if (const char* r = std::getenv("ROS_DOMAIN_ID")) ros_domain = std::atoi(r);
+
     participant_ = factory->create_participant(mmf_domain, qos);
     if (!participant_) {
-        std::cerr << "[bridge] create_participant failed\n";
+        std::cerr << "[bridge] create_participant failed (dds domain " << mmf_domain << ")\n";
         return false;
     }
     publisher_  = participant_->create_publisher(PUBLISHER_QOS_DEFAULT);
@@ -129,6 +152,31 @@ bool DdsBridge::Initialize(const std::string& idl_root) {
         std::cerr << "[bridge] create publisher/subscriber failed\n";
         return false;
     }
+
+    if (ros_domain == mmf_domain) {
+        ros_participant_ = participant_;
+        ros_publisher_   = publisher_;
+        ros_subscriber_  = subscriber_;
+        ros_plane_separate_ = false;
+    } else {
+        ros_participant_ = factory->create_participant(ros_domain, qos);
+        if (!ros_participant_) {
+            std::cerr << "[bridge] create_participant failed (ros domain " << ros_domain << ")\n";
+            return false;
+        }
+        ros_publisher_  = ros_participant_->create_publisher(PUBLISHER_QOS_DEFAULT);
+        ros_subscriber_ = ros_participant_->create_subscriber(SUBSCRIBER_QOS_DEFAULT);
+        if (!ros_publisher_ || !ros_subscriber_) {
+            std::cerr << "[bridge] create ros publisher/subscriber failed\n";
+            return false;
+        }
+        ros_plane_separate_ = true;
+    }
+
+    std::cout << "[bridge] dds domain=" << mmf_domain
+              << " ros domain=" << ros_domain
+              << (ros_plane_separate_ ? " (two participants)" : " (single participant)")
+              << "\n";
     return true;
 }
 
@@ -147,13 +195,15 @@ bool DdsBridge::AddPair(const PairConfig& cfg) {
     // single name. Sharing one PubSubType across two names made
     // wire-level type matching against OtaManager's IDL-compiled
     // peer flaky in early prototyping.
+    // Each side is registered on ITS OWN plane's participant. When the two domains
+    // are equal these are the same participant, which is the pre-existing behaviour.
     TypeSupport ts_raw(new DynamicPubSubType(dyn_type));
     ts_raw.register_type(participant_, cfg.raw_type);
     TypeSupport ts_ros(new DynamicPubSubType(dyn_type));
-    ts_ros.register_type(participant_, cfg.ros_type);
+    ts_ros.register_type(ros_participant_, cfg.ros_type);
 
     Topic* raw_topic = participant_->create_topic(cfg.raw_topic, cfg.raw_type, TOPIC_QOS_DEFAULT);
-    Topic* ros_topic = participant_->create_topic(cfg.ros_topic, cfg.ros_type, TOPIC_QOS_DEFAULT);
+    Topic* ros_topic = ros_participant_->create_topic(cfg.ros_topic, cfg.ros_type, TOPIC_QOS_DEFAULT);
     if (!raw_topic || !ros_topic) {
         std::cerr << "[bridge] create_topic failed for " << cfg.struct_name << "\n";
         return false;
@@ -206,14 +256,18 @@ bool DdsBridge::AddPair(const PairConfig& cfg) {
     DataReader* reader = nullptr;
     DataWriter* writer = nullptr;
     std::string tag;
+    // Endpoint goes on the plane its topic belongs to — raw endpoints on the DDS
+    // plane, ros endpoints on the ROS2 plane. Crossing the planes happens in the
+    // listener callback (reader on one plane hands the sample to a writer on the
+    // other), which is exactly what makes the two domains talk to each other.
     if (cfg.ros_to_raw) {
         writer = publisher_->create_datawriter(raw_topic, wqos);
         tag = cfg.struct_name + " (ros→raw)";
         auto listener = std::make_unique<ForwardListener>(writer, dyn_type, tag, this);
-        reader = subscriber_->create_datareader(ros_topic, rqos, listener.get());
+        reader = ros_subscriber_->create_datareader(ros_topic, rqos, listener.get());
         listeners_.push_back(std::move(listener));
     } else {
-        writer = publisher_->create_datawriter(ros_topic, wqos);
+        writer = ros_publisher_->create_datawriter(ros_topic, wqos);
         tag = cfg.struct_name + " (raw→ros)";
         auto listener = std::make_unique<ForwardListener>(writer, dyn_type, tag, this);
         reader = subscriber_->create_datareader(raw_topic, rqos, listener.get());
@@ -237,12 +291,14 @@ bool DdsBridge::EnableSourceDiag(const std::string& ros_topic_no_slash) {
         return false;
     }
     diag_type_ = builder->build();
+    // ROS-canonical type on a ROS topic that lfc_monitor reads through rosbridge
+    // -> this diagnostic belongs on the ROS2 plane, not the DDS plane.
     TypeSupport ts(new DynamicPubSubType(diag_type_));
-    ts.register_type(participant_, "std_msgs::msg::dds_::String_");
+    ts.register_type(ros_participant_, "std_msgs::msg::dds_::String_");
 
     const std::string ros_topic = "rt/" + ros_topic_no_slash;
-    Topic* topic = participant_->create_topic(ros_topic, "std_msgs::msg::dds_::String_",
-                                              TOPIC_QOS_DEFAULT);
+    Topic* topic = ros_participant_->create_topic(ros_topic, "std_msgs::msg::dds_::String_",
+                                                  TOPIC_QOS_DEFAULT);
     if (!topic) {
         std::cerr << "[bridge] EnableSourceDiag: create_topic failed for " << ros_topic << "\n";
         return false;
@@ -254,7 +310,7 @@ bool DdsBridge::EnableSourceDiag(const std::string& ros_topic_no_slash) {
     wqos.durability().kind = TRANSIENT_LOCAL_DURABILITY_QOS;
     wqos.history().kind = KEEP_LAST_HISTORY_QOS;
     wqos.history().depth = 1;
-    diag_writer_ = publisher_->create_datawriter(topic, wqos);
+    diag_writer_ = ros_publisher_->create_datawriter(topic, wqos);
     if (!diag_writer_) {
         std::cerr << "[bridge] EnableSourceDiag: create_datawriter failed\n";
         return false;

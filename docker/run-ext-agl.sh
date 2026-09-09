@@ -12,8 +12,9 @@
 #   ssh <user>@<hmi-board> 'bash ~/run-ext-agl.sh'
 #
 # 사용 예:
-#   bash run-ext-agl.sh                                  # domain 0, :latest
-#   ROS_DOMAIN_ID=1 bash run-ext-agl.sh                  # 보드별 DDS domain 격리
+#   bash run-ext-agl.sh                                  # 두 평면 모두 domain 42, :latest
+#   ROS_DOMAIN_ID=1 bash run-ext-agl.sh                  # ROS2 평면만 1 로
+#   DDS_DOMAIN_ID=5 ROS_DOMAIN_ID=42 bash run-ext-agl.sh # 두 평면 분리 운영
 #   IMAGE=oss-mmf-ext-agl:arm64-local bash run-ext-agl.sh  # 로컬 이미지 오버라이드
 #   HMI_RUNTIME_UID=1001 bash run-ext-agl.sh             # HMI 사용자 uid(호스트) 지정
 #
@@ -30,22 +31,39 @@ set -e
 
 IMAGE="${IMAGE:-registry.obigo.com/oss/oss-mmf-ext-agl:latest}"
 
-# 도메인 결정 우선순위: ① 명시한 ROS_DOMAIN_ID env ② 도메인 파일 ③ 기본값 42.
-# 도메인 파일(`ROS_DOMAIN_ID=<n>`)은 HMI 런처 Settings 가 기록하며 **다음 기동에** 반영된다
-# (ROS_DOMAIN_ID 는 프로세스 시작 시점에만 읽힘). run-mmf.sh 와 동일 규칙 — 두 호스트에
-# 같은 값을 두어야 core/ext-ros2 ↔ ext-agl 이 한 도메인에서 만난다.
+# 도메인은 **두 평면**이다 (run-mmf.sh 와 동일 규칙 — 두 호스트에 같은 값을 두어야
+# core/ext-ros2 ↔ ext-agl 이 각 평면에서 만난다):
+#   · DDS_DOMAIN_ID — 순수 Fast-DDS (adsw_manager/ota_client 가 이 평면에 붙는다)
+#   · ROS_DOMAIN_ID — ROS2/rmw (rviz2/Autoware/rosbridge)
+# 각 평면 우선순위: ① 명시한 env ② 도메인 파일의 같은 키 ③ 기본값 42.
+# 도메인 파일은 HMI 런처 Settings 가 기록하며 **다음 기동에** 반영된다(도메인은 프로세스
+# 시작 시점에만 읽힘).
 # 기본 42: Autoware adsw 파티션이 42 라, 0 이면 adsw_monitor 가 데이터를 못 받는다(실측).
 MMF_DOMAIN_ENV_FILE="${MMF_DOMAIN_ENV_FILE:-/opt/mmf/config/domain.env}"
-_file_domain=""
-if [ -f "$MMF_DOMAIN_ENV_FILE" ]; then
-  _file_domain="$(sed -n 's/^[[:space:]]*ROS_DOMAIN_ID[[:space:]]*=[[:space:]]*\([0-9]\{1,3\}\).*/\1/p' \
-                    "$MMF_DOMAIN_ENV_FILE" | tail -1)"
-fi
-DOMAIN="${ROS_DOMAIN_ID:-${_file_domain:-42}}"
-if ! [ "$DOMAIN" -ge 0 ] 2>/dev/null || [ "$DOMAIN" -gt 232 ]; then
-  echo "[run-ext-agl] ⚠️ 잘못된 도메인 '$DOMAIN' → 42 사용 (유효 범위 0~232)" >&2
-  DOMAIN=42
-fi
+
+_domain_from_file() {
+  [ -f "$MMF_DOMAIN_ENV_FILE" ] || return 0
+  sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*\([0-9]\{1,3\}\).*/\1/p" \
+    "$MMF_DOMAIN_ENV_FILE" | tail -1
+}
+_valid_domain() {
+  [ -n "$1" ] && [ "$1" -ge 0 ] 2>/dev/null && [ "$1" -le 232 ] 2>/dev/null
+}
+
+_file_ros="$(_domain_from_file ROS_DOMAIN_ID)"
+# DDS 키가 없는 구 도메인 파일은 ROS 값을 그대로 쓴다 — 업그레이드 직후 동작 불변.
+_file_dds="$(_domain_from_file DDS_DOMAIN_ID)"
+_file_dds="${_file_dds:-$_file_ros}"
+
+ROS_DOMAIN="${ROS_DOMAIN_ID:-${_file_ros:-42}}"
+DDS_DOMAIN="${DDS_DOMAIN_ID:-${_file_dds:-42}}"
+for _plane in ROS DDS; do
+  eval "_v=\$${_plane}_DOMAIN"
+  if ! _valid_domain "$_v"; then
+    echo "[run-ext-agl] ⚠️ 잘못된 ${_plane} 도메인 '$_v' → 42 사용 (유효 범위 0~232)" >&2
+    eval "${_plane}_DOMAIN=42"
+  fi
+done
 DOCKER_GID="$(getent group docker | cut -d: -f3)"
 HMI_GPU="${HMI_GPU:-auto}"
 
@@ -60,7 +78,7 @@ fi
 # ext-agl 서비스목록(hmi_launcher 등)을 보드 로컬 yaml 로 오버라이드
 SVC_LIST="${AGL_SERVICE_LIST:-/opt/adsw/config/agl-service-list.yaml}"
 
-echo "[run-ext-agl] image=$IMAGE  domain=$DOMAIN  docker_gid=$DOCKER_GID  hmi_uid=$HMI_RUNTIME_UID"
+echo "[run-ext-agl] image=$IMAGE  dds_domain=$DDS_DOMAIN  ros_domain=$ROS_DOMAIN  docker_gid=$DOCKER_GID  hmi_uid=$HMI_RUNTIME_UID"
 
 # 최신 이미지 확보 (registry 인증 필요; 로컬 태그/오프라인/미인증이면 스킵).
 if [ "${PULL:-1}" = "1" ]; then
@@ -198,8 +216,9 @@ docker run -d --name oss-mmf-ext-agl \
   -v /var/run/docker.sock:/var/run/docker.sock \
   "${SVC_MOUNT[@]}" \
   "${X86_MOUNT[@]}" \
-  -e ROS_DOMAIN_ID="$DOMAIN" \
-  -e MMF_DDS_DOMAIN_ID="$DOMAIN" \
+  -e ROS_DOMAIN_ID="$ROS_DOMAIN" \
+  -e DDS_DOMAIN_ID="$DDS_DOMAIN" \
+  -e MMF_DDS_DOMAIN_ID="$DDS_DOMAIN" \
   "$IMAGE"
 
 echo "[run-ext-agl] done — oss-mmf-ext-agl 시작됨 (adsw_manager + ota_client 내장)."

@@ -1,5 +1,7 @@
 #include "gtest/gtest.h"
+#define private public
 #include "JsonSchemaValidator.h"
+#undef private
 #include <string>
 #include <fstream>
 #include <streambuf>
@@ -63,4 +65,41 @@ TEST_F(JsonSchemaValidatorTest, MissingRequiredField) {
     doc.Parse(missing_field_json_str.c_str());
     ASSERT_FALSE(doc.HasParseError());
     EXPECT_FALSE(JsonSchemaValidator::getInstance().validate(doc));
+}
+
+TEST_F(JsonSchemaValidatorTest, ValidateValidJsonString) {
+    std::string valid_json = R"({"name": "Alice", "age": 25})";
+    auto doc = JsonSchemaValidator::getInstance().validate(valid_json);
+    ASSERT_NE(doc, nullptr);
+    ASSERT_FALSE(doc->HasParseError());
+    EXPECT_STREQ((*doc)["name"].GetString(), "Alice");
+}
+
+TEST_F(JsonSchemaValidatorTest, ConstructorEdgeCasesAndUnloadedSchema) {
+    // 1. Non-existent schema file
+    {
+        JsonSchemaValidator invalid_val("/non_existent_path/schema.json");
+        rapidjson::Document doc;
+        doc.SetObject();
+        EXPECT_FALSE(invalid_val.validate(doc));
+    }
+
+    // 2. Corrupted JSON schema file
+    {
+        std::string bad_schema_path = "/tmp/bad_schema.json";
+        std::ofstream ofs(bad_schema_path);
+        ofs << "{ invalid json schema";
+        ofs.close();
+
+        JsonSchemaValidator bad_val(bad_schema_path);
+        rapidjson::Document doc;
+        doc.SetObject();
+        EXPECT_FALSE(bad_val.validate(doc));
+        std::remove(bad_schema_path.c_str());
+    }
+
+    // 3. Empty schema path fallback
+    {
+        JsonSchemaValidator default_val("");
+    }
 }

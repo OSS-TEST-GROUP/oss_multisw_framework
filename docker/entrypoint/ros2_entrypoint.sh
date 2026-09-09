@@ -63,9 +63,25 @@ else
   echo "[ros2_entrypoint] WARN: /oss/bin/dds_bridge not found, skipping" >&2
 fi
 
+# domain_agent: 원격(HMI 보드) Settings 가 정한 도메인을 이 호스트의 도메인 파일에
+# 반영한다. hmi_launcher 는 자기 호스트의 파일만 쓰기 때문에, Autoware/core/ext-ros2
+# 가 다른 호스트에 있으면 그쪽은 옛 값으로 남는다 — 그 경로를 잇는 데몬이다.
+# 컨테이너 재기동은 하지 않는다(경계). 설계: domain_agent.h
+if [ -x /oss/bin/domain_agent ]; then
+  echo "[ros2_entrypoint] launching /oss/bin/domain_agent in background"
+  ( /oss/bin/domain_agent /oss/bin/idl; rc=$?
+    echo "[ros2_entrypoint] domain_agent exited rc=$rc (container stays up)" ) &
+else
+  echo "[ros2_entrypoint] WARN: /oss/bin/domain_agent not found, skipping" >&2
+fi
+
 # Start rosbridge_server in background
 ros2 launch rosbridge_server rosbridge_websocket_launch.xml &
 
 # Start main application
-exec /oss/bin/adsw_manager
+# 호스트에 oss-domain-apply 설치 (docker.sock 경유, 실패는 무시).
+# 도메인 변경 반영은 호스트에서 돌아야 하고, 이미지에만 담으면 재플래싱까지 미뤄진다.
+# 자세한 근거는 install-domain-apply.sh 헤더 참조.
+[ -x /oss/install-domain-apply.sh ] && /oss/install-domain-apply.sh /oss/host-install || true
 
+exec /oss/bin/adsw_manager

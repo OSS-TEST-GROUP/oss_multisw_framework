@@ -338,6 +338,14 @@ FROM ros-mmf-base AS runtime-mmf-ext-ros2-x86_64
 ARG BUILD_TYPE=Release
 
 COPY --chown=ossuser:ossuser docker/entrypoint/ros2_entrypoint.sh /oss/entrypoint.sh
+# 호스트 설치용 자산 — 기동 시 install-domain-apply.sh 가 docker.sock 으로 호스트에
+# 복사한다. 이미지에만 두면 도메인 반영이 재플래싱까지 미뤄지고, 151(Ubuntu)은
+# Yocto 범위 밖이라 아예 배포 경로가 없다. 근거는 install-domain-apply.sh 헤더 참조.
+COPY --chown=ossuser:ossuser docker/entrypoint/install-domain-apply.sh /oss/install-domain-apply.sh
+COPY --chown=ossuser:ossuser docker/oss-domain-apply.sh /oss/host-install/oss-domain-apply.sh
+COPY --chown=ossuser:ossuser docker/systemd/oss-domain-apply.service /oss/host-install/oss-domain-apply.service
+COPY --chown=ossuser:ossuser docker/systemd/oss-domain-apply.path /oss/host-install/oss-domain-apply.path
+RUN chmod +x /oss/install-domain-apply.sh
 COPY --chown=ossuser:ossuser output/x86_64/${BUILD_TYPE}/extension/ros2/bin /oss/bin
 COPY --chown=ossuser:ossuser output/x86_64/lib /oss/lib
 # adsw autoware 서비스 목록(SSOT) 을 소스에서 직접 baked — output 재컴파일 없이도
@@ -367,6 +375,14 @@ FROM ros-mmf-base AS runtime-mmf-ext-ros2-aarch64
 ARG BUILD_TYPE=Release
 
 COPY --chown=ossuser:ossuser docker/entrypoint/ros2_entrypoint.sh /oss/entrypoint.sh
+# 호스트 설치용 자산 — 기동 시 install-domain-apply.sh 가 docker.sock 으로 호스트에
+# 복사한다. 이미지에만 두면 도메인 반영이 재플래싱까지 미뤄지고, 151(Ubuntu)은
+# Yocto 범위 밖이라 아예 배포 경로가 없다. 근거는 install-domain-apply.sh 헤더 참조.
+COPY --chown=ossuser:ossuser docker/entrypoint/install-domain-apply.sh /oss/install-domain-apply.sh
+COPY --chown=ossuser:ossuser docker/oss-domain-apply.sh /oss/host-install/oss-domain-apply.sh
+COPY --chown=ossuser:ossuser docker/systemd/oss-domain-apply.service /oss/host-install/oss-domain-apply.service
+COPY --chown=ossuser:ossuser docker/systemd/oss-domain-apply.path /oss/host-install/oss-domain-apply.path
+RUN chmod +x /oss/install-domain-apply.sh
 COPY --chown=ossuser:ossuser output/aarch64/${BUILD_TYPE}/extension/ros2/bin /oss/bin
 COPY --chown=ossuser:ossuser output/aarch64/lib /oss/lib
 # adsw autoware 서비스 목록(SSOT) 을 소스에서 직접 baked (x86 스테이지 주석 참조)
@@ -404,6 +420,14 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --chown=ossuser:ossuser docker/entrypoint/agl_entrypoint.sh /oss/entrypoint.sh
+# 호스트 설치용 자산 — 기동 시 install-domain-apply.sh 가 docker.sock 으로 호스트에
+# 복사한다. 이미지에만 두면 도메인 반영이 재플래싱까지 미뤄지고, 151(Ubuntu)은
+# Yocto 범위 밖이라 아예 배포 경로가 없다. 근거는 install-domain-apply.sh 헤더 참조.
+COPY --chown=ossuser:ossuser docker/entrypoint/install-domain-apply.sh /oss/install-domain-apply.sh
+COPY --chown=ossuser:ossuser docker/oss-domain-apply.sh /oss/host-install/oss-domain-apply.sh
+COPY --chown=ossuser:ossuser docker/systemd/oss-domain-apply.service /oss/host-install/oss-domain-apply.service
+COPY --chown=ossuser:ossuser docker/systemd/oss-domain-apply.path /oss/host-install/oss-domain-apply.path
+RUN chmod +x /oss/install-domain-apply.sh
 COPY --chown=ossuser:ossuser output/x86_64/${BUILD_TYPE}/extension/agl/bin /oss/bin
 COPY --chown=ossuser:ossuser output/x86_64/lib /oss/lib
 
@@ -437,6 +461,14 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --chown=ossuser:ossuser docker/entrypoint/agl_entrypoint.sh /oss/entrypoint.sh
+# 호스트 설치용 자산 — 기동 시 install-domain-apply.sh 가 docker.sock 으로 호스트에
+# 복사한다. 이미지에만 두면 도메인 반영이 재플래싱까지 미뤄지고, 151(Ubuntu)은
+# Yocto 범위 밖이라 아예 배포 경로가 없다. 근거는 install-domain-apply.sh 헤더 참조.
+COPY --chown=ossuser:ossuser docker/entrypoint/install-domain-apply.sh /oss/install-domain-apply.sh
+COPY --chown=ossuser:ossuser docker/oss-domain-apply.sh /oss/host-install/oss-domain-apply.sh
+COPY --chown=ossuser:ossuser docker/systemd/oss-domain-apply.service /oss/host-install/oss-domain-apply.service
+COPY --chown=ossuser:ossuser docker/systemd/oss-domain-apply.path /oss/host-install/oss-domain-apply.path
+RUN chmod +x /oss/install-domain-apply.sh
 COPY --chown=ossuser:ossuser output/aarch64/${BUILD_TYPE}/extension/agl/bin /oss/bin
 COPY --chown=ossuser:ossuser output/aarch64/lib /oss/lib
 

@@ -652,9 +652,7 @@ TEST_F(MessageTransmitterTest, SubscribeMessage_WithROSForwarding_TC001) {
     // Initialize with both DDS and DDS_ROS protocols
     EXPECT_CALL(*Mock_DDSProtocol, Initialize()).Times(2).WillRepeatedly(Return(true));
     EXPECT_CALL(*Mock_DDSProtocol, Finalize()).Times(2).WillRepeatedly(Return());
-    EXPECT_CALL(*Mock_DDSProtocol, GetProtocolType())
-        .WillOnce(Return(MessageProtocolType::DDS))
-        .WillOnce(Return(MessageProtocolType::DDS_ROS));
+    EXPECT_CALL(*Mock_DDSProtocol, GetProtocolType()).Times(0);
 
     EXPECT_TRUE(ins->Initialize());
 
@@ -687,9 +685,7 @@ TEST_F(MessageTransmitterTest, UnsubscribeMessage_WithROSForwarding_TC001) {
     // Initialize
     EXPECT_CALL(*Mock_DDSProtocol, Initialize()).Times(2).WillRepeatedly(Return(true));
     EXPECT_CALL(*Mock_DDSProtocol, Finalize()).Times(2).WillRepeatedly(Return());
-    EXPECT_CALL(*Mock_DDSProtocol, GetProtocolType())
-        .WillOnce(Return(MessageProtocolType::DDS))
-        .WillOnce(Return(MessageProtocolType::DDS_ROS));
+    EXPECT_CALL(*Mock_DDSProtocol, GetProtocolType()).Times(0);
 
     EXPECT_TRUE(ins->Initialize());
 
@@ -724,9 +720,7 @@ TEST_F(MessageTransmitterTest, UnsubscribeMessage_WithROSForwarding_TC001) {
 TEST_F(MessageTransmitterTest, SubscribeMessage_MultipleROSSubscribers_TC001) {
     EXPECT_CALL(*Mock_DDSProtocol, Initialize()).Times(2).WillRepeatedly(Return(true));
     EXPECT_CALL(*Mock_DDSProtocol, Finalize()).Times(2).WillRepeatedly(Return());
-    EXPECT_CALL(*Mock_DDSProtocol, GetProtocolType())
-        .WillOnce(Return(MessageProtocolType::DDS))
-        .WillOnce(Return(MessageProtocolType::DDS_ROS));
+    EXPECT_CALL(*Mock_DDSProtocol, GetProtocolType()).Times(0);
 
     EXPECT_TRUE(ins->Initialize());
 
@@ -748,8 +742,7 @@ TEST_F(MessageTransmitterTest, SubscribeMessage_MultipleROSSubscribers_TC001) {
     EXPECT_CALL(*Mock_ServiceExecutorMock, AddTask("Subscriber2", _, _)).WillOnce(Return(1002));
     int64_t sub2 = ins->AddSubscriber("Subscriber2", receive_func, message_creator);
 
-    EXPECT_CALL(*Mock_DDSProtocol, SubscribeMessage("SharedTopic")).WillOnce(Return(true));
-    // Note: No second call to SubscribeMessage for "rt/SharedTopic" because it already exists
+    // Note: No second call to SubscribeMessage for "SharedTopic" or "rt/SharedTopic" because they already exist
     EXPECT_TRUE(ins->SubscribeMessage(sub2, "SharedTopic", MessageProtocolType::DDS, true));
 
     // Verify both subscribers are registered
@@ -765,9 +758,7 @@ TEST_F(MessageTransmitterTest, SubscribeMessage_MultipleROSSubscribers_TC001) {
 TEST_F(MessageTransmitterTest, UnsubscribeMessage_LastROSSubscriber_TC001) {
     EXPECT_CALL(*Mock_DDSProtocol, Initialize()).Times(2).WillRepeatedly(Return(true));
     EXPECT_CALL(*Mock_DDSProtocol, Finalize()).Times(2).WillRepeatedly(Return());
-    EXPECT_CALL(*Mock_DDSProtocol, GetProtocolType())
-        .WillOnce(Return(MessageProtocolType::DDS))
-        .WillOnce(Return(MessageProtocolType::DDS_ROS));
+    EXPECT_CALL(*Mock_DDSProtocol, GetProtocolType()).Times(0);
 
     EXPECT_TRUE(ins->Initialize());
 
@@ -783,14 +774,13 @@ TEST_F(MessageTransmitterTest, UnsubscribeMessage_LastROSSubscriber_TC001) {
     int64_t sub2 = ins->AddSubscriber("Sub2", receive_func, message_creator);
 
     // Both subscribe with ROS forwarding
-    EXPECT_CALL(*Mock_DDSProtocol, SubscribeMessage("Topic")).Times(2).WillRepeatedly(Return(true));
+    // First subscribe calls SubscribeMessage, second subscribe reuses it
+    EXPECT_CALL(*Mock_DDSProtocol, SubscribeMessage("Topic")).WillOnce(Return(true));
     EXPECT_CALL(*Mock_DDSProtocol, SubscribeMessage("rt/Topic")).WillOnce(Return(true));
     EXPECT_TRUE(ins->SubscribeMessage(sub1, "Topic", MessageProtocolType::DDS, true));
     EXPECT_TRUE(ins->SubscribeMessage(sub2, "Topic", MessageProtocolType::DDS, true));
 
-    // First unsubscribe - should NOT remove ROS subscription (still has sub2)
-    EXPECT_CALL(*Mock_DDSProtocol, UnsubscribeMessage("Topic")).WillOnce(Return(true));
-    // No call to UnsubscribeMessage for "rt/Topic" because sub2 is still subscribed
+    // First unsubscribe - should NOT remove underlying Topic/ROS subscription (still has sub2)
     EXPECT_TRUE(ins->UnsubscribeMessage(sub1, "Topic", MessageProtocolType::DDS));
     EXPECT_TRUE(ins->HasSubscriptionID("rt/Topic", sub2, MessageProtocolType::DDS_ROS));
 

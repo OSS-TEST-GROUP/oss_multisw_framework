@@ -38,6 +38,8 @@ int64_t now_epoch_ms() {
 OtamDiagnosticService::OtamDiagnosticService()
     : heartbeat_interval_(resolve_heartbeat_interval()) {}
 
+// LCOV_EXCL_START — 프레임워크 경계(Initialize/Start/Stop): 실 DomainParticipant/
+// DataWriter 생성 + lifecycle. 유닛 불가 → 통합 레인이 검증.
 void OtamDiagnosticService::Initialize() {
   if (state_ != ServiceState::UNINITIALIZED) {
     std::cout << "OtamDiagnosticService already initialized"
@@ -146,6 +148,7 @@ void OtamDiagnosticService::Stop() {
   state_ = ServiceState::UNINITIALIZED;
 }
 
+// LCOV_EXCL_STOP
 void OtamDiagnosticService::PublishOtaMgrInfo(int32_t err_code,
                                                const std::string& err_msg) {
   if (state_ != ServiceState::STARTED) {
@@ -197,6 +200,8 @@ void OtamDiagnosticService::PublishOtaMgrInfo(int32_t err_code,
 // Called by the FastDDS internal thread whenever a subscriber
 // connects or disconnects from this DataWriter's topic.
 // -----------------------------------------------------------------------------
+// LCOV_EXCL_START — DDS 콜백/버퍼 flush/레지스트리 경계
+// (on_publication_matched/FlushPendingMessages/RegisterDds): 실 DDS. 통합 레인 검증.
 void OtamDiagnosticService::WriterMatchedListener::on_publication_matched(
     eprosima::fastdds::dds::DataWriter* /*writer*/,
     const eprosima::fastdds::dds::PublicationMatchedStatus& info) {
@@ -253,6 +258,7 @@ void OtamDiagnosticService::RegisterDds(const std::string& topic_name,
   std::cout << "Registered DDS for topic: " << topic_name << std::endl;
 }
 
+// LCOV_EXCL_STOP
 std::shared_ptr<OtamDds> OtamDiagnosticService::GetDds(
     const std::string& topic_name) {
   auto it = dds_registry_.find(topic_name);

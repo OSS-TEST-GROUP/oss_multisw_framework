@@ -81,6 +81,14 @@ namespace adsw_manager::agl
                       << " is not Docker-controllable." << std::endl;
             return false;
         }
+        if (docker->observe_only) {
+            // 인프라 컨테이너 — 호스트 run 스크립트/compose 가 소유한다.
+            // 여기서 만들면 우리 yaml 인자로 다른 컨테이너가 생긴다.
+            std::cout << "[AppController] " << app_name
+                      << " is observe-only; start is owned by the host."
+                      << std::endl;
+            return false;
+        }
 
         int st = RunDocker({"container", "inspect", app_name});
         bool exists = (st >= 0 && WIFEXITED(st) && WEXITSTATUS(st) == 0);
@@ -139,9 +147,17 @@ namespace adsw_manager::agl
 
     bool AppController::TerminateApp(std::string app_name)
     {
-        if (!GetDockerConfig(app_name).has_value()) {
+        const auto docker = GetDockerConfig(app_name);
+        if (!docker.has_value()) {
             std::cout << "[AppController] " << app_name
                       << " is not Docker-controllable." << std::endl;
+            return false;
+        }
+        if (docker->observe_only) {
+            // ext-agl 은 adsw_manager 자신이 도는 컨테이너다 — stop 은 자살이다.
+            std::cout << "[AppController] " << app_name
+                      << " is observe-only; stop is owned by the host."
+                      << std::endl;
             return false;
         }
 
@@ -232,7 +248,10 @@ namespace adsw_manager::agl
 
     bool AppController::CanControlApp(std::string app_name) const
     {
-        return GetDockerConfig(app_name).has_value();
+        const auto docker = GetDockerConfig(app_name);
+        // observe_only 항목은 상태만 읽고 제어하지 않는다 (AppDockerInfo 주석 참조).
+        // IsAppRunning 은 이 게이트를 쓰지 않으므로 docker inspect 상태 보고는 계속된다.
+        return docker.has_value() && !docker->observe_only;
     }
 
     bool AppController::ShouldAutoRestartApp(std::string app_name) const

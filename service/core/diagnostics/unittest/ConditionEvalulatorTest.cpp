@@ -638,6 +638,32 @@ TEST_F(ConditionEvaluatorTest, ParseArrayValue_DoubleArray) {
     EXPECT_EQ(result, expected);
 }
 
+TEST_F(ConditionEvaluatorTest, EvaluateCondition_UnknownOperandType_TC001) {
+    EXPECT_FALSE(ins->EvaluateCondition("NonExistentDev.field1 = NonExistentDev.field2"));
+}
+
+TEST_F(ConditionEvaluatorTest, EvaluateOperandByOperator_NonArithmetic_TC001) {
+    std::string s1 = "alpha";
+    std::string s2 = "beta";
+    EXPECT_FALSE(ins->EvaluateOperandByOperator(s1, s2, ConditionOperatorType::EQUAL_ABOVE));
+    EXPECT_FALSE(ins->EvaluateOperandByOperator(s1, s2, ConditionOperatorType::EQUAL_LESS));
+    EXPECT_FALSE(ins->EvaluateOperandByOperator(s1, s2, ConditionOperatorType::ABOVE));
+    EXPECT_FALSE(ins->EvaluateOperandByOperator(s1, s2, ConditionOperatorType::LESS));
+    EXPECT_FALSE(ins->EvaluateOperandByOperator(s1, s2, ConditionOperatorType::UNKNOWN));
+}
+
+TEST_F(ConditionEvaluatorTest, FetchOrParseValue_EdgeCases_TC001) {
+    std::string s_out;
+    EXPECT_FALSE(ins->FetchOrParseValue("", s_out));
+    EXPECT_FALSE(ins->FetchOrParseValue("   ", s_out));
+
+    bool b_out;
+    EXPECT_FALSE(ins->FetchOrParseValue("invalid_bool", b_out));
+
+    int64_t i_out;
+    EXPECT_FALSE(ins->FetchOrParseValue("123abc", i_out));
+}
+
 // ==================== END NEW TESTS ====================
 
 int main(int argc, char** argv) {

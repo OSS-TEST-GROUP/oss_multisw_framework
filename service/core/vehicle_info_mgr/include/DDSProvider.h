@@ -67,15 +67,15 @@ private:
     // Use the fully qualified name for the forward declaration
     friend class autoware_sensing_msgs::msg::GnssInsOrientationStamped;
 
-    eprosima::fastdds::dds::DomainParticipant* participant_;
-    eprosima::fastdds::dds::Publisher* publisher_;
-    eprosima::fastdds::dds::Subscriber* subscriber_;
+    eprosima::fastdds::dds::DomainParticipant* participant_{nullptr};
+    eprosima::fastdds::dds::Publisher* publisher_{nullptr};
+    eprosima::fastdds::dds::Subscriber* subscriber_{nullptr};
     
     // Resources for VehicleDataTopic
-    eprosima::fastdds::dds::Topic* vehicle_data_topic_;
-    eprosima::fastdds::dds::Topic* set_vehicle_data_topic_;
-    eprosima::fastdds::dds::DataWriter* vehicle_data_writer_;
-    eprosima::fastdds::dds::DataReader* vehicle_data_reader_;
+    eprosima::fastdds::dds::Topic* vehicle_data_topic_{nullptr};
+    eprosima::fastdds::dds::Topic* set_vehicle_data_topic_{nullptr};
+    eprosima::fastdds::dds::DataWriter* vehicle_data_writer_{nullptr};
+    eprosima::fastdds::dds::DataReader* vehicle_data_reader_{nullptr};
     eprosima::fastdds::dds::TypeSupport vehicle_data_type_;
     std::unique_ptr<DDSDataReaderListener> vehicle_data_listener_;
 

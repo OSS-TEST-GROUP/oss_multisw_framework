@@ -47,7 +47,7 @@ std::shared_ptr<DiagInfo> DiagInfoRegistry::GetDiagInfo(int32_t code) {
     }
     return iter->second;
 }
-std::shared_ptr<DiagInfo> DiagInfoRegistry::GetDiagInfoByName(std::string name) {
+std::shared_ptr<DiagInfo> DiagInfoRegistry::GetDiagInfoByName(const std::string& name) {
     std::lock_guard<std::mutex> lock_guard(diag_info_mutex_);
 
     for (auto& iter : diag_info_list_) {
@@ -59,27 +59,24 @@ std::shared_ptr<DiagInfo> DiagInfoRegistry::GetDiagInfoByName(std::string name) 
 }
 std::vector<std::shared_ptr<DiagInfo>> DiagInfoRegistry::GetAllDiagInfo() {
     std::vector<std::shared_ptr<DiagInfo>> diag_list;
-
-    for (auto& iter : diag_info_list_) {
-        diag_list.push_back(iter.second);
-    }
+    diag_list.reserve(diag_info_list_.size());
+    std::transform(diag_info_list_.begin(), diag_info_list_.end(), std::back_inserter(diag_list),
+                   [](const auto& iter) { return iter.second; });
     return diag_list;
 }
 
 std::vector<int32_t> DiagInfoRegistry::GetDiagInfoCodeList() {
     std::vector<int32_t> code_list;
-
-    for (auto& iter : diag_info_list_) {
-        code_list.push_back(iter.first);
-    }
+    code_list.reserve(diag_info_list_.size());
+    std::transform(diag_info_list_.begin(), diag_info_list_.end(), std::back_inserter(code_list),
+                   [](const auto& iter) { return iter.first; });
     return code_list;
 }
 std::vector<std::string> DiagInfoRegistry::GetDiagInfoNameList() {
     std::vector<std::string> name_list;
-    
-    for (auto& iter : diag_info_list_) {
-        name_list.push_back(iter.second->GetDiagName());
-    }
+    name_list.reserve(diag_info_list_.size());
+    std::transform(diag_info_list_.begin(), diag_info_list_.end(), std::back_inserter(name_list),
+                   [](const auto& iter) { return iter.second->GetDiagName(); });
 
     return name_list;
 }

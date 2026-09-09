@@ -125,7 +125,20 @@ TEST_F(DiagInfoTest, LargeCode_TC014) {
     EXPECT_EQ(0x7FFFFFFF, diag.GetDiagCode());
 }
 
+TEST_F(DiagInfoTest, SourceMessageName_TC015) {
+    EXPECT_EQ("", ins->GetSourceMessageName());
+    ins->SetSourceMessageName("sensor_msg_1");
+    EXPECT_EQ("sensor_msg_1", ins->GetSourceMessageName());
+}
+
+TEST_F(DiagInfoTest, RawData_TC016) {
+    EXPECT_EQ("", ins->GetRawData());
+    ins->SetRawData("raw_hex_data_123");
+    EXPECT_EQ("raw_hex_data_123", ins->GetRawData());
+}
+
 int main(int argc, char* argv[]) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }
+

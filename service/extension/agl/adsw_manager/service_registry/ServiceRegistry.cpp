@@ -2,11 +2,78 @@
 #include "logger/Log.hpp"
 
 #include <algorithm>
+#include <cstdlib>
+#include <string>
 #include <yaml-cpp/yaml.h>
 
 using namespace lifecyclemgr;
 
 namespace adsw_manager::agl {
+
+// yaml 값의 `${VAR}` / `${VAR:-default}` 를 이 프로세스의 환경변수로 치환한다.
+//
+// 왜 필요한가: 서비스 목록의 **정본을 컨테이너 이미지로** 두려면, 보드마다 다른
+// 값(호스트 docker gid, 런타임 uid)이 yaml 에 하드코딩돼 있으면 안 된다. 예전에는
+// 그래서 보드가 호스트 파일을 이미지 사본 위에 마운트했고, 그 결과 목록의 정본이
+// 이미지 밖으로 나가 **컨테이너를 업데이트해도 반영되지 않았다**(보드 81 실측
+// 2026-09-07). 보드별 값만 환경변수로 빼면 목록 자체는 모든 보드에서 같아진다.
+//
+// ros2 쪽 adsw_manager 는 `ContainerController::RunCommand` 가 `system()` 이라
+// docker 인자가 `/bin/sh` 를 통과해 확장이 공짜였다. 반면 AGL 쪽
+// `AppController::RunDocker` 는 fork+execvp 로 셸을 거치지 않으므로 여기서
+// 명시적으로 확장해야 한다.
+//
+// 정의되지 않은 변수는 `:-default` 가 있으면 그 값, 없으면 빈 문자열로 바뀐다
+// (셸과 같은 규칙). 현재 yaml 은 모든 참조에 기존 하드코딩 값을 default 로 달아
+// 두었으므로, 환경변수가 없는 배포에서도 동작이 종전과 같다.
+std::string ExpandEnvVars(const std::string& in) {
+    std::string out;
+    out.reserve(in.size());
+
+    for (size_t i = 0; i < in.size();) {
+        if (in[i] != '$' || i + 1 >= in.size() || in[i + 1] != '{') {
+            out.push_back(in[i++]);
+            continue;
+        }
+        const size_t close = in.find('}', i + 2);
+        if (close == std::string::npos) {
+            // 닫는 중괄호가 없으면 치환하지 않고 원문을 남긴다.
+            out.append(in, i, std::string::npos);
+            break;
+        }
+
+        const std::string body = in.substr(i + 2, close - (i + 2));
+        std::string name = body;
+        std::string fallback;
+        bool has_fallback = false;
+        const size_t sep = body.find(":-");
+        if (sep != std::string::npos) {
+            name = body.substr(0, sep);
+            fallback = body.substr(sep + 2);
+            has_fallback = true;
+        }
+
+        const char* val = name.empty() ? nullptr : std::getenv(name.c_str());
+        if (val != nullptr && *val != '\0') {
+            out.append(val);
+        } else if (has_fallback) {
+            out.append(fallback);
+        }
+        i = close + 1;
+    }
+    return out;
+}
+
+namespace {
+
+// yaml 시퀀스를 문자열 벡터로 읽으면서 환경변수를 확장한다.
+void AppendExpanded(const YAML::Node& seq, std::vector<std::string>& out) {
+    for (const auto& item : seq) {
+        out.push_back(ExpandEnvVars(item.as<std::string>()));
+    }
+}
+
+}  // namespace
 
     bool ServiceRegistry::LoadFromYaml(const std::string& path) {
         try {
@@ -44,18 +111,19 @@ namespace adsw_manager::agl {
                 if (is_str == "RUNNING")   init_state = ServiceState::RUNNING;
 
                 AppDockerInfo docker;
+                // image / extra_args / command_args 는 `${VAR:-default}` 를 지원한다
+                // (ExpandEnvVars 주석 참조 — 목록의 정본을 이미지에 두기 위한 장치).
                 if (entry["image"]) {
-                    docker.image = entry["image"].as<std::string>();
+                    docker.image = ExpandEnvVars(entry["image"].as<std::string>());
+                }
+                if (entry["observe_only"]) {
+                    docker.observe_only = entry["observe_only"].as<bool>();
                 }
                 if (entry["extra_args"]) {
-                    for (const auto& arg : entry["extra_args"]) {
-                        docker.extra_args.push_back(arg.as<std::string>());
-                    }
+                    AppendExpanded(entry["extra_args"], docker.extra_args);
                 }
                 if (entry["command_args"]) {
-                    for (const auto& arg : entry["command_args"]) {
-                        docker.command_args.push_back(arg.as<std::string>());
-                    }
+                    AppendExpanded(entry["command_args"], docker.command_args);
                 }
                 docker_info_.emplace(name, std::move(docker));
 

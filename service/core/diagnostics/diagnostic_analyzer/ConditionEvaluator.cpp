@@ -236,12 +236,9 @@ std::string ConditionEvaluator::ConvertOperatorTypeToString(ConditionOperatorTyp
 }
 
 ConditionOperatorType ConditionEvaluator::ConvertStringToOperatorType(const std::string& type) {
-    for (auto& iter : operator_convert_map) {
-        if (iter.second == type) {
-            return iter.first;
-        }
-    }
-    return ConditionOperatorType::UNKNOWN;
+    auto it = std::find_if(operator_convert_map.begin(), operator_convert_map.end(),
+                           [&type](const auto& iter) { return iter.second == type; });
+    return (it != operator_convert_map.end()) ? it->first : ConditionOperatorType::UNKNOWN;
 }
 
 ConditionOperandType ConditionEvaluator::ConvertTypeIndexToOperandType(std::type_index type) {
@@ -346,7 +343,7 @@ ConditionOperandType ConditionEvaluator::EvaluateOperandTypeFromConstantValue(co
 }
 
 template<typename T>
-bool ConditionEvaluator::EvaluateOperandByOperator(T lh, T rh, ConditionOperatorType op) {
+bool ConditionEvaluator::EvaluateOperandByOperator(const T& lh, const T& rh, ConditionOperatorType op) {
     if (op == ConditionOperatorType::EQUAL) {
         return lh == rh;
     } else if (op == ConditionOperatorType::NOT_EQUAL) {
@@ -386,7 +383,7 @@ bool ConditionEvaluator::EvaluateOperandByOperator(T lh, T rh, ConditionOperator
 }
 
 template<typename T>
-bool ConditionEvaluator::EvaluateOperandByOperatorWithList(T lh, const std::string& rh, ConditionOperatorType op) {
+bool ConditionEvaluator::EvaluateOperandByOperatorWithList(const T& lh, const std::string& rh, ConditionOperatorType op) {
     if (!IsArrayValue(rh)) {
         LOG_ERROR("The operator 'IN' and 'NOT_IN' require a list value.");
         return false;

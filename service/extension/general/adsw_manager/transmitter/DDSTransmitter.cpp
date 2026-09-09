@@ -10,10 +10,15 @@ namespace adsw_manager {
 
 namespace {
 // Per-board DDS domain isolation (default 0). Raw Fast-DDS ignores ROS_DOMAIN_ID,
-// so MMF reads MMF_DDS_DOMAIN_ID. Must match lifecycle_mgr's value on the board.
+// so MMF reads the DDS plane: MMF_DDS_DOMAIN_ID (override) > DDS_DOMAIN_ID > 0.
+// Must match lifecycle_mgr's value on the board.
 int MmfDdsDomainId() {
     if (const char* e = std::getenv("MMF_DDS_DOMAIN_ID")) {
         return std::atoi(e);
+    }
+    // Canonical DDS-plane knob (hmi_launcher Settings writes it to domain.env).
+    if (const char* g = std::getenv("DDS_DOMAIN_ID")) {
+        return std::atoi(g);
     }
     return 0;
 }

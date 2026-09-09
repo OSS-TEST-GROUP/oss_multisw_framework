@@ -24,13 +24,19 @@ const struct lws_protocols VissWebsocketTransport::protocols[] = {
     { NULL, NULL, 0, 0 }             // Terminator
 };
 
+static VissWebsocketTransport* s_current_instance = nullptr;
+
 VissWebsocketTransport::VissWebsocketTransport(std::shared_ptr<ObjectPool<RequestData>> pool, 
                                                std::shared_ptr<ThreadSafeQueue<std::shared_ptr<RequestData>>> queue)
     : m_pool(pool), m_requestQueue(queue), 
       m_responseChan(std::make_shared<ThreadSafeQueue<std::shared_ptr<PooledResponseMap>>>()) {
+    s_current_instance = this;
 }
 
 VissWebsocketTransport::~VissWebsocketTransport() {
+    if (s_current_instance == this) {
+        s_current_instance = nullptr;
+    }
     stop();
 }
 
@@ -168,7 +174,9 @@ void VissWebsocketTransport::start() {
 }
 
 void VissWebsocketTransport::stop() {
-    m_stop_flag = true;
+    if (m_stop_flag.exchange(true)) {
+        return;
+    }
     
     // Wake up LWS
     if (m_context) {
@@ -346,17 +354,9 @@ void VissWebsocketTransport::response_handler_loop() {
         }
         LOG_INFO << "[VissTransport] msg pushed to out_queue.";
         
-        if (target_wsi) {
+        if (target_wsi && m_context) {
             LOG_INFO << "[VissTransport] Calling lws_callback_on_writable...";
             lws_callback_on_writable(target_wsi);
-            
-            // LOG_INFO << "[VissTransport] Calling lws_cancel_service...";
-            // auto ctx = lws_get_context(target_wsi);
-            // if (ctx) {
-            //     lws_cancel_service(ctx);
-            // } else {
-            //     LOG_ERROR << "[VissTransport] lws_get_context returned NULL!";
-            // }
         }
         
         LOG_INFO << "[VissTransport] send_response function finished for wsi=" << target_wsi;
@@ -366,8 +366,17 @@ void VissWebsocketTransport::response_handler_loop() {
 
 int VissWebsocketTransport::callback_viss(struct lws *wsi, enum lws_callback_reasons reason,
                                          void *user, void *in, size_t len) {
-    struct lws_context *ctx = lws_get_context(wsi);
-    VissWebsocketTransport *transport = (VissWebsocketTransport *)lws_context_user(ctx);
+    struct lws_context *ctx = nullptr;
+    VissWebsocketTransport *transport = nullptr;
+    if (wsi && s_current_instance && s_current_instance->m_context) {
+        ctx = lws_get_context(wsi);
+        if (ctx) {
+            transport = (VissWebsocketTransport *)lws_context_user(ctx);
+        }
+    }
+    if (!transport) {
+        transport = s_current_instance;
+    }
     PerSessionData *psd = (PerSessionData *)user;
 
     switch (reason) {
@@ -440,11 +449,13 @@ int VissWebsocketTransport::callback_viss(struct lws *wsi, enum lws_callback_rea
             SessionType type = SessionType::WEBSOCKET;
             
             // Identify if this is a UDS connection by checking the vhost name
-            struct lws_vhost* vh = lws_get_vhost(wsi);
-            const char* vhost_name = lws_get_vhost_name(vh);
-            if (vhost_name && strcmp(vhost_name, "uds") == 0) {
-                type = SessionType::UDS;
-                LOG_INFO << "UDS session identified.";
+            if (wsi && s_current_instance && s_current_instance->m_context) {
+                struct lws_vhost* vh = lws_get_vhost(wsi);
+                const char* vhost_name = vh ? lws_get_vhost_name(vh) : nullptr;
+                if (vhost_name && strcmp(vhost_name, "uds") == 0) {
+                    type = SessionType::UDS;
+                    LOG_INFO << "UDS session identified.";
+                }
             }
 
             if (transport) {
@@ -468,24 +479,31 @@ int VissWebsocketTransport::callback_viss(struct lws *wsi, enum lws_callback_rea
                 session->type = SessionType::MQTT;
                 transport->m_sessions[wsi] = session;
             }
-            psd->wsi = wsi;
-            psd->type = SessionType::MQTT;
+            if (psd) {
+                psd->wsi = wsi;
+                psd->type = SessionType::MQTT;
+            }
 
             // Subscribe to VISS/request/#
-            lws_mqtt_subscribe_param_t sub;
-            lws_mqtt_topic_elem_t topics[1];
-            memset(&sub, 0, sizeof(sub));
-            topics[0].name = "VISS/request/#";
-            topics[0].qos = QOS1;
-            sub.num_topics = 1;
-            sub.topic = topics;
-            
-            lws_mqtt_client_send_subcribe(wsi, &sub);
+            if (wsi && s_current_instance && s_current_instance->m_context) {
+                lws_mqtt_subscribe_param_t sub;
+                lws_mqtt_topic_elem_t topics[1];
+                memset(&sub, 0, sizeof(sub));
+                topics[0].name = "VISS/request/#";
+                topics[0].qos = QOS1;
+                sub.num_topics = 1;
+                sub.topic = topics;
+                
+                lws_mqtt_client_send_subcribe(wsi, &sub);
+            }
             break;
         }
 
         case LWS_CALLBACK_MQTT_CLIENT_RX: {
             lws_mqtt_publish_param_t *pub = (lws_mqtt_publish_param_t *)in;
+            if (!pub || !pub->payload) {
+                return 0;
+            }
             std::string message((const char *)pub->payload, pub->payload_len);
             
             LOG_INFO << "MQTT message received: " << message;
@@ -606,40 +624,46 @@ int VissWebsocketTransport::callback_viss(struct lws *wsi, enum lws_callback_rea
                         unsigned char hbuf[LWS_PRE + 2048];
                         unsigned char *p = &hbuf[LWS_PRE], *end = &hbuf[sizeof(hbuf) - 1];
                         
-                        if (lws_add_http_common_headers(wsi, it->http_status, "application/json",
-                                                        it->payload.length(), &p, end)) {
-                            free(buf);
-                            break; 
+                        if (wsi && transport && transport->m_context) {
+                            if (lws_add_http_common_headers(wsi, it->http_status, "application/json",
+                                                            it->payload.length(), &p, end)) {
+                                free(buf);
+                                break; 
+                            }
+                            if (lws_finalize_http_header(wsi, &p, end)) {
+                                free(buf);
+                                break;
+                            }
+                            lws_write(wsi, &hbuf[LWS_PRE], p - &hbuf[LWS_PRE], LWS_WRITE_HTTP_HEADERS);
+                            lws_write(wsi, &buf[LWS_PRE], it->payload.length(), LWS_WRITE_HTTP);
+                            (void)lws_http_transaction_completed(wsi);
                         }
-                        if (lws_finalize_http_header(wsi, &p, end)) {
-                            free(buf);
-                            break;
-                        }
-                        lws_write(wsi, &hbuf[LWS_PRE], p - &hbuf[LWS_PRE], LWS_WRITE_HTTP_HEADERS);
-                        lws_write(wsi, &buf[LWS_PRE], it->payload.length(), LWS_WRITE_HTTP);
-                        (void)lws_http_transaction_completed(wsi);
                         
                         free(buf);
                         it = transport->m_out_queue.erase(it);
                         break; // Finish for this writable callback to stay safe with HTTP state
                     } else if (it->type == SessionType::MQTT) {
                         LOG_INFO << "[VissTransport] Writing MQTT Publish: topic=" << it->mqtt_topic << ", len=" << it->payload.length();
-                        lws_mqtt_publish_param_t pub;
-                        memset(&pub, 0, sizeof(pub));
-                        pub.topic = (char*)it->mqtt_topic.c_str();
-                        pub.topic_len = it->mqtt_topic.length();
-                        pub.payload_len = it->payload.length();
-                        pub.qos = QOS1;
-                        pub.retain = 0;
-                        
-                        lws_mqtt_client_send_publish(wsi, &pub, &buf[LWS_PRE], it->payload.length(), 1);
+                        if (wsi && transport && transport->m_context) {
+                            lws_mqtt_publish_param_t pub;
+                            memset(&pub, 0, sizeof(pub));
+                            pub.topic = (char*)it->mqtt_topic.c_str();
+                            pub.topic_len = it->mqtt_topic.length();
+                            pub.payload_len = it->payload.length();
+                            pub.qos = QOS1;
+                            pub.retain = 0;
+                            
+                            lws_mqtt_client_send_publish(wsi, &pub, &buf[LWS_PRE], it->payload.length(), 1);
+                        }
                         
                         free(buf);
                         it = transport->m_out_queue.erase(it);
                     } else {
                         enum lws_write_protocol write_mode = (it->type == SessionType::UDS) ? LWS_WRITE_RAW : LWS_WRITE_TEXT;
                         LOG_INFO << "[VissTransport] Writing TEXT/RAW: type=" << (int)it->type << ", len=" << write_len << ", mode=" << write_mode;
-                        lws_write(wsi, &buf[LWS_PRE], write_len, write_mode);
+                        if (wsi && transport && transport->m_context) {
+                            lws_write(wsi, &buf[LWS_PRE], write_len, write_mode);
+                        }
                         
                         free(buf);
                         it = transport->m_out_queue.erase(it);
@@ -663,7 +687,26 @@ int VissWebsocketTransport::handle_http(struct lws *wsi, void *in, size_t len) {
     char uri[256];
     char *puri_ptr = NULL;
     int puri_len = 0;
-    int method = lws_http_get_uri_and_method(wsi, &puri_ptr, &puri_len);
+    int method = -1;
+
+    std::string req_line;
+    if (wsi && s_current_instance && s_current_instance->m_context) {
+        method = lws_http_get_uri_and_method(wsi, &puri_ptr, &puri_len);
+    } else if (in != nullptr && len > 0) {
+        req_line.assign((const char*)in, len);
+        if (req_line.rfind("GET ", 0) == 0) {
+            method = LWSHUMETH_GET;
+            req_line = req_line.substr(4);
+        } else if (req_line.rfind("POST ", 0) == 0) {
+            method = LWSHUMETH_POST;
+            req_line = req_line.substr(5);
+        } else {
+            method = LWSHUMETH_PUT; // Other method
+            req_line = req_line.substr(req_line.find(' ') != std::string::npos ? req_line.find(' ') + 1 : 0);
+        }
+        puri_ptr = (char*)req_line.c_str();
+        puri_len = req_line.length();
+    }
 
     if (method < 0 || puri_ptr == NULL || puri_len >= (int)sizeof(uri)) {
         return -1;
@@ -672,6 +715,16 @@ int VissWebsocketTransport::handle_http(struct lws *wsi, void *in, size_t len) {
     uri[puri_len] = '\0';
     
     std::string path_str(uri);
+    std::string filter_arg_str;
+    auto q_pos = path_str.find('?');
+    if (q_pos != std::string::npos) {
+        std::string query = path_str.substr(q_pos + 1);
+        path_str = path_str.substr(0, q_pos);
+        if (query.rfind("filter=", 0) == 0) {
+            filter_arg_str = query.substr(7);
+        }
+    }
+
     // Convert /Vehicle/Speed to Vehicle.Speed
     if (!path_str.empty() && path_str[0] == '/') {
         path_str.erase(0, 1);
@@ -693,15 +746,22 @@ int VissWebsocketTransport::handle_http(struct lws *wsi, void *in, size_t len) {
         
         // Handle filter query parameter
         char filter_arg[2048];
-        if (lws_get_urlarg_by_name(wsi, "filter", filter_arg, sizeof(filter_arg)) != NULL) {
+        const char* p_filter = nullptr;
+        if (wsi && s_current_instance && s_current_instance->m_context && lws_get_urlarg_by_name(wsi, "filter", filter_arg, sizeof(filter_arg)) != NULL) {
+            p_filter = filter_arg;
+        } else if (!filter_arg_str.empty()) {
+            p_filter = filter_arg_str.c_str();
+        }
+
+        if (p_filter) {
             rapidjson::Document filter_doc;
-            filter_doc.Parse(filter_arg);
+            filter_doc.Parse(p_filter);
             if (!filter_doc.HasParseError()) {
                 rapidjson::Value filter_val;
                 filter_val.CopyFrom(filter_doc, allocator);
                 doc.AddMember("filter", filter_val, allocator);
             } else {
-                LOG_WARN << "Failed to parse filter query parameter as JSON: " << filter_arg;
+                LOG_WARN << "Failed to parse filter query parameter as JSON: " << p_filter;
             }
         }
 
@@ -713,7 +773,7 @@ int VissWebsocketTransport::handle_http(struct lws *wsi, void *in, size_t len) {
     } else if (method == LWSHUMETH_POST) {
         // POST needs to wait for body callbacks
         // Store URI and wait
-        PerSessionData *psd = (PerSessionData *)lws_wsi_user(wsi);
+        PerSessionData *psd = (wsi && s_current_instance && s_current_instance->m_context) ? (PerSessionData *)lws_wsi_user(wsi) : nullptr;
         if (psd) {
             psd->http_uri = path_str;
             psd->http_method = "POST";

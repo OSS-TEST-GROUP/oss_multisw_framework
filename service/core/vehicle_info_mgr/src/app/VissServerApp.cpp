@@ -103,6 +103,9 @@ VissServerApp::VissServerApp(const std::string& himPath) {
 
 VissServerApp::~VissServerApp() {
     stop(); // Ensure stop is always called.
+    if (m_service_manager_thread.joinable()) {
+        m_service_manager_thread.join();
+    }
     LOG_INFO << "~VissServerApp() destructor finished.";
 }
 

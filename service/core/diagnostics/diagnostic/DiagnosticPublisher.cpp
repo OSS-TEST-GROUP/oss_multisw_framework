@@ -10,9 +10,8 @@ namespace diagnostic_manager {
 
 DiagnosticPublisher::DiagnosticPublisher(std::shared_ptr<ServiceExecutor> service_executor, std::shared_ptr<MessageTransmitter> message_transmitter,
         std::shared_ptr<DiagInfoRegistry> diag_info_registry) :
-            service_executor_(service_executor), message_transmitter_(message_transmitter), diag_info_registry_(diag_info_registry) {
-    last_publish_time_ = std::chrono::steady_clock::time_point::min();
-}
+            service_executor_(service_executor), message_transmitter_(message_transmitter), diag_info_registry_(diag_info_registry),
+            last_publish_time_(std::chrono::steady_clock::time_point::min()) {}
 DiagnosticPublisher::~DiagnosticPublisher() {}
 
 bool DiagnosticPublisher::Initialize() {
@@ -89,7 +88,7 @@ void DiagnosticPublisher::HandleRequestGetDiagInfo(std::shared_ptr<VariantData> 
     std::string response_message_name = "mmf/diagnosticmgr/DiagnosticInfoResponse";
     MessageProtocolType response_protocol_type = MessageProtocolType::DDS;
     
-    if (request_message_name.find("rt/") == 0) {
+    if (request_message_name.starts_with("rt/")) {
         response_message_name = "rt/" + response_message_name;
         response_protocol_type = MessageProtocolType::DDS_ROS;
         LOG_INFO("Sending ROS response for DiagnosticInfoResponse");
@@ -97,7 +96,7 @@ void DiagnosticPublisher::HandleRequestGetDiagInfo(std::shared_ptr<VariantData> 
 
     std::shared_ptr<Message> msg = std::make_shared<Message>(
         response_message_name,
-        MessageProtocolType::DDS,
+        response_protocol_type,
         msg_data->GetName(),
         msg_data
     );
@@ -120,7 +119,7 @@ void DiagnosticPublisher::HandleRequestGetDiagInfoList(std::shared_ptr<VariantDa
     std::string response_message_name = "mmf/diagnosticmgr/DiagnosticInfoListResponse";
     MessageProtocolType response_protocol_type = MessageProtocolType::DDS;
     
-    if (request_message_name.find("rt/") == 0) {
+    if (request_message_name.starts_with("rt/")) {
         response_message_name = "rt/" + response_message_name;
         response_protocol_type = MessageProtocolType::DDS_ROS;
         LOG_INFO("Sending ROS response for DiagnosticInfoListResponse");
@@ -128,7 +127,7 @@ void DiagnosticPublisher::HandleRequestGetDiagInfoList(std::shared_ptr<VariantDa
 
     std::shared_ptr<Message> msg = std::make_shared<Message>(
         response_message_name,
-        MessageProtocolType::DDS,
+        response_protocol_type,
         msg_data->GetName(),
         msg_data
     );

@@ -26,7 +26,7 @@ using ExecutorFunctionType = std::function<void(std::shared_ptr<RequestBase>)>;
 class ServiceTask {
   public:
     ServiceTask();
-    ServiceTask(const TaskID task_id, const std::string name, const ServiceTaskType type, ExecutorFunctionType function);
+    ServiceTask(const TaskID task_id, const std::string& name, const ServiceTaskType type, ExecutorFunctionType function);
     virtual ~ServiceTask();
 
     TaskID GetTaskId();

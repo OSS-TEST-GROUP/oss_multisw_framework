@@ -3,6 +3,9 @@
 
 #include <iostream>
 #include <fstream>
+#include <algorithm>
+#include <cctype>
+#include <cstdlib>
 #include <string>
 #include <mutex>
 #include <ctime>
@@ -16,6 +19,28 @@ enum class LogLevel {
     DEBUG,
     VERBOSE
 };
+
+/// 기본 로그 레벨을 환경변수 `MMF_LOG_LEVEL` 에서 읽는다 (error|warn|info|debug|verbose).
+/// 미설정·미인식이면 **INFO**. 예전엔 getInstance() 가 DEBUG 를 박아 두어 정상 동작의
+/// 부산물이 계속 쌓였다 — 컨테이너 로그가 376GB 까지 자란 사고(2026-09-03)의 같은 계열
+/// 원인이라 발생원에서 끌 수 있게 한다. vehicle_info_mgr 의 Logger.h 와 같은 변수를 쓴다.
+inline LogLevel MmfLogLevelFromEnv() {
+    const char* e = std::getenv("MMF_LOG_LEVEL");
+    if (e == nullptr) {
+        return LogLevel::INFO;
+    }
+    std::string v(e);
+    std::transform(v.begin(), v.end(), v.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    if (v == "verbose") return LogLevel::VERBOSE;
+    if (v == "debug")   return LogLevel::DEBUG;
+    if (v == "info")    return LogLevel::INFO;
+    // 이 로거의 레벨에는 WARN 이 없다(CRITICAL/ERROR/INFO/DEBUG/VERBOSE) —
+    // warn 을 주면 한 단계 엄격한 ERROR 로 해석한다.
+    if (v == "warn" || v == "warning" || v == "error") return LogLevel::ERROR;
+    return LogLevel::INFO;   // 알 수 없는 값은 기본값으로
+}
+
 
 
 class Logger {

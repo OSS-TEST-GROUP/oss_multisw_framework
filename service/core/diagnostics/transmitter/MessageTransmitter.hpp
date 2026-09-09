@@ -30,7 +30,7 @@ class SubscriberInfo {
 
 class MessageTransmitter {
   public:
-    MessageTransmitter(std::shared_ptr<ServiceExecutor> service_executor);
+    explicit MessageTransmitter(std::shared_ptr<ServiceExecutor> service_executor);
     virtual ~MessageTransmitter();
 
     bool Initialize();

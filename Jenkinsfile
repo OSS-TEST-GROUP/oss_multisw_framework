@@ -234,6 +234,7 @@ pipeline {
                                     -DBUILD_EXTENSION=${build_ext} \
                                     -DEXTENSION_PLATFORM=${t^^} \
                                     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+                                cmake --build . --target proto_gen_files -j\$(nproc) || true
                                 if [ -f compile_commands.json ]; then
                                     mkdir -p ${workdir}/output/clang-tidy/${t}
                                     cp compile_commands.json ${workdir}/output/clang-tidy/${t}
@@ -244,6 +245,8 @@ pipeline {
                                             -not -path "*/rapidjson/*" \
                                             -not -path "*/nlohmann/*" \
                                             -not -path "*/valijson/*" \
+                                            -not -path "*/idl/*" \
+                                            -not -path "*/generated/*" \
                                             \\( -name "*.cpp" -o -name "*.hpp" -o -name "*.h" -o -name "*.cc" \\)) \
                                         > ${workdir}/output/reports/clang-tidy/clang-tidy-${t}.txt 2>&1 || true
                                 fi
@@ -311,6 +314,8 @@ pipeline {
                                 -not -path "*/rapidjson/*" \
                                 -not -path "*/nlohmann/*" \
                                 -not -path "*/valijson/*" \
+                                -not -path "*/idl/*" \
+                                -not -path "*/generated/*" \
                                 \\( -name "*.cpp" -o -name "*.hpp" -o -name "*.h" -o -name "*.cc" \\) \
                                 > ${WORKSPACE}/output/reports/files_to_analysis.txt || true
                         fi
@@ -339,6 +344,10 @@ pipeline {
                             --suppress=unmatchedSuppression \
                             --suppress=unusedFunction \
                             --suppress=missingInclude \
+                            --suppress=*:*idl* \
+                            --suppress=*:*generated* \
+                            --suppress=*:*rapidjson* \
+                            --suppress=*:*.build* \
                             --std=c++20 || true
                     '''
                 }
@@ -366,6 +375,8 @@ pipeline {
                                 -not -path "*/rapidjson/*" \
                                 -not -path "*/nlohmann/*" \
                                 -not -path "*/valijson/*" \
+                                -not -path "*/idl/*" \
+                                -not -path "*/generated/*" \
                                 \\( -name "*.cpp" -o -name "*.hpp" -o -name "*.h" -o -name "*.cc" \\) \
                                 > ${WORKSPACE}/output/reports/files_to_analysis.txt
                         fi

@@ -94,12 +94,12 @@ void ServiceExecutor::RemoveTask(TaskID task_id) {
     }
     switch (iter->second->GetType()) {
         case ServiceTaskType::REQUEST: {
-            for(auto& iter : task_request_map_) {
-                if (iter.second == task_id) {
-                    task_request_map_.erase(iter.first);
-                    break;
-                }
+            auto req_it = std::find_if(task_request_map_.begin(), task_request_map_.end(),
+                                       [task_id](const auto& entry) { return entry.second == task_id; });
+            if (req_it != task_request_map_.end()) {
+                task_request_map_.erase(req_it);
             }
+            break;
         }
         case ServiceTaskType::UNKNOWN:
         case ServiceTaskType::INTERVAL:

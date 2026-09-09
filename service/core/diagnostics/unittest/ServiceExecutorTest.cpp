@@ -443,6 +443,54 @@ TEST_F(ServiceExecutorTest, RunScheduler_TC003_IntervalTask) {
 }
 
 
+TEST_F(ServiceExecutorTest, Start_AlreadyRunning_TC002) {
+    EXPECT_TRUE(ins->Start());
+    EXPECT_TRUE(ins->Start());
+    ins->Stop();
+}
+
+TEST_F(ServiceExecutorTest, Stop_AlreadyStopped_TC002) {
+    ins->Stop();
+}
+
+TEST_F(ServiceExecutorTest, SetExecutorNum_WhileRunning_TC002) {
+    EXPECT_TRUE(ins->Start());
+    ins->SetExecutorNum(4);
+    // Restore executor_num_ so Stop() doesn't exceed thread_list_ size
+    ins->executor_num_ = 1;
+    ins->Stop();
+}
+
+TEST_F(ServiceExecutorTest, RemoveTask_NotFound_TC002) {
+    ins->RemoveTask(9999);
+    ins->RemoveTask("NonExistentTask");
+}
+
+TEST_F(ServiceExecutorTest, RequestTask_UnregisteredRequest_TC002) {
+    class UnregisteredReq : public RequestBase {};
+    auto req = std::make_shared<UnregisteredReq>();
+    EXPECT_FALSE(ins->RequestTask(req));
+}
+
+TEST_F(ServiceExecutorTest, ComparatorIntervalQueue_DirectCompare_TC002) {
+    Mock_ServiceTaskMock->use_internal_next_execution_time_ = true;
+    ComparatorIntervalQueue comp;
+    auto task1 = std::make_shared<ServiceTask>(1, "Task1", ServiceTaskType::INTERVAL, nullptr);
+    auto task2 = std::make_shared<ServiceTask>(2, "Task2", ServiceTaskType::INTERVAL, nullptr);
+    auto now = std::chrono::steady_clock::now();
+    task1->SetNextExecutionTime(now + 10s);
+    task2->SetNextExecutionTime(now + 1s);
+    EXPECT_TRUE(comp(task1, task2));
+    EXPECT_FALSE(comp(task2, task1));
+}
+
+TEST_F(ServiceExecutorTest, GetTaskNums_TC001) {
+    EXPECT_EQ(0U, ins->GetAllTaskNum());
+    EXPECT_EQ(0U, ins->GetRequestTaskNum());
+    EXPECT_EQ(0U, ins->GetIntervalTaskNum());
+    EXPECT_EQ(0U, ins->GetOnceTaskNum());
+}
+
 int main(int argc, char* argv[]) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
